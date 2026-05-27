@@ -1,0 +1,7 @@
+node_modules
+dist
+.mkcert
+*.pem
+.DS_Store
+src/generated
+xliff
