@@ -8,6 +8,7 @@ import (
 	"github.com/DIMO-Network/fleet-lite-app/internal/config"
 	"github.com/DIMO-Network/fleet-lite-app/internal/controllers"
 	"github.com/DIMO-Network/fleet-lite-app/internal/gateway"
+	"github.com/DIMO-Network/fleet-lite-app/internal/service"
 	"github.com/DIMO-Network/shared/pkg/db"
 	"github.com/DIMO-Network/shared/pkg/middleware/metrics"
 	jwtware "github.com/gofiber/contrib/jwt"
@@ -22,7 +23,17 @@ var appCommitHash string
 // App wires the fiber app together with middleware, routes, and static-file
 // serving. It's the only function /cmd needs to call to get a working
 // server.
-func App(settings *config.Settings, logger *zerolog.Logger, commitHash string, pdb *db.Store, identity gateway.IdentityAPI) *fiber.App {
+func App(
+	settings *config.Settings,
+	logger *zerolog.Logger,
+	commitHash string,
+	pdb *db.Store,
+	identity gateway.IdentityAPI,
+	authProvider *gateway.DimoAuthProvider,
+	extractAPI service.ExtractAPIService,
+	attestSvc service.AttestService,
+	fetchAPI *gateway.FetchAPI,
+) *fiber.App {
 	appCommitHash = commitHash
 
 	app := fiber.New(fiber.Config{
@@ -74,6 +85,17 @@ func App(settings *config.Settings, logger *zerolog.Logger, commitHash string, p
 
 	authApp.Get("/vehicles", vehiclesCtrl.GetVehicles)
 	authApp.Get("/vehicles/:tokenID", vehiclesCtrl.GetVehicle)
+
+	// Glovebox / documents
+	documentsCtrl := controllers.NewDocumentsController(
+		logger, settings, identity, authProvider, extractAPI, attestSvc, fetchAPI,
+	)
+	authApp.Post("/documents/extract", documentsCtrl.ExtractDocument)
+	authApp.Get("/documents/vin-lookup", documentsCtrl.LookupVIN)
+	authApp.Post("/documents/attest", documentsCtrl.AttestDocument)
+	authApp.Get("/documents/list", documentsCtrl.ListDocuments)
+	authApp.Get("/documents/download", documentsCtrl.DownloadDocument)
+	authApp.Delete("/documents/:id", documentsCtrl.DeleteDocument)
 
 	return app
 }

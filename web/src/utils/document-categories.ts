@@ -1,0 +1,48 @@
+/**
+ * Map of canonical CE types → friendly UI labels.
+ * Source of truth for both upload (category dropdown) and list (group headers).
+ */
+export const CE_TYPE_TO_LABEL: Record<string, string> = {
+    'dimo.document.vehicle.service.invoice': 'Service & parts',
+    'dimo.document.vehicle.insurance':       'Insurance',
+    'dimo.document.vehicle.registration':    'Registration',
+    'dimo.document.vehicle.inspection':      'Inspection',
+    'dimo.document.vehicle.title':           'Title',
+    'dimo.document.vehicle.finance':         'Finance',
+    'dimo.document.vehicle.regulatory.other':'Regulatory',
+    'dimo.document.vehicle.maintenance':     'Service & parts',
+    'dimo.document.vehicle.note':            'Note',
+    'dimo.document.vehicle.expense':         'Other',
+    'dimo.document.vehicle.condition':       'Other',
+    'dimo.document.unknown':                 'Uncategorized',
+};
+
+/**
+ * Choices shown in the upload modal's category dropdown.
+ * Order is the same order they'll appear to the user.
+ */
+export const UPLOAD_CATEGORIES: Array<{ ceType: string; label: string }> = [
+    { ceType: 'dimo.document.vehicle.insurance',       label: 'Insurance' },
+    { ceType: 'dimo.document.vehicle.registration',    label: 'Registration' },
+    { ceType: 'dimo.document.vehicle.inspection',      label: 'Inspection' },
+    { ceType: 'dimo.document.vehicle.service.invoice', label: 'Service & parts' },
+    { ceType: 'dimo.document.vehicle.title',           label: 'Title' },
+    { ceType: 'dimo.document.vehicle.finance',         label: 'Finance' },
+    { ceType: 'dimo.document.vehicle.regulatory.other',label: 'Other regulatory' },
+    { ceType: 'dimo.document.unknown',                 label: 'Other' },
+];
+
+/**
+ * CE types we expect a vehicle owner to keep on file. Used by the glovebox
+ * "Missing" rail — anything in this set that the vehicle does not have an
+ * attestation for shows as a prompt to add it.
+ */
+export const EXPECTED_CE_TYPES: string[] = [
+    'dimo.document.vehicle.insurance',
+    'dimo.document.vehicle.registration',
+    'dimo.document.vehicle.inspection',
+];
+
+export function categoryLabel(ceType: string): string {
+    return CE_TYPE_TO_LABEL[ceType] ?? 'Other';
+}

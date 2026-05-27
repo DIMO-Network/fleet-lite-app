@@ -33,6 +33,11 @@ ALLOWED_ORIGINS: 'https://local-fleet-lite.dimo.org:3009,https://console.dimo.or
 ## DIMO API dependencies
 IDENTITY_API_ENDPOINT: https://identity-api.dimo.zone/query
 
+## Document services (glovebox)
+EXTRACT_API_URL: https://extract.dimo.zone/extract
+FETCH_API_URL:   https://fetch-api.dimo.zone/v1/fetch/objects
+ATTEST_API_URL:  https://attest.dimo.zone
+
 ## Chain config (polygon mainnet)
 CHAIN_ID: 137
 VEHICLE_NFT_ADDRESS: '0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF'

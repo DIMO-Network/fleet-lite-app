@@ -26,20 +26,6 @@ export class FleetOverviewView extends LitElement {
         return parts.length ? parts.join(' ') : `Vehicle #${v.tokenId}`;
     }
 
-    private timeAgo(iso: string | null): string {
-        if (!iso) return '';
-        const ts = new Date(iso).getTime();
-        if (Number.isNaN(ts)) return '';
-        const diff = Date.now() - ts;
-        const m = Math.floor(diff / 60_000);
-        if (m < 1) return 'just now';
-        if (m < 60) return `${m} min ago`;
-        const h = Math.floor(m / 60);
-        if (h < 24) return `${h} hour${h === 1 ? '' : 's'} ago`;
-        const d = Math.floor(h / 24);
-        return `${d} day${d === 1 ? '' : 's'} ago`;
-    }
-
     private toCard(v: Vehicle): VehicleCard {
         const hasSynthetic = !!(v.syntheticDevice && v.syntheticDevice.tokenId > 0);
         const hasAftermarket = !!(v.aftermarketDevice && v.aftermarketDevice.tokenId > 0);

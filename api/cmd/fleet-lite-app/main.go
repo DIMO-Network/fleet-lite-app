@@ -11,6 +11,7 @@ import (
 	"github.com/DIMO-Network/fleet-lite-app/internal/app"
 	"github.com/DIMO-Network/fleet-lite-app/internal/config"
 	"github.com/DIMO-Network/fleet-lite-app/internal/gateway"
+	"github.com/DIMO-Network/fleet-lite-app/internal/service"
 	"github.com/DIMO-Network/shared/pkg/db"
 	ssettings "github.com/DIMO-Network/shared/pkg/settings"
 	"github.com/gofiber/fiber/v2"
@@ -66,11 +67,17 @@ func main() {
 	pdb.WaitForDB(logger)
 
 	identityService := gateway.NewIdentityAPIService(logger, &settings)
+	authProvider := gateway.NewDimoAuthProvider(logger, &settings)
+	extractAPI := service.NewExtractAPIService(logger, &settings, authProvider)
+	attestSvc := service.NewAttestService(logger, &settings, authProvider)
+	fetchAPI := gateway.NewFetchAPI(logger, &settings, authProvider)
 
 	monApp := createMonitoringServer()
 	group, gCtx := errgroup.WithContext(ctx)
 
-	webAPI := app.App(&settings, &logger, CommitHash, &pdb, identityService)
+	webAPI := app.App(&settings, &logger, CommitHash, &pdb, identityService,
+		authProvider, extractAPI, attestSvc, fetchAPI,
+	)
 
 	logger.Info().Int("port", settings.MonitoringPort).Msg("Starting monitoring server")
 	runFiber(gCtx, monApp, ":"+strconv.Itoa(settings.MonitoringPort), group, false)

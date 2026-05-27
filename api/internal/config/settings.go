@@ -34,6 +34,12 @@ type Settings struct {
 	// DIMO Identity API
 	IdentityAPIEndpoint url.URL `yaml:"IDENTITY_API_ENDPOINT"`
 
+	// DIMO Document services (extract + attest + fetch).
+	// Used by the glovebox feature; see docs/GLOVEBOX.md.
+	ExtractAPIURL url.URL `yaml:"EXTRACT_API_URL"`
+	FetchAPIURL   url.URL `yaml:"FETCH_API_URL"`
+	AttestAPIURL  url.URL `yaml:"ATTEST_API_URL"`
+
 	// Chain
 	ChainID           int64          `yaml:"CHAIN_ID"`
 	VehicleNftAddress common.Address `yaml:"VEHICLE_NFT_ADDRESS"`
