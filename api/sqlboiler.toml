@@ -1,0 +1,12 @@
+output = "internal/db/models"
+no-tests = true
+
+[psql]
+dbname = "fleet_lite_app"
+blacklist = ["migrations"]
+host   = "localhost"
+port   = 5432
+user   = "dimo"
+pass   = "dimo"
+schema = "fleet_lite_app"
+sslmode= "disable"

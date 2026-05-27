@@ -117,17 +117,79 @@ Then flush mDNS: `sudo killall -HUP mDNSResponder`.
   - `views/account-settings.ts`
 - [ ] **9. Wire routes** — `@lit-labs/router` with `/`, `/vehicles/:tokenId`, `/glovebox`, `/settings`.
 - [ ] **10. First boot** — `npm install`, `npm run dev`, hit `https://local-fleet-lite.dimo.org:3009`, confirm cert is trusted and Fleet Overview renders.
-- [ ] **11. Initial commit** on `main`.
-- [ ] **12. Scaffold placeholders** — empty `api/`, `charts/`, `Dockerfile`, `README.md`, `AGENTS.md` (copy/trim from rental-fleets-app, repointing names + ports).
+- [x] **11. Initial commit** on `main`. → Pushed to `DIMO-Network/fleet-lite-app` (public).
+- [x] **12. Scaffold placeholders** — AGENTS.md + api/README.md + charts/README.md committed. Dockerfile deferred until api/ has a buildable binary (covered in §"API expansion" below).
 
-## Out of scope for this initial cut
+---
 
-- Go API implementation (placeholder only)
-- Helm chart contents
+## API expansion (2026-05-27)
+
+Scope was widened mid-build: the Go API and helm chart move from out-of-scope to **in-scope** at *Skeleton + Auth + Vehicles* depth. Rationale: enables the frontend to hit a real backend for the logged-in user's cars, replacing mock data, with the minimum set of subsystems needed.
+
+### What lands in this round
+
+- `api/` Go service mirroring `rental-fleets-app/api/` directory layout
+- JWT auth via DIMO JWKS (`github.com/gofiber/contrib/jwt`)
+- `/vehicles` endpoint: returns `identity-api` vehicles owned by the JWT's wallet
+- `/identity/*` public proxy endpoints used by the frontend
+- `/health` + `/version` + Prometheus `/metrics` on monitoring port
+- Fiber static-serving of `../web/dist` so the same binary serves the SPA in prod
+- `goose` migrations runner (no migrations yet — `/vehicles` is read-only against identity-api)
+- Real multi-stage `Dockerfile` that builds web + api in one image
+- `charts/fleet-lite-app/` helm chart cloned from rental-fleets-app and trimmed
+
+### Deliberately dropped from rental-fleets-app/api
+
+These subsystems exist in rental-fleets-app but have no place in fleet-lite-app's surface — every one of them adds dependency weight without serving a frontend feature:
+
+- **Tenant model** — fleet-lite is per-user, not multi-tenant. No `tenants` table, no `Tenant-Id` header middleware, no `tenant-selector` flow.
+- **Chat agent + Langfuse** — no AI surface in this app.
+- **River job queue** — no async report generation yet.
+- **Google Calendar integration** — out of scope.
+- **Webhooks (inbound email, telemetry)** — not wired.
+- **Alerts WS + REST** — not wired.
+- **Ledger + Vendors + Vehicle Costs + Maintenance + Reports** — fleet-operator-only features.
+- **Rental Sessions + Guests** — Turo-specific.
+- **Kore Wireless gateway** — SIM management out of scope.
+- **Documents (extract / attest / fetch)** — glovebox is frontend-only mocks until a separate phase.
+- **Pending vehicles / IMEI claiming** — onboarding flow not in scope.
+- **Account management** — `accounts-api` proxy not wired yet.
+
+If/when these come back, mirror the rental-fleets-app shape rather than reinventing.
+
+### API to-do (execution order)
+
+- [ ] **A1. Scaffold api root** — `go.mod` (module `github.com/DIMO-Network/fleet-lite-app`), `.golangci.yml`, `.gitignore`, `Makefile`, `settings.sample.yaml`, `sqlboiler.toml`.
+- [ ] **A2. `cmd/fleet-lite-app/`** — `main.go` (trimmed: zerolog + signals + db + fiber + dimoauth + identity service + vehicles controller), `migrate.go` (goose subcommand).
+- [ ] **A3. `internal/config`** — trimmed Settings struct.
+- [ ] **A4. `internal/core`** — `errors.go`, `permissions.go` (copy as-is).
+- [ ] **A5. `internal/gateway/identity_api*`** — typed `FetchVehiclesByWalletAddress` + `FetchVehicleByTokenID` + cache.
+- [ ] **A6. `internal/service/identity_api`** — raw-bytes proxy for `/identity/*` endpoints.
+- [ ] **A7. `internal/models/models.go`** — trimmed (Vehicle, Definition, SyntheticDevice, PageInfo, paged structs, GraphQlData).
+- [ ] **A8. `internal/controllers/{common,identity,vehicles}.go`** — wallet extraction from JWT; identity proxy handlers; `GetVehicles` for current user.
+- [ ] **A9. `internal/app/app.go`** — fiber app builder with middleware, routes, static serving.
+- [ ] **A10. `internal/db/`** — placeholder migrations + models dirs.
+- [ ] **A11. `go mod tidy` + `go build ./...`** — smoke test.
+- [ ] **A12. Dockerfile** — multi-stage (Go build + npm build → busybox runtime).
+- [ ] **A13. Helm chart** — `charts/fleet-lite-app/` cloned from rental-fleets-app, trimmed envs.
+- [ ] **A14. Commit + push** — all of the above to `DIMO-Network/fleet-lite-app`.
+
+### Conventions chosen for fleet-lite api
+
+- DB name: `fleet_lite_app` (snake_case; matches `rental_fleets_app` convention).
+- Binary name: `fleet-lite-app`.
+- Module path: `github.com/DIMO-Network/fleet-lite-app`.
+- API port: **8084** (rental-fleets uses 8082, b2b-fleet-mgr uses 8083 territory — leaving room).
+- Monitoring port: **8085**.
+- HTTPS dev origin: `https://local-fleet-lite.dimo.org:8084` when api is hit directly, but normal dev hits the frontend at `:3009` which proxies to `:8084` via Vite (when wired) or has the api serve the frontend's `dist/` (production-mimicking mode).
+
+## Out of scope (still)
+
 - CI workflows beyond a copy of the rental-fleets template
 - Auth / passkey signing — design surface only, no working flow
 - Live map tile provider — placeholder background image, as in the Stitch design
 - Tests
+- Frontend wiring to the new api (frontend still uses mock data; switch happens in a follow-up phase)
 
 ---
 

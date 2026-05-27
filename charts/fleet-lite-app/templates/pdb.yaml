@@ -1,0 +1,12 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  namespace: {{ .Release.Namespace }}
+  name: {{ include "fleet-lite-app.fullname" . }}
+  labels:
+    {{- include "fleet-lite-app.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+    {{- include "fleet-lite-app.selectorLabels" . | nindent 6 }}
+{{ toYaml .Values.podDisruptionBudget | indent 2 }}

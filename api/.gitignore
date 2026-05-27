@@ -1,0 +1,7 @@
+target/
+bin/
+dist/
+*.test
+*.out
+settings.yaml
+vendor/

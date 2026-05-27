@@ -1,0 +1,38 @@
+ENVIRONMENT: dev
+LOG_LEVEL: info
+USE_DEV_CERTS: true
+
+API_PORT: 8084          # web server port
+MONITORING_PORT: 8085
+
+SERVICE_NAME: fleet-lite-app
+
+DB:
+  PORT: 5432
+  NAME: fleet_lite_app
+  MAX_OPEN_CONNECTIONS: 10
+  MAX_IDLE_CONNECTIONS: 3
+  HOST: localhost
+  USER: dimo
+  PASSWORD: dimo
+
+## Authentication
+JWT_KEY_SET_URL: https://auth.dimo.zone/keys
+TOKEN_EXCHANGE_URL: https://token-exchange-api.dimo.zone
+
+## Login With DIMO
+DIMO_LOGIN_URL: https://login.dimo.org
+DIMO_AUTH_URL: https://auth.dimo.zone
+DIMO_AUTH_REDIRECT_URL: https://local-fleet-lite.dimo.org:3009/login.html
+DIMO_AUTH_CLIENT_ID: '0x0000000000000000000000000000000000000000'
+DIMO_AUTH_PRIVATE_KEY: ''
+
+## CORS — frontend dev origin + production console
+ALLOWED_ORIGINS: 'https://local-fleet-lite.dimo.org:3009,https://console.dimo.org'
+
+## DIMO API dependencies
+IDENTITY_API_ENDPOINT: https://identity-api.dimo.zone/query
+
+## Chain config (polygon mainnet)
+CHAIN_ID: 137
+VEHICLE_NFT_ADDRESS: '0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF'
