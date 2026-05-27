@@ -1,25 +1,44 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
+import { ApiService } from '../services/api-service.ts';
+import { Vehicle, VehiclesResponse } from '../types/vehicle.ts';
 
 interface GloveboxVehicle {
     tokenId: string;
     title: string;
     recordCount: number;
-    active?: boolean;
 }
 
-const VEHICLES: GloveboxVehicle[] = [
-    { tokenId: '1', title: '2022 Ram 1500', recordCount: 0 },
-    { tokenId: '2', title: '2022 Ram 1500', recordCount: 0 },
-    { tokenId: '3', title: '2023 Chrysler 300', recordCount: 0 },
-    { tokenId: '4', title: '2023 Chrysler 300', recordCount: 0 },
-    { tokenId: '5', title: '2026 Mercedes-Benz A 200', recordCount: 0, active: true },
-];
+function toGloveboxVehicle(v: Vehicle): GloveboxVehicle {
+    const d = v.definition;
+    const parts = [d.year ? String(d.year) : '', d.make, d.model].filter(Boolean);
+    return {
+        tokenId: String(v.tokenId),
+        title: parts.length ? parts.join(' ') : `Vehicle #${v.tokenId}`,
+        // Document storage isn't wired yet — every vehicle shows 0 records.
+        recordCount: 0,
+    };
+}
 
 @customElement('glovebox-view')
 export class GloveboxView extends LitElement {
-    @state() private selected: GloveboxVehicle = VEHICLES.find(v => v.active) ?? VEHICLES[0];
+    @state() private vehicles: GloveboxVehicle[] = [];
+    @state() private selected: GloveboxVehicle | null = null;
+    @state() private loading = true;
+
+    async connectedCallback() {
+        super.connectedCallback();
+        try {
+            const res = await ApiService.getInstance().get<VehiclesResponse>('/vehicles');
+            this.vehicles = (res.vehicles || []).map(toGloveboxVehicle);
+            this.selected = this.vehicles[0] ?? null;
+        } catch (e) {
+            console.error('Failed to load vehicles for glovebox', e);
+        } finally {
+            this.loading = false;
+        }
+    }
 
     static styles = [
         sharedStyles,
@@ -296,7 +315,7 @@ export class GloveboxView extends LitElement {
     ];
 
     private renderListCard(v: GloveboxVehicle) {
-        const cls = v.tokenId === this.selected.tokenId ? 'vehicle-card active' : 'vehicle-card';
+        const cls = v.tokenId === this.selected?.tokenId ? 'vehicle-card active' : 'vehicle-card';
         const onClick = () => { this.selected = v; };
         return html`
             <div class=${cls} @click=${onClick}>
@@ -323,7 +342,12 @@ export class GloveboxView extends LitElement {
                     <button><span class="material-symbols-outlined">add</span></button>
                 </header>
                 <div class="vehicle-list custom-scrollbar">
-                    ${VEHICLES.map(v => this.renderListCard(v))}
+                    ${this.loading
+                        ? html`<p style="padding:24px;color:var(--on-surface-variant);">Loading…</p>`
+                        : this.vehicles.length === 0
+                            ? html`<p style="padding:24px;color:var(--on-surface-variant);">No vehicles on this account.</p>`
+                            : this.vehicles.map(v => this.renderListCard(v))
+                    }
                 </div>
             </section>
 
@@ -333,15 +357,15 @@ export class GloveboxView extends LitElement {
                         <span class="material-symbols-outlined">directions_car</span>
                     </div>
                     <div>
-                        <h2>${this.selected.title}</h2>
-                        <p>${this.selected.recordCount} Records</p>
+                        <h2>${this.selected?.title ?? 'Select a vehicle'}</h2>
+                        <p>${this.selected?.recordCount ?? 0} Records</p>
                     </div>
                 </div>
 
                 <div class="detail-body">
                     <div class="filter-row">
                         <button class="filter-pill">
-                            All <span class="sep">•</span> ${this.selected.recordCount}
+                            All <span class="sep">•</span> ${this.selected?.recordCount ?? 0}
                         </button>
                     </div>
 

@@ -1,6 +1,7 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
+import { logout } from '../utils/token.ts';
 
 type NavKey = 'vehicles' | 'stats' | 'glovebox' | 'settings';
 
@@ -142,7 +143,7 @@ export class SideNav extends LitElement {
                     <span class="material-symbols-outlined">help</span>
                     <span class="label">Support</span>
                 </a>
-                <a class="nav-item" href="#/logout">
+                <a class="nav-item" href="#" @click=${(e: Event) => { e.preventDefault(); logout(); }}>
                     <span class="material-symbols-outlined">logout</span>
                     <span class="label">Sign Out</span>
                 </a>

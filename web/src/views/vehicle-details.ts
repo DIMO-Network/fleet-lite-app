@@ -1,10 +1,43 @@
 import { LitElement, html, css } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
+import { ApiService } from '../services/api-service.ts';
+import { Vehicle } from '../types/vehicle.ts';
 
 @customElement('vehicle-details-view')
 export class VehicleDetailsView extends LitElement {
     @property({ type: String }) tokenId: string = '';
+    @state() private vehicle: Vehicle | null = null;
+    @state() private loading = true;
+
+    private get vehicleTitle(): string {
+        if (!this.vehicle) return `Vehicle #${this.tokenId}`;
+        const d = this.vehicle.definition;
+        const parts = [d.year ? String(d.year) : '', d.make, d.model].filter(Boolean);
+        return parts.length ? parts.join(' ') : `Vehicle #${this.tokenId}`;
+    }
+
+    async connectedCallback() {
+        super.connectedCallback();
+        try {
+            this.vehicle = await ApiService.getInstance().get<Vehicle>(`/vehicles/${this.tokenId}`);
+        } catch (e) {
+            console.error('Failed to load vehicle', e);
+        } finally {
+            this.loading = false;
+        }
+    }
+
+    willUpdate(changed: Map<string, unknown>) {
+        if (changed.has('tokenId') && this.tokenId && !this.loading) {
+            this.loading = true;
+            ApiService.getInstance()
+                .get<Vehicle>(`/vehicles/${this.tokenId}`)
+                .then((v) => { this.vehicle = v; })
+                .catch((e) => { console.error('Failed to load vehicle', e); })
+                .finally(() => { this.loading = false; });
+        }
+    }
 
     static styles = [
         sharedStyles,
@@ -406,7 +439,7 @@ export class VehicleDetailsView extends LitElement {
         return html`
             <header class="top-bar">
                 <div class="left">
-                    <h2>2025 Maxus T60 4X2 GL MT</h2>
+                    <h2>${this.vehicleTitle}</h2>
                     <nav>
                         <a href="#" class="active">Overview</a>
                         <a href="#">Diagnostics</a>
@@ -426,15 +459,24 @@ export class VehicleDetailsView extends LitElement {
             <div class="canvas">
                 <div class="hero-status">
                     <div class="chip">
-                        <span class="material-symbols-outlined">battery_charging_full</span>
-                        <span>1</span>
+                        <span class="material-symbols-outlined">tag</span>
+                        <span>Token #${this.tokenId}</span>
                     </div>
-                    <div class="meta">
-                        <span class="dot"></span>
-                        <span>5,309 miles away</span>
-                        <span class="dot"></span>
-                        <span>2 hours ago</span>
-                    </div>
+                    ${this.vehicle?.aftermarketDevice
+                        ? html`<div class="meta">
+                            <span class="dot"></span>
+                            <span>Aftermarket device #${this.vehicle.aftermarketDevice.tokenId}</span>
+                        </div>`
+                        : this.vehicle?.syntheticDevice && this.vehicle.syntheticDevice.tokenId > 0
+                            ? html`<div class="meta">
+                                <span class="dot"></span>
+                                <span>Synthetic device #${this.vehicle.syntheticDevice.tokenId}</span>
+                            </div>`
+                            : html`<div class="meta">
+                                <span class="dot"></span>
+                                <span>No DIMO integration yet</span>
+                            </div>`
+                    }
                 </div>
 
                 <div class="grid">

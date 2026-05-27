@@ -14,18 +14,25 @@ type GraphQlData[T any] struct {
 
 // Vehicle is the slim view of an identity-api vehicle node that fleet-lite-app cares about.
 type Vehicle struct {
-	ID              string          `json:"id"`
-	TokenID         int64           `json:"tokenId"`
-	MintedAt        *time.Time      `json:"mintedAt"`
-	Owner           string          `json:"owner"`
-	Definition      Definition      `json:"definition"`
-	SyntheticDevice SyntheticDevice `json:"syntheticDevice"`
+	ID                string             `json:"id"`
+	TokenID           int64              `json:"tokenId"`
+	MintedAt          *time.Time         `json:"mintedAt"`
+	Owner             string             `json:"owner"`
+	Definition        Definition         `json:"definition"`
+	SyntheticDevice   SyntheticDevice    `json:"syntheticDevice"`
+	AftermarketDevice *AftermarketDevice `json:"aftermarketDevice,omitempty"`
 }
 
 type SyntheticDevice struct {
 	ID       string `json:"id"`
 	TokenID  int64  `json:"tokenId"`
 	MintedAt string `json:"mintedAt"`
+}
+
+type AftermarketDevice struct {
+	TokenID int64  `json:"tokenId"`
+	Serial  string `json:"serial"`
+	IMEI    string `json:"imei"`
 }
 
 type Definition struct {

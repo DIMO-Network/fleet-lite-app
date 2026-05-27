@@ -20,6 +20,11 @@ const VehiclesByWalletAndCursorQuery = `{
 				tokenId
 				mintedAt
 			}
+			aftermarketDevice {
+				tokenId
+				serial
+				imei
+			}
 		}
 		pageInfo {
 			hasPreviousPage
@@ -47,6 +52,11 @@ const VehicleByTokenIDQuery = `{
 			id
 			tokenId
 			mintedAt
+		}
+		aftermarketDevice {
+			tokenId
+			serial
+			imei
 		}
 	}
 }`

@@ -1,4 +1,5 @@
 import { isLocalhost } from '../utils/utils.ts';
+import { logout } from '../utils/token.ts';
 
 /**
  * Singleton HTTP client. In dev the frontend lives on :3009 and the API on
@@ -35,12 +36,23 @@ export class ApiService {
         return token ? { Authorization: `Bearer ${token}` } : {};
     }
 
+    private handle401IfAuthed(status: number, auth: boolean): void {
+        // The api treats both unsigned JWT and missing-header as 401 (sometimes
+        // 400 from the middleware before our handler sees it). Either way,
+        // clear local auth state and bounce — keeping a dead token causes
+        // infinite redirect loops on the next page load.
+        if (auth && (status === 401 || status === 400)) {
+            logout();
+        }
+    }
+
     public async get<T>(endpoint: string, auth: boolean = true): Promise<T> {
         const res = await fetch(this.buildUrl(endpoint), {
             method: 'GET',
             headers: { 'Content-Type': 'application/json', ...this.authHeader(auth) },
         });
         if (!res.ok) {
+            this.handle401IfAuthed(res.status, auth);
             throw new ApiError(res.status, await safeText(res));
         }
         return res.json();
@@ -53,6 +65,7 @@ export class ApiService {
             body: JSON.stringify(body),
         });
         if (!res.ok) {
+            this.handle401IfAuthed(res.status, auth);
             throw new ApiError(res.status, await safeText(res));
         }
         return res.json();

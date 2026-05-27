@@ -1,7 +1,7 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
-import { ApiService, ApiError } from '../services/api-service.ts';
+import { ApiService } from '../services/api-service.ts';
 import { Vehicle, VehiclesResponse } from '../types/vehicle.ts';
 
 interface VehicleCard {
@@ -41,14 +41,21 @@ export class FleetOverviewView extends LitElement {
     }
 
     private toCard(v: Vehicle): VehicleCard {
-        const synthetic = v.syntheticDevice && v.syntheticDevice.tokenId > 0;
+        const hasSynthetic = !!(v.syntheticDevice && v.syntheticDevice.tokenId > 0);
+        const hasAftermarket = !!(v.aftermarketDevice && v.aftermarketDevice.tokenId > 0);
+        const integrated = hasSynthetic || hasAftermarket;
+        const integration = hasAftermarket
+            ? `Aftermarket #${v.aftermarketDevice!.tokenId}`
+            : hasSynthetic
+                ? `Synthetic #${v.syntheticDevice.tokenId}`
+                : '';
         return {
             tokenId: String(v.tokenId),
             title: this.formatTitle(v),
-            location: '',
-            seenAt: this.timeAgo(v.mintedAt),
-            online: !!synthetic,
-            errorMessage: synthetic ? undefined : 'Enroll subscription to stay online',
+            location: integration,
+            seenAt: `Token #${v.tokenId}`,
+            online: integrated,
+            errorMessage: integrated ? undefined : 'No DIMO integration — pair a device to stream telemetry',
         };
     }
 
@@ -59,11 +66,8 @@ export class FleetOverviewView extends LitElement {
             this.vehicles = (res.vehicles || []).map((v) => this.toCard(v));
             this.loading = false;
         } catch (e) {
+            // ApiService already redirected to /login.html on 401/400.
             this.loading = false;
-            if (e instanceof ApiError && (e.status === 401 || e.status === 400)) {
-                window.location.replace('/login.html');
-                return;
-            }
             console.error('Failed to load vehicles', e);
             this.errorMessage = e instanceof Error ? e.message : 'Failed to load vehicles';
         }
@@ -167,49 +171,6 @@ export class FleetOverviewView extends LitElement {
                 transition: background 0.15s ease;
             }
             .map-controls button:hover { background: var(--surface-container-high); }
-
-            .pin {
-                position: absolute;
-                top: 33%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                z-index: 10;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-            }
-            .pin-label {
-                background: var(--primary);
-                color: var(--on-primary);
-                padding: 4px 12px;
-                border-radius: var(--radius-full);
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                margin-bottom: 4px;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-            }
-            .pin-dot {
-                width: 16px;
-                height: 16px;
-                background: var(--primary);
-                border-radius: var(--radius-full);
-                border: 2px solid var(--background);
-                box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
-                position: relative;
-            }
-            .pin-dot::after {
-                content: '';
-                position: absolute;
-                inset: 0;
-                background: var(--primary);
-                border-radius: var(--radius-full);
-                animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
-                opacity: 0.75;
-            }
-            @keyframes ping {
-                75%, 100% { transform: scale(2); opacity: 0; }
-            }
 
             .vehicles-panel {
                 position: absolute;
@@ -428,11 +389,6 @@ export class FleetOverviewView extends LitElement {
             <div class="map-controls">
                 <button><span class="material-symbols-outlined">my_location</span></button>
                 <button><span class="material-symbols-outlined">layers</span></button>
-            </div>
-
-            <div class="pin">
-                <div class="pin-label">2026 MB A200</div>
-                <div class="pin-dot"></div>
             </div>
 
             <div class="vehicles-panel">

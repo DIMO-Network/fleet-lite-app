@@ -1,25 +1,48 @@
 import { LitElement, html, css } from 'lit';
 import { customElement } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
+import { getTokenClaims, logout } from '../utils/token.ts';
 
-interface Row { icon: string; label: string; }
-
-const PRIVACY_ROWS: Row[] = [
-    { icon: 'directions_car', label: 'Manage Subscription' },
-    { icon: 'vpn_key',        label: 'Passkey' },
-    { icon: 'language',       label: 'Language' },
-    { icon: 'developer_mode', label: 'Advanced' },
-    { icon: 'straighten',     label: 'Measurement Units' },
-    { icon: 'mail',           label: 'Email Preferences' },
-    { icon: 'logout',         label: 'Log out' },
-];
-
-const SUPPORT_ROWS: Row[] = [
-    { icon: 'support_agent', label: 'FAQ' },
-];
+interface Row { icon: string; label: string; onClick?: () => void; }
 
 @customElement('account-settings-view')
 export class AccountSettingsView extends LitElement {
+    private get wallet(): string {
+        const claims = getTokenClaims();
+        const addr = typeof claims?.ethereum_address === 'string' ? claims.ethereum_address : '';
+        if (!addr) return '';
+        return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+    }
+
+    private get email(): string {
+        return localStorage.getItem('email') || '';
+    }
+
+    private privacyRows(): Row[] {
+        return [
+            { icon: 'directions_car', label: 'Manage Subscription' },
+            { icon: 'vpn_key',        label: 'Passkey' },
+            { icon: 'language',       label: 'Language' },
+            { icon: 'developer_mode', label: 'Advanced' },
+            { icon: 'straighten',     label: 'Measurement Units' },
+            { icon: 'mail',           label: 'Email Preferences' },
+            { icon: 'logout',         label: 'Log out', onClick: () => logout() },
+        ];
+    }
+
+    private supportRows(): Row[] {
+        return [
+            { icon: 'support_agent', label: 'FAQ' },
+        ];
+    }
+
+    private copyWallet = async () => {
+        const claims = getTokenClaims();
+        const addr = typeof claims?.ethereum_address === 'string' ? claims.ethereum_address : '';
+        if (addr && navigator.clipboard) {
+            try { await navigator.clipboard.writeText(addr); } catch { /* noop */ }
+        }
+    };
     static styles = [
         sharedStyles,
         css`
@@ -80,28 +103,31 @@ export class AccountSettingsView extends LitElement {
                 .canvas { padding: var(--stack-lg) var(--margin-mobile); }
             }
 
-            .mobile-profile { display: none; }
-            @media (max-width: 768px) {
-                .mobile-profile {
-                    display: block;
-                    margin-bottom: var(--stack-lg);
-                }
-                .mobile-profile h1 {
-                    font: var(--type-headline-xl);
-                    letter-spacing: -0.02em;
-                    color: var(--primary);
-                    margin-bottom: 8px;
-                }
-                .mobile-profile .wallet {
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    color: var(--on-surface-variant);
-                    margin-bottom: 4px;
-                    font: var(--type-body-md);
-                }
-                .mobile-profile .email { font: var(--type-body-md); color: var(--on-surface-variant); }
+            .profile-block {
+                margin-bottom: var(--stack-lg);
+                padding: 24px;
+                background: var(--surface-container-low);
+                border: 1px solid var(--outline-variant);
+                border-radius: var(--radius-lg);
             }
+            .profile-block .wallet {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                color: var(--primary);
+                margin-bottom: 4px;
+                font: var(--type-body-lg);
+            }
+            .profile-block .wallet button {
+                background: none;
+                border: none;
+                color: var(--on-surface-variant);
+                padding: 4px;
+                cursor: pointer;
+            }
+            .profile-block .wallet button:hover { color: var(--primary); }
+            .profile-block .email { font: var(--type-body-md); color: var(--on-surface-variant); }
+            .profile-block .empty { font: var(--type-body-sm); color: var(--on-surface-variant); }
 
             .section { margin-bottom: 32px; }
             .section-title {
@@ -142,8 +168,11 @@ export class AccountSettingsView extends LitElement {
     ];
 
     private renderRow(r: Row) {
+        const onClick = r.onClick
+            ? (e: Event) => { e.preventDefault(); r.onClick?.(); }
+            : undefined;
         return html`
-            <a class="row" href="#">
+            <a class="row" href="#" @click=${onClick}>
                 <div class="left-group">
                     <span class="material-symbols-outlined muted">${r.icon}</span>
                     <span class="label">${r.label}</span>
@@ -167,26 +196,32 @@ export class AccountSettingsView extends LitElement {
             </header>
 
             <div class="canvas">
-                <div class="mobile-profile">
-                    <h1>Account</h1>
-                    <div class="wallet">
-                        <span>0x59...da40</span>
-                        <button class="icon-btn"><span class="material-symbols-outlined" style="font-size: 16px;">content_copy</span></button>
-                    </div>
-                    <div class="email">james@dimo.zone</div>
+                <div class="profile-block">
+                    ${this.wallet
+                        ? html`
+                            <div class="wallet">
+                                <span>${this.wallet}</span>
+                                <button @click=${this.copyWallet} title="Copy wallet address">
+                                    <span class="material-symbols-outlined" style="font-size: 16px;">content_copy</span>
+                                </button>
+                            </div>
+                            ${this.email ? html`<div class="email">${this.email}</div>` : ''}
+                        `
+                        : html`<div class="empty">Not signed in.</div>`
+                    }
                 </div>
 
                 <div class="section">
                     <h3 class="section-title">Privacy & Account</h3>
                     <div class="row-group">
-                        ${PRIVACY_ROWS.map(r => this.renderRow(r))}
+                        ${this.privacyRows().map(r => this.renderRow(r))}
                     </div>
                 </div>
 
                 <div class="section">
                     <h3 class="section-title">Support</h3>
                     <div class="row-group">
-                        ${SUPPORT_ROWS.map(r => this.renderRow(r))}
+                        ${this.supportRows().map(r => this.renderRow(r))}
                     </div>
                 </div>
             </div>

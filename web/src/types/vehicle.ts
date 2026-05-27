@@ -11,6 +11,12 @@ export interface SyntheticDevice {
     mintedAt: string;
 }
 
+export interface AftermarketDevice {
+    tokenId: number;
+    serial: string;
+    imei: string;
+}
+
 export interface Vehicle {
     id: string;
     tokenId: number;
@@ -18,6 +24,7 @@ export interface Vehicle {
     owner: string;
     definition: Definition;
     syntheticDevice: SyntheticDevice;
+    aftermarketDevice?: AftermarketDevice | null;
 }
 
 export interface VehiclesResponse {
