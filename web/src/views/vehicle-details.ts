@@ -14,6 +14,13 @@ import {
     formatVoltage,
 } from '../utils/units.ts';
 
+interface ChartBar {
+    height: number;    // 0..100, normalized to the max in the series
+    value: number | null;
+    label: string;     // day-of-week, short
+    tooltip: string;
+}
+
 @customElement('vehicle-details-view')
 export class VehicleDetailsView extends LitElement {
     @property({ type: String }) tokenId: string = '';
@@ -130,13 +137,81 @@ export class VehicleDetailsView extends LitElement {
         return delta >= 0 ? delta : undefined;
     }
 
-    /** Normalize buckets to 0..100 heights for rendering bars relative to the max. */
-    private bucketHeights(buckets: TimeSeriesBucket[], field: 'max' | 'avg' | 'last' = 'max'): number[] {
-        const values = buckets.map((b) => b[field]).filter((v) => Number.isFinite(v));
-        if (values.length === 0) return [];
-        const max = Math.max(...values);
-        if (max <= 0) return values.map(() => 5);
-        return values.map((v) => Math.max(5, (v / max) * 100));
+    /**
+     * Build chart bars from time-series buckets. Caller picks how to read
+     * the value out of each bucket (e.g. `b => b.max` for Speed, daily-delta
+     * for Distance). Returns one bar per non-null source bucket, each with
+     * normalized height (5–100), the raw value (for tooltips), and a
+     * day-of-week label.
+     */
+    private chartBars(
+        buckets: TimeSeriesBucket[],
+        getValue: (b: TimeSeriesBucket, i: number, all: TimeSeriesBucket[]) => number | undefined,
+        formatValue: (v: number) => string,
+    ): ChartBar[] {
+        const rawValues: Array<number | undefined> = buckets.map((b, i, all) => getValue(b, i, all));
+        const finiteValues = rawValues.filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+        if (finiteValues.length === 0) return [];
+        const max = Math.max(...finiteValues);
+        return buckets.map((b, i) => {
+            const v = rawValues[i];
+            const height = typeof v === 'number' && Number.isFinite(v) && max > 0
+                ? Math.max(5, (v / max) * 100)
+                : 0;
+            return {
+                height,
+                value: typeof v === 'number' ? v : null,
+                label: this.dayLabel(b.timestamp),
+                tooltip: typeof v === 'number' ? `${this.weekdayLong(b.timestamp)}: ${formatValue(v)}` : 'No data',
+            };
+        });
+    }
+
+    private dayLabel(iso: string): string {
+        if (!iso) return '';
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return '';
+        return d.toLocaleDateString(undefined, { weekday: 'short' }).slice(0, 3);
+    }
+
+    private weekdayLong(iso: string): string {
+        if (!iso) return '';
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return iso;
+        return d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+    }
+
+    /** Render a bar chart with day-of-week labels and per-bar tooltips. */
+    private renderBarChart(bars: ChartBar[], color: 'orange' | 'blue' | 'green', density: 'wide' | 'narrow' = 'wide') {
+        if (this.loading) {
+            return html`<div class="chart ${color} ${density === 'narrow' ? 'narrow' : ''}">
+                ${Array.from({ length: density === 'narrow' ? 7 : 8 }).map(() => html`
+                    <div class="bar-col">
+                        <div class="bar ghost shimmer"></div>
+                        <div class="bar-label">&nbsp;</div>
+                    </div>
+                `)}
+            </div>`;
+        }
+        if (bars.length === 0) {
+            return html`<div class="chart ${color} ${density === 'narrow' ? 'narrow' : ''} empty">
+                ${Array.from({ length: density === 'narrow' ? 7 : 8 }).map(() => html`
+                    <div class="bar-col">
+                        <div class="bar ghost"></div>
+                        <div class="bar-label">&nbsp;</div>
+                    </div>
+                `)}
+                <div class="chart-empty-overlay">No data</div>
+            </div>`;
+        }
+        return html`<div class="chart ${color} ${density === 'narrow' ? 'narrow' : ''}">
+            ${bars.map((b) => html`
+                <div class="bar-col" title=${b.tooltip}>
+                    <div class="bar ${color} ${b.value == null ? 'missing' : ''}" style="height: ${b.height}%;"></div>
+                    <div class="bar-label">${b.label}</div>
+                </div>
+            `)}
+        </div>`;
     }
 
     static styles = [
@@ -431,14 +506,88 @@ export class VehicleDetailsView extends LitElement {
                 display: flex;
                 align-items: flex-end;
                 justify-content: space-between;
-                gap: 8px;
+                gap: 6px;
                 height: 100%;
-                padding-bottom: 8px;
+                padding-bottom: 4px;
+                position: relative;
             }
-            .bar { width: 100%; border-radius: 4px; }
-            .bar.orange  { background: linear-gradient(to bottom, var(--secondary-container), transparent 80%); }
-            .bar.green   { background: linear-gradient(to bottom, var(--tertiary-fixed-dim), transparent 80%); }
-            .bar.blue    { background: linear-gradient(to bottom, #3b82f6, transparent 80%); }
+            .chart.narrow { gap: 4px; }
+            .chart.empty { opacity: 0.6; }
+
+            .bar-col {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                align-items: stretch;
+                justify-content: flex-end;
+                height: 100%;
+                min-width: 0;
+                position: relative;
+            }
+            .bar-col[title] { cursor: help; }
+
+            .bar {
+                width: 100%;
+                border-radius: 3px 3px 0 0;
+                min-height: 2px;
+                transition: height 0.45s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+            }
+            .bar.orange { background: linear-gradient(to top, transparent 0%, rgba(234, 107, 24, 0.35) 30%, var(--secondary-container) 100%); }
+            .bar.green  { background: linear-gradient(to top, transparent 0%, rgba(105, 219, 173, 0.3) 30%, var(--tertiary-fixed-dim) 100%); }
+            .bar.blue   { background: linear-gradient(to top, transparent 0%, rgba(59, 130, 246, 0.3) 30%, #3b82f6 100%); }
+            .bar.missing { opacity: 0; }
+
+            .bar.ghost {
+                background: var(--surface-container-high);
+                opacity: 0.5;
+                height: 40%;
+            }
+            .bar.ghost.shimmer {
+                background: linear-gradient(
+                    90deg,
+                    var(--surface-container-high) 0%,
+                    var(--surface-container-highest) 50%,
+                    var(--surface-container-high) 100%
+                );
+                background-size: 200% 100%;
+                animation: shimmer 1.4s ease-in-out infinite;
+            }
+            @keyframes shimmer {
+                0%   { background-position: 200% 0; }
+                100% { background-position: -200% 0; }
+            }
+
+            .bar-label {
+                font-family: var(--font-mono);
+                font-size: 9px;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                color: var(--on-surface-variant);
+                text-align: center;
+                margin-top: 6px;
+                opacity: 0.7;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .chart.empty .bar-label { color: transparent; }
+
+            .chart-empty-overlay {
+                position: absolute;
+                inset: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font: var(--type-label-caps);
+                letter-spacing: 0.1em;
+                text-transform: uppercase;
+                color: var(--on-surface-variant);
+                pointer-events: none;
+            }
+            .chart.narrow .chart-empty-overlay { font-size: 9px; }
+
+            /* Animate the value swap on units toggle (subtle) */
+            .num { transition: opacity 0.18s ease; }
 
             .card-tall  { height: 280px; display: flex; flex-direction: column; }
             .card-mid   { height: 200px; display: flex; flex-direction: column; justify-content: space-between; }
@@ -458,18 +607,6 @@ export class VehicleDetailsView extends LitElement {
                 background: linear-gradient(to top, var(--secondary-container), rgba(234, 107, 24, 0.4));
                 transition: width 0.5s ease;
             }
-
-            .chart-empty {
-                width: 100%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                color: var(--on-surface-variant);
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-            }
-            .chart-empty.small { font-size: 10px; }
 
             .perms-banner {
                 grid-column: span 12;
@@ -526,8 +663,7 @@ export class VehicleDetailsView extends LitElement {
                 height: 100%;
                 margin-top: 16px;
             }
-            .distance-row .chart { gap: 8px; }
-            .distance-row .chart .bar { width: 16px; }
+            .distance-row .chart { flex: 1; margin-left: 16px; max-width: 60%; }
 
             .quick-actions {
                 max-width: 480px;
@@ -576,7 +712,14 @@ export class VehicleDetailsView extends LitElement {
         const { top, avg } = this.speedSummary();
         const topFmt = formatSpeed(top);
         const avgFmt = formatSpeed(avg);
-        const heights = this.bucketHeights(this.speedBuckets, 'max');
+        const bars = this.chartBars(
+            this.speedBuckets,
+            (b) => b.max,
+            (v) => {
+                const f = formatSpeed(v);
+                return `${f.value} ${f.unit}`;
+            },
+        );
         return html`
             <div class="data-card col-6 card-tall">
                 <div class="data-card-head">
@@ -594,12 +737,7 @@ export class VehicleDetailsView extends LitElement {
                             <div class="stat-value-md"><span class="num">${avgFmt.value}</span><span class="unit">${avgFmt.unit}</span></div>
                         </div>
                     </div>
-                    <div class="chart">
-                        ${heights.length
-                            ? heights.map((h) => html`<div class="bar orange" style="height: ${h}%;"></div>`)
-                            : html`<div class="chart-empty">No data</div>`
-                        }
-                    </div>
+                    ${this.renderBarChart(bars, 'orange')}
                 </div>
             </div>
         `;
@@ -664,7 +802,22 @@ export class VehicleDetailsView extends LitElement {
     private renderDistanceCard() {
         const km = this.distance7d();
         const fmt = formatDistance(km);
-        const heights = this.bucketHeights(this.distanceBuckets, 'last');
+        // Daily delta = today's last odometer reading - yesterday's. First bucket
+        // has no predecessor so it's undefined.
+        const bars = this.chartBars(
+            this.distanceBuckets,
+            (b, i, all) => {
+                if (i === 0) return undefined;
+                const prev = all[i - 1].last;
+                if (!Number.isFinite(prev) || !Number.isFinite(b.last)) return undefined;
+                const d = b.last - prev;
+                return d >= 0 ? d : undefined;
+            },
+            (v) => {
+                const f = formatDistance(v, 1);
+                return `${f.value} ${f.unit}`;
+            },
+        );
         return html`
             <div class="data-card col-4 card-mid">
                 <div class="data-card-head">
@@ -675,12 +828,7 @@ export class VehicleDetailsView extends LitElement {
                     <div class="stat-value-md" style="padding-bottom: 8px;">
                         <span class="num">${fmt.value}</span><span class="unit">${fmt.unit}</span>
                     </div>
-                    <div class="chart" style="flex: 1; margin-left: 16px;">
-                        ${heights.length
-                            ? heights.map((h) => html`<div class="bar blue" style="height: ${h}%;"></div>`)
-                            : html`<div class="chart-empty small">No data</div>`
-                        }
-                    </div>
+                    ${this.renderBarChart(bars, 'blue', 'narrow')}
                 </div>
             </div>
         `;
