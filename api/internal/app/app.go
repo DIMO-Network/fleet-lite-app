@@ -57,8 +57,10 @@ func App(settings *config.Settings, logger *zerolog.Logger, commitHash string, p
 	// Controllers
 	identityCtrl := controllers.NewIdentityController(settings, logger)
 	vehiclesCtrl := controllers.NewVehiclesController(settings, logger, identity)
+	settingsCtrl := controllers.NewSettingsController(settings, logger)
 
-	// Public identity proxy endpoints (used by the frontend for vehicle metadata)
+	// Public endpoints (no auth)
+	app.Get("/public/settings", settingsCtrl.GetPublicSettings)
 	app.Get("/identity/vehicle/:tokenID", identityCtrl.GetVehicleByTokenID)
 	app.Get("/identity/definition/:id", identityCtrl.GetDefinitionByID)
 	app.Get("/identity/owner/:owner", identityCtrl.GetOwnerBy0x)

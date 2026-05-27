@@ -1,6 +1,8 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
+import { ApiService, ApiError } from '../services/api-service.ts';
+import { Vehicle, VehiclesResponse } from '../types/vehicle.ts';
 
 interface VehicleCard {
     tokenId: string;
@@ -12,43 +14,60 @@ interface VehicleCard {
     errorMessage?: string;
 }
 
-const MOCK_VEHICLES: VehicleCard[] = [
-    {
-        tokenId: '1',
-        title: '2026 Mercedes-Benz A 200',
-        location: 'Peñalolén, Santiago Metropolitan Region',
-        seenAt: '2 hours ago',
-        online: true,
-    },
-    {
-        tokenId: '2',
-        title: '2025 Maxus T60 4X2 GL MT',
-        location: 'Estación Central, Santiago Metropolitan Region',
-        seenAt: '2 hours ago',
-        online: true,
-        notification: 1,
-    },
-    {
-        tokenId: '3',
-        title: '2025 Ram 1500',
-        location: '',
-        seenAt: '',
-        online: false,
-        errorMessage: 'Enroll subscription to stay online',
-    },
-    {
-        tokenId: '4',
-        title: '2022 Ram 1500',
-        location: '',
-        seenAt: '',
-        online: false,
-        errorMessage: 'Enroll subscription to stay online',
-    },
-];
-
 @customElement('fleet-overview-view')
 export class FleetOverviewView extends LitElement {
-    @state() private vehicles: VehicleCard[] = MOCK_VEHICLES;
+    @state() private vehicles: VehicleCard[] = [];
+    @state() private loading = true;
+    @state() private errorMessage: string | null = null;
+
+    private formatTitle(v: Vehicle): string {
+        const d = v.definition;
+        const parts = [d.year ? String(d.year) : '', d.make, d.model].filter(Boolean);
+        return parts.length ? parts.join(' ') : `Vehicle #${v.tokenId}`;
+    }
+
+    private timeAgo(iso: string | null): string {
+        if (!iso) return '';
+        const ts = new Date(iso).getTime();
+        if (Number.isNaN(ts)) return '';
+        const diff = Date.now() - ts;
+        const m = Math.floor(diff / 60_000);
+        if (m < 1) return 'just now';
+        if (m < 60) return `${m} min ago`;
+        const h = Math.floor(m / 60);
+        if (h < 24) return `${h} hour${h === 1 ? '' : 's'} ago`;
+        const d = Math.floor(h / 24);
+        return `${d} day${d === 1 ? '' : 's'} ago`;
+    }
+
+    private toCard(v: Vehicle): VehicleCard {
+        const synthetic = v.syntheticDevice && v.syntheticDevice.tokenId > 0;
+        return {
+            tokenId: String(v.tokenId),
+            title: this.formatTitle(v),
+            location: '',
+            seenAt: this.timeAgo(v.mintedAt),
+            online: !!synthetic,
+            errorMessage: synthetic ? undefined : 'Enroll subscription to stay online',
+        };
+    }
+
+    async connectedCallback() {
+        super.connectedCallback();
+        try {
+            const res = await ApiService.getInstance().get<VehiclesResponse>('/vehicles');
+            this.vehicles = (res.vehicles || []).map((v) => this.toCard(v));
+            this.loading = false;
+        } catch (e) {
+            this.loading = false;
+            if (e instanceof ApiError && (e.status === 401 || e.status === 400)) {
+                window.location.replace('/login.html');
+                return;
+            }
+            console.error('Failed to load vehicles', e);
+            this.errorMessage = e instanceof Error ? e.message : 'Failed to load vehicles';
+        }
+    }
 
     static styles = [
         sharedStyles,
@@ -261,6 +280,14 @@ export class FleetOverviewView extends LitElement {
                 flex-direction: column;
                 gap: 16px;
             }
+            .empty-state {
+                color: var(--on-surface-variant);
+                font: var(--type-body-sm);
+                padding: 24px;
+                text-align: center;
+            }
+            .empty-state.error { color: var(--error); }
+
             .vehicle-list::-webkit-scrollbar { width: 6px; }
             .vehicle-list::-webkit-scrollbar-thumb {
                 background-color: var(--outline-variant);
@@ -415,7 +442,14 @@ export class FleetOverviewView extends LitElement {
                     <button><span class="material-symbols-outlined">add</span></button>
                 </div>
                 <div class="vehicle-list custom-scrollbar">
-                    ${this.vehicles.map(v => this.renderCard(v))}
+                    ${this.loading
+                        ? html`<p class="empty-state">Loading vehicles…</p>`
+                        : this.errorMessage
+                            ? html`<p class="empty-state error">${this.errorMessage}</p>`
+                            : this.vehicles.length === 0
+                                ? html`<p class="empty-state">No vehicles found on this account.</p>`
+                                : this.vehicles.map(v => this.renderCard(v))
+                    }
                 </div>
             </div>
         `;

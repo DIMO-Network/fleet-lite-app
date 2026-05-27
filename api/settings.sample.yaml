@@ -24,7 +24,7 @@ TOKEN_EXCHANGE_URL: https://token-exchange-api.dimo.zone
 DIMO_LOGIN_URL: https://login.dimo.org
 DIMO_AUTH_URL: https://auth.dimo.zone
 DIMO_AUTH_REDIRECT_URL: https://local-fleet-lite.dimo.org:3009/login.html
-DIMO_AUTH_CLIENT_ID: '0x0000000000000000000000000000000000000000'
+DIMO_AUTH_CLIENT_ID: '0x51dacC165f1306Abfbf0a6312ec96E13AAA826DB'  # shared with rental-fleets-app
 DIMO_AUTH_PRIVATE_KEY: ''
 
 ## CORS — frontend dev origin + production console

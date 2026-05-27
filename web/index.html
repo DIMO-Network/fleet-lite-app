@@ -7,6 +7,28 @@
     <title>FLEET_LITE_OS</title>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@600&display=swap" rel="stylesheet" />
+    <script>
+      // Synchronous token check — must run BEFORE module scripts so a
+      // logged-out visitor goes straight to login.html instead of letting
+      // app-root mount, fire /vehicles, get rejected, and flash UI.
+      (function () {
+        var t = localStorage.getItem('token');
+        var expired = true;
+        if (t) {
+          try {
+            var parts = t.split('.');
+            if (parts.length === 3) {
+              var payload = JSON.parse(atob(parts[1]));
+              var exp = typeof payload.exp === 'number' ? payload.exp : 0;
+              expired = exp < Math.floor(Date.now() / 1000);
+            }
+          } catch (e) { expired = true; }
+        }
+        if (expired) {
+          window.location.replace('/login.html');
+        }
+      })();
+    </script>
     <script type="module" src="./src/index.ts"></script>
     <style>
       html, body { height: 100%; }
