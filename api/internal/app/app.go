@@ -33,6 +33,7 @@ func App(
 	extractAPI service.ExtractAPIService,
 	attestSvc service.AttestService,
 	fetchAPI *gateway.FetchAPI,
+	telemetryAPI service.TelemetryAPIService,
 ) *fiber.App {
 	appCommitHash = commitHash
 
@@ -85,6 +86,11 @@ func App(
 
 	authApp.Get("/vehicles", vehiclesCtrl.GetVehicles)
 	authApp.Get("/vehicles/:tokenID", vehiclesCtrl.GetVehicle)
+
+	// Telemetry (vehicle-details charts)
+	telemetryCtrl := controllers.NewTelemetryController(logger, settings, identity, telemetryAPI)
+	authApp.Get("/telemetry/:tokenID/latest", telemetryCtrl.GetLatest)
+	authApp.Get("/telemetry/:tokenID/timeseries", telemetryCtrl.GetTimeSeries)
 
 	// Glovebox / documents
 	documentsCtrl := controllers.NewDocumentsController(

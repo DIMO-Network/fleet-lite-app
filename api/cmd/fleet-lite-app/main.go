@@ -71,12 +71,13 @@ func main() {
 	extractAPI := service.NewExtractAPIService(logger, &settings, authProvider)
 	attestSvc := service.NewAttestService(logger, &settings, authProvider)
 	fetchAPI := gateway.NewFetchAPI(logger, &settings, authProvider)
+	telemetryAPI := service.NewTelemetryAPIService(logger, &settings, authProvider)
 
 	monApp := createMonitoringServer()
 	group, gCtx := errgroup.WithContext(ctx)
 
 	webAPI := app.App(&settings, &logger, CommitHash, &pdb, identityService,
-		authProvider, extractAPI, attestSvc, fetchAPI,
+		authProvider, extractAPI, attestSvc, fetchAPI, telemetryAPI,
 	)
 
 	logger.Info().Int("port", settings.MonitoringPort).Msg("Starting monitoring server")

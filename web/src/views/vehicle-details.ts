@@ -1,14 +1,32 @@
-import { LitElement, html, css } from 'lit';
+import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { ApiService } from '../services/api-service.ts';
 import { Vehicle } from '../types/vehicle.ts';
+import { TelemetryService } from '../services/telemetry-service.ts';
+import { SignalLatest, TimeSeriesBucket } from '../types/telemetry.ts';
+import { PrefsService } from '../services/prefs-service.ts';
+import {
+    formatDistance,
+    formatPercent,
+    formatSpeed,
+    formatTemperature,
+    formatVoltage,
+} from '../utils/units.ts';
 
 @customElement('vehicle-details-view')
 export class VehicleDetailsView extends LitElement {
     @property({ type: String }) tokenId: string = '';
     @state() private vehicle: Vehicle | null = null;
     @state() private loading = true;
+
+    @state() private latestSignals: Record<string, SignalLatest> = {};
+    @state() private speedBuckets: TimeSeriesBucket[] = [];
+    @state() private distanceBuckets: TimeSeriesBucket[] = [];
+    @state() private telemetryPermissionsRequired = false;
+    @state() private telemetryDevLicense = '';
+
+    private unsubscribePrefs: (() => void) | null = null;
 
     private get vehicleTitle(): string {
         if (!this.vehicle) return `Vehicle #${this.tokenId}`;
@@ -17,26 +35,108 @@ export class VehicleDetailsView extends LitElement {
         return parts.length ? parts.join(' ') : `Vehicle #${this.tokenId}`;
     }
 
-    async connectedCallback() {
-        super.connectedCallback();
+    private async loadAll() {
+        this.loading = true;
+        this.telemetryPermissionsRequired = false;
+        this.latestSignals = {};
+        this.speedBuckets = [];
+        this.distanceBuckets = [];
+
+        // Identity (typed vehicle)
         try {
             this.vehicle = await ApiService.getInstance().get<Vehicle>(`/vehicles/${this.tokenId}`);
         } catch (e) {
             console.error('Failed to load vehicle', e);
-        } finally {
-            this.loading = false;
         }
+
+        // Telemetry. We parallelize latest + 7-day speed/distance to keep TTFP low.
+        const tokenIdNum = Number(this.tokenId);
+        const to = new Date();
+        const from = new Date(to.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const fromIso = from.toISOString();
+        const toIso = to.toISOString();
+
+        const [latestRes, speedRes, distRes] = await Promise.allSettled([
+            TelemetryService.getInstance().latest(tokenIdNum),
+            TelemetryService.getInstance().timeSeries(tokenIdNum, 'speed', fromIso, toIso, '1d'),
+            TelemetryService.getInstance().timeSeries(
+                tokenIdNum,
+                'powertrainTransmissionTravelledDistance',
+                fromIso, toIso, '1d',
+            ),
+        ]);
+
+        if (latestRes.status === 'fulfilled') {
+            this.latestSignals = latestRes.value.signals || {};
+            this.telemetryPermissionsRequired = !!latestRes.value.permissionsRequired;
+            this.telemetryDevLicense = latestRes.value.devLicense || '';
+        } else {
+            console.warn('latest telemetry failed', latestRes.reason);
+        }
+        if (speedRes.status === 'fulfilled') this.speedBuckets = speedRes.value.buckets || [];
+        if (distRes.status === 'fulfilled')  this.distanceBuckets = distRes.value.buckets || [];
+
+        this.loading = false;
+    }
+
+    connectedCallback() {
+        super.connectedCallback();
+        this.loadAll();
+        this.unsubscribePrefs = PrefsService.getInstance().subscribe(() => this.requestUpdate());
+    }
+
+    disconnectedCallback() {
+        this.unsubscribePrefs?.();
+        super.disconnectedCallback();
     }
 
     willUpdate(changed: Map<string, unknown>) {
         if (changed.has('tokenId') && this.tokenId && !this.loading) {
-            this.loading = true;
-            ApiService.getInstance()
-                .get<Vehicle>(`/vehicles/${this.tokenId}`)
-                .then((v) => { this.vehicle = v; })
-                .catch((e) => { console.error('Failed to load vehicle', e); })
-                .finally(() => { this.loading = false; });
+            this.loadAll();
         }
+    }
+
+    private signalValue(name: string): number | undefined {
+        const v = this.latestSignals[name]?.value;
+        if (typeof v === 'number') return v;
+        if (typeof v === 'string') {
+            const n = Number(v);
+            return Number.isFinite(n) ? n : undefined;
+        }
+        return undefined;
+    }
+
+    /** Pick top + avg speed from the daily buckets — telemetry-api already aggregated. */
+    private speedSummary(): { top?: number; avg?: number } {
+        if (this.speedBuckets.length === 0) return {};
+        let top = -Infinity, sum = 0, n = 0;
+        for (const b of this.speedBuckets) {
+            if (b.max > top) top = b.max;
+            if (Number.isFinite(b.avg)) { sum += b.avg; n += 1; }
+        }
+        return {
+            top: top === -Infinity ? undefined : top,
+            avg: n > 0 ? sum / n : undefined,
+        };
+    }
+
+    /** Distance over last 7 days as the delta between first and last odometer reading. */
+    private distance7d(): number | undefined {
+        if (this.distanceBuckets.length < 2) return undefined;
+        const first = this.distanceBuckets.find((b) => Number.isFinite(b.last));
+        const last = [...this.distanceBuckets].reverse().find((b) => Number.isFinite(b.last));
+        if (!first || !last) return undefined;
+        const delta = last.last - first.last;
+        return delta >= 0 ? delta : undefined;
+    }
+
+    /** Normalize buckets to 0..100 heights for rendering bars relative to the max. */
+    private bucketHeights(buckets: TimeSeriesBucket[], field: 'max' | 'avg' | 'last' = 'max'): number[] {
+        const values = buckets.map((b) => b[field]).filter((v) => Number.isFinite(v));
+        if (values.length === 0) return [];
+        const max = Math.max(...values);
+        if (max <= 0) return values.map(() => 5);
+        return values.map((v) => Math.max(5, (v / max) * 100));
     }
 
     static styles = [
@@ -352,20 +452,61 @@ export class VehicleDetailsView extends LitElement {
                 position: relative;
                 overflow: hidden;
             }
-            .fuel-bar::before {
-                content: '';
+            .fuel-bar-fill {
                 position: absolute;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                height: 2px;
-                background: var(--secondary-container);
+                inset: 0 auto 0 0;
+                background: linear-gradient(to top, var(--secondary-container), rgba(234, 107, 24, 0.4));
+                transition: width 0.5s ease;
             }
-            .fuel-bar::after {
-                content: '';
-                position: absolute;
-                inset: 0;
-                background: linear-gradient(to top, rgba(234, 107, 24, 0.4), transparent);
+
+            .chart-empty {
+                width: 100%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: var(--on-surface-variant);
+                font: var(--type-label-caps);
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+            }
+            .chart-empty.small { font-size: 10px; }
+
+            .perms-banner {
+                grid-column: span 12;
+                display: flex;
+                align-items: center;
+                gap: 16px;
+                padding: 16px;
+                background: rgba(255, 182, 145, 0.06);
+                border: 1px solid rgba(255, 182, 145, 0.2);
+                border-radius: var(--radius-md);
+                margin-bottom: 16px;
+            }
+            .perms-banner strong { color: var(--secondary); font: var(--type-body-md); font-weight: 600; }
+            .perms-banner p { font: var(--type-body-sm); color: var(--on-surface-variant); margin-top: 4px; line-height: 1.5; }
+            .perms-banner code { font-family: var(--font-mono); font-size: 11px; color: var(--secondary); }
+            .perms-banner a.grant {
+                flex-shrink: 0;
+                background: var(--primary);
+                color: var(--on-primary);
+                padding: 10px 16px;
+                border-radius: var(--radius-md);
+                font: var(--type-label-caps);
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                font-weight: 700;
+                text-decoration: none;
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+            }
+
+            .data-card.placeholder { opacity: 0.55; }
+            .placeholder-body p { font: var(--type-body-sm); color: var(--on-surface-variant); margin-bottom: 4px; }
+            .placeholder-body p.small {
+                font: var(--type-label-caps);
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
             }
 
             .pill-normal {
@@ -431,8 +572,172 @@ export class VehicleDetailsView extends LitElement {
         `,
     ];
 
-    private bars(heights: number[], color: 'orange' | 'green' | 'blue') {
-        return heights.map(h => html`<div class="bar ${color}" style="height: ${h}%;"></div>`);
+    private renderSpeedCard() {
+        const { top, avg } = this.speedSummary();
+        const topFmt = formatSpeed(top);
+        const avgFmt = formatSpeed(avg);
+        const heights = this.bucketHeights(this.speedBuckets, 'max');
+        return html`
+            <div class="data-card col-6 card-tall">
+                <div class="data-card-head">
+                    <h4>Speed</h4>
+                    <span class="material-symbols-outlined">chevron_right</span>
+                </div>
+                <div class="stat-row">
+                    <div class="stat-col">
+                        <div>
+                            <p class="stat-label">Top</p>
+                            <div class="stat-value-lg"><span class="num">${topFmt.value}</span><span class="unit">${topFmt.unit}</span></div>
+                        </div>
+                        <div>
+                            <p class="stat-label">Average</p>
+                            <div class="stat-value-md"><span class="num">${avgFmt.value}</span><span class="unit">${avgFmt.unit}</span></div>
+                        </div>
+                    </div>
+                    <div class="chart">
+                        ${heights.length
+                            ? heights.map((h) => html`<div class="bar orange" style="height: ${h}%;"></div>`)
+                            : html`<div class="chart-empty">No data</div>`
+                        }
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    private renderUtilizationPlaceholder() {
+        // Telemetry-api doesn't directly expose "hours driven"; would need to
+        // derive from speed-based ignition segments. Defer to a future phase.
+        return html`
+            <div class="data-card col-6 card-tall placeholder">
+                <div class="data-card-head">
+                    <h4>Utilization</h4>
+                    <span class="material-symbols-outlined">hourglass_empty</span>
+                </div>
+                <div class="placeholder-body">
+                    <p>Driving hours aren't exposed directly by telemetry-api.</p>
+                    <p class="small">Will be derived from ignition + speed segments in a future phase.</p>
+                </div>
+            </div>
+        `;
+    }
+
+    private renderFuelCard() {
+        const pct = this.signalValue('powertrainFuelSystemRelativeLevel');
+        const fmt = formatPercent(pct);
+        const widthPct = typeof pct === 'number' ? Math.max(0, Math.min(100, pct)) : 0;
+        return html`
+            <div class="data-card col-4 card-mid">
+                <div class="data-card-head">
+                    <h4>Fuel level</h4>
+                    <span class="material-symbols-outlined">local_gas_station</span>
+                </div>
+                <div>
+                    <div class="stat-value-lg" style="margin-bottom: 16px;">
+                        <span class="num">${fmt.value}</span><span class="unit">${fmt.unit}</span>
+                    </div>
+                    <div class="fuel-bar"><div class="fuel-bar-fill" style="width: ${widthPct}%;"></div></div>
+                </div>
+            </div>
+        `;
+    }
+
+    private renderCoolantCard() {
+        const c = this.signalValue('powertrainCombustionEngineECT');
+        const fmt = formatTemperature(c);
+        const normal = typeof c === 'number' && c >= 70 && c <= 110;
+        return html`
+            <div class="data-card col-4 card-mid">
+                <div class="data-card-head" style="border-bottom: 1px solid var(--outline-variant); padding-bottom: 16px; margin-bottom: 16px;">
+                    <h4>Coolant temperature</h4>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+                    <div class="stat-value-lg"><span class="num">${fmt.value}</span><span class="unit">${fmt.unit}</span></div>
+                    ${typeof c === 'number'
+                        ? html`<span class="pill-normal">${normal ? 'Normal' : 'Check'}</span>`
+                        : nothing}
+                </div>
+            </div>
+        `;
+    }
+
+    private renderDistanceCard() {
+        const km = this.distance7d();
+        const fmt = formatDistance(km);
+        const heights = this.bucketHeights(this.distanceBuckets, 'last');
+        return html`
+            <div class="data-card col-4 card-mid">
+                <div class="data-card-head">
+                    <h4>Distance · 7d</h4>
+                    <span class="material-symbols-outlined">chevron_right</span>
+                </div>
+                <div class="distance-row">
+                    <div class="stat-value-md" style="padding-bottom: 8px;">
+                        <span class="num">${fmt.value}</span><span class="unit">${fmt.unit}</span>
+                    </div>
+                    <div class="chart" style="flex: 1; margin-left: 16px;">
+                        ${heights.length
+                            ? heights.map((h) => html`<div class="bar blue" style="height: ${h}%;"></div>`)
+                            : html`<div class="chart-empty small">No data</div>`
+                        }
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    private renderBatteryCard() {
+        const v = this.signalValue('lowVoltageBatteryCurrentVoltage');
+        const fmt = formatVoltage(v);
+        return html`
+            <div class="data-card col-3 card-short">
+                <div class="data-card-head">
+                    <h4>Battery voltage</h4>
+                    <span class="material-symbols-outlined">battery_full</span>
+                </div>
+                <div class="stat-value-md"><span class="num">${fmt.value}</span><span class="unit">${fmt.unit}</span></div>
+            </div>
+        `;
+    }
+
+    private renderErrorCodesPlaceholder() {
+        return html`
+            <div class="data-card col-3 card-short relative placeholder">
+                <div class="data-card-head">
+                    <h4>Error codes</h4>
+                    <span class="material-symbols-outlined">hourglass_empty</span>
+                </div>
+                <div>
+                    <div class="stat-value-md" style="margin-bottom: 8px;">
+                        <span class="num">—</span><span class="unit">DTCs</span>
+                    </div>
+                    <p class="stat-label">Not yet wired</p>
+                </div>
+                <span class="material-symbols-outlined err-engineering">engineering</span>
+            </div>
+        `;
+    }
+
+    private renderOdometerCard() {
+        const km = this.signalValue('powertrainTransmissionTravelledDistance');
+        const fmt = formatDistance(km);
+        return html`
+            <div class="data-card col-3 card-short">
+                <div class="data-card-head"><h4>Odometer</h4></div>
+                <div class="stat-value-md"><span class="num">${fmt.value}</span><span class="unit">${fmt.unit}</span></div>
+            </div>
+        `;
+    }
+
+    private renderAdBlueCard() {
+        const pct = this.signalValue('powertrainCombustionEngineDieselExhaustFluidLevel');
+        const fmt = formatPercent(pct);
+        return html`
+            <div class="data-card col-3 card-short">
+                <div class="data-card-head"><h4>AdBlue</h4></div>
+                <div class="stat-value-md"><span class="num">${fmt.value}</span><span class="unit">${fmt.unit}</span></div>
+            </div>
+        `;
     }
 
     render() {
@@ -505,126 +810,35 @@ export class VehicleDetailsView extends LitElement {
 
                     <div class="section-label">Last 7 days</div>
 
-                    <!-- Speed -->
-                    <div class="data-card col-6 card-tall">
-                        <div class="data-card-head">
-                            <h4>Speed</h4>
-                            <span class="material-symbols-outlined">chevron_right</span>
-                        </div>
-                        <div class="stat-row">
-                            <div class="stat-col">
-                                <div>
-                                    <p class="stat-label">Top</p>
-                                    <div class="stat-value-lg"><span class="num">78</span><span class="unit">mph</span></div>
-                                </div>
-                                <div>
-                                    <p class="stat-label">Average</p>
-                                    <div class="stat-value-md"><span class="num">22</span><span class="unit">mph</span></div>
-                                </div>
+                    ${this.telemetryPermissionsRequired ? html`
+                        <div class="perms-banner">
+                            <div>
+                                <strong>Grant DIMO permissions to see live telemetry on this vehicle.</strong>
+                                <p>
+                                    The fleet-lite dev license <code>${this.telemetryDevLicense}</code>
+                                    needs SACD permissions on this vehicle before we can read signals from
+                                    telemetry-api. Charts below are placeholders until permissions are granted.
+                                </p>
                             </div>
-                            <div class="chart">${this.bars([60, 40, 75, 50, 80, 90, 65, 85], 'orange')}</div>
+                            <a class="grant" href="https://console.dimo.org" target="_blank" rel="noopener">
+                                Open DIMO console
+                                <span class="material-symbols-outlined" style="font-size:14px;">open_in_new</span>
+                            </a>
                         </div>
-                    </div>
+                    ` : nothing}
 
-                    <!-- Utilization -->
-                    <div class="data-card col-6 card-tall">
-                        <div class="data-card-head">
-                            <h4>Utilization</h4>
-                            <span class="material-symbols-outlined">chevron_right</span>
-                        </div>
-                        <div class="stat-row">
-                            <div class="stat-col">
-                                <div>
-                                    <p class="stat-label">Total</p>
-                                    <div class="stat-value-lg"><span class="num">30.1</span><span class="unit">h</span></div>
-                                </div>
-                                <div>
-                                    <p class="stat-label">Daily avg</p>
-                                    <div class="stat-value-md"><span class="num">4.3</span><span class="unit">h</span></div>
-                                </div>
-                            </div>
-                            <div class="chart">${this.bars([45, 15, 20, 15, 25, 15, 85, 35], 'green')}</div>
-                        </div>
-                    </div>
-
-                    <!-- Fuel -->
-                    <div class="data-card col-4 card-mid">
-                        <div class="data-card-head">
-                            <h4>Fuel usage</h4>
-                            <span class="material-symbols-outlined">chevron_right</span>
-                        </div>
-                        <div>
-                            <div class="stat-value-lg" style="margin-bottom: 16px;">
-                                <span class="num">0</span><span class="unit">gallons</span>
-                            </div>
-                            <div class="fuel-bar"></div>
-                        </div>
-                    </div>
-
-                    <!-- Coolant -->
-                    <div class="data-card col-4 card-mid">
-                        <div class="data-card-head" style="border-bottom: 1px solid var(--outline-variant); padding-bottom: 16px; margin-bottom: 16px;">
-                            <h4>Coolant temperature</h4>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; align-items:flex-end;">
-                            <div class="stat-value-lg"><span class="num">189</span><span class="unit">°F</span></div>
-                            <span class="pill-normal">Normal</span>
-                        </div>
-                    </div>
-
-                    <!-- Distance -->
-                    <div class="data-card col-4 card-mid">
-                        <div class="data-card-head">
-                            <h4>Distance</h4>
-                            <span class="material-symbols-outlined">chevron_right</span>
-                        </div>
-                        <div class="distance-row">
-                            <div class="stat-value-md" style="padding-bottom: 8px;">
-                                <span class="num">342</span><span class="unit">miles</span>
-                            </div>
-                            <div class="chart" style="flex: 1; margin-left: 16px;">
-                                ${this.bars([60, 40, 75, 50, 80, 90, 65], 'blue')}
-                            </div>
-                        </div>
-                    </div>
+                    ${this.renderSpeedCard()}
+                    ${this.renderUtilizationPlaceholder()}
+                    ${this.renderFuelCard()}
+                    ${this.renderCoolantCard()}
+                    ${this.renderDistanceCard()}
 
                     <div class="section-headline">Vehicle status</div>
 
-                    <!-- Battery -->
-                    <div class="data-card col-3 card-short">
-                        <div class="data-card-head">
-                            <h4>Battery voltage</h4>
-                            <span class="material-symbols-outlined">chevron_right</span>
-                        </div>
-                        <div class="stat-value-md"><span class="num">12.881</span><span class="unit">V</span></div>
-                    </div>
-
-                    <!-- Error codes -->
-                    <div class="data-card col-3 card-short relative">
-                        <div class="data-card-head">
-                            <h4>Error codes</h4>
-                            <span class="material-symbols-outlined">chevron_right</span>
-                        </div>
-                        <div>
-                            <div class="stat-value-md" style="margin-bottom: 8px;">
-                                <span class="num">0</span><span class="unit">codes</span>
-                            </div>
-                            <p class="stat-label">2 hours ago</p>
-                        </div>
-                        <span class="material-symbols-outlined err-engineering">engineering</span>
-                    </div>
-
-                    <!-- Odometer -->
-                    <div class="data-card col-3 card-short">
-                        <div class="data-card-head"><h4>Odometer</h4></div>
-                        <div class="stat-value-md"><span class="num">5,688</span><span class="unit">mi</span></div>
-                    </div>
-
-                    <!-- AdBlue -->
-                    <div class="data-card col-3 card-short">
-                        <div class="data-card-head"><h4>AdBlue</h4></div>
-                        <div class="stat-value-md"><span class="num">0</span><span class="unit">%</span></div>
-                    </div>
+                    ${this.renderBatteryCard()}
+                    ${this.renderErrorCodesPlaceholder()}
+                    ${this.renderOdometerCard()}
+                    ${this.renderAdBlueCard()}
                 </div>
 
                 <div class="quick-actions">

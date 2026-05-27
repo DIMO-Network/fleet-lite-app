@@ -40,6 +40,9 @@ type Settings struct {
 	FetchAPIURL   url.URL `yaml:"FETCH_API_URL"`
 	AttestAPIURL  url.URL `yaml:"ATTEST_API_URL"`
 
+	// DIMO Telemetry API (vehicle-details charts).
+	TelemetryAPIURL url.URL `yaml:"TELEMETRY_API_URL"`
+
 	// Chain
 	ChainID           int64          `yaml:"CHAIN_ID"`
 	VehicleNftAddress common.Address `yaml:"VEHICLE_NFT_ADDRESS"`

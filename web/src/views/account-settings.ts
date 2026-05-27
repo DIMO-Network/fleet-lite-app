@@ -2,11 +2,24 @@ import { LitElement, html, css } from 'lit';
 import { customElement } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { getTokenClaims, logout } from '../utils/token.ts';
+import { PrefsService } from '../services/prefs-service.ts';
+import { unitsLabel } from '../utils/units.ts';
 
-interface Row { icon: string; label: string; onClick?: () => void; }
+interface Row { icon: string; label: string; trailing?: string; onClick?: () => void; }
 
 @customElement('account-settings-view')
 export class AccountSettingsView extends LitElement {
+    private unsubscribePrefs: (() => void) | null = null;
+
+    connectedCallback() {
+        super.connectedCallback();
+        this.unsubscribePrefs = PrefsService.getInstance().subscribe(() => this.requestUpdate());
+    }
+
+    disconnectedCallback() {
+        this.unsubscribePrefs?.();
+        super.disconnectedCallback();
+    }
     private get wallet(): string {
         const claims = getTokenClaims();
         const addr = typeof claims?.ethereum_address === 'string' ? claims.ethereum_address : '';
@@ -19,12 +32,18 @@ export class AccountSettingsView extends LitElement {
     }
 
     private privacyRows(): Row[] {
+        const prefs = PrefsService.getInstance();
         return [
             { icon: 'directions_car', label: 'Manage Subscription' },
             { icon: 'vpn_key',        label: 'Passkey' },
             { icon: 'language',       label: 'Language' },
             { icon: 'developer_mode', label: 'Advanced' },
-            { icon: 'straighten',     label: 'Measurement Units' },
+            {
+                icon: 'straighten',
+                label: 'Measurement Units',
+                trailing: unitsLabel(prefs.getUnits()),
+                onClick: () => { prefs.toggleUnits(); },
+            },
             { icon: 'mail',           label: 'Email Preferences' },
             { icon: 'logout',         label: 'Log out', onClick: () => logout() },
         ];
@@ -158,6 +177,13 @@ export class AccountSettingsView extends LitElement {
             .row:last-child { border-bottom: none; }
             .row:hover { background: var(--surface-container-high); }
             .row .left-group { display: flex; align-items: center; gap: 16px; }
+            .row .right-group { display: flex; align-items: center; gap: 12px; }
+            .row .trailing {
+                font: var(--type-label-caps);
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                color: var(--on-surface-variant);
+            }
             .row .label {
                 font: var(--type-body-lg);
                 color: var(--primary);
@@ -177,7 +203,10 @@ export class AccountSettingsView extends LitElement {
                     <span class="material-symbols-outlined muted">${r.icon}</span>
                     <span class="label">${r.label}</span>
                 </div>
-                <span class="material-symbols-outlined muted">chevron_right</span>
+                <div class="right-group">
+                    ${r.trailing ? html`<span class="trailing">${r.trailing}</span>` : ''}
+                    <span class="material-symbols-outlined muted">chevron_right</span>
+                </div>
             </a>
         `;
     }

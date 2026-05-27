@@ -38,6 +38,9 @@ EXTRACT_API_URL: https://extract.dimo.zone/extract
 FETCH_API_URL:   https://fetch-api.dimo.zone/v1/fetch/objects
 ATTEST_API_URL:  https://attest.dimo.zone
 
+## Telemetry (vehicle-details charts)
+TELEMETRY_API_URL: https://telemetry-api.dimo.zone/query
+
 ## Chain config (polygon mainnet)
 CHAIN_ID: 137
 VEHICLE_NFT_ADDRESS: '0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF'
