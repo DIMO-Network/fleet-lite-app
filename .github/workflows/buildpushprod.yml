@@ -1,0 +1,51 @@
+name: buildpushprod
+on:
+  push:
+    tags:
+      - v*
+
+jobs:
+  build_prod:
+    # The type of runner that the job will run on
+    name: buildpushprod
+    runs-on: [self-hosted, linux]
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Get short SHA
+        id: slug
+        run: echo "BUILD_TAG=$(echo ${GITHUB_SHA} | cut -c1-7)" >> $GITHUB_OUTPUT
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+          cache: false
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          build-args: |
+            COMMIT_HASH=${{ steps.slug.outputs.BUILD_TAG }}
+          tags: dimozone/fleet-lite-app:${{ steps.slug.outputs.BUILD_TAG }}, dimozone/fleet-lite-app:latest
+# note we are going straight to prod here. There is no dev env possible due to LIWD
+      - name: Update Image Version in the related HelmChart values.yaml
+        uses: fjogeleit/yaml-update-action@v0.15.0
+        with:
+          valueFile: 'charts/fleet-lite-app/values-prod.yaml'
+          propertyPath: 'image.tag'
+          value: ${{ steps.slug.outputs.BUILD_TAG }}
+          branch: main
+          message: 'Update Image Version to ${{ steps.slug.outputs.BUILD_TAG }}'

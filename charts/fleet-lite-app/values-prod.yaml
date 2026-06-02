@@ -16,61 +16,53 @@ securityContext: {}
 env:
   ENVIRONMENT: prod
   USE_DEV_CERTS: false
-  API_PORT: '8080'
-  MONITORING_PORT: 8888
+  API_PORT: '8084'
+  MONITORING_PORT: '8085'
   LOG_LEVEL: info
+  SERVICE_NAME: fleet-lite-app
   DB_PORT: '5432'
   DB_NAME: fleet_lite_app
   DB_MAX_OPEN_CONNECTIONS: '20'
   DB_MAX_IDLE_CONNECTIONS: '6'
   DB_SSL_MODE: require
-  SERVICE_NAME: fleet-lite-app
+  # Authentication
+  JWT_KEY_SET_URL: https://auth.dimo.zone/keys
+  TOKEN_EXCHANGE_URL: https://token-exchange-api.dimo.zone
+  # Login With DIMO
   DIMO_LOGIN_URL: https://login.dimo.org
   DIMO_AUTH_URL: https://auth.dimo.zone
   DIMO_AUTH_CLIENT_ID: '0x51dacC165f1306Abfbf0a6312ec96E13AAA826DB'
-  DIMO_AUTH_REDIRECT_URL: https://fleets.dimo.co/login.html
-  JWT_KEY_SET_URL: https://auth.dimo.zone/keys
-  IDENTITY_API_ENDPOINT: http://identity-api-prod.prod.svc.cluster.local:8080/query
-  DEVICE_DEFINITIONS_API_ENDPOINT: http://device-definitions-api-prod.prod.svc.cluster.local:8080
-  TOKEN_EXCHANGE_URL: https://token-exchange-api.dimo.zone
-  TOKEN_EXCHANGE_JWT_KEY_SET_URL: http://dex-roles-rights-prod.prod.svc.cluster.local:5556/keys
+  DIMO_AUTH_REDIRECT_URL: https://fleet-lite.dimo.co/login.html
+  # CORS
+  ALLOWED_ORIGINS: https://fleet-lite.dimo.co,https://console.dimo.org
+  # DIMO Identity API
+  IDENTITY_API_ENDPOINT: https://identity-api.dimo.zone/query
+  # Document services (glovebox)
+  EXTRACT_API_URL: https://extract.dimo.zone/extract
+  FETCH_API_URL: https://fetch-api.dimo.zone/v1/fetch/objects
+  ATTEST_API_URL: https://attest.dimo.zone
+  # Telemetry (vehicle-details charts)
   TELEMETRY_API_URL: https://telemetry-api.dimo.zone/query
-  POLYGON_URL: https://polygonscan.com
-  CHAIN_ID: 137
+  # Chain config (polygon mainnet)
+  CHAIN_ID: '137'
   VEHICLE_NFT_ADDRESS: '0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF'
-  SYNTHETIC_NFT_ADDRESS: '0x4804e8D1661cd1a1e5dDdE1ff458A7f878c0aC6D'
-  REGISTRY_ADDRESS: '0xFA8beC73cebB9D88FF88a2f75E7D7312f2Fd39EC'
-  ACCOUNTS_API_ENDPOINT: https://accounts.dimo.org
-  TURNKEY_ORG_ID: c28319a1-73ec-489a-a212-ec8dbd65dd52
-  TURNKEY_API_URL: https://api.turnkey.com
-  TURNKEY_RP_ID: dimo.org
-  ALLOWED_ORIGINS: https://fleets.dimo.co,https://console.dimo.org
-  CHAT_TURN_TIMEOUT_MS: '120000'
-  CHAT_PLATFORM_MONTHLY_SPEND_CAP_USD: '50'
-  LANGFUSE_ENABLED: 'true'
-  LANGFUSE_SAMPLE_RATE: '1.0'
-  LANGFUSE_ENVIRONMENT: production
-  LANGFUSE_BASE_URL: https://us.cloud.langfuse.com
-  GOOGLE_CLIENT_ID: 530163413747-u9d5drcpka2cn8ssa08c5h9gqu88go7p.apps.googleusercontent.com
-  GOOGLE_OAUTH_CALLBACK_URL: https://fleets.dimo.co/integrations/google-calendar/callback
-  WEB_APP_URL: https://fleets.dimo.co
 service:
   type: ClusterIP
   ports:
     mon-http:
-      port: 8888
+      port: 8085
       targetPort: mon-http
       protocol: TCP
     http:
-      port: 8080
+      port: 8084
       targetPort: http
       protocol: TCP
 ports:
   - name: mon-http
-    containerPort: 8888
+    containerPort: 8085
     protocol: TCP
   - name: http
-    containerPort: 8080
+    containerPort: 8084
     protocol: TCP
 ingress:
   enabled: true
@@ -78,9 +70,11 @@ ingress:
   annotations:
     nginx.ingress.kubernetes.io/auth-tls-secret: ingress/cf-origin-ca
     nginx.ingress.kubernetes.io/auth-tls-verify-client: 'on'
-    external-dns.alpha.kubernetes.io/hostname: fleets.dimo.co
+    nginx.ingress.kubernetes.io/enable-cors: 'true'
+    nginx.ingress.kubernetes.io/cors-allow-origin: https://fleet-lite.dimo.co
+    external-dns.alpha.kubernetes.io/hostname: fleet-lite.dimo.co
   hosts:
-    - host: fleets.dimo.co
+    - host: fleet-lite.dimo.co
       paths:
         - path: /
           pathType: ImplementationSpecific

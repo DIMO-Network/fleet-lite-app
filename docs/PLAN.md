@@ -105,18 +105,18 @@ Then flush mDNS: `sudo killall -HUP mDNSResponder`.
 
 - [x] **1. Scaffold repo skeleton** — directories, `.gitignore`, `git init`
 - [x] **2. Write this PLAN.md** to `docs/`
-- [ ] **3. Scaffold `web/`** — port `package.json`, `tsconfig.json`, `eslint.config.js`, `lit-localize.json`, `Makefile`, `index.html`, `src/index.ts`, empty `src/elements/index.ts` + `src/views/index.ts`, `src/context.ts`, `public/`, `src/assets/`. Drop rental-specific deps. Rename project, title, app-root tag.
-- [ ] **4. Configure `vite.config.js`** — host=`local-fleet-lite.dimo.org`, port=3009, https, mkcert plugin → `.mkcert/`, eslintPlugin, viteStaticCopy for assets. Single `main` entry (no login/signup for now).
-- [ ] **5. Add `/etc/hosts` entry** for `local-fleet-lite.dimo.org` → `127.0.0.1` and flush mDNS.
-- [ ] **6. Extract design tokens** from `stitch_fleet-lite-dimo/obsidian_telemetry/DESIGN.md` and the tailwind-config block in `fleet_overview/code.html` into `web/src/global-styles.ts` as CSS custom properties + a shared `sharedStyles` Lit `css` export.
-- [ ] **7. Build app shell** — `<app-root>` element with side nav (Vehicles / Stats / Glovebox / Settings + Support/Sign Out), top-bar slot, router outlet. Mirror rental-fleets-app/web/src/elements/app-root-v2.ts pattern but stripped to the Stitch design.
-- [ ] **8. Port views** — for each Stitch screen, create a Lit view that renders the markup using tokens (Tailwind utility classes converted to scoped CSS):
+- [x] **3. Scaffold `web/`** — port `package.json`, `tsconfig.json`, `eslint.config.js`, `lit-localize.json`, `Makefile`, `index.html`, `src/index.ts`, empty `src/elements/index.ts` + `src/views/index.ts`, `src/context.ts`, `public/`, `src/assets/`. Drop rental-specific deps. Rename project, title, app-root tag.
+- [x] **4. Configure `vite.config.js`** — host=`local-fleet-lite.dimo.org`, port=3009, https, mkcert plugin → `.mkcert/`, eslintPlugin, viteStaticCopy for assets. Single `main` entry (no login/signup for now).
+- [x] **5. Add `/etc/hosts` entry** for `local-fleet-lite.dimo.org` → `127.0.0.1` and flush mDNS.
+- [x] **6. Extract design tokens** from `stitch_fleet-lite-dimo/obsidian_telemetry/DESIGN.md` and the tailwind-config block in `fleet_overview/code.html` into `web/src/global-styles.ts` as CSS custom properties + a shared `sharedStyles` Lit `css` export.
+- [x] **7. Build app shell** — `<app-root>` element with side nav (Vehicles / Stats / Glovebox / Settings + Support/Sign Out), top-bar slot, router outlet. Mirror rental-fleets-app/web/src/elements/app-root-v2.ts pattern but stripped to the Stitch design.
+- [x] **8. Port views** — for each Stitch screen, create a Lit view that renders the markup using tokens (Tailwind utility classes converted to scoped CSS):
   - `views/fleet-overview.ts`
   - `views/vehicle-details.ts`
   - `views/glovebox.ts`
   - `views/account-settings.ts`
-- [ ] **9. Wire routes** — `@lit-labs/router` with `/`, `/vehicles/:tokenId`, `/glovebox`, `/settings`.
-- [ ] **10. First boot** — `npm install`, `npm run dev`, hit `https://local-fleet-lite.dimo.org:3009`, confirm cert is trusted and Fleet Overview renders.
+- [x] **9. Wire routes** — `@lit-labs/router` with `/`, `/vehicles/:tokenId`, `/glovebox`, `/settings`.
+- [x] **10. First boot** — `npm install`, `npm run dev`, hit `https://local-fleet-lite.dimo.org:3009`, confirm cert is trusted and Fleet Overview renders.
 - [x] **11. Initial commit** on `main`. → Pushed to `DIMO-Network/fleet-lite-app` (public).
 - [x] **12. Scaffold placeholders** — AGENTS.md + api/README.md + charts/README.md committed. Dockerfile deferred until api/ has a buildable binary (covered in §"API expansion" below).
 
@@ -159,20 +159,38 @@ If/when these come back, mirror the rental-fleets-app shape rather than reinvent
 
 ### API to-do (execution order)
 
-- [ ] **A1. Scaffold api root** — `go.mod` (module `github.com/DIMO-Network/fleet-lite-app`), `.golangci.yml`, `.gitignore`, `Makefile`, `settings.sample.yaml`, `sqlboiler.toml`.
-- [ ] **A2. `cmd/fleet-lite-app/`** — `main.go` (trimmed: zerolog + signals + db + fiber + dimoauth + identity service + vehicles controller), `migrate.go` (goose subcommand).
-- [ ] **A3. `internal/config`** — trimmed Settings struct.
-- [ ] **A4. `internal/core`** — `errors.go`, `permissions.go` (copy as-is).
-- [ ] **A5. `internal/gateway/identity_api*`** — typed `FetchVehiclesByWalletAddress` + `FetchVehicleByTokenID` + cache.
-- [ ] **A6. `internal/service/identity_api`** — raw-bytes proxy for `/identity/*` endpoints.
-- [ ] **A7. `internal/models/models.go`** — trimmed (Vehicle, Definition, SyntheticDevice, PageInfo, paged structs, GraphQlData).
-- [ ] **A8. `internal/controllers/{common,identity,vehicles}.go`** — wallet extraction from JWT; identity proxy handlers; `GetVehicles` for current user.
-- [ ] **A9. `internal/app/app.go`** — fiber app builder with middleware, routes, static serving.
-- [ ] **A10. `internal/db/`** — placeholder migrations + models dirs.
-- [ ] **A11. `go mod tidy` + `go build ./...`** — smoke test.
-- [ ] **A12. Dockerfile** — multi-stage (Go build + npm build → busybox runtime).
-- [ ] **A13. Helm chart** — `charts/fleet-lite-app/` cloned from rental-fleets-app, trimmed envs.
-- [ ] **A14. Commit + push** — all of the above to `DIMO-Network/fleet-lite-app`.
+- [x] **A1. Scaffold api root** — `go.mod` (module `github.com/DIMO-Network/fleet-lite-app`), `.golangci.yml`, `.gitignore`, `Makefile`, `settings.sample.yaml`, `sqlboiler.toml`.
+- [x] **A2. `cmd/fleet-lite-app/`** — `main.go` (trimmed: zerolog + signals + db + fiber + dimoauth + identity service + vehicles controller), `migrate.go` (goose subcommand).
+- [x] **A3. `internal/config`** — trimmed Settings struct.
+- [x] **A4. `internal/core`** — `errors.go`, `permissions.go` (copy as-is).
+- [x] **A5. `internal/gateway/identity_api*`** — typed `FetchVehiclesByWalletAddress` + `FetchVehicleByTokenID` + cache.
+- [x] **A6. `internal/service/identity_api`** — raw-bytes proxy for `/identity/*` endpoints.
+- [x] **A7. `internal/models/models.go`** — trimmed (Vehicle, Definition, SyntheticDevice, PageInfo, paged structs, GraphQlData).
+- [x] **A8. `internal/controllers/{common,identity,vehicles}.go`** — wallet extraction from JWT; identity proxy handlers; `GetVehicles` for current user.
+- [x] **A9. `internal/app/app.go`** — fiber app builder with middleware, routes, static serving.
+- [x] **A10. `internal/db/`** — placeholder migrations + models dirs.
+- [x] **A11. `go mod tidy` + `go build ./...`** — smoke test.
+- [x] **A12. Dockerfile** — multi-stage (Go build + npm build → busybox runtime).
+- [x] **A13. Helm chart** — `charts/fleet-lite-app/` cloned from rental-fleets-app, trimmed envs.
+- [x] **A14. Commit + push** — all of the above to `DIMO-Network/fleet-lite-app`.
+
+### Scope grew after A14 (2026-06-02)
+
+The API picked up two feature areas beyond the original "skeleton + /vehicles"
+round, both wiring the frontend to real DIMO services (no more mock data):
+
+- **Telemetry** — `internal/service/telemetry_api.go` + `controllers/telemetry.go`;
+  `GET /telemetry/:tokenID/{latest,timeseries}` drive the vehicle-details charts.
+- **Glovebox documents** — `internal/service/{extract_api,attest_service}.go` +
+  `controllers/documents.go`; `POST /documents/extract`, `/documents/attest`,
+  `GET /documents/{vin-lookup,list,download}`. See [GLOVEBOX.md](GLOVEBOX.md).
+- **Public settings** — `controllers/settings.go`; `GET /public/settings` serves
+  client-safe config to the SPA.
+
+Deploy plumbing also landed: `.github/workflows/` (buildpushdev / buildpushprod /
+lint / web-lint, mirrored from rental-fleets-app) and a prod-clean
+`charts/fleet-lite-app/values-prod.yaml` (host `fleet-lite.dimo.co`, env trimmed
+to exactly what `internal/config/settings.go` reads, ports 8084/8085).
 
 ### Conventions chosen for fleet-lite api
 
@@ -185,11 +203,13 @@ If/when these come back, mirror the rental-fleets-app shape rather than reinvent
 
 ## Out of scope (still)
 
-- CI workflows beyond a copy of the rental-fleets template
 - Auth / passkey signing — design surface only, no working flow
 - Live map tile provider — placeholder background image, as in the Stitch design
 - Tests
-- Frontend wiring to the new api (frontend still uses mock data; switch happens in a follow-up phase)
+
+Now done (was previously listed here): CI workflows (mirrored from the
+rental-fleets template) and frontend wiring to the real api — the SPA hits
+`/vehicles`, `/telemetry/*`, and `/documents/*` for live data, not mocks.
 
 ---
 

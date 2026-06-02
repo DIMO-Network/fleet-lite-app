@@ -10,8 +10,11 @@ Stitch design source in `../stitch_fleet-lite-dimo`.
   Design tokens live in `web/src/global-styles.ts` (CSS custom properties +
   shared Lit `css` exports). No Tailwind at runtime — utility classes from the
   Stitch HTML are converted to scoped CSS in each element.
-- **api/** — Go backend (scaffold placeholder; not yet implemented).
-- **charts/** — Helm (placeholder).
+- **api/** — Go backend (Fiber + zerolog). JWT auth + `/vehicles`,
+  `/telemetry/*`, `/documents/*` (glovebox), and DIMO identity-api proxies.
+  Serves the built `web/dist` SPA in production.
+- **charts/** — Helm chart in `charts/fleet-lite-app/` (dev `values.yaml` +
+  prod `values-prod.yaml`, host `fleet-lite.dimo.co`).
 
 ## Local dev
 

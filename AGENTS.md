@@ -12,10 +12,10 @@ built so far.
 ## Layout
 
 ```
-api/      Go backend — Fiber + zerolog + goose migrations. Skeleton + JWT
-          auth + /vehicles endpoint (identity-api proxy). Mirrors
-          rental-fleets-app/api/ layout (cmd/, internal/{app,config,core,
-          controllers,gateway,models,service,db}).
+api/      Go backend — Fiber + zerolog + goose migrations. JWT auth +
+          /vehicles, /telemetry, /documents (glovebox), and identity-api
+          proxy endpoints. Mirrors rental-fleets-app/api/ layout (cmd/,
+          internal/{app,config,core,controllers,gateway,models,service,db}).
 web/      Vite + Lit 3 + TypeScript. Production-ready stack, all four
           designed views ported from ../stitch_fleet-lite-dimo.
 charts/   Helm chart in charts/fleet-lite-app/, cloned from rental-fleets-app
@@ -28,12 +28,16 @@ docs/     PLAN.md and future docs.
 Public:
 - `GET  /health` — DB ping
 - `GET  /version` — commit hash
+- `GET  /public/settings` — client-safe config (Login With DIMO, chain, addresses)
 - `GET  /identity/vehicle/:tokenID`, `GET /identity/definition/:id`,
   `GET /identity/owner/:owner`, `POST /identity/proxy` — DIMO identity-api proxies
 
 Authenticated (DIMO JWT in `Authorization: Bearer ...`):
 - `GET /vehicles` — vehicles owned by the JWT's `ethereum_address`
 - `GET /vehicles/:tokenID` — single vehicle by tokenID
+- `GET /telemetry/:tokenID/latest`, `GET /telemetry/:tokenID/timeseries` — DIMO telemetry-api
+- `POST /documents/extract`, `GET /documents/vin-lookup`, `POST /documents/attest`,
+  `GET /documents/list`, `GET /documents/download` — glovebox (see docs/GLOVEBOX.md)
 
 Monitoring (separate port, no auth):
 - `GET /metrics` on `MONITORING_PORT` (default `8085`) — Prometheus
@@ -91,8 +95,10 @@ Don't add these unless asked — `docs/PLAN.md` lists them and the rationale:
 - Leaflet / real map tiles
 - Chat surface (marked / dompurify) and the chat agent backend
 - Tenant model, alerts, ledger, maintenance, reports, rental sessions,
-  guests, documents, kore, google-calendar (all stripped from the API skeleton — see PLAN.md §"Deliberately dropped from rental-fleets-app/api")
+  guests, kore, google-calendar (all stripped from the API — see PLAN.md §"Deliberately dropped from rental-fleets-app/api")
 - River job queue + Langfuse observability
-- Frontend wiring to the new `/vehicles` endpoint (web still uses mock data)
 - Tests
-- CI workflows
+
+Already landed (no longer "not yet" — the frontend is wired to the real api,
+not mock data): `/vehicles`, telemetry charts, the glovebox documents flow
+(extract / attest / list / download), and CI workflows (`.github/workflows/`).
