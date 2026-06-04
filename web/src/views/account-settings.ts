@@ -1,5 +1,5 @@
 import { LitElement, html, css } from 'lit';
-import { customElement } from 'lit/decorators.js';
+import { customElement, property } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { getTokenClaims, logout } from '../utils/token.ts';
 import { PrefsService } from '../services/prefs-service.ts';
@@ -9,6 +9,7 @@ interface Row { icon: string; label: string; trailing?: string; onClick?: () => 
 
 @customElement('account-settings-view')
 export class AccountSettingsView extends LitElement {
+    @property({ type: String }) tenantId = '';
     private unsubscribePrefs: (() => void) | null = null;
 
     connectedCallback() {

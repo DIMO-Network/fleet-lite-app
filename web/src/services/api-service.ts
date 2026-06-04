@@ -1,5 +1,6 @@
 import { isLocalhost } from '../utils/utils.ts';
 import { logout } from '../utils/token.ts';
+import { currentTenantIdFromHash } from './tenant-service.ts';
 
 /**
  * Singleton HTTP client. In dev the frontend lives on :3009 and the API on
@@ -33,15 +34,21 @@ export class ApiService {
     private authHeader(auth: boolean): Record<string, string> {
         if (!auth) return {};
         const token = localStorage.getItem('token');
-        return token ? { Authorization: `Bearer ${token}` } : {};
+        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+        // Attach the current tenant (from the route) so tenant-scoped endpoints
+        // resolve the right developer license. Harmless on non-tenant endpoints.
+        const tenantId = currentTenantIdFromHash();
+        if (tenantId) headers['Tenant-Id'] = tenantId;
+        return headers;
     }
 
-    private handle401IfAuthed(status: number, auth: boolean): void {
-        // The api treats both unsigned JWT and missing-header as 401 (sometimes
-        // 400 from the middleware before our handler sees it). Either way,
-        // clear local auth state and bounce — keeping a dead token causes
-        // infinite redirect loops on the next page load.
-        if (auth && (status === 401 || status === 400)) {
+    private handle401IfAuthed(status: number, auth: boolean, body: string): void {
+        // Only bounce on a genuine auth failure: a 401, or the JWT middleware's
+        // 400 "missing or malformed JWT". A plain 400 (e.g. "Tenant-Id header is
+        // required") must NOT log the user out — that's a routing/state issue,
+        // not a dead token.
+        if (!auth) return;
+        if (status === 401 || (status === 400 && /jwt/i.test(body))) {
             logout();
         }
     }
@@ -52,8 +59,9 @@ export class ApiService {
             headers: { 'Content-Type': 'application/json', ...this.authHeader(auth) },
         });
         if (!res.ok) {
-            this.handle401IfAuthed(res.status, auth);
-            throw new ApiError(res.status, await safeText(res));
+            const text = await safeText(res);
+            this.handle401IfAuthed(res.status, auth, text);
+            throw new ApiError(res.status, text);
         }
         return res.json();
     }
@@ -65,8 +73,9 @@ export class ApiService {
             body: JSON.stringify(body),
         });
         if (!res.ok) {
-            this.handle401IfAuthed(res.status, auth);
-            throw new ApiError(res.status, await safeText(res));
+            const text = await safeText(res);
+            this.handle401IfAuthed(res.status, auth, text);
+            throw new ApiError(res.status, text);
         }
         return res.json();
     }

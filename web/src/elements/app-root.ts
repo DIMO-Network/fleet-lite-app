@@ -2,11 +2,13 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { Routes } from '@lit-labs/router';
 import { sharedStyles } from '../global-styles.ts';
+import { TenantService } from '../services/tenant-service.ts';
 import './side-nav.ts';
 import '../views/fleet-overview.ts';
 import '../views/vehicle-details.ts';
 import '../views/glovebox.ts';
 import '../views/account-settings.ts';
+import '../views/onboard-tenant.ts';
 
 type NavKey = 'vehicles' | 'stats' | 'glovebox' | 'settings';
 
@@ -21,8 +23,12 @@ export class AppRoot extends LitElement {
     // navigation fires `hashchange` and onHashChange() does the routing.
     private router: Routes;
     private boundOnHashChange = () => this.onHashChange();
+    private tenantService = TenantService.getInstance();
 
     @state() private activeNav: NavKey = 'vehicles';
+    // The current tenant id (first hash segment). Drives nav links + the
+    // Tenant-Id header (via ApiService). Empty while onboarding.
+    @state() private tenantId = '';
 
     static styles = [
         sharedStyles,
@@ -48,13 +54,12 @@ export class AppRoot extends LitElement {
     constructor() {
         super();
         this.router = new Routes(this, [
-            { path: '/',                    render: () => html`<fleet-overview-view></fleet-overview-view>` },
-            { path: '/vehicles/:tokenId',   render: ({ tokenId }) => html`<vehicle-details-view .tokenId=${tokenId}></vehicle-details-view>` },
-            { path: '/glovebox',            render: () => html`<glovebox-view></glovebox-view>` },
-            { path: '/settings',            render: () => html`<account-settings-view></account-settings-view>` },
-            { path: '/stats',               render: () => html`<fleet-overview-view></fleet-overview-view>` },
-            { path: '/support',             render: () => html`<account-settings-view></account-settings-view>` },
-            { path: '/logout',              render: () => html`<account-settings-view></account-settings-view>` },
+            { path: '/onboard',                       render: () => html`<onboard-tenant-view></onboard-tenant-view>` },
+            { path: '/:tenantId/',                    render: () => html`<fleet-overview-view .tenantId=${this.tenantId}></fleet-overview-view>` },
+            { path: '/:tenantId/vehicles/:tokenId',   render: ({ tokenId }) => html`<vehicle-details-view .tenantId=${this.tenantId} .tokenId=${tokenId}></vehicle-details-view>` },
+            { path: '/:tenantId/glovebox',            render: () => html`<glovebox-view .tenantId=${this.tenantId}></glovebox-view>` },
+            { path: '/:tenantId/settings',            render: () => html`<account-settings-view .tenantId=${this.tenantId}></account-settings-view>` },
+            { path: '/:tenantId/stats',               render: () => html`<fleet-overview-view .tenantId=${this.tenantId}></fleet-overview-view>` },
         ]);
     }
 
@@ -69,11 +74,45 @@ export class AppRoot extends LitElement {
         super.disconnectedCallback();
     }
 
-    private onHashChange() {
+    private async onHashChange() {
         const path = location.hash.slice(1) || '/';
+
+        // Onboarding has no tenant.
+        if (path === '/onboard') {
+            this.tenantId = '';
+            this.router.goto('/onboard');
+            this.requestUpdate();
+            return;
+        }
+
+        const seg = path.split('/').filter(Boolean); // ['<tid>', 'vehicles', '3681']
+        const tenantId = seg[0] || '';
+
+        // No tenant in the route → pick a default (or send to onboarding).
+        if (!tenantId) {
+            await this.resolveDefaultTenant();
+            return;
+        }
+
+        this.tenantId = tenantId;
+        this.activeNav = this.deriveActive('/' + seg.slice(1).join('/'));
         this.router.goto(path);
-        this.activeNav = this.deriveActive(path);
         this.requestUpdate();
+    }
+
+    // Decide where a tenant-less URL should land: 0 tenants → onboarding,
+    // otherwise default into the first tenant. (Multi-tenant picker: Phase 3.)
+    private async resolveDefaultTenant() {
+        try {
+            const tenants = await this.tenantService.fetchTenants();
+            if (tenants.length === 0) {
+                location.hash = '/onboard';
+            } else {
+                location.hash = `/${tenants[0].id}/`;
+            }
+        } catch {
+            location.hash = '/onboard';
+        }
     }
 
     private deriveActive(path: string): NavKey {
@@ -85,8 +124,13 @@ export class AppRoot extends LitElement {
     }
 
     render() {
+        // Onboarding (and the brief resolving state) render full-bleed, no nav.
+        const chrome = this.tenantId !== '';
+        if (!chrome) {
+            return html`<main>${this.router.outlet()}</main>`;
+        }
         return html`
-            <side-nav .active=${this.activeNav}></side-nav>
+            <side-nav .active=${this.activeNav} .tenantId=${this.tenantId}></side-nav>
             <main>${this.router.outlet()}</main>
         `;
     }

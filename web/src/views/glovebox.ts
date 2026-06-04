@@ -1,5 +1,5 @@
 import { LitElement, html, css, nothing } from 'lit';
-import { customElement, state } from 'lit/decorators.js';
+import { customElement, state, property } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { ApiService } from '../services/api-service.ts';
 import { Vehicle, VehiclesResponse } from '../types/vehicle.ts';
@@ -29,6 +29,7 @@ const MISSING_BLURBS: Record<string, string> = {
 
 @customElement('glovebox-view')
 export class GloveboxView extends LitElement {
+    @property({ type: String }) tenantId = '';
     @state() private vehicles: Vehicle[] = [];
     @state() private selected: Vehicle | null = null;
     @state() private loadingVehicles = true;

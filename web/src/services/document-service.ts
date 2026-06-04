@@ -1,4 +1,5 @@
 import { ApiService } from './api-service.ts';
+import { TenantService } from './tenant-service.ts';
 import {
     AttestRequest,
     AttestResult,
@@ -40,7 +41,10 @@ export class DocumentService {
         const token = localStorage.getItem('token');
         const res = await fetch(`${base}/documents/extract`, {
             method: 'POST',
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            headers: {
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                ...TenantService.getInstance().tenantIdHeader(),
+            },
             body: form,
         });
         if (!res.ok) {
@@ -71,6 +75,7 @@ export class DocumentService {
             headers: {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${localStorage.getItem('token') ?? ''}`,
+                ...TenantService.getInstance().tenantIdHeader(),
             },
         }).then(async (r) => {
             if (!r.ok) throw new Error(`delete failed: ${r.status} ${await r.text()}`);
@@ -84,7 +89,12 @@ export class DocumentService {
         const token = localStorage.getItem('token');
         const res = await fetch(
             `${base}/documents/download?tokenId=${tokenId}&filehash=${encodeURIComponent(fileHash)}`,
-            { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+            {
+                headers: {
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    ...TenantService.getInstance().tenantIdHeader(),
+                },
+            },
         );
         if (!res.ok) {
             throw new Error(`download failed: ${res.status}`);
