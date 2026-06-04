@@ -10,6 +10,18 @@ interface TenantsResponse {
     tenants: Tenant[];
 }
 
+export interface Member {
+    wallet: string;
+    role: string;
+}
+
+interface MembersResponse {
+    members: Member[];
+}
+
+export const ROLE_OWNER = 'owner';
+export const ROLE_MEMBER = 'member';
+
 /**
  * Tenant state is route-driven: the current tenant id is the first segment of
  * the hash route (`#/:tenantId/...`), so the route is the single source of
@@ -47,6 +59,29 @@ export class TenantService {
     public async fetchTenants(): Promise<Tenant[]> {
         const res = await ApiService.getInstance().get<TenantsResponse>('/tenants');
         return res.tenants ?? [];
+    }
+
+    /** GET /tenants/:id/members — every wallet that belongs to the tenant. */
+    public async fetchMembers(tenantId: string): Promise<Member[]> {
+        const res = await ApiService.getInstance().get<MembersResponse>(
+            `/tenants/${encodeURIComponent(tenantId)}/members`,
+        );
+        return res.members ?? [];
+    }
+
+    /** POST /tenants/:id/members — owner-only; add a wallet to the tenant. */
+    public async addMember(tenantId: string, wallet: string, role: string = ROLE_MEMBER): Promise<void> {
+        await ApiService.getInstance().post(
+            `/tenants/${encodeURIComponent(tenantId)}/members`,
+            { wallet, role },
+        );
+    }
+
+    /** DELETE /tenants/:id/members/:wallet — owner-only; remove a wallet. */
+    public async removeMember(tenantId: string, wallet: string): Promise<void> {
+        await ApiService.getInstance().delete(
+            `/tenants/${encodeURIComponent(tenantId)}/members/${encodeURIComponent(wallet)}`,
+        );
     }
 }
 

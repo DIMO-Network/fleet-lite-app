@@ -127,6 +127,15 @@ func (s *TenantService) GetMembershipRole(ctx context.Context, tenantID, wallet 
 	return tu.Role, nil
 }
 
+// ListMembers returns every membership row for a tenant, oldest first (owner
+// typically created first).
+func (s *TenantService) ListMembers(ctx context.Context, tenantID string) (dbmodels.TenantUserSlice, error) {
+	return dbmodels.TenantUsers(
+		qm.Where("tenant_id = ?", tenantID),
+		qm.OrderBy("created_at"),
+	).All(ctx, s.pdb.DBS().Reader)
+}
+
 // AddMember upserts a wallet's membership in a tenant.
 func (s *TenantService) AddMember(ctx context.Context, tenantID, wallet, role string) error {
 	if role == "" {

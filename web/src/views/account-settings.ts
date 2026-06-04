@@ -4,6 +4,7 @@ import { sharedStyles } from '../global-styles.ts';
 import { getTokenClaims, logout } from '../utils/token.ts';
 import { PrefsService } from '../services/prefs-service.ts';
 import { unitsLabel } from '../utils/units.ts';
+import '../elements/tenant-members.ts';
 
 interface Row { icon: string; label: string; trailing?: string; onClick?: () => void; }
 
@@ -247,6 +248,11 @@ export class AccountSettingsView extends LitElement {
                     <div class="row-group">
                         ${this.privacyRows().map(r => this.renderRow(r))}
                     </div>
+                </div>
+
+                <div class="section">
+                    <h3 class="section-title">Fleet Members</h3>
+                    <tenant-members .tenantId=${this.tenantId}></tenant-members>
                 </div>
 
                 <div class="section">
