@@ -901,6 +901,7 @@ export class VehicleDetailsView extends LitElement {
                     </nav>
                 </div>
                 <div class="right">
+                    <tenant-switcher .currentTenantId=${this.tenantId}></tenant-switcher>
                     <button class="live-tracking">
                         <span class="status-dot"></span>
                         Live Tracking

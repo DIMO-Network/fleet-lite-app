@@ -365,6 +365,7 @@ export class FleetOverviewView extends LitElement {
                     </nav>
                 </div>
                 <div class="right">
+                    <tenant-switcher .currentTenantId=${this.tenantId}></tenant-switcher>
                     <button class="live-tracking">Live Tracking</button>
                     <button class="icon-btn"><span class="material-symbols-outlined">notifications</span></button>
                     <button class="icon-btn"><span class="material-symbols-outlined">account_circle</span></button>

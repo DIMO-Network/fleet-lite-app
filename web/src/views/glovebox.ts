@@ -497,6 +497,7 @@ export class GloveboxView extends LitElement {
                         <h2>${this.selected ? vehicleTitle(this.selected) : 'Select a vehicle'}</h2>
                         <p>${this.selected ? `${total} Record${total === 1 ? '' : 's'}` : 'Pick a vehicle from the list'}</p>
                     </div>
+                    <tenant-switcher .currentTenantId=${this.tenantId} style="margin-left:auto;"></tenant-switcher>
                 </div>
 
                 ${this.selected ? html`

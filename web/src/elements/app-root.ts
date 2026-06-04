@@ -4,6 +4,7 @@ import { Routes } from '@lit-labs/router';
 import { sharedStyles } from '../global-styles.ts';
 import { TenantService } from '../services/tenant-service.ts';
 import './side-nav.ts';
+import './tenant-switcher.ts';
 import '../views/fleet-overview.ts';
 import '../views/vehicle-details.ts';
 import '../views/glovebox.ts';
@@ -95,21 +96,25 @@ export class AppRoot extends LitElement {
         }
 
         this.tenantId = tenantId;
+        // Remember the active tenant so the next tenant-less load returns here.
+        localStorage.setItem('lastTenantId', tenantId);
         this.activeNav = this.deriveActive('/' + seg.slice(1).join('/'));
         this.router.goto(path);
         this.requestUpdate();
     }
 
-    // Decide where a tenant-less URL should land: 0 tenants → onboarding,
-    // otherwise default into the first tenant. (Multi-tenant picker: Phase 3.)
+    // Decide where a tenant-less URL should land: 0 tenants → onboarding;
+    // 1 tenant → it; >1 → the last-used tenant if still valid, else the first.
     private async resolveDefaultTenant() {
         try {
             const tenants = await this.tenantService.fetchTenants();
             if (tenants.length === 0) {
                 location.hash = '/onboard';
-            } else {
-                location.hash = `/${tenants[0].id}/`;
+                return;
             }
+            const last = localStorage.getItem('lastTenantId');
+            const pick = tenants.find(t => t.id === last) ?? tenants[0];
+            location.hash = `/${pick.id}/`;
         } catch {
             location.hash = '/onboard';
         }

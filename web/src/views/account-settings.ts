@@ -217,6 +217,7 @@ export class AccountSettingsView extends LitElement {
             <header class="top-bar">
                 <h2>Account</h2>
                 <div class="right">
+                    <tenant-switcher .currentTenantId=${this.tenantId}></tenant-switcher>
                     <button class="icon-btn"><span class="material-symbols-outlined">notifications</span></button>
                     <div class="avatar">
                         <img alt="User profile"
