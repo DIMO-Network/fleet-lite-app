@@ -42,31 +42,10 @@ check-host:
 	fi
 
 ## db: ensure psql is installed, Postgres is reachable, and role + db exist
+# Connects as a superuser ($USER on Homebrew, else postgres) to auto-create the
+# role + database if missing. See scripts/db-setup.sh.
 db:
-	@command -v psql >/dev/null 2>&1 || { \
-	  echo "✗ psql not found — install Postgres (client + server) with Homebrew:"; \
-	  echo "    brew install postgresql@16"; \
-	  echo "    brew services start postgresql@16"; \
-	  exit 1; }
-	@PGCONNECT_TIMEOUT=5 psql -w -h localhost -p 5432 -d postgres -tAc 'SELECT 1' >/dev/null 2>&1 || { \
-	  echo "✗ psql is installed but can't connect to Postgres on localhost:5432."; \
-	  echo "  Install and/or start the server with Homebrew:"; \
-	  echo "    brew install postgresql@16"; \
-	  echo "    brew services start postgresql@16"; \
-	  echo "  (check it's running with: brew services list)"; \
-	  exit 1; }
-	@psql -h localhost -d postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname='$(DB_USER)'" | grep -q 1 || { \
-	  echo "▶ creating role '$(DB_USER)'…"; \
-	  psql -h localhost -d postgres -c "CREATE ROLE $(DB_USER) WITH LOGIN PASSWORD '$(DB_PASS)';"; }
-	@psql -h localhost -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$(DB_NAME)'" | grep -q 1 || { \
-	  echo "▶ creating database '$(DB_NAME)'…"; \
-	  psql -h localhost -d postgres -c "CREATE DATABASE $(DB_NAME) WITH OWNER $(DB_USER);"; }
-	@PGPASSWORD=$(DB_PASS) PGCONNECT_TIMEOUT=5 psql -w -h localhost -U $(DB_USER) -d $(DB_NAME) -tAc 'SELECT 1' >/dev/null 2>&1 || { \
-	  echo "✗ role '$(DB_USER)' can't connect to '$(DB_NAME)' with the password the app expects."; \
-	  echo "  The backend connects as $(DB_USER)/$(DB_PASS). Reset the role password with:"; \
-	  echo "    psql -h localhost -d postgres -c \"ALTER ROLE $(DB_USER) WITH LOGIN PASSWORD '$(DB_PASS)';\""; \
-	  exit 1; }
-	@echo "✓ postgres ready ($(DB_USER) can connect to $(DB_NAME))"
+	@DB_NAME=$(DB_NAME) DB_USER=$(DB_USER) DB_PASS=$(DB_PASS) scripts/db-setup.sh
 
 ## settings: create api/settings.yaml from the sample if it's missing
 settings:
