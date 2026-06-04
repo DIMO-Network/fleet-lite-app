@@ -41,22 +41,11 @@ check-host:
 	  exit 1; \
 	fi
 
-## db: ensure local Postgres is up and the role + database exist
+## db: ensure psql is installed, Postgres is reachable, and role + db exist
+# Connects as a superuser ($USER on Homebrew, else postgres) to auto-create the
+# role + database if missing. See scripts/db-setup.sh.
 db:
-	@command -v pg_isready >/dev/null 2>&1 || { \
-	  echo "✗ Postgres client tools not found."; \
-	  echo "    brew install postgresql@16"; exit 1; }
-	@pg_isready -h localhost -p 5432 -q || { \
-	  echo "✗ Postgres is not running on localhost:5432."; \
-	  echo "    brew install postgresql@16 && brew services start postgresql@16"; \
-	  exit 1; }
-	@psql -h localhost -d postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname='$(DB_USER)'" | grep -q 1 || { \
-	  echo "▶ creating role '$(DB_USER)'…"; \
-	  psql -h localhost -d postgres -c "CREATE ROLE $(DB_USER) WITH LOGIN PASSWORD '$(DB_PASS)';"; }
-	@psql -h localhost -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$(DB_NAME)'" | grep -q 1 || { \
-	  echo "▶ creating database '$(DB_NAME)'…"; \
-	  psql -h localhost -d postgres -c "CREATE DATABASE $(DB_NAME) WITH OWNER $(DB_USER);"; }
-	@echo "✓ postgres ready (db $(DB_NAME), role $(DB_USER))"
+	@DB_NAME=$(DB_NAME) DB_USER=$(DB_USER) DB_PASS=$(DB_PASS) scripts/db-setup.sh
 
 ## settings: create api/settings.yaml from the sample if it's missing
 settings:
