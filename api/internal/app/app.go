@@ -34,6 +34,8 @@ func App(
 	attestSvc service.AttestService,
 	fetchAPI *gateway.FetchAPI,
 	telemetryAPI service.TelemetryAPIService,
+	tenantSvc *service.TenantService,
+	vehicleSvc *service.VehicleService,
 ) *fiber.App {
 	appCommitHash = commitHash
 
@@ -52,7 +54,7 @@ func App(
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     settings.AllowedOrigins,
 		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS,PATCH",
-		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, Tenant-Id",
 		AllowCredentials: true,
 	}))
 
@@ -68,8 +70,9 @@ func App(
 
 	// Controllers
 	identityCtrl := controllers.NewIdentityController(settings, logger)
-	vehiclesCtrl := controllers.NewVehiclesController(settings, logger, identity)
+	vehiclesCtrl := controllers.NewVehiclesController(settings, logger, vehicleSvc)
 	settingsCtrl := controllers.NewSettingsController(settings, logger)
+	tenantsCtrl := controllers.NewTenantsController(logger, settings, tenantSvc, vehicleSvc, identity, authProvider)
 
 	// Public endpoints (no auth)
 	app.Get("/public/settings", settingsCtrl.GetPublicSettings)
@@ -84,24 +87,37 @@ func App(
 	})
 	authApp := app.Group("", jwtAuth)
 
-	authApp.Get("/vehicles", vehiclesCtrl.GetVehicles)
-	authApp.Get("/vehicles/:tokenID", vehiclesCtrl.GetVehicle)
+	// Tenant management (JWT only — these precede / manage tenant selection;
+	// each handler authorizes against the :id path param itself).
+	authApp.Get("/tenants", tenantsCtrl.GetTenants)
+	authApp.Post("/tenants", tenantsCtrl.CreateTenant)
+	authApp.Post("/tenants/:id/sync-vehicles", tenantsCtrl.SyncVehicles)
+	authApp.Get("/tenants/:id/settings", tenantsCtrl.GetSettings)
+	authApp.Put("/tenants/:id/settings", tenantsCtrl.UpdateSettings)
+	authApp.Post("/tenants/:id/members", tenantsCtrl.AddMember)
+	authApp.Delete("/tenants/:id/members/:wallet", tenantsCtrl.RemoveMember)
+
+	// Tenant-scoped data routes (JWT + Tenant-Id header membership check).
+	tenantApp := authApp.Group("", NewTenantMiddleware(tenantSvc, logger))
+
+	tenantApp.Get("/vehicles", vehiclesCtrl.GetVehicles)
+	tenantApp.Get("/vehicles/:tokenID", vehiclesCtrl.GetVehicle)
 
 	// Telemetry (vehicle-details charts)
-	telemetryCtrl := controllers.NewTelemetryController(logger, settings, identity, telemetryAPI)
-	authApp.Get("/telemetry/:tokenID/latest", telemetryCtrl.GetLatest)
-	authApp.Get("/telemetry/:tokenID/timeseries", telemetryCtrl.GetTimeSeries)
+	telemetryCtrl := controllers.NewTelemetryController(logger, settings, vehicleSvc, telemetryAPI)
+	tenantApp.Get("/telemetry/:tokenID/latest", telemetryCtrl.GetLatest)
+	tenantApp.Get("/telemetry/:tokenID/timeseries", telemetryCtrl.GetTimeSeries)
 
 	// Glovebox / documents
 	documentsCtrl := controllers.NewDocumentsController(
-		logger, settings, identity, authProvider, extractAPI, attestSvc, fetchAPI,
+		logger, settings, vehicleSvc, authProvider, extractAPI, attestSvc, fetchAPI,
 	)
-	authApp.Post("/documents/extract", documentsCtrl.ExtractDocument)
-	authApp.Get("/documents/vin-lookup", documentsCtrl.LookupVIN)
-	authApp.Post("/documents/attest", documentsCtrl.AttestDocument)
-	authApp.Get("/documents/list", documentsCtrl.ListDocuments)
-	authApp.Get("/documents/download", documentsCtrl.DownloadDocument)
-	authApp.Delete("/documents/:id", documentsCtrl.DeleteDocument)
+	tenantApp.Post("/documents/extract", documentsCtrl.ExtractDocument)
+	tenantApp.Get("/documents/vin-lookup", documentsCtrl.LookupVIN)
+	tenantApp.Post("/documents/attest", documentsCtrl.AttestDocument)
+	tenantApp.Get("/documents/list", documentsCtrl.ListDocuments)
+	tenantApp.Get("/documents/download", documentsCtrl.DownloadDocument)
+	tenantApp.Delete("/documents/:id", documentsCtrl.DeleteDocument)
 
 	return app
 }

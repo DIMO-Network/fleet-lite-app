@@ -4,10 +4,25 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/DIMO-Network/fleet-lite-app/internal/models"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 )
+
+// TenantLocalsKey is where the tenant middleware stashes the resolved,
+// decrypted tenant for the current request.
+const TenantLocalsKey = "tenant"
+
+// GetTenant returns the resolved tenant the tenant middleware loaded into the
+// request context (after validating the caller's membership).
+func GetTenant(c *fiber.Ctx) (models.Tenant, error) {
+	t, ok := c.Locals(TenantLocalsKey).(models.Tenant)
+	if !ok {
+		return models.Tenant{}, fmt.Errorf("no tenant in context")
+	}
+	return t, nil
+}
 
 // GetWalletAddressFromJWT pulls the `ethereum_address` claim from the bearer
 // JWT that the gofiber/contrib/jwt middleware stashed at c.Locals("user").

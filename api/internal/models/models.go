@@ -61,3 +61,38 @@ type PagedVehiclesNodes struct {
 type PagedVehicles struct {
 	VehicleNodes PagedVehiclesNodes `json:"vehicles"`
 }
+
+// Tenant is the in-memory view of a tenant with its DIMO developer credentials
+// decrypted, used for all outbound DIMO data calls. Secrets are tagged `json:"-"`.
+type Tenant struct {
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	ClientID        string `json:"clientId"`
+	DIMOPrivateKey  string `json:"-"` // decrypted DIMO developer API key
+	DIMORedirectURI string `json:"dimoRedirectUri,omitempty"`
+}
+
+// DeveloperLicense is the identity-api view of a DIMO developer license, used to
+// resolve the redirect URI for a tenant's client ID during the auth challenge.
+type DeveloperLicense struct {
+	TokenID      int64        `json:"tokenId"`
+	Owner        string       `json:"owner"`
+	Alias        string       `json:"alias"`
+	RedirectURIs RedirectURIs `json:"redirectURIs"`
+}
+
+type RedirectURIs struct {
+	Edges []RedirectURIEdge `json:"edges"`
+}
+
+type RedirectURIEdge struct {
+	Node RedirectURINode `json:"node"`
+}
+
+type RedirectURINode struct {
+	URI string `json:"uri"`
+}
+
+type SingleDeveloperLicense struct {
+	DeveloperLicense DeveloperLicense `json:"developerLicense"`
+}

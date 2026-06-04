@@ -22,6 +22,11 @@ type IdentityAPI interface {
 	GetCachedVehicleByTokenID(tokenID int64) (*models.Vehicle, error)
 	FetchVehicleByTokenID(tokenID int64) (*models.Vehicle, error)
 	FetchVehiclesByWalletAddress(address string) ([]models.Vehicle, error)
+	// FetchPrivilegedVehicles returns every vehicle a developer-license client ID
+	// is privileged on (SACD-shared). Used for per-tenant vehicle sync.
+	FetchPrivilegedVehicles(clientID string) ([]models.Vehicle, error)
+	// FetchDeveloperLicenseByClientID resolves a developer license (incl. redirect URIs).
+	FetchDeveloperLicenseByClientID(clientID string) (*models.DeveloperLicense, error)
 }
 
 type identityAPIService struct {
@@ -101,6 +106,54 @@ func (i *identityAPIService) fetchUserVehiclesPage(walletAddress, after string) 
 		return nil, err
 	}
 	return &paged.Data.VehicleNodes, nil
+}
+
+func (i *identityAPIService) FetchPrivilegedVehicles(clientID string) ([]models.Vehicle, error) {
+	vehicles := []models.Vehicle{}
+	page, err := i.fetchPrivilegedVehiclesPage(clientID, "")
+	if err != nil {
+		return nil, err
+	}
+	vehicles = append(vehicles, page.Nodes...)
+
+	for page.PageInfo.HasNextPage {
+		page, err = i.fetchPrivilegedVehiclesPage(clientID, page.PageInfo.EndCursor)
+		if err != nil {
+			return nil, err
+		}
+		vehicles = append(vehicles, page.Nodes...)
+	}
+	return vehicles, nil
+}
+
+func (i *identityAPIService) fetchPrivilegedVehiclesPage(clientID, after string) (*models.PagedVehiclesNodes, error) {
+	afterCursor := "null"
+	if after != "" {
+		afterCursor = strconv.Quote(after)
+	}
+	body, err := i.Query(fmt.Sprintf(VehiclesByPrivilegeAndCursorQuery, clientID, 100, afterCursor))
+	if err != nil {
+		return nil, err
+	}
+
+	var paged models.GraphQlData[models.PagedVehicles]
+	if err = json.Unmarshal(body, &paged); err != nil {
+		return nil, err
+	}
+	return &paged.Data.VehicleNodes, nil
+}
+
+func (i *identityAPIService) FetchDeveloperLicenseByClientID(clientID string) (*models.DeveloperLicense, error) {
+	body, err := i.Query(fmt.Sprintf(DeveloperLicenseByClientIDQuery, clientID))
+	if err != nil {
+		return nil, err
+	}
+
+	var resp models.GraphQlData[models.SingleDeveloperLicense]
+	if err = json.Unmarshal(body, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.Data.DeveloperLicense, nil
 }
 
 func (i *identityAPIService) Query(graphqlQuery string) ([]byte, error) {

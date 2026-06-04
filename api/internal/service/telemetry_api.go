@@ -11,6 +11,7 @@ import (
 
 	"github.com/DIMO-Network/fleet-lite-app/internal/config"
 	"github.com/DIMO-Network/fleet-lite-app/internal/gateway"
+	"github.com/DIMO-Network/fleet-lite-app/internal/models"
 	"github.com/rs/zerolog"
 )
 
@@ -21,8 +22,8 @@ import (
 // VINCredential, RawData).  Same SACD-grant constraint as glovebox: the dev
 // license must have permissions on the vehicle.
 type TelemetryAPIService interface {
-	Latest(tokenID uint64, signals []string) (map[string]SignalLatest, error)
-	TimeSeries(tokenID uint64, signal, from, to, interval string) ([]TimeSeriesBucket, error)
+	Latest(tenant models.Tenant, tokenID uint64, signals []string) (map[string]SignalLatest, error)
+	TimeSeries(tenant models.Tenant, tokenID uint64, signal, from, to, interval string) ([]TimeSeriesBucket, error)
 }
 
 // SignalLatest mirrors telemetry-api's `{value, timestamp}` shape for a signal.
@@ -59,20 +60,20 @@ func NewTelemetryAPIService(logger zerolog.Logger, settings *config.Settings, au
 // Returns a map keyed by the camelCase signal name as it appears in the
 // GraphQL schema (same as `signals` arg). Missing signals are omitted from
 // the map (silent — not all vehicles report every signal).
-func (t *telemetryAPIService) Latest(tokenID uint64, signals []string) (map[string]SignalLatest, error) {
+func (t *telemetryAPIService) Latest(tenant models.Tenant, tokenID uint64, signals []string) (map[string]SignalLatest, error) {
 	if len(signals) == 0 {
 		return map[string]SignalLatest{}, nil
 	}
 
 	// Build the per-signal selection. Each signal returns {value, timestamp}.
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("query { signalsLatest(tokenId: %d) {", tokenID))
+	fmt.Fprintf(&sb, "query { signalsLatest(tokenId: %d) {", tokenID)
 	for _, s := range signals {
-		sb.WriteString(fmt.Sprintf(" %s { value timestamp }", s))
+		fmt.Fprintf(&sb, " %s { value timestamp }", s)
 	}
 	sb.WriteString(" } }")
 
-	raw, err := t.query(tokenID, sb.String())
+	raw, err := t.query(tenant, tokenID, sb.String())
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +92,7 @@ func (t *telemetryAPIService) Latest(tokenID uint64, signals []string) (map[stri
 // TimeSeries queries `signals(tokenId, from, to, interval)` for one signal
 // and returns its min/max/avg/last buckets. Interval is a duration string
 // the telemetry-api recognizes (e.g. "1d", "1h", "15m").
-func (t *telemetryAPIService) TimeSeries(tokenID uint64, signal, from, to, interval string) ([]TimeSeriesBucket, error) {
+func (t *telemetryAPIService) TimeSeries(tenant models.Tenant, tokenID uint64, signal, from, to, interval string) ([]TimeSeriesBucket, error) {
 	q := fmt.Sprintf(`query {
 		signals(tokenId: %d, from: %q, to: %q, interval: %q) {
 			timestamp
@@ -99,7 +100,7 @@ func (t *telemetryAPIService) TimeSeries(tokenID uint64, signal, from, to, inter
 		}
 	}`, tokenID, from, to, interval, signal)
 
-	raw, err := t.query(tokenID, q)
+	raw, err := t.query(tenant, tokenID, q)
 	if err != nil {
 		return nil, err
 	}
@@ -134,8 +135,8 @@ func (t *telemetryAPIService) TimeSeries(tokenID uint64, signal, from, to, inter
 	return buckets, nil
 }
 
-func (t *telemetryAPIService) query(tokenID uint64, gql string) ([]byte, error) {
-	jwt, err := t.authProvider.GetVehicleJWT(tokenID)
+func (t *telemetryAPIService) query(tenant models.Tenant, tokenID uint64, gql string) ([]byte, error) {
+	jwt, err := t.authProvider.GetVehicleJWT(tenant, tokenID)
 	if err != nil {
 		return nil, fmt.Errorf("vehicle JWT: %w", err)
 	}
