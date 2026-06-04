@@ -2,7 +2,7 @@ replicaCount: 2
 image:
   repository: dimozone/fleet-lite-app
   pullPolicy: IfNotPresent
-  tag: 29357c7
+  tag: feb22f9
 imagePullSecrets: []
 nameOverride: ''
 fullnameOverride: ''
@@ -25,25 +25,18 @@ env:
   DB_MAX_OPEN_CONNECTIONS: '20'
   DB_MAX_IDLE_CONNECTIONS: '6'
   DB_SSL_MODE: require
-  # Authentication
   JWT_KEY_SET_URL: https://auth.dimo.zone/keys
   TOKEN_EXCHANGE_URL: https://token-exchange-api.dimo.zone
-  # Login With DIMO
   DIMO_LOGIN_URL: https://login.dimo.org
   DIMO_AUTH_URL: https://auth.dimo.zone
   DIMO_AUTH_CLIENT_ID: '0x51dacC165f1306Abfbf0a6312ec96E13AAA826DB'
   DIMO_AUTH_REDIRECT_URL: https://fleet-lite.dimo.co/login.html
-  # CORS
   ALLOWED_ORIGINS: https://fleet-lite.dimo.co,https://console.dimo.org
-  # DIMO Identity API
   IDENTITY_API_ENDPOINT: https://identity-api.dimo.zone/query
-  # Document services (glovebox)
   EXTRACT_API_URL: https://extract.dimo.zone/extract
   FETCH_API_URL: https://fetch-api.dimo.zone/v1/fetch/objects
   ATTEST_API_URL: https://attest.dimo.zone
-  # Telemetry (vehicle-details charts)
   TELEMETRY_API_URL: https://telemetry-api.dimo.zone/query
-  # Chain config (polygon mainnet)
   CHAIN_ID: '137'
   VEHICLE_NFT_ADDRESS: '0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF'
 service:
