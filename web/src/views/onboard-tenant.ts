@@ -2,6 +2,7 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { ApiService, ApiError } from '../services/api-service.ts';
+import { logout } from '../utils/token.ts';
 
 interface CreatedTenant {
     id: string;
@@ -26,6 +27,7 @@ export class OnboardTenantView extends LitElement {
         sharedStyles,
         css`
             :host {
+                position: relative;
                 display: flex;
                 align-items: center;
                 justify-content: center;
@@ -35,6 +37,35 @@ export class OnboardTenantView extends LitElement {
                 color: var(--on-surface);
                 overflow: auto;
             }
+            .topbar {
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                display: flex;
+                justify-content: flex-end;
+                padding: var(--stack-md) var(--margin-desktop);
+            }
+            @media (max-width: 768px) {
+                .topbar { padding: var(--stack-md) var(--margin-mobile); }
+            }
+            .logout-btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                background: none;
+                border: 1px solid var(--outline-variant);
+                color: var(--on-surface-variant);
+                border-radius: var(--radius-full);
+                padding: 8px 16px;
+                font: var(--type-body-sm);
+                cursor: pointer;
+                transition: color 0.15s ease, border-color 0.15s ease;
+                width: auto;
+                margin: 0;
+            }
+            .logout-btn:hover { color: var(--primary); border-color: var(--outline); }
+            .logout-btn .material-symbols-outlined { font-size: 18px; }
             .card {
                 width: min(480px, 92vw);
                 background: var(--surface-container);
@@ -129,6 +160,12 @@ export class OnboardTenantView extends LitElement {
 
     render() {
         return html`
+            <div class="topbar">
+                <button class="logout-btn" type="button" @click=${() => logout()}>
+                    <span class="material-symbols-outlined">logout</span>
+                    Log out
+                </button>
+            </div>
             <form class="card" @submit=${this.submit}>
                 <h1>Set up your fleet</h1>
                 <p class="sub">
