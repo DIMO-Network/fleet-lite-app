@@ -21,7 +21,7 @@ env:
   LOG_LEVEL: info
   SERVICE_NAME: fleet-lite-app
   DB_PORT: '5432'
-  DB_NAME: fleet_lite_app
+  DB_NAME: fleets_lite
   DB_MAX_OPEN_CONNECTIONS: '20'
   DB_MAX_IDLE_CONNECTIONS: '6'
   DB_SSL_MODE: require
