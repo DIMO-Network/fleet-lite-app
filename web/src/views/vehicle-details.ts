@@ -23,6 +23,7 @@ interface ChartBar {
 
 @customElement('vehicle-details-view')
 export class VehicleDetailsView extends LitElement {
+    @property({ type: String }) tenantId = '';
     @property({ type: String }) tokenId: string = '';
     @state() private vehicle: Vehicle | null = null;
     @state() private loading = true;

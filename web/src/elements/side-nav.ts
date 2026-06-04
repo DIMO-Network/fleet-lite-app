@@ -5,16 +5,19 @@ import { logout } from '../utils/token.ts';
 
 type NavKey = 'vehicles' | 'stats' | 'glovebox' | 'settings';
 
-const ITEMS: { key: NavKey; icon: string; label: string; href: string }[] = [
-    { key: 'vehicles', icon: 'directions_car', label: 'Vehicles', href: '#/' },
-    { key: 'stats',    icon: 'bar_chart',      label: 'Stats',    href: '#/stats' },
-    { key: 'glovebox', icon: 'inventory_2',    label: 'Glovebox', href: '#/glovebox' },
-    { key: 'settings', icon: 'settings',       label: 'Settings', href: '#/settings' },
+// `suffix` is appended to the current tenant prefix (`#/<tenantId>`) to form the
+// link, so all nav stays within the active tenant's routes.
+const ITEMS: { key: NavKey; icon: string; label: string; suffix: string }[] = [
+    { key: 'vehicles', icon: 'directions_car', label: 'Vehicles', suffix: '/' },
+    { key: 'stats',    icon: 'bar_chart',      label: 'Stats',    suffix: '/stats' },
+    { key: 'glovebox', icon: 'inventory_2',    label: 'Glovebox', suffix: '/glovebox' },
+    { key: 'settings', icon: 'settings',       label: 'Settings', suffix: '/settings' },
 ];
 
 @customElement('side-nav')
 export class SideNav extends LitElement {
     @property({ type: String }) active: NavKey = 'vehicles';
+    @property({ type: String }) tenantId = '';
 
     static styles = [
         sharedStyles,
@@ -115,8 +118,9 @@ export class SideNav extends LitElement {
         `,
     ];
 
-    private item(key: NavKey, icon: string, label: string, href: string) {
+    private item(key: NavKey, icon: string, label: string, suffix: string) {
         const cls = this.active === key ? 'nav-item active' : 'nav-item';
+        const href = `#/${this.tenantId}${suffix}`;
         return html`
             <a class=${cls} href=${href}>
                 <span class="material-symbols-outlined">${icon}</span>
@@ -136,10 +140,10 @@ export class SideNav extends LitElement {
             </div>
             <button class="add-vehicle">Add Vehicle</button>
             <nav class="items">
-                ${ITEMS.map(i => this.item(i.key, i.icon, i.label, i.href))}
+                ${ITEMS.map(i => this.item(i.key, i.icon, i.label, i.suffix))}
             </nav>
             <div class="footer">
-                <a class="nav-item" href="#/support">
+                <a class="nav-item" href="#/${this.tenantId}/settings">
                     <span class="material-symbols-outlined">help</span>
                     <span class="label">Support</span>
                 </a>

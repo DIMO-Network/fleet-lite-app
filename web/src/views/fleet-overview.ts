@@ -1,5 +1,5 @@
 import { LitElement, html, css } from 'lit';
-import { customElement, state } from 'lit/decorators.js';
+import { customElement, state, property } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { ApiService } from '../services/api-service.ts';
 import { Vehicle, VehiclesResponse } from '../types/vehicle.ts';
@@ -16,6 +16,7 @@ interface VehicleCard {
 
 @customElement('fleet-overview-view')
 export class FleetOverviewView extends LitElement {
+    @property({ type: String }) tenantId = '';
     @state() private vehicles: VehicleCard[] = [];
     @state() private loading = true;
     @state() private errorMessage: string | null = null;
@@ -325,7 +326,7 @@ export class FleetOverviewView extends LitElement {
     private renderCard(v: VehicleCard) {
         const cls = v.online ? 'vehicle-card' : 'vehicle-card offline';
         return html`
-            <a class=${cls} href="#/vehicles/${v.tokenId}">
+            <a class=${cls} href="#/${this.tenantId}/vehicles/${v.tokenId}">
                 <div class="vehicle-row">
                     <div class="vehicle-icon">
                         <span class="material-symbols-outlined">directions_car</span>
@@ -359,8 +360,8 @@ export class FleetOverviewView extends LitElement {
                 <div class="left">
                     <h2>Fleet Overview</h2>
                     <nav>
-                        <a href="#/" class="active">Map View</a>
-                        <a href="#/stats">List View</a>
+                        <a href="#/${this.tenantId}/" class="active">Map View</a>
+                        <a href="#/${this.tenantId}/stats">List View</a>
                     </nav>
                 </div>
                 <div class="right">
