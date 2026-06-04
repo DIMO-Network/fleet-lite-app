@@ -94,6 +94,7 @@ func App(
 	authApp.Post("/tenants/:id/sync-vehicles", tenantsCtrl.SyncVehicles)
 	authApp.Get("/tenants/:id/settings", tenantsCtrl.GetSettings)
 	authApp.Put("/tenants/:id/settings", tenantsCtrl.UpdateSettings)
+	authApp.Get("/tenants/:id/members", tenantsCtrl.GetMembers)
 	authApp.Post("/tenants/:id/members", tenantsCtrl.AddMember)
 	authApp.Delete("/tenants/:id/members/:wallet", tenantsCtrl.RemoveMember)
 

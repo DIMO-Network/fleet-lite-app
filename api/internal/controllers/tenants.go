@@ -150,6 +150,28 @@ func (t *TenantsController) SyncVehicles(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"synced": n})
 }
 
+type memberJSON struct {
+	Wallet string `json:"wallet"`
+	Role   string `json:"role"`
+}
+
+// GetMembers — GET /tenants/:id/members. Any member can list the tenant's members.
+func (t *TenantsController) GetMembers(c *fiber.Ctx) error {
+	if _, _, err := t.requireMember(c); err != nil {
+		return err
+	}
+	rows, err := t.tenantSvc.ListMembers(c.Context(), c.Params("id"))
+	if err != nil {
+		t.logger.Err(err).Str("tenant", c.Params("id")).Msg("list members")
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to list members")
+	}
+	out := make([]memberJSON, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, memberJSON{Wallet: r.Wallet, Role: r.Role})
+	}
+	return c.JSON(fiber.Map{"members": out})
+}
+
 type addMemberRequest struct {
 	Wallet string `json:"wallet"`
 	Role   string `json:"role"`

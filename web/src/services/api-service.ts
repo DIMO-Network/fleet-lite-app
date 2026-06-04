@@ -79,6 +79,19 @@ export class ApiService {
         }
         return res.json();
     }
+
+    public async delete<T>(endpoint: string, auth: boolean = true): Promise<T> {
+        const res = await fetch(this.buildUrl(endpoint), {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json', ...this.authHeader(auth) },
+        });
+        if (!res.ok) {
+            const text = await safeText(res);
+            this.handle401IfAuthed(res.status, auth, text);
+            throw new ApiError(res.status, text);
+        }
+        return res.json();
+    }
 }
 
 export class ApiError extends Error {
