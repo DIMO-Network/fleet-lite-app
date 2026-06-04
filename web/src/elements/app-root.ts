@@ -1,6 +1,6 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { Router } from '@lit-labs/router';
+import { Routes } from '@lit-labs/router';
 import { sharedStyles } from '../global-styles.ts';
 import './side-nav.ts';
 import '../views/fleet-overview.ts';
@@ -12,7 +12,14 @@ type NavKey = 'vehicles' | 'stats' | 'glovebox' | 'settings';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
-    private router: Router;
+    // We use Routes, not Router, on purpose: this app does hash-based routing
+    // (links are `#/...` and we drive the router from the `hashchange` event
+    // below). Router installs a global click interceptor that preventDefaults
+    // every <a>, pushState()s its href, and routes on `anchor.pathname` — for a
+    // `#/...` link that pathname is always `/`, so every click would just
+    // re-render the `/` route. Routes has no click handling, so native hash
+    // navigation fires `hashchange` and onHashChange() does the routing.
+    private router: Routes;
     private boundOnHashChange = () => this.onHashChange();
 
     @state() private activeNav: NavKey = 'vehicles';
@@ -40,7 +47,7 @@ export class AppRoot extends LitElement {
 
     constructor() {
         super();
-        this.router = new Router(this, [
+        this.router = new Routes(this, [
             { path: '/',                    render: () => html`<fleet-overview-view></fleet-overview-view>` },
             { path: '/vehicles/:tokenId',   render: ({ tokenId }) => html`<vehicle-details-view .tokenId=${tokenId}></vehicle-details-view>` },
             { path: '/glovebox',            render: () => html`<glovebox-view></glovebox-view>` },
