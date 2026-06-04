@@ -18,29 +18,47 @@ Stitch design source in `../stitch_fleet-lite-dimo`.
 
 ## Local dev
 
-### 1. /etc/hosts
-
-Add a loopback entry so the WebAuthn relying-party-id rules stay satisfied
-(needs to be a subdomain of `dimo.org`):
+### Quick start
 
 ```sh
-echo '127.0.0.1 local-fleet-lite.dimo.org' | sudo tee -a /etc/hosts
-sudo killall -HUP mDNSResponder
+make dev
 ```
 
-### 2. Run the web app
+`make dev` brings up the whole stack: it checks the dev host is in `/etc/hosts`,
+ensures a local Postgres role + database exist, copies `settings.yaml`, installs
+web deps, then runs the frontend (Vite) and backend (Go) together. Ctrl-C tears
+both down. Run `make help` to see the individual targets.
 
-```sh
-cd web
-npm install
-npm run dev
-```
+Two one-time prerequisites it can't do for you:
 
-`vite-plugin-mkcert` generates `web/.mkcert/cert.pem` + `key.pem` on first run
-and installs a root CA in the macOS keychain (one-time sudo prompt). After that
-the app is reachable at:
+1. **`/etc/hosts`** — needs a loopback entry (a `*.dimo.org` subdomain, so the
+   WebAuthn relying-party-id rules stay satisfied). `make dev` checks for it and
+   prints these commands if it's missing:
+
+   ```sh
+   echo '127.0.0.1 local-fleet-lite.dimo.org' | sudo tee -a /etc/hosts
+   sudo killall -HUP mDNSResponder
+   ```
+
+2. **Postgres** — must be running locally. `make dev` auto-creates the `dimo`
+   role and `fleet_lite_app` database, but can't install Postgres itself:
+
+   ```sh
+   brew install postgresql@16 && brew services start postgresql@16
+   ```
+
+On first run `vite-plugin-mkcert` generates `web/.mkcert/cert.pem` + `dev.pem`
+and installs a root CA in the macOS keychain (one-time sudo prompt). The backend
+reads those same certs for its TLS listener. The app is then reachable at:
 
 > https://local-fleet-lite.dimo.org:3009
+
+### Running pieces individually
+
+```sh
+make web   # frontend only (Vite dev server, generates the mkcert certs)
+make api   # backend only  (settings + migrations + Go server; needs the certs)
+```
 
 ## Design source
 
