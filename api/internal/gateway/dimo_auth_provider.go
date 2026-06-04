@@ -2,28 +2,28 @@ package gateway
 
 import (
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/DIMO-Network/fleet-lite-app/internal/config"
+	"github.com/DIMO-Network/fleet-lite-app/internal/models"
 	"github.com/DIMO-Network/shared/pkg/dimoauth"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/patrickmn/go-cache"
 	"github.com/rs/zerolog"
 )
 
-// DimoAuthProvider holds a single DIMO developer license (configured in
-// settings.yaml) and provides cached developer / vehicle / asset JWTs.
-//
-// Single-license version of the rental-fleets DimoAuthProvider — there is no
-// per-tenant table here; fleet-lite-app is single-user.
+// DimoAuthProvider manages per-tenant DIMO developer/vehicle/asset JWTs. Each
+// tenant supplies its own developer license (client ID + decrypted private key);
+// all outbound DIMO data calls run under the current tenant's credentials.
 type DimoAuthProvider struct {
-	authService       *dimoauth.AuthService
-	authServiceErr    error
-	authServiceOnce   sync.Once
-	developerJWTCache *cache.Cache // "_" -> JWT string
-	vehicleJWTCache   *cache.Cache // tokenID or DID -> JWT string
+	mu                sync.RWMutex
+	authServices      map[string]*dimoauth.AuthService // tenant ID -> auth service
+	developerJWTCache *cache.Cache                     // tenant ID -> JWT
+	vehicleJWTCache   *cache.Cache                     // "tenantID:tokenID|DID" -> JWT
 
 	settings *config.Settings
 	logger   zerolog.Logger
@@ -31,6 +31,7 @@ type DimoAuthProvider struct {
 
 func NewDimoAuthProvider(logger zerolog.Logger, settings *config.Settings) *DimoAuthProvider {
 	return &DimoAuthProvider{
+		authServices:      make(map[string]*dimoauth.AuthService),
 		developerJWTCache: cache.New(14*24*time.Hour, 15*24*time.Hour),
 		vehicleJWTCache:   cache.New(10*time.Minute, 12*time.Minute),
 		settings:          settings,
@@ -38,39 +39,37 @@ func NewDimoAuthProvider(logger zerolog.Logger, settings *config.Settings) *Dimo
 	}
 }
 
-// GetDeveloperJWT returns a cached or freshly-obtained developer JWT for the
-// configured DIMO_AUTH_CLIENT_ID / DIMO_AUTH_PRIVATE_KEY pair.
-func (p *DimoAuthProvider) GetDeveloperJWT() (string, error) {
-	if cached, found := p.developerJWTCache.Get("_"); found {
+// GetDeveloperJWT returns a cached or freshly-obtained developer JWT for the tenant.
+func (p *DimoAuthProvider) GetDeveloperJWT(tenant models.Tenant) (string, error) {
+	if cached, found := p.developerJWTCache.Get(tenant.ID); found {
 		return cached.(string), nil
 	}
 
-	auth, err := p.getOrCreateAuthService()
+	auth, err := p.getOrCreateAuthService(tenant)
 	if err != nil {
 		return "", err
 	}
 
 	jwt := auth.GetToken()
 	if jwt == nil {
-		return "", fmt.Errorf("failed to get developer JWT")
+		return "", fmt.Errorf("failed to get developer JWT for tenant %s", tenant.ID)
 	}
-	p.developerJWTCache.Set("_", jwt.Raw, 14*24*time.Hour)
+	p.developerJWTCache.Set(tenant.ID, jwt.Raw, 14*24*time.Hour)
 	return jwt.Raw, nil
 }
 
-// GetVehicleJWT exchanges the developer JWT for a vehicle-scoped JWT (by
-// numeric tokenID). Used for telemetry / fetch-api by tokenID.
-func (p *DimoAuthProvider) GetVehicleJWT(tokenID uint64) (string, error) {
-	cacheKey := strconv.FormatUint(tokenID, 10)
+// GetVehicleJWT exchanges the tenant's developer JWT for a vehicle-scoped JWT (by tokenID).
+func (p *DimoAuthProvider) GetVehicleJWT(tenant models.Tenant, tokenID uint64) (string, error) {
+	cacheKey := fmt.Sprintf("%s:%d", tenant.ID, tokenID)
 	if cached, found := p.vehicleJWTCache.Get(cacheKey); found {
 		return cached.(string), nil
 	}
 
-	developerJWT, err := p.GetDeveloperJWT()
+	developerJWT, err := p.GetDeveloperJWT(tenant)
 	if err != nil {
 		return "", fmt.Errorf("dev JWT for vehicle exchange: %w", err)
 	}
-	auth, err := p.getOrCreateAuthService()
+	auth, err := p.getOrCreateAuthService(tenant)
 	if err != nil {
 		return "", err
 	}
@@ -83,20 +82,19 @@ func (p *DimoAuthProvider) GetVehicleJWT(tokenID uint64) (string, error) {
 	return vehicleJWT, nil
 }
 
-// GetAssetJWT exchanges the developer JWT for an asset (DID-scoped) JWT.
-// Used for fetch-api queries that take a DID. DID format:
-//
-//	did:erc721:<chainId>:<contractAddr>:<tokenId>
-func (p *DimoAuthProvider) GetAssetJWT(tokenDID string) (string, error) {
-	if cached, found := p.vehicleJWTCache.Get(tokenDID); found {
+// GetAssetJWT exchanges the tenant's developer JWT for an asset (DID-scoped) JWT.
+// DID format: did:erc721:<chainId>:<contractAddr>:<tokenId>
+func (p *DimoAuthProvider) GetAssetJWT(tenant models.Tenant, tokenDID string) (string, error) {
+	cacheKey := fmt.Sprintf("%s:%s", tenant.ID, tokenDID)
+	if cached, found := p.vehicleJWTCache.Get(cacheKey); found {
 		return cached.(string), nil
 	}
 
-	developerJWT, err := p.GetDeveloperJWT()
+	developerJWT, err := p.GetDeveloperJWT(tenant)
 	if err != nil {
 		return "", fmt.Errorf("dev JWT for asset exchange: %w", err)
 	}
-	auth, err := p.getOrCreateAuthService()
+	auth, err := p.getOrCreateAuthService(tenant)
 	if err != nil {
 		return "", err
 	}
@@ -111,7 +109,7 @@ func (p *DimoAuthProvider) GetAssetJWT(tokenDID string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("exchange for asset JWT: %w", err)
 	}
-	p.vehicleJWTCache.Set(tokenDID, assetJWT, 10*time.Minute)
+	p.vehicleJWTCache.Set(cacheKey, assetJWT, 10*time.Minute)
 	return assetJWT, nil
 }
 
@@ -133,21 +131,36 @@ func ParseTokenIDFromDID(tokenDID string) (uint64, error) {
 	return id, nil
 }
 
-func (p *DimoAuthProvider) getOrCreateAuthService() (*dimoauth.AuthService, error) {
-	p.authServiceOnce.Do(func() {
-		auth, err := dimoauth.NewAuthService(p.logger, &dimoauth.Settings{
-			AuthURL:            p.settings.DimoAuthURL,
-			TokenExchangeURL:   p.settings.TokenExchangeURL,
-			NFTContractAddress: p.settings.VehicleNftAddress,
-			ClientID:           p.settings.DimoAuthClientID,
-			RedirectURL:        p.settings.DimoAuthRedirectURL,
-			PrivateKeyHex:      p.settings.DimoAuthPrivateKey,
-		})
-		if err != nil {
-			p.authServiceErr = fmt.Errorf("create auth service: %w", err)
-			return
+func (p *DimoAuthProvider) getOrCreateAuthService(tenant models.Tenant) (*dimoauth.AuthService, error) {
+	p.mu.RLock()
+	auth, found := p.authServices[tenant.ID]
+	p.mu.RUnlock()
+	if found {
+		return auth, nil
+	}
+
+	// Prefer the tenant's registered redirect URI; fall back to the global one.
+	redirect := p.settings.DimoAuthRedirectURL
+	if tenant.DIMORedirectURI != "" {
+		if ruri, err := url.Parse(tenant.DIMORedirectURI); err == nil {
+			redirect = *ruri
 		}
-		p.authService = auth
+	}
+
+	auth, err := dimoauth.NewAuthService(p.logger, &dimoauth.Settings{
+		AuthURL:            p.settings.DimoAuthURL,
+		TokenExchangeURL:   p.settings.TokenExchangeURL,
+		NFTContractAddress: p.settings.VehicleNftAddress,
+		ClientID:           common.HexToAddress(tenant.ClientID),
+		RedirectURL:        redirect,
+		PrivateKeyHex:      tenant.DIMOPrivateKey,
 	})
-	return p.authService, p.authServiceErr
+	if err != nil {
+		return nil, fmt.Errorf("create auth service for tenant %s: %w", tenant.ID, err)
+	}
+
+	p.mu.Lock()
+	p.authServices[tenant.ID] = auth
+	p.mu.Unlock()
+	return auth, nil
 }

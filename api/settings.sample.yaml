@@ -30,6 +30,10 @@ DIMO_AUTH_PRIVATE_KEY: ''
 ## CORS — frontend dev origin + production console
 ALLOWED_ORIGINS: 'https://local-fleet-lite.dimo.org:3009,https://console.dimo.org'
 
+## Multi-tenancy — AES-256-GCM key for encrypting tenant DIMO API keys at rest.
+## Any non-empty string works locally; use a strong random value in prod.
+TENANT_SECRET_ENC_KEY: 'local-dev-tenant-enc-key-change-me'
+
 ## DIMO API dependencies
 IDENTITY_API_ENDPOINT: https://identity-api.dimo.zone/query
 

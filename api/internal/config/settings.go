@@ -31,6 +31,9 @@ type Settings struct {
 	// CORS
 	AllowedOrigins string `yaml:"ALLOWED_ORIGINS"`
 
+	// Multi-tenancy: key used to AES-256-GCM encrypt tenant DIMO API keys at rest. // secret
+	TenantSecretEncKey string `yaml:"TENANT_SECRET_ENC_KEY"`
+
 	// DIMO Identity API
 	IdentityAPIEndpoint url.URL `yaml:"IDENTITY_API_ENDPOINT"`
 

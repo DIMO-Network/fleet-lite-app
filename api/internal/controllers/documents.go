@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -21,7 +22,7 @@ import (
 type DocumentsController struct {
 	logger       *zerolog.Logger
 	settings     *config.Settings
-	identity     gateway.IdentityAPI
+	vehicleSvc   *service.VehicleService
 	authProvider *gateway.DimoAuthProvider
 	extractAPI   service.ExtractAPIService
 	attestSvc    service.AttestService
@@ -31,7 +32,7 @@ type DocumentsController struct {
 func NewDocumentsController(
 	logger *zerolog.Logger,
 	settings *config.Settings,
-	identity gateway.IdentityAPI,
+	vehicleSvc *service.VehicleService,
 	authProvider *gateway.DimoAuthProvider,
 	extractAPI service.ExtractAPIService,
 	attestSvc service.AttestService,
@@ -40,7 +41,7 @@ func NewDocumentsController(
 	return &DocumentsController{
 		logger:       logger,
 		settings:     settings,
-		identity:     identity,
+		vehicleSvc:   vehicleSvc,
 		authProvider: authProvider,
 		extractAPI:   extractAPI,
 		attestSvc:    attestSvc,
@@ -48,27 +49,18 @@ func NewDocumentsController(
 	}
 }
 
-// ownsVehicle returns true if the wallet listed by identity-api as the owner
-// of tokenID matches the JWT caller. Source of truth is identity-api, not our
-// JWT — the JWT only tells us *who* the caller is.
-func (d *DocumentsController) ownsVehicle(wallet string, tokenID uint64) (bool, error) {
-	vehicles, err := d.identity.FetchVehiclesByWalletAddress(wallet)
-	if err != nil {
-		return false, err
-	}
-	for _, v := range vehicles {
-		if uint64(v.TokenID) == tokenID {
-			return true, nil
-		}
-	}
-	return false, nil
+// vehicleInTenant reports whether the tokenID is one of the tenant's synced vehicles.
+func (d *DocumentsController) vehicleInTenant(ctx context.Context, tenantID string, tokenID uint64) bool {
+	_, err := d.vehicleSvc.GetVehicle(ctx, tenantID, int64(tokenID))
+	return err == nil
 }
 
 // ExtractDocument — POST /documents/extract (multipart file).
 // Returns {vin, category, fields, fileHash, rawResponse}.
 func (d *DocumentsController) ExtractDocument(c *fiber.Ctx) error {
-	if _, err := GetWalletAddressFromJWT(c); err != nil {
-		return fiber.NewError(fiber.StatusUnauthorized, err.Error())
+	tenant, err := GetTenant(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 
 	fileHeader, err := c.FormFile("file")
@@ -93,7 +85,7 @@ func (d *DocumentsController) ExtractDocument(c *fiber.Ctx) error {
 	sum := sha256.Sum256(fileBytes)
 	fileHash := hex.EncodeToString(sum[:])
 
-	result, err := d.extractAPI.ExtractDocument(fileBytes, fileHeader.Filename, mimeType)
+	result, err := d.extractAPI.ExtractDocument(tenant, fileBytes, fileHeader.Filename, mimeType)
 	if err != nil {
 		d.logger.Err(err).Msg("extract failed")
 		return fiber.NewError(fiber.StatusBadGateway, "document extraction failed: "+err.Error())
@@ -137,9 +129,9 @@ type AttestRequest struct {
 
 // AttestDocument — POST /documents/attest. Builds and submits a raw+parsed CE pair.
 func (d *DocumentsController) AttestDocument(c *fiber.Ctx) error {
-	wallet, err := GetWalletAddressFromJWT(c)
+	tenant, err := GetTenant(c)
 	if err != nil {
-		return fiber.NewError(fiber.StatusUnauthorized, err.Error())
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 
 	var req AttestRequest
@@ -150,13 +142,8 @@ func (d *DocumentsController) AttestDocument(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "tokenId, category, fileBase64 are required")
 	}
 
-	owns, err := d.ownsVehicle(wallet.Hex(), uint64(req.TokenID))
-	if err != nil {
-		d.logger.Err(err).Str("wallet", wallet.Hex()).Int64("tokenID", req.TokenID).Msg("ownership check failed")
-		return fiber.NewError(fiber.StatusBadGateway, "vehicle ownership check failed")
-	}
-	if !owns {
-		return fiber.NewError(fiber.StatusForbidden, "caller does not own this vehicle")
+	if !d.vehicleInTenant(c.Context(), tenant.ID, uint64(req.TokenID)) {
+		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
 	}
 
 	fileBytes, err := base64.StdEncoding.DecodeString(req.FileBase64)
@@ -168,7 +155,7 @@ func (d *DocumentsController) AttestDocument(c *fiber.Ctx) error {
 
 	tokenDID := d.authProvider.BuildVehicleDID(uint64(req.TokenID))
 
-	result, err := d.attestSvc.AttestDocumentPair(service.AttestInput{
+	result, err := d.attestSvc.AttestDocumentPair(tenant, service.AttestInput{
 		TokenID:    strconv.FormatInt(req.TokenID, 10),
 		TokenDID:   tokenDID,
 		Category:   req.Category,
@@ -187,24 +174,20 @@ func (d *DocumentsController) AttestDocument(c *fiber.Ctx) error {
 // ListDocuments — GET /documents/list?tokenId=N. Returns parsed CEs only;
 // the frontend uses filehash to download the raw via /documents/download.
 func (d *DocumentsController) ListDocuments(c *fiber.Ctx) error {
-	wallet, err := GetWalletAddressFromJWT(c)
+	tenant, err := GetTenant(c)
 	if err != nil {
-		return fiber.NewError(fiber.StatusUnauthorized, err.Error())
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 	tokenID, err := strconv.ParseUint(c.Query("tokenId"), 10, 64)
 	if err != nil || tokenID == 0 {
 		return fiber.NewError(fiber.StatusBadRequest, "valid tokenId query param required")
 	}
-	owns, err := d.ownsVehicle(wallet.Hex(), tokenID)
-	if err != nil {
-		return fiber.NewError(fiber.StatusBadGateway, "vehicle ownership check failed")
-	}
-	if !owns {
-		return fiber.NewError(fiber.StatusForbidden, "caller does not own this vehicle")
+	if !d.vehicleInTenant(c.Context(), tenant.ID, tokenID) {
+		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
 	}
 
 	tokenDID := d.authProvider.BuildVehicleDID(tokenID)
-	entries, err := d.fetchAPI.ListByDID(tokenDID, 200)
+	entries, err := d.fetchAPI.ListByDID(tenant, tokenDID, 200)
 	if err != nil {
 		// 403 from token-exchange-api means the dev license lacks SACD
 		// permissions on this vehicle. Surface that so the frontend can
@@ -216,7 +199,7 @@ func (d *DocumentsController) ListDocuments(c *fiber.Ctx) error {
 				"documents":           []interface{}{},
 				"tokenDid":            tokenDID,
 				"permissionsRequired": true,
-				"devLicense":          d.settings.DimoAuthClientID.Hex(),
+				"devLicense":          tenant.ClientID,
 			})
 		}
 		d.logger.Err(err).Str("did", tokenDID).Msg("list failed")
@@ -280,9 +263,9 @@ func (d *DocumentsController) ListDocuments(c *fiber.Ctx) error {
 // DownloadDocument — GET /documents/download?tokenId=N&filehash=X.
 // Streams the raw bytes with Content-Disposition so the browser saves.
 func (d *DocumentsController) DownloadDocument(c *fiber.Ctx) error {
-	wallet, err := GetWalletAddressFromJWT(c)
+	tenant, err := GetTenant(c)
 	if err != nil {
-		return fiber.NewError(fiber.StatusUnauthorized, err.Error())
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 	tokenID, err := strconv.ParseUint(c.Query("tokenId"), 10, 64)
 	if err != nil || tokenID == 0 {
@@ -292,16 +275,12 @@ func (d *DocumentsController) DownloadDocument(c *fiber.Ctx) error {
 	if fileHash == "" {
 		return fiber.NewError(fiber.StatusBadRequest, "filehash query param required")
 	}
-	owns, err := d.ownsVehicle(wallet.Hex(), tokenID)
-	if err != nil {
-		return fiber.NewError(fiber.StatusBadGateway, "vehicle ownership check failed")
-	}
-	if !owns {
-		return fiber.NewError(fiber.StatusForbidden, "caller does not own this vehicle")
+	if !d.vehicleInTenant(c.Context(), tenant.ID, tokenID) {
+		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
 	}
 
 	tokenDID := d.authProvider.BuildVehicleDID(tokenID)
-	entry, err := d.fetchAPI.FindRawByFilehash(tokenDID, fileHash)
+	entry, err := d.fetchAPI.FindRawByFilehash(tenant, tokenDID, fileHash)
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadGateway, "fetch raw document failed: "+err.Error())
 	}
@@ -326,9 +305,9 @@ func (d *DocumentsController) DownloadDocument(c *fiber.Ctx) error {
 
 // DeleteDocument — DELETE /documents/:id?tokenId=N. Emits a tombstone CE.
 func (d *DocumentsController) DeleteDocument(c *fiber.Ctx) error {
-	wallet, err := GetWalletAddressFromJWT(c)
+	tenant, err := GetTenant(c)
 	if err != nil {
-		return fiber.NewError(fiber.StatusUnauthorized, err.Error())
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 	parsedID := c.Params("id")
 	if parsedID == "" {
@@ -338,19 +317,15 @@ func (d *DocumentsController) DeleteDocument(c *fiber.Ctx) error {
 	if err != nil || tokenID == 0 {
 		return fiber.NewError(fiber.StatusBadRequest, "valid tokenId query param required")
 	}
-	owns, err := d.ownsVehicle(wallet.Hex(), tokenID)
-	if err != nil {
-		return fiber.NewError(fiber.StatusBadGateway, "vehicle ownership check failed")
-	}
-	if !owns {
-		return fiber.NewError(fiber.StatusForbidden, "caller does not own this vehicle")
+	if !d.vehicleInTenant(c.Context(), tenant.ID, tokenID) {
+		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
 	}
 
 	// Look up the paired raw id by filehash (best-effort — if we don't find
 	// it we still emit a tombstone for the parsed id).
 	tokenDID := d.authProvider.BuildVehicleDID(tokenID)
 	rawID := ""
-	if entries, err := d.fetchAPI.ListByDID(tokenDID, 200); err == nil {
+	if entries, err := d.fetchAPI.ListByDID(tenant, tokenDID, 200); err == nil {
 		for _, e := range entries {
 			if e.ID == parsedID && e.FileHash != "" {
 				for _, e2 := range entries {
@@ -364,7 +339,7 @@ func (d *DocumentsController) DeleteDocument(c *fiber.Ctx) error {
 		}
 	}
 
-	result, err := d.attestSvc.Tombstone(parsedID, rawID, tokenDID)
+	result, err := d.attestSvc.Tombstone(tenant, parsedID, rawID, tokenDID)
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadGateway, "tombstone failed: "+err.Error())
 	}

@@ -15,6 +15,7 @@ import (
 
 	"github.com/DIMO-Network/fleet-lite-app/internal/config"
 	"github.com/DIMO-Network/fleet-lite-app/internal/gateway"
+	"github.com/DIMO-Network/fleet-lite-app/internal/models"
 	gethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -27,14 +28,14 @@ import (
 // and "parsed" (data = extracted fields); both reference the same filehash so
 // fetch-api can join them.
 type AttestService interface {
-	AttestDocumentPair(input AttestInput) (*AttestResult, error)
-	Tombstone(parsedID, rawID, tokenDID string) (*AttestResult, error)
+	AttestDocumentPair(tenant models.Tenant, input AttestInput) (*AttestResult, error)
+	Tombstone(tenant models.Tenant, parsedID, rawID, tokenDID string) (*AttestResult, error)
 }
 
 type AttestInput struct {
-	TokenID       string                 // numeric tokenID as string, for logging
-	TokenDID      string                 // canonical asset DID, used as CE subject
-	Category      string                 // CE type (e.g. "dimo.document.vehicle.insurance") or short form
+	TokenID       string // numeric tokenID as string, for logging
+	TokenDID      string // canonical asset DID, used as CE subject
+	Category      string // CE type (e.g. "dimo.document.vehicle.insurance") or short form
 	FileBytes     []byte
 	MimeType      string
 	FileHash      string                 // SHA256 hex (computed if empty)
@@ -135,15 +136,11 @@ func rawEventType(category string) string {
 	return strings.Replace(parsed, "dimo.document.", "dimo.raw.", 1)
 }
 
-func (s *attestService) source() string {
-	return s.settings.DimoAuthClientID.Hex()
-}
-
-func (s *attestService) buildParsedCloudEvent(input AttestInput, signature string) signedCloudEvent {
+func (s *attestService) buildParsedCloudEvent(input AttestInput, signature, source string) signedCloudEvent {
 	return signedCloudEvent{
 		SpecVersion:     "1.0",
 		ID:              uuid.New().String(),
-		Source:          s.source(),
+		Source:          source,
 		Type:            parsedEventType(input.Category),
 		Subject:         input.TokenDID,
 		Time:            time.Now().UTC().Format(time.RFC3339),
@@ -154,7 +151,7 @@ func (s *attestService) buildParsedCloudEvent(input AttestInput, signature strin
 	}
 }
 
-func (s *attestService) buildRawCloudEvent(input AttestInput, signature string) signedRawCloudEvent {
+func (s *attestService) buildRawCloudEvent(input AttestInput, signature, source string) signedRawCloudEvent {
 	mimeType := input.MimeType
 	if mimeType == "" {
 		mimeType = "application/octet-stream"
@@ -166,7 +163,7 @@ func (s *attestService) buildRawCloudEvent(input AttestInput, signature string) 
 	return signedRawCloudEvent{
 		SpecVersion:     "1.0",
 		ID:              rawID,
-		Source:          s.source(),
+		Source:          source,
 		Type:            rawEventType(input.Category),
 		Subject:         input.TokenDID,
 		Time:            time.Now().UTC().Format(time.RFC3339),
@@ -202,7 +199,7 @@ func (s *attestService) submitCloudEvent(event interface{}, developerJWT string)
 	return nil
 }
 
-func (s *attestService) AttestDocumentPair(input AttestInput) (*AttestResult, error) {
+func (s *attestService) AttestDocumentPair(tenant models.Tenant, input AttestInput) (*AttestResult, error) {
 	if input.TokenDID == "" {
 		return nil, fmt.Errorf("missing TokenDID")
 	}
@@ -214,17 +211,18 @@ func (s *attestService) AttestDocumentPair(input AttestInput) (*AttestResult, er
 		input.RawDocumentID = uuid.New().String()
 	}
 
-	developerJWT, err := s.authProvider.GetDeveloperJWT()
+	developerJWT, err := s.authProvider.GetDeveloperJWT(tenant)
 	if err != nil {
 		return nil, fmt.Errorf("developer JWT: %w", err)
 	}
-	apiKey := s.settings.DimoAuthPrivateKey
+	apiKey := tenant.DIMOPrivateKey
+	source := tenant.ClientID
 
 	rawSig, err := signDataSecp256k1(input.FileBytes, apiKey)
 	if err != nil {
 		return nil, fmt.Errorf("sign raw: %w", err)
 	}
-	rawEvent := s.buildRawCloudEvent(input, rawSig)
+	rawEvent := s.buildRawCloudEvent(input, rawSig, source)
 	s.logger.Debug().Str("eventType", rawEvent.Type).Str("tokenID", input.TokenID).Msg("Submitting raw cloud event")
 	if err := s.submitCloudEvent(rawEvent, developerJWT); err != nil {
 		return nil, fmt.Errorf("submit raw cloud event: %w", err)
@@ -238,7 +236,7 @@ func (s *attestService) AttestDocumentPair(input AttestInput) (*AttestResult, er
 	if err != nil {
 		return nil, fmt.Errorf("sign parsed: %w", err)
 	}
-	parsedEvent := s.buildParsedCloudEvent(input, parsedSig)
+	parsedEvent := s.buildParsedCloudEvent(input, parsedSig, source)
 	s.logger.Info().Str("eventType", parsedEvent.Type).Str("tokenID", input.TokenID).Msg("Submitting parsed cloud event")
 	if err := s.submitCloudEvent(parsedEvent, developerJWT); err != nil {
 		return nil, fmt.Errorf("parsed attestation after raw (raw=%s): %w", rawEvent.ID, err)
@@ -253,15 +251,15 @@ func (s *attestService) AttestDocumentPair(input AttestInput) (*AttestResult, er
 // Tombstone emits a single dimo.tombstone CE referencing the parsed CE id and
 // (optionally) the paired raw CE id. CEs on DIS are immutable; tombstones are
 // the soft-delete convention.
-func (s *attestService) Tombstone(parsedID, rawID, tokenDID string) (*AttestResult, error) {
+func (s *attestService) Tombstone(tenant models.Tenant, parsedID, rawID, tokenDID string) (*AttestResult, error) {
 	if parsedID == "" || tokenDID == "" {
 		return nil, fmt.Errorf("missing parsedID or tokenDID")
 	}
-	developerJWT, err := s.authProvider.GetDeveloperJWT()
+	developerJWT, err := s.authProvider.GetDeveloperJWT(tenant)
 	if err != nil {
 		return nil, fmt.Errorf("developer JWT: %w", err)
 	}
-	apiKey := s.settings.DimoAuthPrivateKey
+	apiKey := tenant.DIMOPrivateKey
 
 	data := map[string]interface{}{"referenceId": parsedID}
 	if rawID != "" {
@@ -278,7 +276,7 @@ func (s *attestService) Tombstone(parsedID, rawID, tokenDID string) (*AttestResu
 	ev := signedCloudEvent{
 		SpecVersion:     "1.0",
 		ID:              uuid.New().String(),
-		Source:          s.source(),
+		Source:          tenant.ClientID,
 		Type:            "dimo.tombstone",
 		Subject:         tokenDID,
 		Time:            time.Now().UTC().Format(time.RFC3339),

@@ -13,6 +13,7 @@ import (
 
 	"github.com/DIMO-Network/fleet-lite-app/internal/config"
 	"github.com/DIMO-Network/fleet-lite-app/internal/gateway"
+	"github.com/DIMO-Network/fleet-lite-app/internal/models"
 	"github.com/rs/zerolog"
 )
 
@@ -32,7 +33,7 @@ type ExtractResult struct {
 // developer JWT (cached); each extract call sends the file as multipart with
 // that JWT.
 type ExtractAPIService interface {
-	ExtractDocument(fileBytes []byte, fileName, mimeType string) (*ExtractResult, error)
+	ExtractDocument(tenant models.Tenant, fileBytes []byte, fileName, mimeType string) (*ExtractResult, error)
 }
 
 type extractAPIService struct {
@@ -49,8 +50,8 @@ func NewExtractAPIService(logger zerolog.Logger, settings *config.Settings, auth
 	}
 }
 
-func (s *extractAPIService) ExtractDocument(fileBytes []byte, fileName, mimeType string) (*ExtractResult, error) {
-	developerJWT, err := s.authProvider.GetDeveloperJWT()
+func (s *extractAPIService) ExtractDocument(tenant models.Tenant, fileBytes []byte, fileName, mimeType string) (*ExtractResult, error) {
+	developerJWT, err := s.authProvider.GetDeveloperJWT(tenant)
 	if err != nil {
 		return nil, fmt.Errorf("developer JWT: %w", err)
 	}
@@ -106,9 +107,9 @@ func (s *extractAPIService) ExtractDocument(fileBytes []byte, fileName, mimeType
 	}
 
 	result := &ExtractResult{
-		RawJSON: json.RawMessage(respBytes),
-		Fields:  rawMap,
-		VIN:     findVINInMap(rawMap),
+		RawJSON:  json.RawMessage(respBytes),
+		Fields:   rawMap,
+		VIN:      findVINInMap(rawMap),
 		Category: findCategory(rawMap),
 	}
 	return result, nil

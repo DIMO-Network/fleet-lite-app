@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/DIMO-Network/fleet-lite-app/internal/config"
+	"github.com/DIMO-Network/fleet-lite-app/internal/models"
 	"github.com/rs/zerolog"
 )
 
@@ -45,8 +46,8 @@ func NewFetchAPI(logger zerolog.Logger, settings *config.Settings, authProvider 
 
 // ListByDID pulls the most recent `limit` CEs for a vehicle DID and returns
 // only the ones whose type prefixes match document attestations (parsed or raw).
-func (f *FetchAPI) ListByDID(tokenDID string, limit int) ([]AttestationEntry, error) {
-	assetJWT, err := f.authProvider.GetAssetJWT(tokenDID)
+func (f *FetchAPI) ListByDID(tenant models.Tenant, tokenDID string, limit int) ([]AttestationEntry, error) {
+	assetJWT, err := f.authProvider.GetAssetJWT(tenant, tokenDID)
 	if err != nil {
 		return nil, fmt.Errorf("asset JWT: %w", err)
 	}
@@ -117,11 +118,11 @@ func (f *FetchAPI) ListByDID(tokenDID string, limit int) ([]AttestationEntry, er
 // the given filehash for a vehicle, or nil if absent. fetch-api has no
 // filehash filter — we pull recent and match in-process. Per-vehicle history
 // is bounded in practice.
-func (f *FetchAPI) FindRawByFilehash(tokenDID, fileHash string) (*AttestationEntry, error) {
+func (f *FetchAPI) FindRawByFilehash(tenant models.Tenant, tokenDID, fileHash string) (*AttestationEntry, error) {
 	if fileHash == "" {
 		return nil, fmt.Errorf("fileHash is required")
 	}
-	entries, err := f.ListByDID(tokenDID, 200)
+	entries, err := f.ListByDID(tenant, tokenDID, 200)
 	if err != nil {
 		return nil, err
 	}
