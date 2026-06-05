@@ -32,7 +32,7 @@ export class FleetMap extends LitElement {
         #map {
             width: 100%;
             height: 100%;
-            background: var(--surface-container-lowest, #0e0e0e);
+            background: #e8e8e8;
         }
         /* Dark, unobtrusive Leaflet controls + popups to match the theme. */
         .leaflet-control-zoom a {
@@ -74,11 +74,10 @@ export class FleetMap extends LitElement {
             .setView(FleetMap.DEFAULT_CENTER, FleetMap.DEFAULT_ZOOM);
         L.control.zoom({ position: 'bottomleft' }).addTo(this.map);
 
-        // Free, key-less dark basemap (OSM data via CARTO).
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
-            subdomains: 'abcd',
+        // Standard OpenStreetMap basemap (default Leaflet look, key-less).
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
-            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+            attribution: '&copy; OpenStreetMap contributors',
         }).addTo(this.map);
 
         this.syncMarkers();
