@@ -240,21 +240,21 @@ var VehicleWhere = struct {
 	CreatedAt    whereHelpertime_Time
 	UpdatedAt    whereHelpertime_Time
 }{
-	TenantID:     whereHelperstring{field: "\"fleet_lite_app\".\"vehicles\".\"tenant_id\""},
-	TokenID:      whereHelperint64{field: "\"fleet_lite_app\".\"vehicles\".\"token_id\""},
-	OwnerAddress: whereHelpernull_String{field: "\"fleet_lite_app\".\"vehicles\".\"owner_address\""},
-	Make:         whereHelpernull_String{field: "\"fleet_lite_app\".\"vehicles\".\"make\""},
-	Model:        whereHelpernull_String{field: "\"fleet_lite_app\".\"vehicles\".\"model\""},
-	Year:         whereHelpernull_Int{field: "\"fleet_lite_app\".\"vehicles\".\"year\""},
-	DefinitionID: whereHelpernull_String{field: "\"fleet_lite_app\".\"vehicles\".\"definition_id\""},
-	DeviceType:   whereHelpernull_String{field: "\"fleet_lite_app\".\"vehicles\".\"device_type\""},
-	Imei:         whereHelpernull_String{field: "\"fleet_lite_app\".\"vehicles\".\"imei\""},
-	Serial:       whereHelpernull_String{field: "\"fleet_lite_app\".\"vehicles\".\"serial\""},
-	MintedAt:     whereHelpernull_Time{field: "\"fleet_lite_app\".\"vehicles\".\"minted_at\""},
-	Raw:          whereHelpernull_JSON{field: "\"fleet_lite_app\".\"vehicles\".\"raw\""},
-	SyncedAt:     whereHelpertime_Time{field: "\"fleet_lite_app\".\"vehicles\".\"synced_at\""},
-	CreatedAt:    whereHelpertime_Time{field: "\"fleet_lite_app\".\"vehicles\".\"created_at\""},
-	UpdatedAt:    whereHelpertime_Time{field: "\"fleet_lite_app\".\"vehicles\".\"updated_at\""},
+	TenantID:     whereHelperstring{field: "\"vehicles\".\"tenant_id\""},
+	TokenID:      whereHelperint64{field: "\"vehicles\".\"token_id\""},
+	OwnerAddress: whereHelpernull_String{field: "\"vehicles\".\"owner_address\""},
+	Make:         whereHelpernull_String{field: "\"vehicles\".\"make\""},
+	Model:        whereHelpernull_String{field: "\"vehicles\".\"model\""},
+	Year:         whereHelpernull_Int{field: "\"vehicles\".\"year\""},
+	DefinitionID: whereHelpernull_String{field: "\"vehicles\".\"definition_id\""},
+	DeviceType:   whereHelpernull_String{field: "\"vehicles\".\"device_type\""},
+	Imei:         whereHelpernull_String{field: "\"vehicles\".\"imei\""},
+	Serial:       whereHelpernull_String{field: "\"vehicles\".\"serial\""},
+	MintedAt:     whereHelpernull_Time{field: "\"vehicles\".\"minted_at\""},
+	Raw:          whereHelpernull_JSON{field: "\"vehicles\".\"raw\""},
+	SyncedAt:     whereHelpertime_Time{field: "\"vehicles\".\"synced_at\""},
+	CreatedAt:    whereHelpertime_Time{field: "\"vehicles\".\"created_at\""},
+	UpdatedAt:    whereHelpertime_Time{field: "\"vehicles\".\"updated_at\""},
 }
 
 // VehicleRels is where relationship names are stored.
@@ -675,8 +675,8 @@ func (vehicleL) LoadTenant(ctx context.Context, e boil.ContextExecutor, singular
 	}
 
 	query := NewQuery(
-		qm.From(`fleet_lite_app.tenants`),
-		qm.WhereIn(`fleet_lite_app.tenants.id in ?`, argsSlice...),
+		qm.From(`tenants`),
+		qm.WhereIn(`tenants.id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -749,7 +749,7 @@ func (o *Vehicle) SetTenant(ctx context.Context, exec boil.ContextExecutor, inse
 	}
 
 	updateQuery := fmt.Sprintf(
-		"UPDATE \"fleet_lite_app\".\"vehicles\" SET %s WHERE %s",
+		"UPDATE \"vehicles\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, []string{"tenant_id"}),
 		strmangle.WhereClause("\"", "\"", 2, vehiclePrimaryKeyColumns),
 	)
@@ -786,10 +786,10 @@ func (o *Vehicle) SetTenant(ctx context.Context, exec boil.ContextExecutor, inse
 
 // Vehicles retrieves all the records using an executor.
 func Vehicles(mods ...qm.QueryMod) vehicleQuery {
-	mods = append(mods, qm.From("\"fleet_lite_app\".\"vehicles\""))
+	mods = append(mods, qm.From("\"vehicles\""))
 	q := NewQuery(mods...)
 	if len(queries.GetSelect(q)) == 0 {
-		queries.SetSelect(q, []string{"\"fleet_lite_app\".\"vehicles\".*"})
+		queries.SetSelect(q, []string{"\"vehicles\".*"})
 	}
 
 	return vehicleQuery{q}
@@ -805,7 +805,7 @@ func FindVehicle(ctx context.Context, exec boil.ContextExecutor, tenantID string
 		sel = strings.Join(strmangle.IdentQuoteSlice(dialect.LQ, dialect.RQ, selectCols), ",")
 	}
 	query := fmt.Sprintf(
-		"select %s from \"fleet_lite_app\".\"vehicles\" where \"tenant_id\"=$1 AND \"token_id\"=$2", sel,
+		"select %s from \"vehicles\" where \"tenant_id\"=$1 AND \"token_id\"=$2", sel,
 	)
 
 	q := queries.Raw(query, tenantID, tokenID)
@@ -872,9 +872,9 @@ func (o *Vehicle) Insert(ctx context.Context, exec boil.ContextExecutor, columns
 			return err
 		}
 		if len(wl) != 0 {
-			cache.query = fmt.Sprintf("INSERT INTO \"fleet_lite_app\".\"vehicles\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
+			cache.query = fmt.Sprintf("INSERT INTO \"vehicles\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
 		} else {
-			cache.query = "INSERT INTO \"fleet_lite_app\".\"vehicles\" %sDEFAULT VALUES%s"
+			cache.query = "INSERT INTO \"vehicles\" %sDEFAULT VALUES%s"
 		}
 
 		var queryOutput, queryReturning string
@@ -946,7 +946,7 @@ func (o *Vehicle) Update(ctx context.Context, exec boil.ContextExecutor, columns
 			return 0, errors.New("models: unable to update vehicles, could not build whitelist")
 		}
 
-		cache.query = fmt.Sprintf("UPDATE \"fleet_lite_app\".\"vehicles\" SET %s WHERE %s",
+		cache.query = fmt.Sprintf("UPDATE \"vehicles\" SET %s WHERE %s",
 			strmangle.SetParamNames("\"", "\"", 1, wl),
 			strmangle.WhereClause("\"", "\"", len(wl)+1, vehiclePrimaryKeyColumns),
 		)
@@ -1027,7 +1027,7 @@ func (o VehicleSlice) UpdateAll(ctx context.Context, exec boil.ContextExecutor, 
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := fmt.Sprintf("UPDATE \"fleet_lite_app\".\"vehicles\" SET %s WHERE %s",
+	sql := fmt.Sprintf("UPDATE \"vehicles\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, colNames),
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), len(colNames)+1, vehiclePrimaryKeyColumns, len(o)))
 
@@ -1131,7 +1131,7 @@ func (o *Vehicle) Upsert(ctx context.Context, exec boil.ContextExecutor, updateO
 			conflict = make([]string, len(vehiclePrimaryKeyColumns))
 			copy(conflict, vehiclePrimaryKeyColumns)
 		}
-		cache.query = buildUpsertQueryPostgres(dialect, "\"fleet_lite_app\".\"vehicles\"", updateOnConflict, ret, update, conflict, insert, opts...)
+		cache.query = buildUpsertQueryPostgres(dialect, "\"vehicles\"", updateOnConflict, ret, update, conflict, insert, opts...)
 
 		cache.valueMapping, err = queries.BindMapping(vehicleType, vehicleMapping, insert)
 		if err != nil {
@@ -1190,7 +1190,7 @@ func (o *Vehicle) Delete(ctx context.Context, exec boil.ContextExecutor) (int64,
 	}
 
 	args := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(o)), vehiclePrimaryKeyMapping)
-	sql := "DELETE FROM \"fleet_lite_app\".\"vehicles\" WHERE \"tenant_id\"=$1 AND \"token_id\"=$2"
+	sql := "DELETE FROM \"vehicles\" WHERE \"tenant_id\"=$1 AND \"token_id\"=$2"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1255,7 +1255,7 @@ func (o VehicleSlice) DeleteAll(ctx context.Context, exec boil.ContextExecutor) 
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "DELETE FROM \"fleet_lite_app\".\"vehicles\" WHERE " +
+	sql := "DELETE FROM \"vehicles\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, vehiclePrimaryKeyColumns, len(o))
 
 	if boil.IsDebug(ctx) {
@@ -1310,7 +1310,7 @@ func (o *VehicleSlice) ReloadAll(ctx context.Context, exec boil.ContextExecutor)
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "SELECT \"fleet_lite_app\".\"vehicles\".* FROM \"fleet_lite_app\".\"vehicles\" WHERE " +
+	sql := "SELECT \"vehicles\".* FROM \"vehicles\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, vehiclePrimaryKeyColumns, len(*o))
 
 	q := queries.Raw(sql, args...)
@@ -1328,7 +1328,7 @@ func (o *VehicleSlice) ReloadAll(ctx context.Context, exec boil.ContextExecutor)
 // VehicleExists checks if the Vehicle row exists.
 func VehicleExists(ctx context.Context, exec boil.ContextExecutor, tenantID string, tokenID int64) (bool, error) {
 	var exists bool
-	sql := "select exists(select 1 from \"fleet_lite_app\".\"vehicles\" where \"tenant_id\"=$1 AND \"token_id\"=$2 limit 1)"
+	sql := "select exists(select 1 from \"vehicles\" where \"tenant_id\"=$1 AND \"token_id\"=$2 limit 1)"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
