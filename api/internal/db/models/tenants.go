@@ -133,12 +133,12 @@ var TenantWhere = struct {
 	CreatedAt     whereHelpertime_Time
 	UpdatedAt     whereHelpertime_Time
 }{
-	ID:            whereHelperstring{field: "\"fleet_lite_app\".\"tenants\".\"id\""},
-	Name:          whereHelperstring{field: "\"fleet_lite_app\".\"tenants\".\"name\""},
-	DimoClientID:  whereHelpernull_String{field: "\"fleet_lite_app\".\"tenants\".\"dimo_client_id\""},
-	DimoAPIKeyEnc: whereHelpernull_String{field: "\"fleet_lite_app\".\"tenants\".\"dimo_api_key_enc\""},
-	CreatedAt:     whereHelpertime_Time{field: "\"fleet_lite_app\".\"tenants\".\"created_at\""},
-	UpdatedAt:     whereHelpertime_Time{field: "\"fleet_lite_app\".\"tenants\".\"updated_at\""},
+	ID:            whereHelperstring{field: "\"tenants\".\"id\""},
+	Name:          whereHelperstring{field: "\"tenants\".\"name\""},
+	DimoClientID:  whereHelpernull_String{field: "\"tenants\".\"dimo_client_id\""},
+	DimoAPIKeyEnc: whereHelpernull_String{field: "\"tenants\".\"dimo_api_key_enc\""},
+	CreatedAt:     whereHelpertime_Time{field: "\"tenants\".\"created_at\""},
+	UpdatedAt:     whereHelpertime_Time{field: "\"tenants\".\"updated_at\""},
 }
 
 // TenantRels is where relationship names are stored.
@@ -517,7 +517,7 @@ func (o *Tenant) TenantUsers(mods ...qm.QueryMod) tenantUserQuery {
 	}
 
 	queryMods = append(queryMods,
-		qm.Where("\"fleet_lite_app\".\"tenant_users\".\"tenant_id\"=?", o.ID),
+		qm.Where("\"tenant_users\".\"tenant_id\"=?", o.ID),
 	)
 
 	return TenantUsers(queryMods...)
@@ -531,7 +531,7 @@ func (o *Tenant) Vehicles(mods ...qm.QueryMod) vehicleQuery {
 	}
 
 	queryMods = append(queryMods,
-		qm.Where("\"fleet_lite_app\".\"vehicles\".\"tenant_id\"=?", o.ID),
+		qm.Where("\"vehicles\".\"tenant_id\"=?", o.ID),
 	)
 
 	return Vehicles(queryMods...)
@@ -592,8 +592,8 @@ func (tenantL) LoadTenantUsers(ctx context.Context, e boil.ContextExecutor, sing
 	}
 
 	query := NewQuery(
-		qm.From(`fleet_lite_app.tenant_users`),
-		qm.WhereIn(`fleet_lite_app.tenant_users.tenant_id in ?`, argsSlice...),
+		qm.From(`tenant_users`),
+		qm.WhereIn(`tenant_users.tenant_id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -705,8 +705,8 @@ func (tenantL) LoadVehicles(ctx context.Context, e boil.ContextExecutor, singula
 	}
 
 	query := NewQuery(
-		qm.From(`fleet_lite_app.vehicles`),
-		qm.WhereIn(`fleet_lite_app.vehicles.tenant_id in ?`, argsSlice...),
+		qm.From(`vehicles`),
+		qm.WhereIn(`vehicles.tenant_id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -777,7 +777,7 @@ func (o *Tenant) AddTenantUsers(ctx context.Context, exec boil.ContextExecutor, 
 			}
 		} else {
 			updateQuery := fmt.Sprintf(
-				"UPDATE \"fleet_lite_app\".\"tenant_users\" SET %s WHERE %s",
+				"UPDATE \"tenant_users\" SET %s WHERE %s",
 				strmangle.SetParamNames("\"", "\"", 1, []string{"tenant_id"}),
 				strmangle.WhereClause("\"", "\"", 2, tenantUserPrimaryKeyColumns),
 			)
@@ -830,7 +830,7 @@ func (o *Tenant) AddVehicles(ctx context.Context, exec boil.ContextExecutor, ins
 			}
 		} else {
 			updateQuery := fmt.Sprintf(
-				"UPDATE \"fleet_lite_app\".\"vehicles\" SET %s WHERE %s",
+				"UPDATE \"vehicles\" SET %s WHERE %s",
 				strmangle.SetParamNames("\"", "\"", 1, []string{"tenant_id"}),
 				strmangle.WhereClause("\"", "\"", 2, vehiclePrimaryKeyColumns),
 			)
@@ -871,10 +871,10 @@ func (o *Tenant) AddVehicles(ctx context.Context, exec boil.ContextExecutor, ins
 
 // Tenants retrieves all the records using an executor.
 func Tenants(mods ...qm.QueryMod) tenantQuery {
-	mods = append(mods, qm.From("\"fleet_lite_app\".\"tenants\""))
+	mods = append(mods, qm.From("\"tenants\""))
 	q := NewQuery(mods...)
 	if len(queries.GetSelect(q)) == 0 {
-		queries.SetSelect(q, []string{"\"fleet_lite_app\".\"tenants\".*"})
+		queries.SetSelect(q, []string{"\"tenants\".*"})
 	}
 
 	return tenantQuery{q}
@@ -890,7 +890,7 @@ func FindTenant(ctx context.Context, exec boil.ContextExecutor, iD string, selec
 		sel = strings.Join(strmangle.IdentQuoteSlice(dialect.LQ, dialect.RQ, selectCols), ",")
 	}
 	query := fmt.Sprintf(
-		"select %s from \"fleet_lite_app\".\"tenants\" where \"id\"=$1", sel,
+		"select %s from \"tenants\" where \"id\"=$1", sel,
 	)
 
 	q := queries.Raw(query, iD)
@@ -957,9 +957,9 @@ func (o *Tenant) Insert(ctx context.Context, exec boil.ContextExecutor, columns 
 			return err
 		}
 		if len(wl) != 0 {
-			cache.query = fmt.Sprintf("INSERT INTO \"fleet_lite_app\".\"tenants\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
+			cache.query = fmt.Sprintf("INSERT INTO \"tenants\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
 		} else {
-			cache.query = "INSERT INTO \"fleet_lite_app\".\"tenants\" %sDEFAULT VALUES%s"
+			cache.query = "INSERT INTO \"tenants\" %sDEFAULT VALUES%s"
 		}
 
 		var queryOutput, queryReturning string
@@ -1031,7 +1031,7 @@ func (o *Tenant) Update(ctx context.Context, exec boil.ContextExecutor, columns 
 			return 0, errors.New("models: unable to update tenants, could not build whitelist")
 		}
 
-		cache.query = fmt.Sprintf("UPDATE \"fleet_lite_app\".\"tenants\" SET %s WHERE %s",
+		cache.query = fmt.Sprintf("UPDATE \"tenants\" SET %s WHERE %s",
 			strmangle.SetParamNames("\"", "\"", 1, wl),
 			strmangle.WhereClause("\"", "\"", len(wl)+1, tenantPrimaryKeyColumns),
 		)
@@ -1112,7 +1112,7 @@ func (o TenantSlice) UpdateAll(ctx context.Context, exec boil.ContextExecutor, c
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := fmt.Sprintf("UPDATE \"fleet_lite_app\".\"tenants\" SET %s WHERE %s",
+	sql := fmt.Sprintf("UPDATE \"tenants\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, colNames),
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), len(colNames)+1, tenantPrimaryKeyColumns, len(o)))
 
@@ -1216,7 +1216,7 @@ func (o *Tenant) Upsert(ctx context.Context, exec boil.ContextExecutor, updateOn
 			conflict = make([]string, len(tenantPrimaryKeyColumns))
 			copy(conflict, tenantPrimaryKeyColumns)
 		}
-		cache.query = buildUpsertQueryPostgres(dialect, "\"fleet_lite_app\".\"tenants\"", updateOnConflict, ret, update, conflict, insert, opts...)
+		cache.query = buildUpsertQueryPostgres(dialect, "\"tenants\"", updateOnConflict, ret, update, conflict, insert, opts...)
 
 		cache.valueMapping, err = queries.BindMapping(tenantType, tenantMapping, insert)
 		if err != nil {
@@ -1275,7 +1275,7 @@ func (o *Tenant) Delete(ctx context.Context, exec boil.ContextExecutor) (int64, 
 	}
 
 	args := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(o)), tenantPrimaryKeyMapping)
-	sql := "DELETE FROM \"fleet_lite_app\".\"tenants\" WHERE \"id\"=$1"
+	sql := "DELETE FROM \"tenants\" WHERE \"id\"=$1"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1340,7 +1340,7 @@ func (o TenantSlice) DeleteAll(ctx context.Context, exec boil.ContextExecutor) (
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "DELETE FROM \"fleet_lite_app\".\"tenants\" WHERE " +
+	sql := "DELETE FROM \"tenants\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, tenantPrimaryKeyColumns, len(o))
 
 	if boil.IsDebug(ctx) {
@@ -1395,7 +1395,7 @@ func (o *TenantSlice) ReloadAll(ctx context.Context, exec boil.ContextExecutor) 
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "SELECT \"fleet_lite_app\".\"tenants\".* FROM \"fleet_lite_app\".\"tenants\" WHERE " +
+	sql := "SELECT \"tenants\".* FROM \"tenants\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, tenantPrimaryKeyColumns, len(*o))
 
 	q := queries.Raw(sql, args...)
@@ -1413,7 +1413,7 @@ func (o *TenantSlice) ReloadAll(ctx context.Context, exec boil.ContextExecutor) 
 // TenantExists checks if the Tenant row exists.
 func TenantExists(ctx context.Context, exec boil.ContextExecutor, iD string) (bool, error) {
 	var exists bool
-	sql := "select exists(select 1 from \"fleet_lite_app\".\"tenants\" where \"id\"=$1 limit 1)"
+	sql := "select exists(select 1 from \"tenants\" where \"id\"=$1 limit 1)"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)

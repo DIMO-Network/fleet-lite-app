@@ -109,7 +109,7 @@ func (s *TenantService) GetTenantByID(ctx context.Context, tenantID string) (*mo
 // ListTenantsForWallet returns every tenant the wallet is a member of.
 func (s *TenantService) ListTenantsForWallet(ctx context.Context, wallet string) (dbmodels.TenantSlice, error) {
 	return dbmodels.Tenants(
-		qm.InnerJoin("fleet_lite_app.tenant_users tu on tu.tenant_id = tenants.id"),
+		qm.InnerJoin("tenant_users tu on tu.tenant_id = tenants.id"),
 		qm.Where("lower(tu.wallet) = lower(?)", wallet),
 		qm.OrderBy("tenants.created_at"),
 	).All(ctx, s.pdb.DBS().Reader)

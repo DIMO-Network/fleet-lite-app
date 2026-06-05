@@ -16,6 +16,12 @@ LD_FLAGS = -X main.CommitHash=$(COMMIT)
 GO_FLAGS =
 
 APPS = fleet-lite-app
+
+# Schema name used only for local sqlboiler introspection (must match the local
+# dev DB name in sqlboiler.toml). It is stripped from generated models so they
+# stay schema-agnostic and resolve via search_path at runtime — see `sqlboiler`.
+DB_SCHEMA = fleet_lite_app
+
 all: $(APPS)
 
 install: $(APPS)
@@ -58,6 +64,11 @@ migrate-down:
 
 sqlboiler:
 	@sqlboiler psql --no-tests --wipe
+	# Strip the schema qualifier so generated models are schema-agnostic: the
+	# runtime schema is resolved via search_path (= DB.Name from settings), so
+	# the same models work whatever the deployment's DB_NAME is. See migrate.go
+	# (CREATE SCHEMA IF NOT EXISTS <DB.Name>) and shared db BuildConnectionString.
+	@sed -i '' -e 's/\\"$(DB_SCHEMA)\\"\.//g' -e 's/$(DB_SCHEMA)\.//g' internal/db/models/*.go
 
 addmigration:
 	@goose -dir internal/db/migrations create rename_me sql
