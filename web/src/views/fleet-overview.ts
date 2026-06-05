@@ -2,7 +2,9 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state, property } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { ApiService } from '../services/api-service.ts';
-import { Vehicle, VehiclesResponse } from '../types/vehicle.ts';
+import { Vehicle, VehiclesResponse, VehicleLocation, LocationsResponse } from '../types/vehicle.ts';
+import { FleetMap } from '../elements/fleet-map.ts';
+import '../elements/fleet-map.ts';
 
 interface VehicleCard {
     tokenId: string;
@@ -18,6 +20,7 @@ interface VehicleCard {
 export class FleetOverviewView extends LitElement {
     @property({ type: String }) tenantId = '';
     @state() private vehicles: VehicleCard[] = [];
+    @state() private locations: VehicleLocation[] = [];
     @state() private loading = true;
     @state() private errorMessage: string | null = null;
 
@@ -58,6 +61,18 @@ export class FleetOverviewView extends LitElement {
             console.error('Failed to load vehicles', e);
             this.errorMessage = e instanceof Error ? e.message : 'Failed to load vehicles';
         }
+        // Map locations load independently — telemetry is slower and non-fatal
+        // to the vehicle list. Vehicles with no fix / no permission are omitted.
+        try {
+            const loc = await ApiService.getInstance().get<LocationsResponse>('/telemetry/locations');
+            this.locations = loc.locations || [];
+        } catch (e) {
+            console.error('Failed to load vehicle locations', e);
+        }
+    }
+
+    private recenterMap() {
+        this.renderRoot.querySelector<FleetMap>('fleet-map')?.recenter();
     }
 
     static styles = [
@@ -125,21 +140,12 @@ export class FleetOverviewView extends LitElement {
                 position: absolute;
                 inset: 0;
                 z-index: 0;
-                background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCafAyaZaFkGbs0F-VRUMpBhT4Qnwu1r8nQf4Aj8I_HOoT7H7MyPxONAqC8FiCiJdvky_xYReTYz08ZPsqIZg2dTljMrTa1UYio31UMUCcTwS4zmJ2zxWihc0W12bN-u0qvD216PoKq0AuQUMwpWDSJ_w2H-5Yq7HDaT1LO_C9FazKL-fnjDD_IhaqtcXkQsQbFMx0FRGgzZBNV2qbNQddzi5Zcus630eiiSj1CamQZiZnOl0msenE-fKKe4YbBsKcpuoRwRqvHwkc');
-                background-size: cover;
-                background-position: center;
-            }
-            .map::after {
-                content: '';
-                position: absolute;
-                inset: 0;
-                background: linear-gradient(180deg, rgba(19, 19, 19, 0.4) 0%, rgba(19, 19, 19, 0.8) 100%);
             }
 
             .map-controls {
                 position: absolute;
                 top: 96px;
-                right: 24px;
+                left: 24px;
                 display: flex;
                 flex-direction: column;
                 gap: 12px;
@@ -372,11 +378,12 @@ export class FleetOverviewView extends LitElement {
                 </div>
             </header>
 
-            <div class="map"></div>
+            <fleet-map class="map" .vehicles=${this.locations} .tenantId=${this.tenantId}></fleet-map>
 
             <div class="map-controls">
-                <button><span class="material-symbols-outlined">my_location</span></button>
-                <button><span class="material-symbols-outlined">layers</span></button>
+                <button @click=${this.recenterMap} title="Fit all vehicles">
+                    <span class="material-symbols-outlined">my_location</span>
+                </button>
             </div>
 
             <div class="vehicles-panel">

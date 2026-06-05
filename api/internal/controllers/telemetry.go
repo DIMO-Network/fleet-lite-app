@@ -2,11 +2,17 @@ package controllers
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/DIMO-Network/fleet-lite-app/internal/config"
+	"github.com/DIMO-Network/fleet-lite-app/internal/models"
 	"github.com/DIMO-Network/fleet-lite-app/internal/service"
 	"github.com/gofiber/fiber/v2"
+	"github.com/patrickmn/go-cache"
 	"github.com/rs/zerolog"
 )
 
@@ -24,10 +30,11 @@ var curatedLatestSignals = []string{
 }
 
 type TelemetryController struct {
-	logger     *zerolog.Logger
-	settings   *config.Settings
-	vehicleSvc *service.VehicleService
-	telemetry  service.TelemetryAPIService
+	logger         *zerolog.Logger
+	settings       *config.Settings
+	vehicleSvc     *service.VehicleService
+	telemetry      service.TelemetryAPIService
+	locationsCache *cache.Cache // tenantID -> []vehicleLocationJSON (map markers)
 }
 
 func NewTelemetryController(
@@ -37,10 +44,11 @@ func NewTelemetryController(
 	telemetry service.TelemetryAPIService,
 ) *TelemetryController {
 	return &TelemetryController{
-		logger:     logger,
-		settings:   settings,
-		vehicleSvc: vehicleSvc,
-		telemetry:  telemetry,
+		logger:         logger,
+		settings:       settings,
+		vehicleSvc:     vehicleSvc,
+		telemetry:      telemetry,
+		locationsCache: cache.New(2*time.Minute, 5*time.Minute),
 	}
 }
 
@@ -91,6 +99,101 @@ func (t *TelemetryController) GetLatest(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadGateway, "telemetry latest failed: "+err.Error())
 	}
 	return c.JSON(fiber.Map{"signals": latest})
+}
+
+// vehicleLocationJSON is one marker on the fleet-overview map.
+type vehicleLocationJSON struct {
+	TokenID   int64   `json:"tokenId"`
+	Title     string  `json:"title"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+	Timestamp string  `json:"timestamp"`
+}
+
+// GetLocations — GET /telemetry/locations. Returns the latest GPS fix for each
+// of the tenant's vehicles that reports one, for the fleet-overview map.
+// Vehicles with no location, or where the dev license lacks SACD permissions,
+// are silently omitted. Fetches concurrently (bounded) to keep latency low.
+func (t *TelemetryController) GetLocations(c *fiber.Ctx) error {
+	tenant, err := GetTenant(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+
+	// Per-tenant cache: fleets can have hundreds of vehicles, and each location
+	// is a JWT mint + telemetry-api round trip. Caching keeps the map fast and
+	// avoids hammering DIMO on every load.
+	if cached, found := t.locationsCache.Get(tenant.ID); found {
+		return c.JSON(fiber.Map{"locations": cached})
+	}
+
+	vehicles, err := t.vehicleSvc.ListVehicles(c.Context(), tenant.ID)
+	if err != nil {
+		t.logger.Err(err).Str("tenant", tenant.ID).Msg("list vehicles for locations")
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to list vehicles")
+	}
+
+	const maxConcurrent = 20
+	sem := make(chan struct{}, maxConcurrent)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	out := make([]vehicleLocationJSON, 0, len(vehicles))
+
+	for _, v := range vehicles {
+		v := v
+		wg.Add(1)
+		sem <- struct{}{}
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			loc, lerr := t.telemetry.LatestLocation(tenant, uint64(v.TokenID))
+			if lerr != nil {
+				// A dev license without SACDs on a vehicle is expected — skip quietly.
+				if !isPermissionError(lerr) {
+					t.logger.Warn().Err(lerr).Int64("tokenID", v.TokenID).Msg("location fetch failed")
+				}
+				return
+			}
+			if loc == nil {
+				return // vehicle has never reported a location
+			}
+
+			mu.Lock()
+			out = append(out, vehicleLocationJSON{
+				TokenID:   v.TokenID,
+				Title:     vehicleTitle(v),
+				Latitude:  loc.Latitude,
+				Longitude: loc.Longitude,
+				Timestamp: loc.Timestamp,
+			})
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+
+	t.locationsCache.Set(tenant.ID, out, cache.DefaultExpiration)
+	return c.JSON(fiber.Map{"locations": out})
+}
+
+// vehicleTitle builds a "YEAR MAKE MODEL" label, falling back to the token id.
+// Mirrors the frontend's formatTitle so map popups match the vehicle cards.
+func vehicleTitle(v models.Vehicle) string {
+	d := v.Definition
+	parts := make([]string, 0, 3)
+	if d.Year > 0 {
+		parts = append(parts, strconv.Itoa(d.Year))
+	}
+	if d.Make != "" {
+		parts = append(parts, d.Make)
+	}
+	if d.Model != "" {
+		parts = append(parts, d.Model)
+	}
+	if len(parts) == 0 {
+		return fmt.Sprintf("Vehicle #%d", v.TokenID)
+	}
+	return strings.Join(parts, " ")
 }
 
 // GetTimeSeries — GET /telemetry/:tokenID/timeseries?signal=X&from=...&to=...&interval=...
