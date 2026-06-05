@@ -20,6 +20,7 @@ env:
   MONITORING_PORT: '8085'
   LOG_LEVEL: info
   SERVICE_NAME: fleet-lite-app
+  DB_NAME: fleets_lite
   JWT_KEY_SET_URL: https://auth.dev.dimo.zone/keys
   TOKEN_EXCHANGE_URL: https://token-exchange-api.dev.dimo.zone
   DIMO_LOGIN_URL: https://login.dev.dimo.org
