@@ -30,3 +30,16 @@ export interface Vehicle {
 export interface VehiclesResponse {
     vehicles: Vehicle[];
 }
+
+/** A vehicle's latest GPS fix for the fleet-overview map (GET /telemetry/locations). */
+export interface VehicleLocation {
+    tokenId: number;
+    title: string;
+    latitude: number;
+    longitude: number;
+    timestamp: string;
+}
+
+export interface LocationsResponse {
+    locations: VehicleLocation[];
+}
