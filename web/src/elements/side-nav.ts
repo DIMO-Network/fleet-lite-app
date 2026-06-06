@@ -64,20 +64,6 @@ export class SideNav extends LitElement {
                 color: var(--on-surface-variant);
             }
 
-            .add-vehicle {
-                width: 100%;
-                background: var(--primary);
-                color: var(--on-primary);
-                padding: 12px;
-                border-radius: var(--radius-md);
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                margin-bottom: 24px;
-                transition: opacity 0.15s ease;
-            }
-            .add-vehicle:hover { opacity: 0.9; }
-
             nav.items { flex: 1; display: flex; flex-direction: column; gap: 8px; }
 
             a.nav-item {
@@ -138,7 +124,6 @@ export class SideNav extends LitElement {
                     <p>Precision Telemetry</p>
                 </div>
             </div>
-            <button class="add-vehicle">Add Vehicle</button>
             <nav class="items">
                 ${ITEMS.map(i => this.item(i.key, i.icon, i.label, i.suffix))}
             </nav>
