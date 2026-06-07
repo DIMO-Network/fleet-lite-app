@@ -103,6 +103,8 @@ func App(
 
 	tenantApp.Get("/vehicles", vehiclesCtrl.GetVehicles)
 	tenantApp.Get("/vehicles/:tokenID", vehiclesCtrl.GetVehicle)
+	tenantApp.Post("/vehicles/:tokenID/favorite", vehiclesCtrl.AddFavorite)
+	tenantApp.Delete("/vehicles/:tokenID/favorite", vehiclesCtrl.RemoveFavorite)
 
 	// Telemetry (vehicle-details charts)
 	telemetryCtrl := controllers.NewTelemetryController(logger, settings, vehicleSvc, telemetryAPI)

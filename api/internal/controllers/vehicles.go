@@ -55,3 +55,40 @@ func (v *VehiclesController) GetVehicle(c *fiber.Ctx) error {
 	}
 	return c.JSON(vehicle)
 }
+
+// AddFavorite — star a vehicle for the current tenant ("account"). Favorites
+// are shared across the tenant's members and pinned to the top of the list.
+// POST /vehicles/:tokenID/favorite
+func (v *VehiclesController) AddFavorite(c *fiber.Ctx) error {
+	tenant, err := GetTenant(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	tokenID, err := ParseTokenIDParam(c, "tokenID")
+	if err != nil {
+		return err
+	}
+	if err := v.vehicleSvc.AddFavorite(c.Context(), tenant.ID, int64(tokenID)); err != nil {
+		v.logger.Err(err).Uint64("tokenID", tokenID).Str("tenant", tenant.ID).Msg("failed to add favorite")
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to add favorite")
+	}
+	return c.JSON(fiber.Map{"isFavorite": true})
+}
+
+// RemoveFavorite — unstar a vehicle for the current tenant.
+// DELETE /vehicles/:tokenID/favorite
+func (v *VehiclesController) RemoveFavorite(c *fiber.Ctx) error {
+	tenant, err := GetTenant(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	tokenID, err := ParseTokenIDParam(c, "tokenID")
+	if err != nil {
+		return err
+	}
+	if err := v.vehicleSvc.RemoveFavorite(c.Context(), tenant.ID, int64(tokenID)); err != nil {
+		v.logger.Err(err).Uint64("tokenID", tokenID).Str("tenant", tenant.ID).Msg("failed to remove favorite")
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to remove favorite")
+	}
+	return c.JSON(fiber.Map{"isFavorite": false})
+}

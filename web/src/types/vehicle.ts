@@ -25,8 +25,21 @@ export interface Vehicle {
     definition: Definition;
     syntheticDevice: SyntheticDevice;
     aftermarketDevice?: AftermarketDevice | null;
+    isFavorite?: boolean;
 }
 
 export interface VehiclesResponse {
     vehicles: Vehicle[];
+}
+
+export interface VehicleCard {
+    tokenId: string;
+    title: string;
+    location: string;
+    seenAt: string;
+    online: boolean;
+    notification?: number;
+    errorMessage?: string;
+    noPermissions?: boolean;
+    isFavorite?: boolean;
 }

@@ -5,18 +5,8 @@ import leafletCss from 'leaflet/dist/leaflet.css?inline';
 import { sharedStyles } from '../global-styles.ts';
 import { ApiService } from '../services/api-service.ts';
 import { TelemetryService } from '../services/telemetry-service.ts';
-import { Vehicle, VehiclesResponse } from '../types/vehicle.ts';
-
-interface VehicleCard {
-    tokenId: string;
-    title: string;
-    location: string;
-    seenAt: string;
-    online: boolean;
-    notification?: number;
-    errorMessage?: string;
-    noPermissions?: boolean;
-}
+import { FleetCache } from '../services/fleet-cache.ts';
+import { Vehicle, VehicleCard, VehiclesResponse } from '../types/vehicle.ts';
 
 @customElement('fleet-overview-view')
 export class FleetOverviewView extends LitElement {
@@ -27,6 +17,7 @@ export class FleetOverviewView extends LitElement {
 
     private leafletMap: L.Map | null = null;
     private markers = new Map<string, L.CircleMarker>();
+    private lastLocations: Record<string, { lat: number; lon: number }> = {};
     private resizeObserver: ResizeObserver | null = null;
     @state() private panelCollapsed = false;
     @state() private panelExpanded = true;
@@ -81,13 +72,61 @@ export class FleetOverviewView extends LitElement {
             seenAt: `Token #${v.tokenId}`,
             online: integrated,
             errorMessage: integrated ? undefined : 'No DIMO integration — pair a device to stream telemetry',
+            isFavorite: v.isFavorite ?? false,
         };
     }
 
-    private async loadVehicleData() {
+    /** Stable sort that pins favorites to the top, preserving relative order otherwise. */
+    private sortByFavorite(cards: VehicleCard[]): VehicleCard[] {
+        return [...cards].sort((a, b) => Number(!!b.isFavorite) - Number(!!a.isFavorite));
+    }
+
+    /** (Re)place map markers from `this.vehicles` + `this.lastLocations`. No-op until the map exists. */
+    private placeMarkers() {
+        if (!this.leafletMap) return;
+        this.markers.forEach((m) => m.remove());
+        this.markers.clear();
+
+        const titleMap = new Map(this.vehicles.map((v) => [v.tokenId, v.title]));
+        for (const [tokenId, coords] of Object.entries(this.lastLocations)) {
+            const marker = L.circleMarker([coords.lat, coords.lon], {
+                radius: 8,
+                fillColor: '#69dbad',
+                color: '#ffffff',
+                weight: 2,
+                opacity: 0.9,
+                fillOpacity: 0.85,
+            }).bindTooltip(titleMap.get(tokenId) ?? `Vehicle ${tokenId}`, { permanent: false, direction: 'top', offset: [0, -10] });
+            marker.addTo(this.leafletMap);
+            this.markers.set(tokenId, marker);
+        }
+
+        if (this.markers.size > 0) {
+            const group = L.featureGroup([...this.markers.values()]);
+            this.leafletMap.fitBounds(group.getBounds().pad(0.4), { maxZoom: 12 });
+        }
+    }
+
+    /**
+     * Loads the vehicle list + map locations. Reuses the cached result from a
+     * prior visit unless `force` is set (manual refresh), so navigating to
+     * vehicle details and back doesn't re-trigger the loading state or refetch.
+     */
+    private async loadVehicleData(force = false) {
+        if (!force) {
+            const cached = FleetCache.get();
+            if (cached) {
+                this.vehicles = cached.vehicles;
+                this.lastLocations = cached.locations;
+                this.loading = false;
+                this.placeMarkers();
+                return;
+            }
+        }
+
         try {
             const res = await ApiService.getInstance().get<VehiclesResponse>('/vehicles');
-            this.vehicles = (res.vehicles || []).map((v) => this.toCard(v));
+            this.vehicles = this.sortByFavorite((res.vehicles || []).map((v) => this.toCard(v)));
             this.loading = false;
         } catch (e) {
             // ApiService already redirected to /login.html on 401/400.
@@ -97,6 +136,7 @@ export class FleetOverviewView extends LitElement {
             return;
         }
 
+        this.lastLocations = {};
         // Single request for all vehicle locations. Per-vehicle JWT check on the
         // backend determines which vehicles the dev license has SACD access to.
         try {
@@ -110,38 +150,21 @@ export class FleetOverviewView extends LitElement {
                 );
             }
 
-            const titleMap = new Map(this.vehicles.map((v) => [v.tokenId, v.title]));
-            for (const [tokenId, coords] of Object.entries(res.locations)) {
-                if (!this.leafletMap) break;
-                const marker = L.circleMarker([coords.lat, coords.lon], {
-                    radius: 8,
-                    fillColor: '#69dbad',
-                    color: '#ffffff',
-                    weight: 2,
-                    opacity: 0.9,
-                    fillOpacity: 0.85,
-                }).bindTooltip(titleMap.get(tokenId) ?? `Vehicle ${tokenId}`, { permanent: false, direction: 'top', offset: [0, -10] });
-                marker.addTo(this.leafletMap);
-                this.markers.set(tokenId, marker);
-            }
+            this.lastLocations = res.locations;
         } catch {
             // Network failure — map stays at default view.
         }
 
-        if (this.markers.size > 0 && this.leafletMap) {
-            const group = L.featureGroup([...this.markers.values()]);
-            this.leafletMap.fitBounds(group.getBounds().pad(0.4), { maxZoom: 12 });
-        }
+        this.placeMarkers();
+        FleetCache.set({ vehicles: this.vehicles, locations: this.lastLocations });
     }
 
     private async refreshVehicles() {
         if (this.refreshing) return;
         this.refreshing = true;
         this.errorMessage = null;
-        this.markers.forEach((m) => m.remove());
-        this.markers.clear();
         try {
-            await this.loadVehicleData();
+            await this.loadVehicleData(true);
         } finally {
             this.refreshing = false;
         }
@@ -183,6 +206,10 @@ export class FleetOverviewView extends LitElement {
         this.resizeObserver = new ResizeObserver(() => this.updateMinZoom());
         this.resizeObserver.observe(el);
         this.updateMinZoom();
+
+        // Cached data may have already been loaded into `this.vehicles` /
+        // `this.lastLocations` before the map existed — place markers now.
+        this.placeMarkers();
     }
 
     override disconnectedCallback() {
@@ -557,6 +584,21 @@ export class FleetOverviewView extends LitElement {
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+            .favorite-star {
+                font-size: 16px;
+                color: #ffb432;
+                flex-shrink: 0;
+            }
+            .favorite-star-compact {
+                position: absolute;
+                top: 4px;
+                right: 4px;
+                font-size: 12px;
+                color: #ffb432;
             }
             .vehicle-meta .location {
                 font: var(--type-body-sm);
@@ -628,7 +670,10 @@ export class FleetOverviewView extends LitElement {
                         <span class="status-dot ${this.statusClass(v)}"></span>
                     </div>
                     <div class="vehicle-meta">
-                        <h4>${v.title}</h4>
+                        <h4>
+                            ${v.isFavorite ? html`<span class="material-symbols-outlined favorite-star" title="Favorite">star</span>` : ''}
+                            ${v.title}
+                        </h4>
                         ${v.online ? html`
                             <p class="location">${v.location}</p>
                             ${v.notification
@@ -660,6 +705,7 @@ export class FleetOverviewView extends LitElement {
         return html`
             <a class="vehicle-card-compact" href="#/${this.tenantId}/vehicles/${v.tokenId}" title=${v.title}>
                 <span class="status-dot ${this.statusClass(v)}"></span>
+                ${v.isFavorite ? html`<span class="material-symbols-outlined favorite-star-compact" title="Favorite">star</span>` : ''}
                 <span class="compact-token-id">${v.tokenId}</span>
                 ${this.markers.has(v.tokenId) ? html`
                     <button class="zoom-btn" title="Zoom to vehicle" @click=${(e: Event) => this.zoomToVehicle(e, v.tokenId)}>

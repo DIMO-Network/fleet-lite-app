@@ -21,6 +21,10 @@ type Vehicle struct {
 	Definition        Definition         `json:"definition"`
 	SyntheticDevice   SyntheticDevice    `json:"syntheticDevice"`
 	AftermarketDevice *AftermarketDevice `json:"aftermarketDevice,omitempty"`
+	// IsFavorite reflects whether the current tenant has starred this vehicle.
+	// Populated by VehicleService when assembling responses — it isn't part of
+	// the identity-api shape and is never present in the stored `raw` JSON.
+	IsFavorite bool `json:"isFavorite"`
 }
 
 type SyntheticDevice struct {
