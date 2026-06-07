@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/DIMO-Network/fleet-lite-app/internal/config"
@@ -19,8 +20,8 @@ var curatedLatestSignals = []string{
 	"powertrainCombustionEngineECT",                     // coolant temp (°C)
 	"lowVoltageBatteryCurrentVoltage",                   // 12V battery (V)
 	"powertrainCombustionEngineDieselExhaustFluidLevel", // AdBlue % (diesel)
-	"powertrainTractionBatteryStateOfChargeCurrent",     // EV SoC % — useful if applicable
-	"speed", // current speed (km/h)
+	"powertrainTractionBatteryStateOfChargeCurrent",     // EV SoC %
+	"speed",                                             // current speed (km/h)
 }
 
 type TelemetryController struct {
@@ -91,6 +92,40 @@ func (t *TelemetryController) GetLatest(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadGateway, "telemetry latest failed: "+err.Error())
 	}
 	return c.JSON(fiber.Map{"signals": latest})
+}
+
+// GetFleetLocations — GET /telemetry/locations. Returns last-known coordinates
+// for all integrated vehicles in the tenant in a single telemetry-api request.
+func (t *TelemetryController) GetFleetLocations(c *fiber.Ctx) error {
+	tenant, err := GetTenant(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	vehicles, err := t.vehicleSvc.ListVehicles(c.Context(), tenant.ID)
+	if err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "list vehicles: "+err.Error())
+	}
+	tokenIDs := make([]uint64, 0, len(vehicles))
+	for _, v := range vehicles {
+		if v.TokenID > 0 {
+			tokenIDs = append(tokenIDs, uint64(v.TokenID))
+		}
+	}
+	result, err := t.telemetry.FleetLocations(tenant, tokenIDs)
+	if err != nil {
+		t.logger.Err(err).Msg("fleet locations failed")
+		return fiber.NewError(fiber.StatusBadGateway, "fleet locations failed: "+err.Error())
+	}
+	// Rekey as strings for JSON (JS can't safely represent uint64 as number).
+	out := make(map[string]interface{}, len(result.Locations))
+	for id, coords := range result.Locations {
+		out[fmt.Sprintf("%d", id)] = coords
+	}
+	noPerms := make([]string, len(result.NoPermissions))
+	for i, id := range result.NoPermissions {
+		noPerms[i] = fmt.Sprintf("%d", id)
+	}
+	return c.JSON(fiber.Map{"locations": out, "noPermissions": noPerms})
 }
 
 // GetTimeSeries — GET /telemetry/:tokenID/timeseries?signal=X&from=...&to=...&interval=...

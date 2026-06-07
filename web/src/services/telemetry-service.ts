@@ -1,5 +1,5 @@
 import { ApiService } from './api-service.ts';
-import { LatestSignalsResponse, TimeSeriesResponse } from '../types/telemetry.ts';
+import { FleetLocationsResponse, LatestSignalsResponse, TimeSeriesResponse } from '../types/telemetry.ts';
 
 export class TelemetryService {
     private static instance: TelemetryService;
@@ -19,6 +19,10 @@ export class TelemetryService {
      * GET /telemetry/:tokenId/timeseries — aggregation buckets for one signal.
      * Caller picks interval (e.g. `1d` for 7 daily buckets).
      */
+    fleetLocations(): Promise<FleetLocationsResponse> {
+        return ApiService.getInstance().get<FleetLocationsResponse>('/telemetry/locations');
+    }
+
     timeSeries(tokenId: number, signal: string, from: string, to: string, interval = '1d'): Promise<TimeSeriesResponse> {
         const q = new URLSearchParams({ signal, from, to, interval });
         return ApiService.getInstance().get<TimeSeriesResponse>(`/telemetry/${tokenId}/timeseries?${q.toString()}`);

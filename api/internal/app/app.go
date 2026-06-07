@@ -106,6 +106,7 @@ func App(
 
 	// Telemetry (vehicle-details charts)
 	telemetryCtrl := controllers.NewTelemetryController(logger, settings, vehicleSvc, telemetryAPI)
+	tenantApp.Get("/telemetry/locations", telemetryCtrl.GetFleetLocations)
 	tenantApp.Get("/telemetry/:tokenID/latest", telemetryCtrl.GetLatest)
 	tenantApp.Get("/telemetry/:tokenID/timeseries", telemetryCtrl.GetTimeSeries)
 
