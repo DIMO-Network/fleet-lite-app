@@ -36,12 +36,21 @@ type FleetLocationsResult struct {
 
 type TelemetryAPIService interface {
 	Latest(tenant models.Tenant, tokenID uint64, signals []string) (map[string]SignalLatest, error)
+	LatestLocation(tenant models.Tenant, tokenID uint64) (*VehicleLocation, error)
 	TimeSeries(tenant models.Tenant, tokenID uint64, signal, from, to, interval string) ([]TimeSeriesBucket, error)
 	// FleetLocations checks per-vehicle JWT availability to determine which
 	// vehicles the tenant's dev license has SACD permissions for, then fetches
 	// coordinates for those vehicles in a single aliased GraphQL request.
 	// Vehicles where JWT exchange fails are returned in NoPermissions.
 	FleetLocations(tenant models.Tenant, tokenIDs []uint64) (FleetLocationsResult, error)
+}
+
+// VehicleLocation is a vehicle's latest GPS fix from telemetry-api's
+// currentLocationCoordinates signal (nested value, unlike scalar signals).
+type VehicleLocation struct {
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+	Timestamp string  `json:"timestamp"`
 }
 
 // SignalLatest mirrors telemetry-api's `{value, timestamp}` shape for a signal.
@@ -105,6 +114,46 @@ func (t *telemetryAPIService) Latest(tenant models.Tenant, tokenID uint64, signa
 		return nil, fmt.Errorf("parse signalsLatest: %w", err)
 	}
 	return resp.Data.SignalsLatest, nil
+}
+
+// LatestLocation queries `currentLocationCoordinates` for one vehicle. Returns
+// nil (no error) when the vehicle has never reported a location. The signal's
+// value is nested ({latitude, longitude}) so it can't go through Latest's
+// scalar SignalLatest shape.
+func (t *telemetryAPIService) LatestLocation(tenant models.Tenant, tokenID uint64) (*VehicleLocation, error) {
+	q := fmt.Sprintf("query { signalsLatest(tokenId: %d) { currentLocationCoordinates { value { latitude longitude } timestamp } } }", tokenID)
+
+	raw, err := t.query(tenant, tokenID, q)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp struct {
+		Data struct {
+			SignalsLatest struct {
+				CurrentLocationCoordinates *struct {
+					Value struct {
+						Latitude  float64 `json:"latitude"`
+						Longitude float64 `json:"longitude"`
+					} `json:"value"`
+					Timestamp string `json:"timestamp"`
+				} `json:"currentLocationCoordinates"`
+			} `json:"signalsLatest"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, fmt.Errorf("parse currentLocationCoordinates: %w", err)
+	}
+
+	loc := resp.Data.SignalsLatest.CurrentLocationCoordinates
+	if loc == nil {
+		return nil, nil
+	}
+	return &VehicleLocation{
+		Latitude:  loc.Value.Latitude,
+		Longitude: loc.Value.Longitude,
+		Timestamp: loc.Timestamp,
+	}, nil
 }
 
 // TimeSeries queries `signals(tokenId, from, to, interval)` for one signal

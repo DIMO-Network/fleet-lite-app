@@ -4,10 +4,14 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/DIMO-Network/fleet-lite-app/internal/config"
+	"github.com/DIMO-Network/fleet-lite-app/internal/models"
 	"github.com/DIMO-Network/fleet-lite-app/internal/service"
 	"github.com/gofiber/fiber/v2"
+	"github.com/patrickmn/go-cache"
 	"github.com/rs/zerolog"
 )
 
@@ -25,10 +29,11 @@ var curatedLatestSignals = []string{
 }
 
 type TelemetryController struct {
-	logger     *zerolog.Logger
-	settings   *config.Settings
-	vehicleSvc *service.VehicleService
-	telemetry  service.TelemetryAPIService
+	logger         *zerolog.Logger
+	settings       *config.Settings
+	vehicleSvc     *service.VehicleService
+	telemetry      service.TelemetryAPIService
+	locationsCache *cache.Cache // tenantID -> []vehicleLocationJSON (map markers)
 }
 
 func NewTelemetryController(
@@ -38,10 +43,11 @@ func NewTelemetryController(
 	telemetry service.TelemetryAPIService,
 ) *TelemetryController {
 	return &TelemetryController{
-		logger:     logger,
-		settings:   settings,
-		vehicleSvc: vehicleSvc,
-		telemetry:  telemetry,
+		logger:         logger,
+		settings:       settings,
+		vehicleSvc:     vehicleSvc,
+		telemetry:      telemetry,
+		locationsCache: cache.New(2*time.Minute, 5*time.Minute),
 	}
 }
 
