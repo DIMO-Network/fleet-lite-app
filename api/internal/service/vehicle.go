@@ -74,7 +74,8 @@ func (s *VehicleService) SyncVehicles(ctx context.Context, tenant *models.Tenant
 	return len(vehicles), nil
 }
 
-// ListVehicles returns the tenant's synced vehicles in identity-api Vehicle shape.
+// ListVehicles returns the tenant's synced vehicles in identity-api Vehicle
+// shape, with IsFavorite populated from the tenant's favorites.
 func (s *VehicleService) ListVehicles(ctx context.Context, tenantID string) ([]models.Vehicle, error) {
 	rows, err := dbmodels.Vehicles(
 		qm.Where("tenant_id = ?", tenantID),
@@ -83,9 +84,15 @@ func (s *VehicleService) ListVehicles(ctx context.Context, tenantID string) ([]m
 	if err != nil {
 		return nil, err
 	}
+	favorites, err := s.favoriteSet(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]models.Vehicle, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, rowToVehicle(r))
+		v := rowToVehicle(r)
+		v.IsFavorite = favorites[v.TokenID]
+		out = append(out, v)
 	}
 	return out, nil
 }
@@ -100,7 +107,51 @@ func (s *VehicleService) GetVehicle(ctx context.Context, tenantID string, tokenI
 		return nil, err
 	}
 	v := rowToVehicle(r)
+	v.IsFavorite, err = s.IsFavorite(ctx, tenantID, tokenID)
+	if err != nil {
+		return nil, err
+	}
 	return &v, nil
+}
+
+// favoriteSet returns the tenant's favorited token IDs as a lookup set.
+func (s *VehicleService) favoriteSet(ctx context.Context, tenantID string) (map[int64]bool, error) {
+	rows, err := dbmodels.VehicleFavorites(
+		qm.Where("tenant_id = ?", tenantID),
+	).All(ctx, s.pdb.DBS().Reader)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int64]bool, len(rows))
+	for _, r := range rows {
+		out[r.TokenID] = true
+	}
+	return out, nil
+}
+
+// IsFavorite reports whether the tenant has starred the given vehicle.
+func (s *VehicleService) IsFavorite(ctx context.Context, tenantID string, tokenID int64) (bool, error) {
+	return dbmodels.VehicleFavorites(
+		qm.Where("tenant_id = ?", tenantID),
+		qm.And("token_id = ?", tokenID),
+	).Exists(ctx, s.pdb.DBS().Reader)
+}
+
+// AddFavorite stars a vehicle for the tenant. Idempotent — re-starring an
+// already-favorited vehicle is a no-op.
+func (s *VehicleService) AddFavorite(ctx context.Context, tenantID string, tokenID int64) error {
+	row := &dbmodels.VehicleFavorite{TenantID: tenantID, TokenID: tokenID}
+	return row.Upsert(ctx, s.pdb.DBS().Writer, false, []string{"tenant_id", "token_id"}, boil.None(), boil.Infer())
+}
+
+// RemoveFavorite unstars a vehicle for the tenant. Idempotent — unstarring a
+// vehicle that isn't favorited is a no-op.
+func (s *VehicleService) RemoveFavorite(ctx context.Context, tenantID string, tokenID int64) error {
+	_, err := dbmodels.VehicleFavorites(
+		qm.Where("tenant_id = ?", tenantID),
+		qm.And("token_id = ?", tokenID),
+	).DeleteAll(ctx, s.pdb.DBS().Writer)
+	return err
 }
 
 // rowToVehicle reconstructs the identity Vehicle shape from a DB row, preferring

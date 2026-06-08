@@ -25,21 +25,21 @@ export interface Vehicle {
     definition: Definition;
     syntheticDevice: SyntheticDevice;
     aftermarketDevice?: AftermarketDevice | null;
+    isFavorite?: boolean;
 }
 
 export interface VehiclesResponse {
     vehicles: Vehicle[];
 }
 
-/** A vehicle's latest GPS fix for the fleet-overview map (GET /telemetry/locations). */
-export interface VehicleLocation {
-    tokenId: number;
+export interface VehicleCard {
+    tokenId: string;
     title: string;
-    latitude: number;
-    longitude: number;
-    timestamp: string;
-}
-
-export interface LocationsResponse {
-    locations: VehicleLocation[];
+    location: string;
+    seenAt: string;
+    online: boolean;
+    notification?: number;
+    errorMessage?: string;
+    noPermissions?: boolean;
+    isFavorite?: boolean;
 }

@@ -3,7 +3,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -25,8 +24,8 @@ var curatedLatestSignals = []string{
 	"powertrainCombustionEngineECT",                     // coolant temp (°C)
 	"lowVoltageBatteryCurrentVoltage",                   // 12V battery (V)
 	"powertrainCombustionEngineDieselExhaustFluidLevel", // AdBlue % (diesel)
-	"powertrainTractionBatteryStateOfChargeCurrent",     // EV SoC % — useful if applicable
-	"speed", // current speed (km/h)
+	"powertrainTractionBatteryStateOfChargeCurrent",     // EV SoC %
+	"speed",                                             // current speed (km/h)
 }
 
 type TelemetryController struct {
@@ -101,99 +100,38 @@ func (t *TelemetryController) GetLatest(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"signals": latest})
 }
 
-// vehicleLocationJSON is one marker on the fleet-overview map.
-type vehicleLocationJSON struct {
-	TokenID   int64   `json:"tokenId"`
-	Title     string  `json:"title"`
-	Latitude  float64 `json:"latitude"`
-	Longitude float64 `json:"longitude"`
-	Timestamp string  `json:"timestamp"`
-}
-
-// GetLocations — GET /telemetry/locations. Returns the latest GPS fix for each
-// of the tenant's vehicles that reports one, for the fleet-overview map.
-// Vehicles with no location, or where the dev license lacks SACD permissions,
-// are silently omitted. Fetches concurrently (bounded) to keep latency low.
-func (t *TelemetryController) GetLocations(c *fiber.Ctx) error {
+// GetFleetLocations — GET /telemetry/locations. Returns last-known coordinates
+// for all integrated vehicles in the tenant in a single telemetry-api request.
+func (t *TelemetryController) GetFleetLocations(c *fiber.Ctx) error {
 	tenant, err := GetTenant(c)
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-
-	// Per-tenant cache: fleets can have hundreds of vehicles, and each location
-	// is a JWT mint + telemetry-api round trip. Caching keeps the map fast and
-	// avoids hammering DIMO on every load.
-	if cached, found := t.locationsCache.Get(tenant.ID); found {
-		return c.JSON(fiber.Map{"locations": cached})
-	}
-
 	vehicles, err := t.vehicleSvc.ListVehicles(c.Context(), tenant.ID)
 	if err != nil {
-		t.logger.Err(err).Str("tenant", tenant.ID).Msg("list vehicles for locations")
-		return fiber.NewError(fiber.StatusInternalServerError, "failed to list vehicles")
+		return fiber.NewError(fiber.StatusInternalServerError, "list vehicles: "+err.Error())
 	}
-
-	const maxConcurrent = 20
-	sem := make(chan struct{}, maxConcurrent)
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	out := make([]vehicleLocationJSON, 0, len(vehicles))
-
+	tokenIDs := make([]uint64, 0, len(vehicles))
 	for _, v := range vehicles {
-		v := v
-		wg.Add(1)
-		sem <- struct{}{}
-		go func() {
-			defer wg.Done()
-			defer func() { <-sem }()
-
-			loc, lerr := t.telemetry.LatestLocation(tenant, uint64(v.TokenID))
-			if lerr != nil {
-				// A dev license without SACDs on a vehicle is expected — skip quietly.
-				if !isPermissionError(lerr) {
-					t.logger.Warn().Err(lerr).Int64("tokenID", v.TokenID).Msg("location fetch failed")
-				}
-				return
-			}
-			if loc == nil {
-				return // vehicle has never reported a location
-			}
-
-			mu.Lock()
-			out = append(out, vehicleLocationJSON{
-				TokenID:   v.TokenID,
-				Title:     vehicleTitle(v),
-				Latitude:  loc.Latitude,
-				Longitude: loc.Longitude,
-				Timestamp: loc.Timestamp,
-			})
-			mu.Unlock()
-		}()
+		if v.TokenID > 0 {
+			tokenIDs = append(tokenIDs, uint64(v.TokenID))
+		}
 	}
-	wg.Wait()
-
-	t.locationsCache.Set(tenant.ID, out, cache.DefaultExpiration)
-	return c.JSON(fiber.Map{"locations": out})
-}
-
-// vehicleTitle builds a "YEAR MAKE MODEL" label, falling back to the token id.
-// Mirrors the frontend's formatTitle so map popups match the vehicle cards.
-func vehicleTitle(v models.Vehicle) string {
-	d := v.Definition
-	parts := make([]string, 0, 3)
-	if d.Year > 0 {
-		parts = append(parts, strconv.Itoa(d.Year))
+	result, err := t.telemetry.FleetLocations(tenant, tokenIDs)
+	if err != nil {
+		t.logger.Err(err).Msg("fleet locations failed")
+		return fiber.NewError(fiber.StatusBadGateway, "fleet locations failed: "+err.Error())
 	}
-	if d.Make != "" {
-		parts = append(parts, d.Make)
+	// Rekey as strings for JSON (JS can't safely represent uint64 as number).
+	out := make(map[string]interface{}, len(result.Locations))
+	for id, coords := range result.Locations {
+		out[fmt.Sprintf("%d", id)] = coords
 	}
-	if d.Model != "" {
-		parts = append(parts, d.Model)
+	noPerms := make([]string, len(result.NoPermissions))
+	for i, id := range result.NoPermissions {
+		noPerms[i] = fmt.Sprintf("%d", id)
 	}
-	if len(parts) == 0 {
-		return fmt.Sprintf("Vehicle #%d", v.TokenID)
-	}
-	return strings.Join(parts, " ")
+	return c.JSON(fiber.Map{"locations": out, "noPermissions": noPerms})
 }
 
 // GetTimeSeries — GET /telemetry/:tokenID/timeseries?signal=X&from=...&to=...&interval=...

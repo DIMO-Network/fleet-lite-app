@@ -2,6 +2,7 @@ import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { ApiService } from '../services/api-service.ts';
+import { FleetCache } from '../services/fleet-cache.ts';
 import { Vehicle } from '../types/vehicle.ts';
 import { TelemetryService } from '../services/telemetry-service.ts';
 import { SignalLatest, TimeSeriesBucket } from '../types/telemetry.ts';
@@ -33,6 +34,7 @@ export class VehicleDetailsView extends LitElement {
     @state() private distanceBuckets: TimeSeriesBucket[] = [];
     @state() private telemetryPermissionsRequired = false;
     @state() private telemetryDevLicense = '';
+    @state() private favoriteBusy = false;
 
     private unsubscribePrefs: (() => void) | null = null;
 
@@ -85,6 +87,33 @@ export class VehicleDetailsView extends LitElement {
         if (distRes.status === 'fulfilled')  this.distanceBuckets = distRes.value.buckets || [];
 
         this.loading = false;
+    }
+
+    /**
+     * Toggle favorite status for this vehicle, persisted server-side for the
+     * tenant ("account") and shared across its members. Optimistically updates
+     * the button and invalidates the fleet map cache so the pinned ordering
+     * and star badge reflect the change next time the user views it.
+     */
+    private async toggleFavorite() {
+        if (!this.vehicle || this.favoriteBusy) return;
+        const next = !this.vehicle.isFavorite;
+        this.favoriteBusy = true;
+        const previous = this.vehicle;
+        this.vehicle = { ...this.vehicle, isFavorite: next };
+        try {
+            if (next) {
+                await ApiService.getInstance().post(`/vehicles/${this.tokenId}/favorite`, {});
+            } else {
+                await ApiService.getInstance().delete(`/vehicles/${this.tokenId}/favorite`);
+            }
+            FleetCache.invalidate();
+        } catch (e) {
+            console.error('Failed to toggle favorite', e);
+            this.vehicle = previous;
+        } finally {
+            this.favoriteBusy = false;
+        }
     }
 
     connectedCallback() {
@@ -695,6 +724,7 @@ export class VehicleDetailsView extends LitElement {
                 color: var(--primary);
             }
             .quick-actions button .material-symbols-outlined.muted { color: var(--on-surface-variant); }
+            .quick-actions button .material-symbols-outlined.favorite-on { color: #ffb432; }
 
             .err-engineering {
                 position: absolute;
@@ -992,10 +1022,12 @@ export class VehicleDetailsView extends LitElement {
                 </div>
 
                 <div class="quick-actions">
-                    <button>
+                    <button ?disabled=${this.favoriteBusy} @click=${() => this.toggleFavorite()}>
                         <div class="left-group">
-                            <span class="material-symbols-outlined muted">star</span>
-                            <span class="label">Make favorite</span>
+                            <span class="material-symbols-outlined ${this.vehicle?.isFavorite ? 'favorite-on' : 'muted'}">
+                                ${this.vehicle?.isFavorite ? 'star' : 'star_border'}
+                            </span>
+                            <span class="label">${this.vehicle?.isFavorite ? 'Remove favorite' : 'Make favorite'}</span>
                         </div>
                     </button>
                     <button>

@@ -17,6 +17,11 @@ export interface TimeSeriesBucket {
     last: number;
 }
 
+export interface FleetLocationsResponse {
+    locations: Record<string, { lat: number; lon: number }>;
+    noPermissions: string[];
+}
+
 export interface TimeSeriesResponse {
     signal: string;
     interval: string;

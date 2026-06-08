@@ -143,17 +143,20 @@ var TenantWhere = struct {
 
 // TenantRels is where relationship names are stored.
 var TenantRels = struct {
-	TenantUsers string
-	Vehicles    string
+	TenantUsers      string
+	VehicleFavorites string
+	Vehicles         string
 }{
-	TenantUsers: "TenantUsers",
-	Vehicles:    "Vehicles",
+	TenantUsers:      "TenantUsers",
+	VehicleFavorites: "VehicleFavorites",
+	Vehicles:         "Vehicles",
 }
 
 // tenantR is where relationships are stored.
 type tenantR struct {
-	TenantUsers TenantUserSlice `boil:"TenantUsers" json:"TenantUsers" toml:"TenantUsers" yaml:"TenantUsers"`
-	Vehicles    VehicleSlice    `boil:"Vehicles" json:"Vehicles" toml:"Vehicles" yaml:"Vehicles"`
+	TenantUsers      TenantUserSlice      `boil:"TenantUsers" json:"TenantUsers" toml:"TenantUsers" yaml:"TenantUsers"`
+	VehicleFavorites VehicleFavoriteSlice `boil:"VehicleFavorites" json:"VehicleFavorites" toml:"VehicleFavorites" yaml:"VehicleFavorites"`
+	Vehicles         VehicleSlice         `boil:"Vehicles" json:"Vehicles" toml:"Vehicles" yaml:"Vehicles"`
 }
 
 // NewStruct creates a new relationship struct
@@ -175,6 +178,22 @@ func (r *tenantR) GetTenantUsers() TenantUserSlice {
 	}
 
 	return r.TenantUsers
+}
+
+func (o *Tenant) GetVehicleFavorites() VehicleFavoriteSlice {
+	if o == nil {
+		return nil
+	}
+
+	return o.R.GetVehicleFavorites()
+}
+
+func (r *tenantR) GetVehicleFavorites() VehicleFavoriteSlice {
+	if r == nil {
+		return nil
+	}
+
+	return r.VehicleFavorites
 }
 
 func (o *Tenant) GetVehicles() VehicleSlice {
@@ -523,6 +542,20 @@ func (o *Tenant) TenantUsers(mods ...qm.QueryMod) tenantUserQuery {
 	return TenantUsers(queryMods...)
 }
 
+// VehicleFavorites retrieves all the vehicle_favorite's VehicleFavorites with an executor.
+func (o *Tenant) VehicleFavorites(mods ...qm.QueryMod) vehicleFavoriteQuery {
+	var queryMods []qm.QueryMod
+	if len(mods) != 0 {
+		queryMods = append(queryMods, mods...)
+	}
+
+	queryMods = append(queryMods,
+		qm.Where("\"vehicle_favorites\".\"tenant_id\"=?", o.ID),
+	)
+
+	return VehicleFavorites(queryMods...)
+}
+
 // Vehicles retrieves all the vehicle's Vehicles with an executor.
 func (o *Tenant) Vehicles(mods ...qm.QueryMod) vehicleQuery {
 	var queryMods []qm.QueryMod
@@ -640,6 +673,119 @@ func (tenantL) LoadTenantUsers(ctx context.Context, e boil.ContextExecutor, sing
 				local.R.TenantUsers = append(local.R.TenantUsers, foreign)
 				if foreign.R == nil {
 					foreign.R = &tenantUserR{}
+				}
+				foreign.R.Tenant = local
+				break
+			}
+		}
+	}
+
+	return nil
+}
+
+// LoadVehicleFavorites allows an eager lookup of values, cached into the
+// loaded structs of the objects. This is for a 1-M or N-M relationship.
+func (tenantL) LoadVehicleFavorites(ctx context.Context, e boil.ContextExecutor, singular bool, maybeTenant any, mods queries.Applicator) error {
+	var slice []*Tenant
+	var object *Tenant
+
+	if singular {
+		var ok bool
+		object, ok = maybeTenant.(*Tenant)
+		if !ok {
+			object = new(Tenant)
+			ok = queries.SetFromEmbeddedStruct(&object, &maybeTenant)
+			if !ok {
+				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", object, maybeTenant))
+			}
+		}
+	} else {
+		s, ok := maybeTenant.(*[]*Tenant)
+		if ok {
+			slice = *s
+		} else {
+			ok = queries.SetFromEmbeddedStruct(&slice, maybeTenant)
+			if !ok {
+				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", slice, maybeTenant))
+			}
+		}
+	}
+
+	args := make(map[any]struct{})
+	if singular {
+		if object.R == nil {
+			object.R = &tenantR{}
+		}
+		args[object.ID] = struct{}{}
+	} else {
+		for _, obj := range slice {
+			if obj.R == nil {
+				obj.R = &tenantR{}
+			}
+			args[obj.ID] = struct{}{}
+		}
+	}
+
+	if len(args) == 0 {
+		return nil
+	}
+
+	argsSlice := make([]any, len(args))
+	i := 0
+	for arg := range args {
+		argsSlice[i] = arg
+		i++
+	}
+
+	query := NewQuery(
+		qm.From(`vehicle_favorites`),
+		qm.WhereIn(`vehicle_favorites.tenant_id in ?`, argsSlice...),
+	)
+	if mods != nil {
+		mods.Apply(query)
+	}
+
+	results, err := query.QueryContext(ctx, e)
+	if err != nil {
+		return errors.Wrap(err, "failed to eager load vehicle_favorites")
+	}
+
+	var resultSlice []*VehicleFavorite
+	if err = queries.Bind(results, &resultSlice); err != nil {
+		return errors.Wrap(err, "failed to bind eager loaded slice vehicle_favorites")
+	}
+
+	if err = results.Close(); err != nil {
+		return errors.Wrap(err, "failed to close results in eager load on vehicle_favorites")
+	}
+	if err = results.Err(); err != nil {
+		return errors.Wrap(err, "error occurred during iteration of eager loaded relations for vehicle_favorites")
+	}
+
+	if len(vehicleFavoriteAfterSelectHooks) != 0 {
+		for _, obj := range resultSlice {
+			if err := obj.doAfterSelectHooks(ctx, e); err != nil {
+				return err
+			}
+		}
+	}
+	if singular {
+		object.R.VehicleFavorites = resultSlice
+		for _, foreign := range resultSlice {
+			if foreign.R == nil {
+				foreign.R = &vehicleFavoriteR{}
+			}
+			foreign.R.Tenant = object
+		}
+		return nil
+	}
+
+	for _, foreign := range resultSlice {
+		for _, local := range slice {
+			if local.ID == foreign.TenantID {
+				local.R.VehicleFavorites = append(local.R.VehicleFavorites, foreign)
+				if foreign.R == nil {
+					foreign.R = &vehicleFavoriteR{}
 				}
 				foreign.R.Tenant = local
 				break
@@ -807,6 +953,59 @@ func (o *Tenant) AddTenantUsers(ctx context.Context, exec boil.ContextExecutor, 
 	for _, rel := range related {
 		if rel.R == nil {
 			rel.R = &tenantUserR{
+				Tenant: o,
+			}
+		} else {
+			rel.R.Tenant = o
+		}
+	}
+	return nil
+}
+
+// AddVehicleFavorites adds the given related objects to the existing relationships
+// of the tenant, optionally inserting them as new records.
+// Appends related to o.R.VehicleFavorites.
+// Sets related.R.Tenant appropriately.
+func (o *Tenant) AddVehicleFavorites(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*VehicleFavorite) error {
+	var err error
+	for _, rel := range related {
+		if insert {
+			rel.TenantID = o.ID
+			if err = rel.Insert(ctx, exec, boil.Infer()); err != nil {
+				return errors.Wrap(err, "failed to insert into foreign table")
+			}
+		} else {
+			updateQuery := fmt.Sprintf(
+				"UPDATE \"vehicle_favorites\" SET %s WHERE %s",
+				strmangle.SetParamNames("\"", "\"", 1, []string{"tenant_id"}),
+				strmangle.WhereClause("\"", "\"", 2, vehicleFavoritePrimaryKeyColumns),
+			)
+			values := []any{o.ID, rel.TenantID, rel.TokenID}
+
+			if boil.IsDebug(ctx) {
+				writer := boil.DebugWriterFrom(ctx)
+				fmt.Fprintln(writer, updateQuery)
+				fmt.Fprintln(writer, values)
+			}
+			if _, err = exec.ExecContext(ctx, updateQuery, values...); err != nil {
+				return errors.Wrap(err, "failed to update foreign table")
+			}
+
+			rel.TenantID = o.ID
+		}
+	}
+
+	if o.R == nil {
+		o.R = &tenantR{
+			VehicleFavorites: related,
+		}
+	} else {
+		o.R.VehicleFavorites = append(o.R.VehicleFavorites, related...)
+	}
+
+	for _, rel := range related {
+		if rel.R == nil {
+			rel.R = &vehicleFavoriteR{
 				Tenant: o,
 			}
 		} else {
@@ -1232,7 +1431,7 @@ func (o *Tenant) Upsert(ctx context.Context, exec boil.ContextExecutor, updateOn
 
 	value := reflect.Indirect(reflect.ValueOf(o))
 	vals := queries.ValuesFromMapping(value, cache.valueMapping)
-	var returns []interface{}
+	var returns []any
 	if len(cache.retMapping) != 0 {
 		returns = queries.PtrsFromMapping(value, cache.retMapping)
 	}

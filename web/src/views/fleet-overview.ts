@@ -1,20 +1,12 @@
-import { LitElement, html, css } from 'lit';
+import { LitElement, html, css, unsafeCSS } from 'lit';
 import { customElement, state, property } from 'lit/decorators.js';
+import L from 'leaflet';
+import leafletCss from 'leaflet/dist/leaflet.css?inline';
 import { sharedStyles } from '../global-styles.ts';
 import { ApiService } from '../services/api-service.ts';
-import { Vehicle, VehiclesResponse, VehicleLocation, LocationsResponse } from '../types/vehicle.ts';
-import { FleetMap } from '../elements/fleet-map.ts';
-import '../elements/fleet-map.ts';
-
-interface VehicleCard {
-    tokenId: string;
-    title: string;
-    location: string;
-    seenAt: string;
-    online: boolean;
-    notification?: number;
-    errorMessage?: string;
-}
+import { TelemetryService } from '../services/telemetry-service.ts';
+import { FleetCache } from '../services/fleet-cache.ts';
+import { Vehicle, VehicleCard, VehiclesResponse } from '../types/vehicle.ts';
 
 @customElement('fleet-overview-view')
 export class FleetOverviewView extends LitElement {
@@ -23,6 +15,41 @@ export class FleetOverviewView extends LitElement {
     @state() private locations: VehicleLocation[] = [];
     @state() private loading = true;
     @state() private errorMessage: string | null = null;
+
+    private leafletMap: L.Map | null = null;
+    private markers = new Map<string, L.CircleMarker>();
+    private lastLocations: Record<string, { lat: number; lon: number }> = {};
+    private resizeObserver: ResizeObserver | null = null;
+    @state() private panelCollapsed = false;
+    @state() private panelExpanded = true;
+    @state() private refreshing = false;
+
+    private centerMap() {
+        if (!this.leafletMap) return;
+        if (this.markers.size > 0) {
+            const group = L.featureGroup([...this.markers.values()]);
+            this.leafletMap.fitBounds(group.getBounds().pad(0.4), { maxZoom: 12 });
+        } else {
+            this.leafletMap.setView([39.5, -98.35], 4);
+        }
+    }
+
+    private zoomToVehicle(e: Event, tokenId: string) {
+        e.preventDefault();
+        e.stopPropagation();
+        const marker = this.markers.get(tokenId);
+        if (!marker || !this.leafletMap) return;
+        this.leafletMap.flyTo(marker.getLatLng(), 14);
+        if (window.innerWidth < 768) {
+            this.panelCollapsed = true;
+        }
+    }
+
+    private statusClass(v: VehicleCard): string {
+        if (!v.online) return 'status-red';
+        if (v.noPermissions) return 'status-amber';
+        return 'status-green';
+    }
 
     private formatTitle(v: Vehicle): string {
         const d = v.definition;
@@ -46,37 +73,158 @@ export class FleetOverviewView extends LitElement {
             seenAt: `Token #${v.tokenId}`,
             online: integrated,
             errorMessage: integrated ? undefined : 'No DIMO integration — pair a device to stream telemetry',
+            isFavorite: v.isFavorite ?? false,
         };
     }
 
-    async connectedCallback() {
-        super.connectedCallback();
+    /** Stable sort that pins favorites to the top, preserving relative order otherwise. */
+    private sortByFavorite(cards: VehicleCard[]): VehicleCard[] {
+        return [...cards].sort((a, b) => Number(!!b.isFavorite) - Number(!!a.isFavorite));
+    }
+
+    /** (Re)place map markers from `this.vehicles` + `this.lastLocations`. No-op until the map exists. */
+    private placeMarkers() {
+        if (!this.leafletMap) return;
+        this.markers.forEach((m) => m.remove());
+        this.markers.clear();
+
+        const titleMap = new Map(this.vehicles.map((v) => [v.tokenId, v.title]));
+        for (const [tokenId, coords] of Object.entries(this.lastLocations)) {
+            const marker = L.circleMarker([coords.lat, coords.lon], {
+                radius: 8,
+                fillColor: '#69dbad',
+                color: '#ffffff',
+                weight: 2,
+                opacity: 0.9,
+                fillOpacity: 0.85,
+            }).bindTooltip(titleMap.get(tokenId) ?? `Vehicle ${tokenId}`, { permanent: false, direction: 'top', offset: [0, -10] });
+            marker.addTo(this.leafletMap);
+            this.markers.set(tokenId, marker);
+        }
+
+        if (this.markers.size > 0) {
+            const group = L.featureGroup([...this.markers.values()]);
+            this.leafletMap.fitBounds(group.getBounds().pad(0.4), { maxZoom: 12 });
+        }
+    }
+
+    /**
+     * Loads the vehicle list + map locations. Reuses the cached result from a
+     * prior visit unless `force` is set (manual refresh), so navigating to
+     * vehicle details and back doesn't re-trigger the loading state or refetch.
+     */
+    private async loadVehicleData(force = false) {
+        if (!force) {
+            const cached = FleetCache.get();
+            if (cached) {
+                this.vehicles = cached.vehicles;
+                this.lastLocations = cached.locations;
+                this.loading = false;
+                this.placeMarkers();
+                return;
+            }
+        }
+
         try {
             const res = await ApiService.getInstance().get<VehiclesResponse>('/vehicles');
-            this.vehicles = (res.vehicles || []).map((v) => this.toCard(v));
+            this.vehicles = this.sortByFavorite((res.vehicles || []).map((v) => this.toCard(v)));
             this.loading = false;
         } catch (e) {
             // ApiService already redirected to /login.html on 401/400.
             this.loading = false;
             console.error('Failed to load vehicles', e);
             this.errorMessage = e instanceof Error ? e.message : 'Failed to load vehicles';
+            return;
         }
-        // Map locations load independently — telemetry is slower and non-fatal
-        // to the vehicle list. Vehicles with no fix / no permission are omitted.
+
+        this.lastLocations = {};
+        // Single request for all vehicle locations. Per-vehicle JWT check on the
+        // backend determines which vehicles the dev license has SACD access to.
         try {
-            const loc = await ApiService.getInstance().get<LocationsResponse>('/telemetry/locations');
-            this.locations = loc.locations || [];
-        } catch (e) {
-            console.error('Failed to load vehicle locations', e);
+            const res = await TelemetryService.getInstance().fleetLocations();
+
+            // Mark vehicles where JWT exchange failed (no SACD permissions).
+            const noPermSet = new Set(res.noPermissions ?? []);
+            if (noPermSet.size > 0) {
+                this.vehicles = this.vehicles.map((v) =>
+                    noPermSet.has(v.tokenId) ? { ...v, noPermissions: true } : v
+                );
+            }
+
+            this.lastLocations = res.locations;
+        } catch {
+            // Network failure — map stays at default view.
+        }
+
+        this.placeMarkers();
+        FleetCache.set({ vehicles: this.vehicles, locations: this.lastLocations });
+    }
+
+    private async refreshVehicles() {
+        if (this.refreshing) return;
+        this.refreshing = true;
+        this.errorMessage = null;
+        try {
+            await this.loadVehicleData(true);
+        } finally {
+            this.refreshing = false;
         }
     }
 
-    private recenterMap() {
-        this.renderRoot.querySelector<FleetMap>('fleet-map')?.recenter();
+    async connectedCallback() {
+        super.connectedCallback();
+        await this.loadVehicleData();
+    }
+
+    private updateMinZoom() {
+        if (!this.leafletMap) return;
+        // Tiles are 256px at zoom 0; minZoom must ensure world width >= container width.
+        const w = this.leafletMap.getContainer().clientWidth;
+        const minZoom = Math.ceil(Math.log2(w / 256));
+        this.leafletMap.setMinZoom(minZoom);
+        if (this.leafletMap.getZoom() < minZoom) {
+            this.leafletMap.setZoom(minZoom);
+        }
+    }
+
+    override firstUpdated() {
+        const el = this.renderRoot.querySelector<HTMLElement>('.map');
+        if (!el) return;
+        const worldBounds = L.latLngBounds([[-85.051129, -180], [85.051129, 180]]);
+        this.leafletMap = L.map(el, {
+            zoomControl: false,
+            attributionControl: true,
+            maxBounds: worldBounds,
+            maxBoundsViscosity: 1.0,
+        }).setView([39.5, -98.35], 4);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 19,
+            noWrap: true,
+        }).addTo(this.leafletMap);
+
+        this.resizeObserver = new ResizeObserver(() => this.updateMinZoom());
+        this.resizeObserver.observe(el);
+        this.updateMinZoom();
+
+        // Cached data may have already been loaded into `this.vehicles` /
+        // `this.lastLocations` before the map existed — place markers now.
+        this.placeMarkers();
+    }
+
+    override disconnectedCallback() {
+        super.disconnectedCallback();
+        this.resizeObserver?.disconnect();
+        this.resizeObserver = null;
+        this.markers.clear();
+        this.leafletMap?.remove();
+        this.leafletMap = null;
     }
 
     static styles = [
         sharedStyles,
+        unsafeCSS(leafletCss),
         css`
             :host {
                 display: flex;
@@ -141,6 +289,15 @@ export class FleetOverviewView extends LitElement {
                 inset: 0;
                 z-index: 0;
             }
+            /* Lift the very-dark CARTO tiles to a readable contrast level */
+            .map .leaflet-tile {
+                filter: brightness(1.8);
+            }
+            /* Push attribution below the vehicles panel on mobile */
+            .map .leaflet-control-attribution {
+                font-size: 9px;
+                opacity: 0.5;
+            }
 
             .map-controls {
                 position: absolute;
@@ -165,6 +322,37 @@ export class FleetOverviewView extends LitElement {
             }
             .map-controls button:hover { background: var(--surface-container-high); }
 
+            .map-legend {
+                position: absolute;
+                bottom: 40px;
+                left: 24px;
+                display: flex;
+                flex-direction: row;
+                gap: 8px;
+                z-index: 10;
+            }
+            .map-legend button {
+                width: 48px;
+                height: 48px;
+                background: var(--surface-container-low);
+                border: 1px solid var(--outline-variant);
+                border-radius: var(--radius-full);
+                color: var(--on-surface);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: background 0.15s ease;
+            }
+            .map-legend button:hover { background: var(--surface-container-high); }
+            .map-legend button:disabled { cursor: default; opacity: 0.6; }
+            .map-legend .spinning .material-symbols-outlined {
+                animation: spin 0.8s linear infinite;
+            }
+            @keyframes spin {
+                from { transform: rotate(0deg); }
+                to { transform: rotate(360deg); }
+            }
+
             .vehicles-panel {
                 position: absolute;
                 bottom: 0;
@@ -180,6 +368,10 @@ export class FleetOverviewView extends LitElement {
                 flex-direction: column;
                 overflow: hidden;
                 box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+                transition: transform 0.3s ease, width 0.3s ease;
+            }
+            .vehicles-panel.collapsed {
+                transform: translateY(calc(100% - 56px));
             }
             @media (min-width: 768px) {
                 .vehicles-panel {
@@ -190,7 +382,76 @@ export class FleetOverviewView extends LitElement {
                     width: 384px;
                     border-radius: 24px;
                 }
+                .vehicles-panel.narrow { width: 96px; }
+                .vehicles-panel.narrow .panel-header { display: none; }
+                .vehicles-panel.narrow .vehicle-list { padding: 8px; gap: 8px; }
             }
+
+            .chevron-tab {
+                display: none;
+                position: absolute;
+                top: 120px;
+                right: calc(24px + 384px - 12px);
+                width: 24px;
+                height: 24px;
+                background: var(--surface-container-low);
+                border: 1px solid var(--outline-variant);
+                border-radius: var(--radius-full);
+                color: var(--on-surface-variant);
+                align-items: center;
+                justify-content: center;
+                z-index: 25;
+                cursor: pointer;
+                transition: right 0.3s ease, background 0.15s ease;
+            }
+            .chevron-tab .material-symbols-outlined { font-size: 16px; }
+            .chevron-tab:hover { background: var(--surface-container-high); }
+            @media (min-width: 768px) {
+                .chevron-tab { display: flex; }
+                .chevron-tab.narrow { right: calc(24px + 96px - 12px); }
+            }
+
+            .vehicle-card-compact {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                height: 64px;
+                border-radius: var(--radius-md);
+                text-decoration: none;
+                color: inherit;
+                position: relative;
+                flex-shrink: 0;
+                transition: background 0.15s ease;
+            }
+            .vehicle-card-compact:hover { background: var(--surface-container-high); }
+            .compact-token-id {
+                font: var(--type-label-caps);
+                font-size: 11px;
+                letter-spacing: 0.04em;
+                color: var(--on-surface-variant);
+                text-align: center;
+                line-height: 1.2;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                max-width: 100%;
+                padding: 0 4px;
+            }
+            .vehicle-card-compact .zoom-btn {
+                top: auto;
+                bottom: 4px;
+                right: 4px;
+                width: 20px;
+                height: 20px;
+            }
+            .vehicle-card-compact .status-dot {
+                top: 6px;
+                left: 6px;
+                width: 9px;
+                height: 9px;
+                border: none;
+            }
+            .vehicle-card-compact .zoom-btn .material-symbols-outlined { font-size: 12px; }
 
             .drag-handle {
                 width: 100%;
@@ -258,13 +519,49 @@ export class FleetOverviewView extends LitElement {
                 text-decoration: none;
                 color: inherit;
                 display: block;
+                position: relative;
             }
+
+            .zoom-btn {
+                position: absolute;
+                top: 12px;
+                right: 12px;
+                width: 32px;
+                height: 32px;
+                background: var(--surface-container-high);
+                border: 1px solid var(--outline-variant);
+                border-radius: var(--radius-full);
+                color: var(--on-surface-variant);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: background 0.15s ease, color 0.15s ease;
+                z-index: 1;
+            }
+            .zoom-btn:hover {
+                background: var(--primary);
+                color: var(--on-primary);
+                border-color: var(--primary);
+            }
+            .zoom-btn .material-symbols-outlined { font-size: 16px; }
             .vehicle-card:hover { border-color: rgba(255, 255, 255, 0.5); }
             .vehicle-card.offline { border-color: rgba(255, 180, 171, 0.2); }
             .vehicle-card.offline:hover { border-color: rgba(255, 180, 171, 0.5); }
 
+            .status-dot {
+                position: absolute;
+                width: 12px;
+                height: 12px;
+                border-radius: var(--radius-full);
+                border: 2px solid var(--surface-container-low);
+            }
+            .status-dot.status-green { background: #69dbad; }
+            .status-dot.status-red { background: var(--error); }
+            .status-dot.status-amber { background: #ffb432; }
+
             .vehicle-row { display: flex; align-items: flex-start; gap: 16px; }
             .vehicle-icon {
+                position: relative;
                 width: 64px;
                 height: 64px;
                 border-radius: var(--radius-full);
@@ -275,6 +572,7 @@ export class FleetOverviewView extends LitElement {
                 justify-content: center;
                 flex-shrink: 0;
             }
+            .vehicle-icon .status-dot { bottom: -2px; right: -2px; }
             .vehicle-icon .material-symbols-outlined { color: var(--primary); font-size: 32px; }
             .vehicle-card.offline .vehicle-icon { opacity: 0.5; }
             .vehicle-card.offline .vehicle-icon .material-symbols-outlined { color: var(--on-surface-variant); }
@@ -287,6 +585,21 @@ export class FleetOverviewView extends LitElement {
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+            .favorite-star {
+                font-size: 16px;
+                color: #ffb432;
+                flex-shrink: 0;
+            }
+            .favorite-star-compact {
+                position: absolute;
+                top: 4px;
+                right: 4px;
+                font-size: 12px;
+                color: #ffb432;
             }
             .vehicle-meta .location {
                 font: var(--type-body-sm);
@@ -326,6 +639,20 @@ export class FleetOverviewView extends LitElement {
                 font: var(--type-body-sm);
             }
             .vehicle-meta .error-msg .material-symbols-outlined { font-size: 16px; }
+            .no-permissions-badge {
+                margin-top: 6px;
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                background: rgba(255, 180, 50, 0.12);
+                border: 1px solid rgba(255, 180, 50, 0.35);
+                color: #ffb432;
+                border-radius: var(--radius-sm);
+                padding: 2px 8px;
+                font: var(--type-label-caps);
+                letter-spacing: 0.04em;
+            }
+            .no-permissions-badge .material-symbols-outlined { font-size: 14px; }
         `,
     ];
 
@@ -333,12 +660,21 @@ export class FleetOverviewView extends LitElement {
         const cls = v.online ? 'vehicle-card' : 'vehicle-card offline';
         return html`
             <a class=${cls} href="#/${this.tenantId}/vehicles/${v.tokenId}">
+                ${this.markers.has(v.tokenId) ? html`
+                    <button class="zoom-btn" title="Zoom to vehicle" @click=${(e: Event) => this.zoomToVehicle(e, v.tokenId)}>
+                        <span class="material-symbols-outlined">my_location</span>
+                    </button>
+                ` : ''}
                 <div class="vehicle-row">
                     <div class="vehicle-icon">
                         <span class="material-symbols-outlined">directions_car</span>
+                        <span class="status-dot ${this.statusClass(v)}"></span>
                     </div>
                     <div class="vehicle-meta">
-                        <h4>${v.title}</h4>
+                        <h4>
+                            ${v.isFavorite ? html`<span class="material-symbols-outlined favorite-star" title="Favorite">star</span>` : ''}
+                            ${v.title}
+                        </h4>
                         ${v.online ? html`
                             <p class="location">${v.location}</p>
                             ${v.notification
@@ -348,6 +684,12 @@ export class FleetOverviewView extends LitElement {
                                     </div>`
                                 : html`<p class="seen">${v.seenAt}</p>`
                             }
+                            ${v.noPermissions ? html`
+                                <div class="no-permissions-badge">
+                                    <span class="material-symbols-outlined">lock</span>
+                                    <span>No location access</span>
+                                </div>
+                            ` : ''}
                         ` : html`
                             <div class="error-msg">
                                 <span class="material-symbols-outlined">warning</span>
@@ -356,6 +698,21 @@ export class FleetOverviewView extends LitElement {
                         `}
                     </div>
                 </div>
+            </a>
+        `;
+    }
+
+    private renderCompactCard(v: VehicleCard) {
+        return html`
+            <a class="vehicle-card-compact" href="#/${this.tenantId}/vehicles/${v.tokenId}" title=${v.title}>
+                <span class="status-dot ${this.statusClass(v)}"></span>
+                ${v.isFavorite ? html`<span class="material-symbols-outlined favorite-star-compact" title="Favorite">star</span>` : ''}
+                <span class="compact-token-id">${v.tokenId}</span>
+                ${this.markers.has(v.tokenId) ? html`
+                    <button class="zoom-btn" title="Zoom to vehicle" @click=${(e: Event) => this.zoomToVehicle(e, v.tokenId)}>
+                        <span class="material-symbols-outlined">my_location</span>
+                    </button>
+                ` : ''}
             </a>
         `;
     }
@@ -386,8 +743,36 @@ export class FleetOverviewView extends LitElement {
                 </button>
             </div>
 
-            <div class="vehicles-panel">
-                <div class="drag-handle"><div></div></div>
+            <div class="map-legend">
+                <button title="Center map" @click=${() => this.centerMap()}>
+                    <span class="material-symbols-outlined">center_focus_strong</span>
+                </button>
+                <button title="Zoom in" @click=${() => this.leafletMap?.zoomIn()}>
+                    <span class="material-symbols-outlined">add</span>
+                </button>
+                <button title="Zoom out" @click=${() => this.leafletMap?.zoomOut()}>
+                    <span class="material-symbols-outlined">remove</span>
+                </button>
+                <button
+                    class=${this.refreshing ? 'spinning' : ''}
+                    title="Refresh vehicle state"
+                    ?disabled=${this.refreshing}
+                    @click=${() => this.refreshVehicles()}
+                >
+                    <span class="material-symbols-outlined">refresh</span>
+                </button>
+            </div>
+
+            <button
+                class="chevron-tab ${!this.panelExpanded ? 'narrow' : ''}"
+                title="${this.panelExpanded ? 'Collapse panel' : 'Expand panel'}"
+                @click=${() => { this.panelExpanded = !this.panelExpanded; }}
+            >
+                <span class="material-symbols-outlined">${this.panelExpanded ? 'chevron_right' : 'chevron_left'}</span>
+            </button>
+
+            <div class="vehicles-panel ${this.panelCollapsed ? 'collapsed' : ''} ${!this.panelExpanded ? 'narrow' : ''}">
+                <div class="drag-handle" @click=${() => { this.panelCollapsed = false; }}><div></div></div>
                 <div class="panel-header">
                     <h3>Your cars</h3>
                     <button><span class="material-symbols-outlined">add</span></button>
@@ -399,7 +784,7 @@ export class FleetOverviewView extends LitElement {
                             ? html`<p class="empty-state error">${this.errorMessage}</p>`
                             : this.vehicles.length === 0
                                 ? html`<p class="empty-state">No vehicles found on this account.</p>`
-                                : this.vehicles.map(v => this.renderCard(v))
+                                : this.vehicles.map(v => this.panelExpanded ? this.renderCard(v) : this.renderCompactCard(v))
                     }
                 </div>
             </div>
