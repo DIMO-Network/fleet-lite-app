@@ -5,7 +5,7 @@ import { ApiService } from '../services/api-service.ts';
 import { FleetCache } from '../services/fleet-cache.ts';
 import { Vehicle } from '../types/vehicle.ts';
 import { TelemetryService } from '../services/telemetry-service.ts';
-import { SignalLatest, TimeSeriesBucket } from '../types/telemetry.ts';
+import { SignalLatest, TimeSeriesBucket, Trip } from '../types/telemetry.ts';
 import { PrefsService } from '../services/prefs-service.ts';
 import {
     formatDistance,
@@ -32,6 +32,8 @@ export class VehicleDetailsView extends LitElement {
     @state() private latestSignals: Record<string, SignalLatest> = {};
     @state() private speedBuckets: TimeSeriesBucket[] = [];
     @state() private distanceBuckets: TimeSeriesBucket[] = [];
+    @state() private trips: Trip[] = [];
+    @state() private tripsExpanded = false;
     @state() private telemetryPermissionsRequired = false;
     @state() private telemetryDevLicense = '';
     @state() private favoriteBusy = false;
@@ -51,6 +53,8 @@ export class VehicleDetailsView extends LitElement {
         this.latestSignals = {};
         this.speedBuckets = [];
         this.distanceBuckets = [];
+        this.trips = [];
+        this.tripsExpanded = false;
 
         // Identity (typed vehicle)
         try {
@@ -66,14 +70,15 @@ export class VehicleDetailsView extends LitElement {
         const fromIso = from.toISOString();
         const toIso = to.toISOString();
 
-        const [latestRes, speedRes, distRes] = await Promise.allSettled([
+        const [latestRes, speedRes, distRes, tripsRes] = await Promise.allSettled([
             TelemetryService.getInstance().latest(tokenIdNum),
-            TelemetryService.getInstance().timeSeries(tokenIdNum, 'speed', fromIso, toIso, '1d'),
+            TelemetryService.getInstance().timeSeries(tokenIdNum, 'speed', fromIso, toIso, '24h'),
             TelemetryService.getInstance().timeSeries(
                 tokenIdNum,
                 'powertrainTransmissionTravelledDistance',
-                fromIso, toIso, '1d',
+                fromIso, toIso, '24h',
             ),
+            TelemetryService.getInstance().trips(tokenIdNum),
         ]);
 
         if (latestRes.status === 'fulfilled') {
@@ -85,6 +90,10 @@ export class VehicleDetailsView extends LitElement {
         }
         if (speedRes.status === 'fulfilled') this.speedBuckets = speedRes.value.buckets || [];
         if (distRes.status === 'fulfilled')  this.distanceBuckets = distRes.value.buckets || [];
+        if (tripsRes.status === 'fulfilled') {
+            this.trips = [...(tripsRes.value.trips || [])]
+                .sort((a, b) => Date.parse(b.startTime) - Date.parse(a.startTime));
+        }
 
         this.loading = false;
     }
@@ -204,6 +213,98 @@ export class VehicleDetailsView extends LitElement {
         return d.toLocaleDateString(undefined, { weekday: 'short' }).slice(0, 3);
     }
 
+    private tripTimeLabel(iso: string): string {
+        if (!iso) return '—';
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return '—';
+        return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    }
+
+    private tripDuration(seconds: number): string {
+        if (!Number.isFinite(seconds) || seconds < 0) return '—';
+        const h = Math.floor(seconds / 3600);
+        const m = Math.round((seconds % 3600) / 60);
+        if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`;
+        return `${m}m`;
+    }
+
+    private renderTripRow(trip: Trip) {
+        const distFmt = formatDistance(trip.distanceKm ?? undefined, 1);
+        const avgFmt = formatSpeed(trip.avgSpeedKph ?? undefined);
+        const maxFmt = formatSpeed(trip.maxSpeedKph ?? undefined);
+        return html`
+            <div class="trip-row">
+                <div class="trip-route">
+                    <span class="material-symbols-outlined">trip_origin</span>
+                    <span class="trip-time">${this.tripTimeLabel(trip.startTime)}</span>
+                    <span class="material-symbols-outlined">arrow_forward</span>
+                    <span class="trip-time">${trip.isOngoing ? 'Ongoing' : this.tripTimeLabel(trip.endTime ?? '')}</span>
+                </div>
+                <div class="trip-stats">
+                    <span class="trip-stat">
+                        <span class="label">Distance</span>
+                        <span class="value">${distFmt.value}<span class="unit">${distFmt.unit}</span></span>
+                    </span>
+                    <span class="trip-stat">
+                        <span class="label">Avg speed</span>
+                        <span class="value">${avgFmt.value}<span class="unit">${avgFmt.unit}</span></span>
+                    </span>
+                    <span class="trip-stat">
+                        <span class="label">Max speed</span>
+                        <span class="value">${maxFmt.value}<span class="unit">${maxFmt.unit}</span></span>
+                    </span>
+                    <span class="trip-stat ${trip.isOngoing ? 'ongoing' : ''}">
+                        <span class="label">Duration</span>
+                        <span class="value">${trip.isOngoing ? 'In progress' : this.tripDuration(trip.duration)}</span>
+                    </span>
+                </div>
+            </div>
+        `;
+    }
+
+    private renderTripsCard() {
+        const VISIBLE_COUNT = 3;
+        let body;
+        if (this.loading) {
+            body = html`<div class="trips-empty">Loading trips…</div>`;
+        } else if (this.telemetryPermissionsRequired) {
+            body = html`<div class="trips-empty">Grant DIMO permissions on this vehicle to see trip history.</div>`;
+        } else if (this.trips.length === 0) {
+            body = html`<div class="trips-empty">No trips in the last 3 days.</div>`;
+        } else {
+            const visible = this.trips.slice(0, VISIBLE_COUNT);
+            const rest = this.trips.slice(VISIBLE_COUNT);
+            body = html`
+                <div class="trips-list">
+                    ${visible.map((trip) => this.renderTripRow(trip))}
+                    ${rest.length > 0 ? html`
+                        <div class="trips-drawer ${this.tripsExpanded ? 'open' : ''}">
+                            <div class="trips-drawer-inner">
+                                ${rest.map((trip) => this.renderTripRow(trip))}
+                            </div>
+                        </div>
+                    ` : null}
+                </div>
+                ${rest.length > 0 ? html`
+                    <button class="trips-toggle" @click=${() => { this.tripsExpanded = !this.tripsExpanded; }}>
+                        <span class="material-symbols-outlined">${this.tripsExpanded ? 'expand_less' : 'expand_more'}</span>
+                        ${this.tripsExpanded ? 'Show fewer trips' : `Show ${rest.length} more trip${rest.length === 1 ? '' : 's'}`}
+                    </button>
+                ` : null}
+            `;
+        }
+
+        return html`
+            <div class="trips-card">
+                <div class="trips-header">
+                    <h3>Trips</h3>
+                    <span class="chip">Last 3 days</span>
+                </div>
+                ${body}
+            </div>
+        `;
+    }
+
     private weekdayLong(iso: string): string {
         if (!iso) return '';
         const d = new Date(iso);
@@ -259,8 +360,9 @@ export class VehicleDetailsView extends LitElement {
             header.top-bar {
                 position: sticky;
                 top: 0;
-                z-index: 10;
+                z-index: 40;
                 height: 80px;
+                flex-shrink: 0;
                 width: 100%;
                 background: rgba(19, 19, 19, 0.8);
                 backdrop-filter: blur(12px);
@@ -268,7 +370,7 @@ export class VehicleDetailsView extends LitElement {
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
-                padding: 0 var(--margin-desktop);
+                padding: 0 var(--gutter);
                 border-bottom: 1px solid var(--outline-variant);
             }
             header.top-bar .left { display: flex; align-items: center; gap: 32px; }
@@ -276,9 +378,7 @@ export class VehicleDetailsView extends LitElement {
             header.top-bar nav { display: flex; gap: 24px; }
             header.top-bar nav a {
                 text-decoration: none;
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
+                font: var(--type-body-md);
                 color: var(--on-surface-variant);
                 padding-bottom: 4px;
             }
@@ -364,6 +464,43 @@ export class VehicleDetailsView extends LitElement {
                 border-radius: var(--radius-full);
                 background: var(--outline-variant);
             }
+            .hero-status .actions {
+                margin-left: auto;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+            .hero-status .favorite-btn {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 40px;
+                height: 40px;
+                background: var(--surface-container-high);
+                border: 1px solid var(--outline-variant);
+                border-radius: var(--radius-full);
+                color: var(--on-surface-variant);
+                transition: background 0.15s ease;
+            }
+            .hero-status .favorite-btn:hover { background: var(--surface-container-highest); }
+            .hero-status .favorite-btn .favorite-on { color: #ffb432; }
+            .hero-status .data-sources-btn {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 8px 16px;
+                background: var(--surface-container-high);
+                border: 1px solid var(--outline-variant);
+                border-radius: var(--radius-full);
+                color: var(--primary);
+                font: var(--type-body-md);
+                transition: background 0.15s ease;
+            }
+            .hero-status .data-sources-btn:hover { background: var(--surface-container-highest); }
+            .hero-status .data-sources-btn .material-symbols-outlined {
+                color: var(--on-surface-variant);
+                font-size: 18px;
+            }
 
             .grid {
                 display: grid;
@@ -406,67 +543,104 @@ export class VehicleDetailsView extends LitElement {
             }
 
             .trips-card {
-                position: relative;
                 grid-column: span 12;
-                min-height: 300px;
                 border-radius: var(--radius-lg);
-                overflow: hidden;
                 border: 1px solid var(--outline-variant);
-            }
-            .trips-bg {
-                position: absolute;
-                inset: 0;
-                background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCUEePP8X7lhZsYuKcY97xNfG4loiGb-LmVCARxTGWO0EQyT5v5ozen4q9d9KfdN_MhsqKS0yFqeFrR4zLYzT3iSl-4nksBYrRgd-AmsnlMKA5U_gZdRNrM2SMq9628-jevQ3MFdQU9cgKBV2CYDD_lPR0fB_w2H7VYjJVZeS-LoqYp4-saTHHer7ouvx0RezGPbPVUFTY0dr4jOcrTMFxanTNy6M4NMo2-wY0-hZ3RsjhKviJ625RW8FKjzcHSbFnHxX1xCCoOT5E');
-                background-size: cover;
-                background-position: center;
-            }
-            .trips-content {
-                position: absolute;
-                inset: 0;
-                background: linear-gradient(180deg, rgba(19, 19, 19, 0.2) 0%, rgba(19, 19, 19, 1) 100%);
+                background: var(--surface-container-low);
                 padding: var(--gutter);
-                display: flex;
-                flex-direction: column;
-                justify-content: space-between;
             }
-            .trips-top {
+            .trips-header {
                 display: flex;
                 justify-content: space-between;
-                align-items: flex-start;
+                align-items: center;
+                margin-bottom: 16px;
             }
-            .trips-top h3 { font: var(--type-headline-md); color: var(--primary); }
-            .trips-top .chip {
-                background: rgba(53, 53, 52, 0.8);
-                backdrop-filter: blur(8px);
-                color: var(--primary);
+            .trips-header h3 { font: var(--type-headline-md); color: var(--primary); }
+            .trips-header .chip {
+                background: var(--surface-container-high);
+                color: var(--on-surface-variant);
                 font: var(--type-label-caps);
                 letter-spacing: 0.05em;
+                text-transform: uppercase;
                 padding: 4px 12px;
                 border-radius: var(--radius-full);
                 border: 1px solid var(--outline-variant);
             }
-            .trips-bottom .from {
-                font: var(--type-body-lg);
-                font-weight: 500;
-                color: var(--primary);
-                margin-bottom: 4px;
+            .trips-list { display: flex; flex-direction: column; }
+            .trip-row {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 16px;
+                padding: 16px 0;
+                border-bottom: 1px solid var(--outline-variant);
             }
-            .trips-bottom .to {
-                font: var(--type-body-md);
-                color: var(--on-surface-variant);
+            .trip-row:last-child { border-bottom: none; }
+            .trip-route {
                 display: flex;
                 align-items: center;
                 gap: 8px;
-                margin-bottom: 16px;
+                font: var(--type-body-md);
+                color: var(--primary);
+                min-width: 0;
             }
-            .trips-bottom .to .material-symbols-outlined { font-size: 16px; }
-            .trips-bottom .stats {
+            .trip-route .material-symbols-outlined { color: var(--on-surface-variant); font-size: 18px; flex-shrink: 0; }
+            .trip-route .trip-time { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            .trip-stats {
                 display: flex;
                 gap: 24px;
+                flex-shrink: 0;
+            }
+            .trip-stat {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-end;
+                gap: 2px;
+            }
+            .trip-stat .label {
                 font: var(--type-label-caps);
                 letter-spacing: 0.05em;
                 text-transform: uppercase;
                 color: var(--on-surface-variant);
+                font-size: 10px;
+            }
+            .trip-stat .value {
+                font: var(--type-body-md);
+                color: var(--on-surface);
+                white-space: nowrap;
+            }
+            .trip-stat .value .unit { color: var(--on-surface-variant); font-size: 0.85em; margin-left: 2px; }
+            .trip-stat.ongoing .value { color: var(--tertiary-fixed-dim); }
+            .trips-drawer {
+                display: grid;
+                grid-template-rows: 0fr;
+                overflow: hidden;
+                transition: grid-template-rows 0.2s ease;
+            }
+            .trips-drawer-inner { min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+            .trips-drawer.open { grid-template-rows: 1fr; }
+            .trips-toggle {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 4px;
+                width: 100%;
+                margin-top: 4px;
+                padding: 12px 0 0;
+                border: none;
+                border-top: 1px solid var(--outline-variant);
+                background: transparent;
+                color: var(--primary);
+                font: var(--type-label-lg);
+                cursor: pointer;
+            }
+            .trips-toggle:hover { color: var(--on-surface); }
+            .trips-toggle .material-symbols-outlined { font-size: 20px; }
+            .trips-empty {
+                font: var(--type-body-md);
+                color: var(--on-surface-variant);
+                padding: 24px 0;
+                text-align: center;
             }
 
             .section-label {
@@ -695,36 +869,6 @@ export class VehicleDetailsView extends LitElement {
             }
             .distance-row .chart { flex: 1; margin-left: 16px; max-width: 60%; }
 
-            .quick-actions {
-                max-width: 480px;
-                background: var(--surface-container-low);
-                border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-lg);
-                overflow: hidden;
-                margin-bottom: 96px;
-            }
-            .quick-actions button {
-                width: 100%;
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                padding: 16px;
-                background: none;
-                border: none;
-                border-bottom: 1px solid var(--outline-variant);
-                text-align: left;
-                color: inherit;
-                transition: background 0.15s ease;
-            }
-            .quick-actions button:last-child { border-bottom: none; }
-            .quick-actions button:hover { background: var(--surface-container-high); }
-            .quick-actions button .left-group { display: flex; align-items: center; gap: 16px; }
-            .quick-actions button .label {
-                font: var(--type-body-md);
-                color: var(--primary);
-            }
-            .quick-actions button .material-symbols-outlined.muted { color: var(--on-surface-variant); }
-            .quick-actions button .material-symbols-outlined.favorite-on { color: #ffb432; }
 
             .err-engineering {
                 position: absolute;
@@ -962,31 +1106,29 @@ export class VehicleDetailsView extends LitElement {
                                 <span>No DIMO integration yet</span>
                             </div>`
                     }
+
+                    <div class="actions">
+                        <button
+                            class="favorite-btn"
+                            ?disabled=${this.favoriteBusy}
+                            title=${this.vehicle?.isFavorite ? 'Remove favorite' : 'Make favorite'}
+                            @click=${() => this.toggleFavorite()}
+                        >
+                            <span class="material-symbols-outlined ${this.vehicle?.isFavorite ? 'favorite-on' : ''}">
+                                ${this.vehicle?.isFavorite ? 'star' : 'star_border'}
+                            </span>
+                        </button>
+                        <button class="data-sources-btn">
+                            <span class="material-symbols-outlined">wifi</span>
+                            <span>Data sources</span>
+                            <span class="material-symbols-outlined">chevron_right</span>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="grid">
                     <!-- Trips -->
-                    <div class="trips-card">
-                        <div class="trips-bg"></div>
-                        <div class="trips-content">
-                            <div class="trips-top">
-                                <h3>Trips</h3>
-                                <span class="chip">3h ago</span>
-                            </div>
-                            <div class="trips-bottom">
-                                <p class="from">Las Encinas 641, Cerrillos</p>
-                                <p class="to">
-                                    <span class="material-symbols-outlined">arrow_forward</span>
-                                    <span>Avenida Gladys Marín 6096, Estación Central</span>
-                                </p>
-                                <div class="stats">
-                                    <span>14.3 mi</span>
-                                    <span>1h 5m</span>
-                                    <span>11:31 AM</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    ${this.renderTripsCard()}
 
                     <div class="section-label">Last 7 days</div>
 
@@ -1019,24 +1161,6 @@ export class VehicleDetailsView extends LitElement {
                     ${this.renderErrorCodesPlaceholder()}
                     ${this.renderOdometerCard()}
                     ${this.renderAdBlueCard()}
-                </div>
-
-                <div class="quick-actions">
-                    <button ?disabled=${this.favoriteBusy} @click=${() => this.toggleFavorite()}>
-                        <div class="left-group">
-                            <span class="material-symbols-outlined ${this.vehicle?.isFavorite ? 'favorite-on' : 'muted'}">
-                                ${this.vehicle?.isFavorite ? 'star' : 'star_border'}
-                            </span>
-                            <span class="label">${this.vehicle?.isFavorite ? 'Remove favorite' : 'Make favorite'}</span>
-                        </div>
-                    </button>
-                    <button>
-                        <div class="left-group">
-                            <span class="material-symbols-outlined muted">wifi</span>
-                            <span class="label">Data sources</span>
-                        </div>
-                        <span class="material-symbols-outlined muted">chevron_right</span>
-                    </button>
                 </div>
             </div>
         `;
