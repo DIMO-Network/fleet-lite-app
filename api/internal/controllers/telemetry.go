@@ -221,3 +221,54 @@ func (t *TelemetryController) GetTrips(c *fiber.Ctx) error {
 	}
 	return c.JSON(fiber.Map{"trips": trips, "from": from, "to": to})
 }
+
+// GetTripRoute — GET /telemetry/:tokenID/trip-route?from=...&to=...
+// Returns GPS waypoints and behavior events for a trip's time window, used
+// to animate route playback. Unlike GetTrips, `from`/`to` are required —
+// replay always has an explicit window from the selected trip.
+func (t *TelemetryController) GetTripRoute(c *fiber.Ctx) error {
+	tenant, err := GetTenant(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	tokenID, err := ParseTokenIDParam(c, "tokenID")
+	if err != nil {
+		return err
+	}
+	if !t.vehicleInTenant(c.Context(), tenant.ID, tokenID) {
+		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
+	}
+
+	from := c.Query("from")
+	if from == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "from is required and must be an RFC3339 timestamp")
+	}
+	if _, err := time.Parse(time.RFC3339, from); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "from must be an RFC3339 timestamp")
+	}
+
+	to := c.Query("to")
+	if to == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "to is required and must be an RFC3339 timestamp")
+	}
+	if _, err := time.Parse(time.RFC3339, to); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "to must be an RFC3339 timestamp")
+	}
+
+	waypoints, events, err := t.telemetry.TripRoute(tenant, tokenID, from, to)
+	if err != nil {
+		if isPermissionError(err) {
+			return c.JSON(fiber.Map{
+				"waypoints":           []service.TripWaypoint{},
+				"events":              []service.TripEvent{},
+				"from":                from,
+				"to":                  to,
+				"permissionsRequired": true,
+				"devLicense":          tenant.ClientID,
+			})
+		}
+		t.logger.Err(err).Uint64("tokenID", tokenID).Msg("telemetry trip route failed")
+		return fiber.NewError(fiber.StatusBadGateway, "telemetry trip route failed: "+err.Error())
+	}
+	return c.JSON(fiber.Map{"waypoints": waypoints, "events": events, "from": from, "to": to})
+}

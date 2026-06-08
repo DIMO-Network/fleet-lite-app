@@ -112,6 +112,7 @@ func App(
 	tenantApp.Get("/telemetry/:tokenID/latest", telemetryCtrl.GetLatest)
 	tenantApp.Get("/telemetry/:tokenID/timeseries", telemetryCtrl.GetTimeSeries)
 	tenantApp.Get("/telemetry/:tokenID/trips", telemetryCtrl.GetTrips)
+	tenantApp.Get("/telemetry/:tokenID/trip-route", telemetryCtrl.GetTripRoute)
 
 	// Glovebox / documents
 	documentsCtrl := controllers.NewDocumentsController(
