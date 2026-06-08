@@ -7,6 +7,7 @@ import { Vehicle } from '../types/vehicle.ts';
 import { TelemetryService } from '../services/telemetry-service.ts';
 import { SignalLatest, TimeSeriesBucket, Trip } from '../types/telemetry.ts';
 import { PrefsService } from '../services/prefs-service.ts';
+import '../elements/trip-replay-modal.ts';
 import {
     formatDistance,
     formatPercent,
@@ -34,6 +35,7 @@ export class VehicleDetailsView extends LitElement {
     @state() private distanceBuckets: TimeSeriesBucket[] = [];
     @state() private trips: Trip[] = [];
     @state() private tripsExpanded = false;
+    @state() private replayTrip: Trip | null = null;
     @state() private telemetryPermissionsRequired = false;
     @state() private telemetryDevLicense = '';
     @state() private favoriteBusy = false;
@@ -55,6 +57,7 @@ export class VehicleDetailsView extends LitElement {
         this.distanceBuckets = [];
         this.trips = [];
         this.tripsExpanded = false;
+        this.replayTrip = null;
 
         // Identity (typed vehicle)
         try {
@@ -258,6 +261,12 @@ export class VehicleDetailsView extends LitElement {
                         <span class="value">${trip.isOngoing ? 'In progress' : this.tripDuration(trip.duration)}</span>
                     </span>
                 </div>
+                ${!trip.isOngoing && trip.endTime ? html`
+                    <button class="trip-replay-btn" @click=${() => { this.replayTrip = trip; }}>
+                        <span class="material-symbols-outlined">play_circle</span>
+                        Replay
+                    </button>
+                ` : nothing}
             </div>
         `;
     }
@@ -576,6 +585,24 @@ export class VehicleDetailsView extends LitElement {
                 border-bottom: 1px solid var(--outline-variant);
             }
             .trip-row:last-child { border-bottom: none; }
+            .trip-replay-btn {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                align-self: flex-start;
+                margin-top: 8px;
+                padding: 6px 14px;
+                background: transparent;
+                border: 1px solid var(--outline-variant);
+                border-radius: var(--radius-md);
+                color: var(--on-surface);
+                font: var(--type-label-caps);
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                cursor: pointer;
+            }
+            .trip-replay-btn:hover { background: var(--surface-container-high); }
+            .trip-replay-btn .material-symbols-outlined { font-size: 16px; }
             .trip-route {
                 display: flex;
                 align-items: center;
@@ -1163,6 +1190,13 @@ export class VehicleDetailsView extends LitElement {
                     ${this.renderAdBlueCard()}
                 </div>
             </div>
+            ${this.replayTrip ? html`
+                <trip-replay-modal
+                    .trip=${this.replayTrip}
+                    .tokenId=${Number(this.tokenId)}
+                    @close=${() => { this.replayTrip = null; }}>
+                </trip-replay-modal>
+            ` : nothing}
         `;
     }
 }
