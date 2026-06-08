@@ -35,6 +35,7 @@ export interface VehiclesResponse {
 export interface VehicleCard {
     tokenId: string;
     title: string;
+    make: string;
     location: string;
     seenAt: string;
     online: boolean;
