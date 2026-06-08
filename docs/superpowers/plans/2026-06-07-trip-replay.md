@@ -2,6 +2,23 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **RESUME POINT (2026-06-08):** Tasks 1–4 are DONE and committed on branch `feat/trip-replay`
+> (pushed to `origin/feat/trip-replay` — the original `feat/map-view` branch was deleted on
+> remote, so the work was carried over to this new branch name). Commits, in order:
+> - `358ea3d` Task 1: TripRoute service method + types
+> - `514fc6b` Task 2: GetTripRoute controller handler + route registration
+> - `d6c5652` Task 3: frontend TripRoute types + tripRoute service method
+> - `d934c5c` Task 4: trip-replay-modal Lit element (verbatim port)
+> - `922ca10` fix: guard trip-replay-modal against post-disconnect map/animation leak
+>   (a Critical issue found in Task 4's code-quality review — closing the modal mid-fetch
+>   could leave a live Leaflet map + tile requests + a runaway animation interval; fixed
+>   with a `connected` flag checked at the 3 post-`await` resumption points in `fetchRoute`)
+>
+> Each of Tasks 1–4 went through the full subagent-driven-development cycle (implementer →
+> spec-compliance review → code-quality review, with one fix-and-re-verify loop on Task 4).
+> All reviews are now ✅. **Next: start at Task 5** (wire the Replay button into the Trips
+> card), then Task 6 (manual e2e verification — needs `make dev` + a browser).
+
 **Goal:** Add a "Replay" button to completed trips on the vehicle details page that opens a modal showing an animated GPS-route playback with behavior-event markers, ported from `rental-fleets-app`'s `trip-replay-modal-element.ts`.
 
 **Architecture:** One new combined backend endpoint (`GET /telemetry/:tokenID/trip-route`) issues a single aliased GraphQL request to telemetry-api for both 30-second-interval location waypoints and behavior events, returning them as flat JSON. A new `trip-replay-modal` Lit element fetches this data on connect, downsamples waypoints to 500, and animates playback on a Leaflet map using the same dark CartoDB tiles as `fleet-overview.ts`.
@@ -23,7 +40,7 @@ This codebase has no Go or TypeScript test suites (`find api -name '*_test.go'` 
 **Files:**
 - Modify: `api/internal/service/telemetry_api.go:37-48` (interface), and add new types/method near `Trip` (line 54) and `Trips` (line 233)
 
-- [ ] **Step 1: Add `TripWaypoint` and `TripEvent` types**
+- [x] **Step 1: Add `TripWaypoint` and `TripEvent` types**
 
 In `api/internal/service/telemetry_api.go`, immediately after the `Trip` struct (after line 64, before the `SignalLatest` comment on line 66), add:
 
@@ -45,7 +62,7 @@ type TripEvent struct {
 }
 ```
 
-- [ ] **Step 2: Add `TripRoute` to the `TelemetryAPIService` interface**
+- [x] **Step 2: Add `TripRoute` to the `TelemetryAPIService` interface**
 
 In the same file, in the `TelemetryAPIService` interface (lines 37-48), add this method directly below the `Trips` line (after line 47, before the closing `}` on line 48):
 
@@ -55,7 +72,7 @@ In the same file, in the `TelemetryAPIService` interface (lines 37-48), add this
 	TripRoute(tenant models.Tenant, tokenID uint64, from, to string) ([]TripWaypoint, []TripEvent, error)
 ```
 
-- [ ] **Step 3: Implement `TripRoute`**
+- [x] **Step 3: Implement `TripRoute`**
 
 In the same file, immediately after the closing `}` of the `Trips` method (after line 324, before the `query` helper on line 326), add:
 
@@ -127,12 +144,12 @@ func (t *telemetryAPIService) TripRoute(tenant models.Tenant, tokenID uint64, fr
 }
 ```
 
-- [ ] **Step 4: Build to verify it compiles**
+- [x] **Step 4: Build to verify it compiles**
 
 Run: `cd api && go build ./...`
 Expected: no output (clean build). If it fails with "missing method TripRoute", check that the interface (Step 2) and implementation (Step 3) method signatures match exactly.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/jamesli/DIMO/fleet-lite-app
@@ -148,7 +165,7 @@ git commit -m "feat(api): add TripRoute service method for trip replay waypoints
 - Modify: `api/internal/controllers/telemetry.go` (add handler after `GetTrips`, currently ending at line 223)
 - Modify: `api/internal/app/app.go:114` (route registration)
 
-- [ ] **Step 1: Add the `GetTripRoute` handler**
+- [x] **Step 1: Add the `GetTripRoute` handler**
 
 In `api/internal/controllers/telemetry.go`, immediately after the closing `}` of `GetTrips` (after line 223), add:
 
@@ -206,7 +223,7 @@ func (t *TelemetryController) GetTripRoute(c *fiber.Ctx) error {
 }
 ```
 
-- [ ] **Step 2: Register the route**
+- [x] **Step 2: Register the route**
 
 In `api/internal/app/app.go`, immediately after line 114 (`tenantApp.Get("/telemetry/:tokenID/trips", telemetryCtrl.GetTrips)`), add:
 
@@ -214,12 +231,12 @@ In `api/internal/app/app.go`, immediately after line 114 (`tenantApp.Get("/telem
 	tenantApp.Get("/telemetry/:tokenID/trip-route", telemetryCtrl.GetTripRoute)
 ```
 
-- [ ] **Step 3: Build to verify it compiles**
+- [x] **Step 3: Build to verify it compiles**
 
 Run: `cd api && go build ./...`
 Expected: no output (clean build).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 cd /Users/jamesli/DIMO/fleet-lite-app
@@ -235,7 +252,7 @@ git commit -m "feat(api): expose GET /telemetry/:tokenID/trip-route endpoint"
 - Modify: `web/src/types/telemetry.ts` (add types after `TripsResponse`, currently lines 37-39)
 - Modify: `web/src/services/telemetry-service.ts` (add method after `trips()`)
 
-- [ ] **Step 1: Add `TripWaypoint`, `TripEvent`, `TripRouteResponse` types**
+- [x] **Step 1: Add `TripWaypoint`, `TripEvent`, `TripRouteResponse` types**
 
 In `web/src/types/telemetry.ts`, immediately after the `TripsResponse` interface closing brace, add:
 
@@ -261,7 +278,7 @@ export interface TripRouteResponse {
 }
 ```
 
-- [ ] **Step 2: Add the `tripRoute` service method**
+- [x] **Step 2: Add the `tripRoute` service method**
 
 In `web/src/services/telemetry-service.ts`, immediately after the `trips()` method's closing brace, add:
 
@@ -284,12 +301,12 @@ Also update the import at the top of the file to include `TripRouteResponse`:
 import { FleetLocationsResponse, LatestSignalsResponse, TimeSeriesResponse, TripsResponse, TripRouteResponse } from '../types/telemetry.ts';
 ```
 
-- [ ] **Step 3: Type-check to verify it compiles**
+- [x] **Step 3: Type-check to verify it compiles**
 
 Run: `cd web && npx tsc --noEmit`
 Expected: no errors.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 cd /Users/jamesli/DIMO/fleet-lite-app
@@ -306,7 +323,7 @@ git commit -m "feat(web): add TripRoute types and telemetry-service method"
 
 This is the core ported component — adapted from `rental-fleets-app/web/src/elements/trip-replay-modal-element.ts` to fleet-lite-app's `Trip` shape (flat `startTime`/`endTime`/`distanceKm`/`avgSpeedKph`/`maxSpeedKph`/`duration` fields rather than nested `start.value`/`signals[]`), its `TelemetryService` singleton (rather than raw GraphQL POST + `@lit/context`), its dark CartoDB tiles (rather than OSM), its modal/card/`sharedStyles` conventions (rather than `globalStyles`/`.replay-modal`), and its `formatDistance`/`formatSpeed` unit-aware utilities for the stats bar.
 
-- [ ] **Step 1: Create the file with imports, types, and helpers**
+- [x] **Step 1: Create the file with imports, types, and helpers**
 
 Create `web/src/elements/trip-replay-modal.ts`:
 
@@ -353,7 +370,7 @@ function fmtDuration(seconds: number): string {
 }
 ```
 
-- [ ] **Step 2: Add the `@customElement` class declaration with styles**
+- [x] **Step 2: Add the `@customElement` class declaration with styles**
 
 Append to the same file:
 
@@ -544,7 +561,7 @@ export class TripReplayModal extends LitElement {
 }
 ```
 
-- [ ] **Step 3: Add properties, state, private fields, and lifecycle methods**
+- [x] **Step 3: Add properties, state, private fields, and lifecycle methods**
 
 Insert inside the class body (after `static styles = [...]`):
 
@@ -590,7 +607,7 @@ Insert inside the class body (after `static styles = [...]`):
     }
 ```
 
-- [ ] **Step 4: Add `fetchRoute` (data loading)**
+- [x] **Step 4: Add `fetchRoute` (data loading)**
 
 Insert after `dispatchClose`:
 
@@ -639,7 +656,7 @@ Insert after `dispatchClose`:
     }
 ```
 
-- [ ] **Step 5: Add map initialization methods**
+- [x] **Step 5: Add map initialization methods**
 
 Insert after `fetchRoute`:
 
@@ -695,7 +712,7 @@ Insert after `fetchRoute`:
     }
 ```
 
-- [ ] **Step 6: Add playback control methods and getters**
+- [x] **Step 6: Add playback control methods and getters**
 
 Insert after `initMap`:
 
@@ -752,7 +769,7 @@ Insert after `initMap`:
 
 **Note on the `tick()`/`requestUpdate()` change from the original:** rental-fleets-app's `tick()` directly mutates `.progress-fill` width and `.time-display` text via `querySelector` to avoid a full Lit re-render every 50ms. This port instead calls `this.requestUpdate()`, which re-renders only the parts of the template that read reactive state/getters — simpler and consistent with this codebase's Lit usage elsewhere (no other element in fleet-lite-app manually patches the DOM outside of Lit's render cycle). If profiling later shows this is too slow at 1× speed (20 ticks/sec), the direct-DOM approach can be reintroduced.
 
-- [ ] **Step 7: Add the `render()` method**
+- [x] **Step 7: Add the `render()` method**
 
 Insert after the `endTs` getter:
 
@@ -846,14 +863,14 @@ declare global {
 }
 ```
 
-- [ ] **Step 8: Type-check to verify it compiles**
+- [x] **Step 8: Type-check to verify it compiles**
 
 Run: `cd web && npx tsc --noEmit`
 Expected: no errors. Common issues to check if it fails:
 - `material-symbols-outlined` usage: confirm this class is used elsewhere as a plain `<span>` (it is, e.g. `vehicle-details.ts:238`) — no import needed, it's a global font-icon class from `index.html`.
 - `unsafeCSS`/`leafletCss` import: confirm this matches `fleet-overview.ts:4,235` exactly (`leaflet/dist/leaflet.css?inline` + `unsafeCSS(leafletCss)`).
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 cd /Users/jamesli/DIMO/fleet-lite-app
