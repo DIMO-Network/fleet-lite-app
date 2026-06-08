@@ -239,17 +239,20 @@ export class TripReplayModal extends LitElement {
     private drawnPolyline?: L.Polyline;
     private animationInterval?: number;
     private mapInitTimer?: number;
+    private connected = false;
 
     private readonly onKeydown = (e: KeyboardEvent) => { if (e.key === 'Escape') this.dispatchClose(); };
 
     override connectedCallback() {
         super.connectedCallback();
+        this.connected = true;
         document.addEventListener('keydown', this.onKeydown);
         void this.fetchRoute();
     }
 
     override disconnectedCallback() {
         super.disconnectedCallback();
+        this.connected = false;
         document.removeEventListener('keydown', this.onKeydown);
         if (this.mapInitTimer !== undefined) { clearTimeout(this.mapInitTimer); this.mapInitTimer = undefined; }
         this.stopAnim();
@@ -266,6 +269,7 @@ export class TripReplayModal extends LitElement {
         this.fetchError = '';
         try {
             const resp = await TelemetryService.getInstance().tripRoute(this.tokenId, this.trip.startTime, this.trip.endTime!);
+            if (!this.connected) return;
 
             if (resp.permissionsRequired) {
                 this.fetchError = 'Grant DIMO permissions on this vehicle to see trip replay.';
@@ -280,6 +284,7 @@ export class TripReplayModal extends LitElement {
                 this.isSparse = true;
                 this.loading = false;
                 await this.updateComplete;
+                if (!this.connected) return;
                 this.initFallbackMap();
                 return;
             }
@@ -296,6 +301,7 @@ export class TripReplayModal extends LitElement {
 
             this.loading = false;
             await this.updateComplete;
+            if (!this.connected) return;
             this.initMap();
         } catch (e) {
             this.fetchError = e instanceof Error ? e.message : 'Failed to load GPS data';
