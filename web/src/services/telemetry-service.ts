@@ -1,5 +1,5 @@
 import { ApiService } from './api-service.ts';
-import { FleetLocationsResponse, LatestSignalsResponse, TimeSeriesResponse, TripsResponse } from '../types/telemetry.ts';
+import { FleetLocationsResponse, LatestSignalsResponse, TimeSeriesResponse, TripsResponse, TripRouteResponse } from '../types/telemetry.ts';
 
 export class TelemetryService {
     private static instance: TelemetryService;
@@ -39,5 +39,15 @@ export class TelemetryService {
         if (to) q.set('to', to);
         const suffix = q.toString() ? `?${q.toString()}` : '';
         return ApiService.getInstance().get<TripsResponse>(`/telemetry/${tokenId}/trips${suffix}`);
+    }
+
+    /**
+     * GET /telemetry/:tokenId/trip-route — GPS waypoints and behavior events
+     * for a trip's time window, used to animate route playback. `from`/`to`
+     * are required (the trip's start/end timestamps).
+     */
+    tripRoute(tokenId: number, from: string, to: string): Promise<TripRouteResponse> {
+        const q = new URLSearchParams({ from, to });
+        return ApiService.getInstance().get<TripRouteResponse>(`/telemetry/${tokenId}/trip-route?${q.toString()}`);
     }
 }

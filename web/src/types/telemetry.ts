@@ -42,6 +42,26 @@ export interface TripsResponse {
     devLicense?: string;
 }
 
+export interface TripWaypoint {
+    timestamp: string;
+    lat: number;
+    lng: number;
+}
+
+export interface TripEvent {
+    timestamp: string;
+    name: string;
+    durationNs: number;
+}
+
+export interface TripRouteResponse {
+    waypoints: TripWaypoint[];
+    events: TripEvent[];
+    from: string;
+    to: string;
+    permissionsRequired?: boolean;
+}
+
 export interface TimeSeriesResponse {
     signal: string;
     interval: string;
