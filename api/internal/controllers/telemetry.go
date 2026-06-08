@@ -4,12 +4,16 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/DIMO-Network/fleet-lite-app/internal/config"
 	"github.com/DIMO-Network/fleet-lite-app/internal/service"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
 )
+
+// defaultTripsRange is how far back GetTrips looks when the caller omits `from`.
+const defaultTripsRange = 3 * 24 * time.Hour
 
 // Curated set of signals the vehicle-details view needs for "latest" reads.
 // Kept server-side so the frontend doesn't have to know about telemetry-api's
@@ -143,7 +147,7 @@ func (t *TelemetryController) GetTimeSeries(c *fiber.Ctx) error {
 	signal := c.Query("signal")
 	from := c.Query("from")
 	to := c.Query("to")
-	interval := c.Query("interval", "1d")
+	interval := c.Query("interval", "24h")
 	if signal == "" || from == "" || to == "" {
 		return fiber.NewError(fiber.StatusBadRequest, "signal, from, to query params are required")
 	}
@@ -164,4 +168,56 @@ func (t *TelemetryController) GetTimeSeries(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadGateway, "telemetry time-series failed: "+err.Error())
 	}
 	return c.JSON(fiber.Map{"signal": signal, "interval": interval, "buckets": buckets})
+}
+
+// GetTrips — GET /telemetry/:tokenID/trips?from=...&to=...
+// Returns detected driving segments ("trips") for the vehicle. Defaults to
+// the last 3 days when `from`/`to` are omitted; telemetry-api caps the range
+// at 31 days.
+func (t *TelemetryController) GetTrips(c *fiber.Ctx) error {
+	tenant, err := GetTenant(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	tokenID, err := ParseTokenIDParam(c, "tokenID")
+	if err != nil {
+		return err
+	}
+	if !t.vehicleInTenant(c.Context(), tenant.ID, tokenID) {
+		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
+	}
+
+	to := c.Query("to")
+	toTime := time.Now().UTC()
+	if to != "" {
+		toTime, err = time.Parse(time.RFC3339, to)
+		if err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "to must be an RFC3339 timestamp")
+		}
+	} else {
+		to = toTime.Format(time.RFC3339)
+	}
+
+	from := c.Query("from")
+	if from == "" {
+		from = toTime.Add(-defaultTripsRange).Format(time.RFC3339)
+	} else if _, err := time.Parse(time.RFC3339, from); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "from must be an RFC3339 timestamp")
+	}
+
+	trips, err := t.telemetry.Trips(tenant, tokenID, from, to)
+	if err != nil {
+		if isPermissionError(err) {
+			return c.JSON(fiber.Map{
+				"trips":               []service.Trip{},
+				"from":                from,
+				"to":                  to,
+				"permissionsRequired": true,
+				"devLicense":          tenant.ClientID,
+			})
+		}
+		t.logger.Err(err).Uint64("tokenID", tokenID).Msg("telemetry trips failed")
+		return fiber.NewError(fiber.StatusBadGateway, "telemetry trips failed: "+err.Error())
+	}
+	return c.JSON(fiber.Map{"trips": trips, "from": from, "to": to})
 }

@@ -1,5 +1,5 @@
 import { ApiService } from './api-service.ts';
-import { FleetLocationsResponse, LatestSignalsResponse, TimeSeriesResponse } from '../types/telemetry.ts';
+import { FleetLocationsResponse, LatestSignalsResponse, TimeSeriesResponse, TripsResponse } from '../types/telemetry.ts';
 
 export class TelemetryService {
     private static instance: TelemetryService;
@@ -17,14 +17,27 @@ export class TelemetryService {
 
     /**
      * GET /telemetry/:tokenId/timeseries — aggregation buckets for one signal.
-     * Caller picks interval (e.g. `1d` for 7 daily buckets).
+     * Caller picks interval as a Go duration string, e.g. `24h` for daily
+     * buckets (the telemetry-api has no `d` unit — only h/m/s).
      */
     fleetLocations(): Promise<FleetLocationsResponse> {
         return ApiService.getInstance().get<FleetLocationsResponse>('/telemetry/locations');
     }
 
-    timeSeries(tokenId: number, signal: string, from: string, to: string, interval = '1d'): Promise<TimeSeriesResponse> {
+    timeSeries(tokenId: number, signal: string, from: string, to: string, interval = '24h'): Promise<TimeSeriesResponse> {
         const q = new URLSearchParams({ signal, from, to, interval });
         return ApiService.getInstance().get<TimeSeriesResponse>(`/telemetry/${tokenId}/timeseries?${q.toString()}`);
+    }
+
+    /**
+     * GET /telemetry/:tokenId/trips — detected driving segments ("trips").
+     * Omit `from`/`to` to get the server's default last-3-days window.
+     */
+    trips(tokenId: number, from?: string, to?: string): Promise<TripsResponse> {
+        const q = new URLSearchParams();
+        if (from) q.set('from', from);
+        if (to) q.set('to', to);
+        const suffix = q.toString() ? `?${q.toString()}` : '';
+        return ApiService.getInstance().get<TripsResponse>(`/telemetry/${tokenId}/trips${suffix}`);
     }
 }

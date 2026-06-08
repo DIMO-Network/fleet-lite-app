@@ -42,6 +42,25 @@ type TelemetryAPIService interface {
 	// coordinates for those vehicles in a single aliased GraphQL request.
 	// Vehicles where JWT exchange fails are returned in NoPermissions.
 	FleetLocations(tenant models.Tenant, tokenIDs []uint64) (FleetLocationsResult, error)
+	// Trips queries detected driving segments (`segments`, ignition-based) for
+	// a vehicle within [from, to]. The telemetry-api caps this range at 31 days.
+	Trips(tenant models.Tenant, tokenID uint64, from, to string) ([]Trip, error)
+}
+
+// Trip is one detected driving segment for a vehicle, derived from
+// telemetry-api's `segments` query using ignition-based detection — the
+// mechanism that best matches the everyday notion of "started driving" /
+// "stopped driving".
+type Trip struct {
+	StartTime     string          `json:"startTime"`
+	StartLocation *LocationCoords `json:"startLocation"`
+	EndTime       *string         `json:"endTime"`
+	EndLocation   *LocationCoords `json:"endLocation"`
+	Duration      int             `json:"duration"` // seconds
+	IsOngoing     bool            `json:"isOngoing"`
+	DistanceKm    *float64        `json:"distanceKm"`
+	AvgSpeedKph   *float64        `json:"avgSpeedKph"`
+	MaxSpeedKph   *float64        `json:"maxSpeedKph"`
 }
 
 // SignalLatest mirrors telemetry-api's `{value, timestamp}` shape for a signal.
@@ -108,8 +127,9 @@ func (t *telemetryAPIService) Latest(tenant models.Tenant, tokenID uint64, signa
 }
 
 // TimeSeries queries `signals(tokenId, from, to, interval)` for one signal
-// and returns its min/max/avg/last buckets. Interval is a duration string
-// the telemetry-api recognizes (e.g. "1d", "1h", "15m").
+// and returns its min/max/avg/last buckets. Interval is a Go duration string
+// (e.g. "24h", "1h", "15m") — the telemetry-api parses it with time.ParseDuration,
+// which has no "d" (day) unit.
 //
 // The telemetry-api schema requires an `agg` argument per signal and returns a
 // scalar Float — we alias the same field four times to get all aggregations.
@@ -204,6 +224,103 @@ func (t *telemetryAPIService) FleetLocations(tenant models.Tenant, tokenIDs []ui
 	}
 
 	return FleetLocationsResult{Locations: locs, NoPermissions: noPerms}, nil
+}
+
+// Trips queries `segments(tokenId, from, to, mechanism: ignitionDetection)`
+// and maps each segment to a flat Trip, requesting the signal aggregations
+// needed to derive distance and avg/max speed. `end` is null for a trip
+// still in progress (isOngoing: true).
+func (t *telemetryAPIService) Trips(tenant models.Tenant, tokenID uint64, from, to string) ([]Trip, error) {
+	q := fmt.Sprintf(`query {
+		segments(tokenId: %d, from: %q, to: %q, mechanism: ignitionDetection, limit: 100, signalRequests: [
+			{name: "speed", agg: AVG},
+			{name: "speed", agg: MAX},
+			{name: "powertrainTransmissionTravelledDistance", agg: FIRST},
+			{name: "powertrainTransmissionTravelledDistance", agg: LAST}
+		]) {
+			start { timestamp value { latitude longitude } }
+			end { timestamp value { latitude longitude } }
+			duration
+			isOngoing
+			signals { name agg value }
+		}
+	}`, tokenID, from, to)
+
+	raw, err := t.query(tenant, tokenID, q)
+	if err != nil {
+		return nil, err
+	}
+
+	type signalLocation struct {
+		Timestamp string `json:"timestamp"`
+		Value     *struct {
+			Latitude  float64 `json:"latitude"`
+			Longitude float64 `json:"longitude"`
+		} `json:"value"`
+	}
+	type signalAgg struct {
+		Name  string  `json:"name"`
+		Agg   string  `json:"agg"`
+		Value float64 `json:"value"`
+	}
+	var resp struct {
+		Data struct {
+			Segments []struct {
+				Start     signalLocation  `json:"start"`
+				End       *signalLocation `json:"end"`
+				Duration  int             `json:"duration"`
+				IsOngoing bool            `json:"isOngoing"`
+				Signals   []signalAgg     `json:"signals"`
+			} `json:"segments"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, fmt.Errorf("parse segments: %w", err)
+	}
+	t.logger.Info().Uint64("tokenID", tokenID).Str("from", from).Str("to", to).
+		Int("segments", len(resp.Data.Segments)).Msg("telemetry segments fetched")
+
+	toCoords := func(loc signalLocation) *LocationCoords {
+		if loc.Value == nil {
+			return nil
+		}
+		return &LocationCoords{Lat: loc.Value.Latitude, Lon: loc.Value.Longitude}
+	}
+
+	findAgg := func(signals []signalAgg, name, agg string) *float64 {
+		for _, s := range signals {
+			if s.Name == name && s.Agg == agg {
+				v := s.Value
+				return &v
+			}
+		}
+		return nil
+	}
+
+	trips := make([]Trip, 0, len(resp.Data.Segments))
+	for _, seg := range resp.Data.Segments {
+		trip := Trip{
+			StartTime:     seg.Start.Timestamp,
+			StartLocation: toCoords(seg.Start),
+			Duration:      seg.Duration,
+			IsOngoing:     seg.IsOngoing,
+			AvgSpeedKph:   findAgg(seg.Signals, "speed", "AVG"),
+			MaxSpeedKph:   findAgg(seg.Signals, "speed", "MAX"),
+		}
+		if first, last := findAgg(seg.Signals, "powertrainTransmissionTravelledDistance", "FIRST"),
+			findAgg(seg.Signals, "powertrainTransmissionTravelledDistance", "LAST"); first != nil && last != nil {
+			if delta := *last - *first; delta >= 0 {
+				trip.DistanceKm = &delta
+			}
+		}
+		if seg.End != nil {
+			endTime := seg.End.Timestamp
+			trip.EndTime = &endTime
+			trip.EndLocation = toCoords(*seg.End)
+		}
+		trips = append(trips, trip)
+	}
+	return trips, nil
 }
 
 func (t *telemetryAPIService) query(tenant models.Tenant, tokenID uint64, gql string) ([]byte, error) {
