@@ -196,18 +196,20 @@ export class FleetOverviewView extends LitElement {
     override firstUpdated() {
         const el = this.renderRoot.querySelector<HTMLElement>('.map');
         if (!el) return;
-        const worldBounds = L.latLngBounds([[-85.051129, -180], [85.051129, 180]]);
+        // Bound latitude to Web Mercator's valid range but leave longitude open so
+        // panning across the antimeridian wraps into the next copy of the world.
+        const worldBounds = L.latLngBounds([-85.051129, -Infinity], [85.051129, Infinity]);
         this.leafletMap = L.map(el, {
             zoomControl: false,
             attributionControl: true,
             maxBounds: worldBounds,
             maxBoundsViscosity: 1.0,
+            worldCopyJump: true,
         }).setView([39.5, -98.35], 4);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
             subdomains: 'abcd',
             maxZoom: 19,
-            noWrap: true,
         }).addTo(this.leafletMap);
 
         this.resizeObserver = new ResizeObserver(() => this.updateMinZoom());
