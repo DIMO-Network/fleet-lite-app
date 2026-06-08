@@ -45,6 +45,9 @@ type TelemetryAPIService interface {
 	// Trips queries detected driving segments (`segments`, ignition-based) for
 	// a vehicle within [from, to]. The telemetry-api caps this range at 31 days.
 	Trips(tenant models.Tenant, tokenID uint64, from, to string) ([]Trip, error)
+	// TripRoute fetches GPS waypoints (sampled every 30s) and behavior events
+	// for a trip's [from, to] window, used to animate route playback.
+	TripRoute(tenant models.Tenant, tokenID uint64, from, to string) ([]TripWaypoint, []TripEvent, error)
 }
 
 // Trip is one detected driving segment for a vehicle, derived from
@@ -61,6 +64,22 @@ type Trip struct {
 	DistanceKm    *float64        `json:"distanceKm"`
 	AvgSpeedKph   *float64        `json:"avgSpeedKph"`
 	MaxSpeedKph   *float64        `json:"maxSpeedKph"`
+}
+
+// TripWaypoint is one GPS fix sampled at a fixed interval across a trip's
+// time window, used to animate route playback.
+type TripWaypoint struct {
+	Timestamp string  `json:"timestamp"`
+	Lat       float64 `json:"lat"`
+	Lng       float64 `json:"lng"`
+}
+
+// TripEvent is a discrete behavior event (e.g. harsh braking) within a
+// trip's time window, used to mark the replay timeline.
+type TripEvent struct {
+	Timestamp  string `json:"timestamp"`
+	Name       string `json:"name"`
+	DurationNs int64  `json:"durationNs"`
 }
 
 // SignalLatest mirrors telemetry-api's `{value, timestamp}` shape for a signal.
@@ -321,6 +340,72 @@ func (t *telemetryAPIService) Trips(tenant models.Tenant, tokenID uint64, from, 
 		trips = append(trips, trip)
 	}
 	return trips, nil
+}
+
+// TripRoute queries `signals(..., interval: "30s")` for location waypoints
+// and `events` for behavior markers within a trip's [from, to] window, in a
+// single aliased GraphQL request. Waypoints with no GPS fix that interval
+// are skipped; events are returned unfiltered (the frontend filters to known
+// event names for display).
+func (t *telemetryAPIService) TripRoute(tenant models.Tenant, tokenID uint64, from, to string) ([]TripWaypoint, []TripEvent, error) {
+	q := fmt.Sprintf(`query {
+		route: signals(tokenId: %d, from: %q, to: %q, interval: "30s") {
+			timestamp
+			currentLocationCoordinates(agg: LAST) { latitude longitude }
+		}
+		events(tokenId: %d, from: %q, to: %q) {
+			timestamp
+			name
+			durationNs
+		}
+	}`, tokenID, from, to, tokenID, from, to)
+
+	raw, err := t.query(tenant, tokenID, q)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var resp struct {
+		Data struct {
+			Route []struct {
+				Timestamp                  string `json:"timestamp"`
+				CurrentLocationCoordinates *struct {
+					Latitude  float64 `json:"latitude"`
+					Longitude float64 `json:"longitude"`
+				} `json:"currentLocationCoordinates"`
+			} `json:"route"`
+			Events []struct {
+				Timestamp  string `json:"timestamp"`
+				Name       string `json:"name"`
+				DurationNs int64  `json:"durationNs"`
+			} `json:"events"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, nil, fmt.Errorf("parse trip route: %w", err)
+	}
+
+	waypoints := make([]TripWaypoint, 0, len(resp.Data.Route))
+	for _, pt := range resp.Data.Route {
+		if pt.CurrentLocationCoordinates == nil {
+			continue
+		}
+		waypoints = append(waypoints, TripWaypoint{
+			Timestamp: pt.Timestamp,
+			Lat:       pt.CurrentLocationCoordinates.Latitude,
+			Lng:       pt.CurrentLocationCoordinates.Longitude,
+		})
+	}
+
+	events := make([]TripEvent, 0, len(resp.Data.Events))
+	for _, e := range resp.Data.Events {
+		events = append(events, TripEvent{Timestamp: e.Timestamp, Name: e.Name, DurationNs: e.DurationNs})
+	}
+
+	t.logger.Info().Uint64("tokenID", tokenID).Str("from", from).Str("to", to).
+		Int("waypoints", len(waypoints)).Int("events", len(events)).Msg("telemetry trip route fetched")
+
+	return waypoints, events, nil
 }
 
 func (t *telemetryAPIService) query(tenant models.Tenant, tokenID uint64, gql string) ([]byte, error) {
