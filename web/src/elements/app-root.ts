@@ -10,8 +10,9 @@ import '../views/vehicle-details.ts';
 import '../views/glovebox.ts';
 import '../views/account-settings.ts';
 import '../views/onboard-tenant.ts';
+import '../views/groups-management.ts';
 
-type NavKey = 'vehicles' | 'stats' | 'glovebox' | 'settings';
+type NavKey = 'vehicles' | 'stats' | 'groups' | 'glovebox' | 'settings';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -58,6 +59,7 @@ export class AppRoot extends LitElement {
             { path: '/onboard',                       render: () => html`<onboard-tenant-view></onboard-tenant-view>` },
             { path: '/:tenantId/',                    render: () => html`<fleet-overview-view .tenantId=${this.tenantId}></fleet-overview-view>` },
             { path: '/:tenantId/vehicles/:tokenId',   render: ({ tokenId }) => html`<vehicle-details-view .tenantId=${this.tenantId} .tokenId=${tokenId}></vehicle-details-view>` },
+            { path: '/:tenantId/groups',              render: () => html`<groups-management-view .tenantId=${this.tenantId}></groups-management-view>` },
             { path: '/:tenantId/glovebox',            render: () => html`<glovebox-view .tenantId=${this.tenantId}></glovebox-view>` },
             { path: '/:tenantId/settings',            render: () => html`<account-settings-view .tenantId=${this.tenantId}></account-settings-view>` },
             { path: '/:tenantId/stats',               render: () => html`<fleet-overview-view .tenantId=${this.tenantId}></fleet-overview-view>` },
@@ -123,6 +125,7 @@ export class AppRoot extends LitElement {
     private deriveActive(path: string): NavKey {
         if (path === '/' || path.startsWith('/vehicles')) return 'vehicles';
         if (path.startsWith('/stats')) return 'stats';
+        if (path.startsWith('/groups')) return 'groups';
         if (path.startsWith('/glovebox')) return 'glovebox';
         if (path.startsWith('/settings')) return 'settings';
         return 'vehicles';
