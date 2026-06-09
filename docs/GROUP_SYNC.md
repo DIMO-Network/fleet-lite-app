@@ -37,6 +37,13 @@ several apps under one developer credential, so source can't distinguish them.
 
 ### Phase 1 — additive sync + triggers (this work)
 
+> **SHIPPED (2026-06-09):** lazy endpoint, activity-tiered cron, and the sync-
+> state columns below are implemented. The additive merge now lives in
+> `service.GroupSyncService.SyncVehicle` (shared by the `import-group-attestations`
+> cron and the lazy endpoint); the cron grew `-warm-only`/`-warm-days`; the Helm
+> chart runs a daily warm pass + weekly full pass (both opt-in). `tenant_users`
+> activity (`last_login_at`/`email`) shipped earlier in #23.
+
 - **Keep the current additive merge** (add-only, dedup by the
   `(tenant_id, token_id, fleet_group_id)` PK; never removes). Shipped in PR #21.
 - **Lazy sync (frontend-initiated):** new tenant-scoped endpoint, e.g.

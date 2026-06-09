@@ -25,12 +25,18 @@ var hexColorRe = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
 type FleetGroupsController struct {
 	logger *zerolog.Logger
 	groups *service.FleetGroupService
+	sync   *service.GroupSyncService
 	attest service.AttestService
 }
 
-func NewFleetGroupsController(logger *zerolog.Logger, groups *service.FleetGroupService, attest service.AttestService) *FleetGroupsController {
-	return &FleetGroupsController{logger: logger, groups: groups, attest: attest}
+func NewFleetGroupsController(logger *zerolog.Logger, groups *service.FleetGroupService, sync *service.GroupSyncService, attest service.AttestService) *FleetGroupsController {
+	return &FleetGroupsController{logger: logger, groups: groups, sync: sync, attest: attest}
 }
+
+// lazySyncCooldown is how long after a per-vehicle sync we serve the cached
+// groups without re-pulling from Fetch API. Bounds the cost of rapid repeat
+// vehicle selections; the weekly cron still converges anything we skip.
+const lazySyncCooldown = 60 * time.Second
 
 type createFleetGroupRequest struct {
 	Name  string `json:"name"`
@@ -199,6 +205,47 @@ func (fc *FleetGroupsController) RemoveVehicleFromGroup(c *fiber.Ctx) error {
 	}
 	fc.republishVehicle(tenant, int64(tokenID))
 	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// SyncVehicleGroups — POST /fleet/vehicles/:tokenID/groups/sync
+//
+// Frontend-initiated lazy sync: pulls this one vehicle's group attestations
+// from Fetch API, additively merges them into the local cache, and returns the
+// vehicle's current groups for immediate display. Cooldown-gated (see
+// lazySyncCooldown) so repeated views don't hammer Fetch API. Pull-only — it
+// never republishes our own attestation (that happens on explicit assign/remove).
+func (fc *FleetGroupsController) SyncVehicleGroups(c *fiber.Ctx) error {
+	tenant, err := GetTenant(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	tokenID, err := ParseTokenIDParam(c, "tokenID")
+	if err != nil {
+		return err
+	}
+
+	res, err := fc.sync.SyncVehicle(c.Context(), tenant, int64(tokenID), service.SyncOpts{Cooldown: lazySyncCooldown})
+	if err != nil {
+		if errors.Is(err, service.ErrVehicleNotFound) {
+			return fiber.NewError(fiber.StatusNotFound, "vehicle not found")
+		}
+		// A Fetch-API failure is upstream — surface 502 and keep serving cached
+		// groups below would be nicer, but the merge didn't run, so report it.
+		fc.logger.Err(err).Str("tenant", tenant.ID).Int64("token_id", int64(tokenID)).
+			Msg("sync vehicle groups")
+		return fiber.NewError(fiber.StatusBadGateway, "failed to sync vehicle groups")
+	}
+
+	groups, err := fc.groups.VehicleGroups(c.Context(), tenant.ID, int64(tokenID))
+	if err != nil {
+		fc.logger.Err(err).Str("tenant", tenant.ID).Int64("token_id", int64(tokenID)).
+			Msg("load vehicle groups after sync")
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to load vehicle groups")
+	}
+	if groups == nil {
+		groups = []service.GroupRef{}
+	}
+	return c.JSON(fiber.Map{"groups": groups, "synced": !res.Skipped, "added": res.Added})
 }
 
 // republishVehicles (re)publishes the group-membership attestation for each

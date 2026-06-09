@@ -47,20 +47,53 @@ func NewFetchAPI(logger zerolog.Logger, settings *config.Settings, authProvider 
 
 // ListByDID pulls the most recent `limit` CEs for a vehicle DID and returns
 // only the ones whose type prefixes match document attestations (parsed or raw).
+// Document filtering is client-side; for a single exact type prefer the
+// server-side-filtered ListByDIDAndType.
 func (f *FetchAPI) ListByDID(tenant models.Tenant, tokenDID string, limit int) ([]AttestationEntry, error) {
+	entries, err := f.queryCloudEvents(tenant, tokenDID, limit, "")
+	if err != nil {
+		return nil, err
+	}
+	out := entries[:0]
+	for _, e := range entries {
+		if isDocumentType(e.Type) {
+			out = append(out, e)
+		}
+	}
+	return out, nil
+}
+
+// ListByDIDAndType pulls the most recent `limit` CEs of exactly `ceType` (e.g.
+// dimo.document.vehicle.groups) for a vehicle DID. The type filter is applied
+// server-side via fetch-api's cloudEvents `filter: { type: ... }` argument, so
+// `limit` bounds the matched-type count directly — a high-volume unrelated CE
+// type can't crowd the target type out of the window.
+func (f *FetchAPI) ListByDIDAndType(tenant models.Tenant, tokenDID, ceType string, limit int) ([]AttestationEntry, error) {
+	return f.queryCloudEvents(tenant, tokenDID, limit, ceType)
+}
+
+// queryCloudEvents runs the fetch-api GraphQL cloudEvents query for a DID and
+// returns the parsed entries verbatim (no client-side filtering). When
+// typeFilter is non-empty it is pushed into the query's `filter: { type: ... }`
+// argument so fetch-api filters by CE type server-side.
+func (f *FetchAPI) queryCloudEvents(tenant models.Tenant, tokenDID string, limit int, typeFilter string) ([]AttestationEntry, error) {
 	assetJWT, err := f.authProvider.GetAssetJWT(tenant, tokenDID)
 	if err != nil {
 		return nil, fmt.Errorf("asset JWT: %w", err)
 	}
 
-	// fetch-api is a GraphQL endpoint (POST /query). Request the recent cloud
-	// events for the DID; callers filter by type in-process.
+	// fetch-api is a GraphQL endpoint (POST /query). filter:{type} narrows by CE
+	// type server-side; omitted when typeFilter is empty (callers filter in-process).
+	filterArg := ""
+	if typeFilter != "" {
+		filterArg = fmt.Sprintf(", filter: { type: %q }", typeFilter)
+	}
 	gqlQuery := fmt.Sprintf(`query {
-  cloudEvents(did: %q, limit: %d) {
+  cloudEvents(did: %q, limit: %d%s) {
     data
     header { id type source producer subject time }
   }
-}`, tokenDID, limit)
+}`, tokenDID, limit, filterArg)
 	body, err := json.Marshal(map[string]string{"query": gqlQuery})
 	if err != nil {
 		return nil, fmt.Errorf("marshal fetch request: %w", err)
@@ -117,9 +150,7 @@ func (f *FetchAPI) ListByDID(tenant models.Tenant, tokenDID string, limit int) (
 			entry.Data = json.RawMessage(*ce.Data)
 		}
 		entry.DataBase64 = ce.DataBase64
-		if isDocumentType(entry.Type) {
-			entries = append(entries, entry)
-		}
+		entries = append(entries, entry)
 	}
 	return entries, nil
 }

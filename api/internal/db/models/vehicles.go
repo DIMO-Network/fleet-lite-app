@@ -24,92 +24,102 @@ import (
 
 // Vehicle is an object representing the database table.
 type Vehicle struct {
-	TenantID     string      `boil:"tenant_id" json:"tenant_id" toml:"tenant_id" yaml:"tenant_id"`
-	TokenID      int64       `boil:"token_id" json:"token_id" toml:"token_id" yaml:"token_id"`
-	OwnerAddress null.String `boil:"owner_address" json:"owner_address,omitempty" toml:"owner_address" yaml:"owner_address,omitempty"`
-	Make         null.String `boil:"make" json:"make,omitempty" toml:"make" yaml:"make,omitempty"`
-	Model        null.String `boil:"model" json:"model,omitempty" toml:"model" yaml:"model,omitempty"`
-	Year         null.Int    `boil:"year" json:"year,omitempty" toml:"year" yaml:"year,omitempty"`
-	DefinitionID null.String `boil:"definition_id" json:"definition_id,omitempty" toml:"definition_id" yaml:"definition_id,omitempty"`
-	DeviceType   null.String `boil:"device_type" json:"device_type,omitempty" toml:"device_type" yaml:"device_type,omitempty"`
-	Imei         null.String `boil:"imei" json:"imei,omitempty" toml:"imei" yaml:"imei,omitempty"`
-	Serial       null.String `boil:"serial" json:"serial,omitempty" toml:"serial" yaml:"serial,omitempty"`
-	MintedAt     null.Time   `boil:"minted_at" json:"minted_at,omitempty" toml:"minted_at" yaml:"minted_at,omitempty"`
-	Raw          null.JSON   `boil:"raw" json:"raw,omitempty" toml:"raw" yaml:"raw,omitempty"`
-	SyncedAt     time.Time   `boil:"synced_at" json:"synced_at" toml:"synced_at" yaml:"synced_at"`
-	CreatedAt    time.Time   `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
-	UpdatedAt    time.Time   `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
+	TenantID        string      `boil:"tenant_id" json:"tenant_id" toml:"tenant_id" yaml:"tenant_id"`
+	TokenID         int64       `boil:"token_id" json:"token_id" toml:"token_id" yaml:"token_id"`
+	OwnerAddress    null.String `boil:"owner_address" json:"owner_address,omitempty" toml:"owner_address" yaml:"owner_address,omitempty"`
+	Make            null.String `boil:"make" json:"make,omitempty" toml:"make" yaml:"make,omitempty"`
+	Model           null.String `boil:"model" json:"model,omitempty" toml:"model" yaml:"model,omitempty"`
+	Year            null.Int    `boil:"year" json:"year,omitempty" toml:"year" yaml:"year,omitempty"`
+	DefinitionID    null.String `boil:"definition_id" json:"definition_id,omitempty" toml:"definition_id" yaml:"definition_id,omitempty"`
+	DeviceType      null.String `boil:"device_type" json:"device_type,omitempty" toml:"device_type" yaml:"device_type,omitempty"`
+	Imei            null.String `boil:"imei" json:"imei,omitempty" toml:"imei" yaml:"imei,omitempty"`
+	Serial          null.String `boil:"serial" json:"serial,omitempty" toml:"serial" yaml:"serial,omitempty"`
+	MintedAt        null.Time   `boil:"minted_at" json:"minted_at,omitempty" toml:"minted_at" yaml:"minted_at,omitempty"`
+	Raw             null.JSON   `boil:"raw" json:"raw,omitempty" toml:"raw" yaml:"raw,omitempty"`
+	SyncedAt        time.Time   `boil:"synced_at" json:"synced_at" toml:"synced_at" yaml:"synced_at"`
+	CreatedAt       time.Time   `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
+	UpdatedAt       time.Time   `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
+	GroupsUpdatedAt null.Time   `boil:"groups_updated_at" json:"groups_updated_at,omitempty" toml:"groups_updated_at" yaml:"groups_updated_at,omitempty"`
+	LastGroupSyncAt null.Time   `boil:"last_group_sync_at" json:"last_group_sync_at,omitempty" toml:"last_group_sync_at" yaml:"last_group_sync_at,omitempty"`
 
 	R *vehicleR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L vehicleL  `boil:"-" json:"-" toml:"-" yaml:"-"`
 }
 
 var VehicleColumns = struct {
-	TenantID     string
-	TokenID      string
-	OwnerAddress string
-	Make         string
-	Model        string
-	Year         string
-	DefinitionID string
-	DeviceType   string
-	Imei         string
-	Serial       string
-	MintedAt     string
-	Raw          string
-	SyncedAt     string
-	CreatedAt    string
-	UpdatedAt    string
+	TenantID        string
+	TokenID         string
+	OwnerAddress    string
+	Make            string
+	Model           string
+	Year            string
+	DefinitionID    string
+	DeviceType      string
+	Imei            string
+	Serial          string
+	MintedAt        string
+	Raw             string
+	SyncedAt        string
+	CreatedAt       string
+	UpdatedAt       string
+	GroupsUpdatedAt string
+	LastGroupSyncAt string
 }{
-	TenantID:     "tenant_id",
-	TokenID:      "token_id",
-	OwnerAddress: "owner_address",
-	Make:         "make",
-	Model:        "model",
-	Year:         "year",
-	DefinitionID: "definition_id",
-	DeviceType:   "device_type",
-	Imei:         "imei",
-	Serial:       "serial",
-	MintedAt:     "minted_at",
-	Raw:          "raw",
-	SyncedAt:     "synced_at",
-	CreatedAt:    "created_at",
-	UpdatedAt:    "updated_at",
+	TenantID:        "tenant_id",
+	TokenID:         "token_id",
+	OwnerAddress:    "owner_address",
+	Make:            "make",
+	Model:           "model",
+	Year:            "year",
+	DefinitionID:    "definition_id",
+	DeviceType:      "device_type",
+	Imei:            "imei",
+	Serial:          "serial",
+	MintedAt:        "minted_at",
+	Raw:             "raw",
+	SyncedAt:        "synced_at",
+	CreatedAt:       "created_at",
+	UpdatedAt:       "updated_at",
+	GroupsUpdatedAt: "groups_updated_at",
+	LastGroupSyncAt: "last_group_sync_at",
 }
 
 var VehicleTableColumns = struct {
-	TenantID     string
-	TokenID      string
-	OwnerAddress string
-	Make         string
-	Model        string
-	Year         string
-	DefinitionID string
-	DeviceType   string
-	Imei         string
-	Serial       string
-	MintedAt     string
-	Raw          string
-	SyncedAt     string
-	CreatedAt    string
-	UpdatedAt    string
+	TenantID        string
+	TokenID         string
+	OwnerAddress    string
+	Make            string
+	Model           string
+	Year            string
+	DefinitionID    string
+	DeviceType      string
+	Imei            string
+	Serial          string
+	MintedAt        string
+	Raw             string
+	SyncedAt        string
+	CreatedAt       string
+	UpdatedAt       string
+	GroupsUpdatedAt string
+	LastGroupSyncAt string
 }{
-	TenantID:     "vehicles.tenant_id",
-	TokenID:      "vehicles.token_id",
-	OwnerAddress: "vehicles.owner_address",
-	Make:         "vehicles.make",
-	Model:        "vehicles.model",
-	Year:         "vehicles.year",
-	DefinitionID: "vehicles.definition_id",
-	DeviceType:   "vehicles.device_type",
-	Imei:         "vehicles.imei",
-	Serial:       "vehicles.serial",
-	MintedAt:     "vehicles.minted_at",
-	Raw:          "vehicles.raw",
-	SyncedAt:     "vehicles.synced_at",
-	CreatedAt:    "vehicles.created_at",
-	UpdatedAt:    "vehicles.updated_at",
+	TenantID:        "vehicles.tenant_id",
+	TokenID:         "vehicles.token_id",
+	OwnerAddress:    "vehicles.owner_address",
+	Make:            "vehicles.make",
+	Model:           "vehicles.model",
+	Year:            "vehicles.year",
+	DefinitionID:    "vehicles.definition_id",
+	DeviceType:      "vehicles.device_type",
+	Imei:            "vehicles.imei",
+	Serial:          "vehicles.serial",
+	MintedAt:        "vehicles.minted_at",
+	Raw:             "vehicles.raw",
+	SyncedAt:        "vehicles.synced_at",
+	CreatedAt:       "vehicles.created_at",
+	UpdatedAt:       "vehicles.updated_at",
+	GroupsUpdatedAt: "vehicles.groups_updated_at",
+	LastGroupSyncAt: "vehicles.last_group_sync_at",
 }
 
 // Generated where
@@ -177,37 +187,41 @@ func (w whereHelpernull_JSON) IsNull() qm.QueryMod    { return qmhelper.WhereIsN
 func (w whereHelpernull_JSON) IsNotNull() qm.QueryMod { return qmhelper.WhereIsNotNull(w.field) }
 
 var VehicleWhere = struct {
-	TenantID     whereHelperstring
-	TokenID      whereHelperint64
-	OwnerAddress whereHelpernull_String
-	Make         whereHelpernull_String
-	Model        whereHelpernull_String
-	Year         whereHelpernull_Int
-	DefinitionID whereHelpernull_String
-	DeviceType   whereHelpernull_String
-	Imei         whereHelpernull_String
-	Serial       whereHelpernull_String
-	MintedAt     whereHelpernull_Time
-	Raw          whereHelpernull_JSON
-	SyncedAt     whereHelpertime_Time
-	CreatedAt    whereHelpertime_Time
-	UpdatedAt    whereHelpertime_Time
+	TenantID        whereHelperstring
+	TokenID         whereHelperint64
+	OwnerAddress    whereHelpernull_String
+	Make            whereHelpernull_String
+	Model           whereHelpernull_String
+	Year            whereHelpernull_Int
+	DefinitionID    whereHelpernull_String
+	DeviceType      whereHelpernull_String
+	Imei            whereHelpernull_String
+	Serial          whereHelpernull_String
+	MintedAt        whereHelpernull_Time
+	Raw             whereHelpernull_JSON
+	SyncedAt        whereHelpertime_Time
+	CreatedAt       whereHelpertime_Time
+	UpdatedAt       whereHelpertime_Time
+	GroupsUpdatedAt whereHelpernull_Time
+	LastGroupSyncAt whereHelpernull_Time
 }{
-	TenantID:     whereHelperstring{field: "\"vehicles\".\"tenant_id\""},
-	TokenID:      whereHelperint64{field: "\"vehicles\".\"token_id\""},
-	OwnerAddress: whereHelpernull_String{field: "\"vehicles\".\"owner_address\""},
-	Make:         whereHelpernull_String{field: "\"vehicles\".\"make\""},
-	Model:        whereHelpernull_String{field: "\"vehicles\".\"model\""},
-	Year:         whereHelpernull_Int{field: "\"vehicles\".\"year\""},
-	DefinitionID: whereHelpernull_String{field: "\"vehicles\".\"definition_id\""},
-	DeviceType:   whereHelpernull_String{field: "\"vehicles\".\"device_type\""},
-	Imei:         whereHelpernull_String{field: "\"vehicles\".\"imei\""},
-	Serial:       whereHelpernull_String{field: "\"vehicles\".\"serial\""},
-	MintedAt:     whereHelpernull_Time{field: "\"vehicles\".\"minted_at\""},
-	Raw:          whereHelpernull_JSON{field: "\"vehicles\".\"raw\""},
-	SyncedAt:     whereHelpertime_Time{field: "\"vehicles\".\"synced_at\""},
-	CreatedAt:    whereHelpertime_Time{field: "\"vehicles\".\"created_at\""},
-	UpdatedAt:    whereHelpertime_Time{field: "\"vehicles\".\"updated_at\""},
+	TenantID:        whereHelperstring{field: "\"vehicles\".\"tenant_id\""},
+	TokenID:         whereHelperint64{field: "\"vehicles\".\"token_id\""},
+	OwnerAddress:    whereHelpernull_String{field: "\"vehicles\".\"owner_address\""},
+	Make:            whereHelpernull_String{field: "\"vehicles\".\"make\""},
+	Model:           whereHelpernull_String{field: "\"vehicles\".\"model\""},
+	Year:            whereHelpernull_Int{field: "\"vehicles\".\"year\""},
+	DefinitionID:    whereHelpernull_String{field: "\"vehicles\".\"definition_id\""},
+	DeviceType:      whereHelpernull_String{field: "\"vehicles\".\"device_type\""},
+	Imei:            whereHelpernull_String{field: "\"vehicles\".\"imei\""},
+	Serial:          whereHelpernull_String{field: "\"vehicles\".\"serial\""},
+	MintedAt:        whereHelpernull_Time{field: "\"vehicles\".\"minted_at\""},
+	Raw:             whereHelpernull_JSON{field: "\"vehicles\".\"raw\""},
+	SyncedAt:        whereHelpertime_Time{field: "\"vehicles\".\"synced_at\""},
+	CreatedAt:       whereHelpertime_Time{field: "\"vehicles\".\"created_at\""},
+	UpdatedAt:       whereHelpertime_Time{field: "\"vehicles\".\"updated_at\""},
+	GroupsUpdatedAt: whereHelpernull_Time{field: "\"vehicles\".\"groups_updated_at\""},
+	LastGroupSyncAt: whereHelpernull_Time{field: "\"vehicles\".\"last_group_sync_at\""},
 }
 
 // VehicleRels is where relationship names are stored.
@@ -247,9 +261,9 @@ func (r *vehicleR) GetTenant() *Tenant {
 type vehicleL struct{}
 
 var (
-	vehicleAllColumns            = []string{"tenant_id", "token_id", "owner_address", "make", "model", "year", "definition_id", "device_type", "imei", "serial", "minted_at", "raw", "synced_at", "created_at", "updated_at"}
+	vehicleAllColumns            = []string{"tenant_id", "token_id", "owner_address", "make", "model", "year", "definition_id", "device_type", "imei", "serial", "minted_at", "raw", "synced_at", "created_at", "updated_at", "groups_updated_at", "last_group_sync_at"}
 	vehicleColumnsWithoutDefault = []string{"tenant_id", "token_id"}
-	vehicleColumnsWithDefault    = []string{"owner_address", "make", "model", "year", "definition_id", "device_type", "imei", "serial", "minted_at", "raw", "synced_at", "created_at", "updated_at"}
+	vehicleColumnsWithDefault    = []string{"owner_address", "make", "model", "year", "definition_id", "device_type", "imei", "serial", "minted_at", "raw", "synced_at", "created_at", "updated_at", "groups_updated_at", "last_group_sync_at"}
 	vehiclePrimaryKeyColumns     = []string{"tenant_id", "token_id"}
 	vehicleGeneratedColumns      = []string{}
 )

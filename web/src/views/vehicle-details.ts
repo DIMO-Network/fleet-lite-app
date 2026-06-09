@@ -3,6 +3,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { ApiService } from '../services/api-service.ts';
 import { FleetCache } from '../services/fleet-cache.ts';
+import { FleetGroupService } from '../services/fleet-group-service.ts';
 import { Vehicle } from '../types/vehicle.ts';
 import { TelemetryService } from '../services/telemetry-service.ts';
 import { SignalLatest, TimeSeriesBucket } from '../types/telemetry.ts';
@@ -59,6 +60,12 @@ export class VehicleDetailsView extends LitElement {
             console.error('Failed to load vehicle', e);
         }
 
+        // Lazy group sync: pull this vehicle's group attestations and refresh the
+        // displayed groups. Fire-and-forget so it never delays the page — the
+        // vehicle already rendered with its cached groups; this updates them if a
+        // sibling/foreign app changed membership. Cooldown-gated server-side.
+        this.syncVehicleGroups();
+
         // Telemetry. We parallelize latest + 7-day speed/distance to keep TTFP low.
         const tokenIdNum = Number(this.tokenId);
         const to = new Date();
@@ -87,6 +94,27 @@ export class VehicleDetailsView extends LitElement {
         if (distRes.status === 'fulfilled')  this.distanceBuckets = distRes.value.buckets || [];
 
         this.loading = false;
+    }
+
+    /**
+     * Best-effort lazy group sync. Calls the per-vehicle sync endpoint and, if it
+     * changed this vehicle's groups, updates the displayed list and invalidates
+     * the fleet overview cache so the list/map reflect the new membership on the
+     * next visit. Swallows errors — the page is fully usable without it, and the
+     * weekly cron is the backstop.
+     */
+    private async syncVehicleGroups() {
+        const tokenIdNum = Number(this.tokenId);
+        if (!tokenIdNum) return;
+        try {
+            const res = await FleetGroupService.getInstance().syncGroups(tokenIdNum);
+            // Ignore if the route moved on to another vehicle while we were pulling.
+            if (!this.vehicle || Number(this.tokenId) !== tokenIdNum) return;
+            this.vehicle = { ...this.vehicle, groups: res.groups };
+            if (res.added > 0) FleetCache.invalidate();
+        } catch (e) {
+            console.warn('Failed to sync vehicle groups', e);
+        }
     }
 
     /**
