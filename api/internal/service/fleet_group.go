@@ -244,6 +244,13 @@ func (s *FleetGroupService) LoadVehicleGroups(ctx context.Context, exec boil.Con
 	return groups, nil
 }
 
+// VehicleGroups loads a single vehicle's current groups using the service's own
+// reader. Convenience for the write-path attestation goroutine, which runs on a
+// background context (the request context is gone by then).
+func (s *FleetGroupService) VehicleGroups(ctx context.Context, tenantID string, tokenID int64) ([]GroupRef, error) {
+	return s.LoadVehicleGroups(ctx, s.pdb.DBS().Reader, tenantID, tokenID)
+}
+
 // VehicleGroupsMap returns, for the whole tenant, a map of token id -> the groups
 // that vehicle belongs to. Used to attach `groups` to the /vehicles list in one
 // query rather than per-vehicle.

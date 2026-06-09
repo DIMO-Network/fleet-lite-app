@@ -72,7 +72,7 @@ func App(
 	// Controllers
 	identityCtrl := controllers.NewIdentityController(settings, logger)
 	vehiclesCtrl := controllers.NewVehiclesController(settings, logger, vehicleSvc, groupSvc)
-	fleetGroupsCtrl := controllers.NewFleetGroupsController(logger, groupSvc)
+	fleetGroupsCtrl := controllers.NewFleetGroupsController(logger, groupSvc, attestSvc)
 	settingsCtrl := controllers.NewSettingsController(settings, logger)
 	tenantsCtrl := controllers.NewTenantsController(logger, settings, tenantSvc, vehicleSvc, identity, authProvider)
 
