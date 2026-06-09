@@ -12,6 +12,15 @@ type GraphQlData[T any] struct {
 	Data T `json:"data"`
 }
 
+// GroupRef is the slim, public view of a fleet group a vehicle belongs to. It is
+// the shape embedded both in the /vehicles response (for the map/list filter)
+// and in the per-vehicle group-membership attestation `data.groups`.
+type GroupRef struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Color string `json:"color"`
+}
+
 // Vehicle is the slim view of an identity-api vehicle node that fleet-lite-app cares about.
 type Vehicle struct {
 	ID                string             `json:"id"`
@@ -25,6 +34,9 @@ type Vehicle struct {
 	// Populated by VehicleService when assembling responses — it isn't part of
 	// the identity-api shape and is never present in the stored `raw` JSON.
 	IsFavorite bool `json:"isFavorite"`
+	// Groups the vehicle belongs to, for the fleet-overview map/list filter.
+	// Always a (possibly empty) slice in the /vehicles response.
+	Groups []GroupRef `json:"groups"`
 }
 
 type SyntheticDevice struct {

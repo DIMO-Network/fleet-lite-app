@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"github.com/DIMO-Network/fleet-lite-app/internal/config"
+	"github.com/DIMO-Network/fleet-lite-app/internal/models"
 	"github.com/DIMO-Network/fleet-lite-app/internal/service"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
@@ -11,13 +12,15 @@ type VehiclesController struct {
 	settings   *config.Settings
 	logger     *zerolog.Logger
 	vehicleSvc *service.VehicleService
+	groupSvc   *service.FleetGroupService
 }
 
-func NewVehiclesController(settings *config.Settings, logger *zerolog.Logger, vehicleSvc *service.VehicleService) *VehiclesController {
+func NewVehiclesController(settings *config.Settings, logger *zerolog.Logger, vehicleSvc *service.VehicleService, groupSvc *service.FleetGroupService) *VehiclesController {
 	return &VehiclesController{
 		settings:   settings,
 		logger:     logger,
 		vehicleSvc: vehicleSvc,
+		groupSvc:   groupSvc,
 	}
 }
 
@@ -33,6 +36,22 @@ func (v *VehiclesController) GetVehicles(c *fiber.Ctx) error {
 	if err != nil {
 		v.logger.Err(err).Str("tenant", tenant.ID).Msg("failed to list tenant vehicles")
 		return fiber.NewError(fiber.StatusBadGateway, "failed to fetch vehicles")
+	}
+
+	// Attach group membership for the fleet-overview map/list filter. Best-effort:
+	// a failure here shouldn't blank the vehicle list. Each vehicle always carries
+	// a (possibly empty) groups slice.
+	groupsByToken, err := v.groupSvc.VehicleGroupsMap(c.Context(), tenant.ID)
+	if err != nil {
+		v.logger.Err(err).Str("tenant", tenant.ID).Msg("failed to load vehicle groups")
+		groupsByToken = nil
+	}
+	for i := range vehicles {
+		if g := groupsByToken[vehicles[i].TokenID]; g != nil {
+			vehicles[i].Groups = g
+		} else {
+			vehicles[i].Groups = []models.GroupRef{}
+		}
 	}
 	return c.JSON(fiber.Map{"vehicles": vehicles})
 }

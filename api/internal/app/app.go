@@ -36,6 +36,7 @@ func App(
 	telemetryAPI service.TelemetryAPIService,
 	tenantSvc *service.TenantService,
 	vehicleSvc *service.VehicleService,
+	groupSvc *service.FleetGroupService,
 ) *fiber.App {
 	appCommitHash = commitHash
 
@@ -70,7 +71,8 @@ func App(
 
 	// Controllers
 	identityCtrl := controllers.NewIdentityController(settings, logger)
-	vehiclesCtrl := controllers.NewVehiclesController(settings, logger, vehicleSvc)
+	vehiclesCtrl := controllers.NewVehiclesController(settings, logger, vehicleSvc, groupSvc)
+	fleetGroupsCtrl := controllers.NewFleetGroupsController(logger, groupSvc)
 	settingsCtrl := controllers.NewSettingsController(settings, logger)
 	tenantsCtrl := controllers.NewTenantsController(logger, settings, tenantSvc, vehicleSvc, identity, authProvider)
 
@@ -105,6 +107,15 @@ func App(
 	tenantApp.Get("/vehicles/:tokenID", vehiclesCtrl.GetVehicle)
 	tenantApp.Post("/vehicles/:tokenID/favorite", vehiclesCtrl.AddFavorite)
 	tenantApp.Delete("/vehicles/:tokenID/favorite", vehiclesCtrl.RemoveFavorite)
+
+	// Fleet groups (tenant-scoped CRUD + vehicle membership)
+	tenantApp.Get("/fleet/groups", fleetGroupsCtrl.GetGroups)
+	tenantApp.Post("/fleet/groups", fleetGroupsCtrl.CreateGroup)
+	tenantApp.Get("/fleet/groups/:id", fleetGroupsCtrl.GetGroup)
+	tenantApp.Patch("/fleet/groups/:id", fleetGroupsCtrl.UpdateGroup)
+	tenantApp.Delete("/fleet/groups/:id", fleetGroupsCtrl.DeleteGroup)
+	tenantApp.Post("/fleet/vehicles/:tokenID/group/:groupID", fleetGroupsCtrl.AddVehicleToGroup)
+	tenantApp.Delete("/fleet/vehicles/:tokenID/group/:groupID", fleetGroupsCtrl.RemoveVehicleFromGroup)
 
 	// Telemetry (vehicle-details charts)
 	telemetryCtrl := controllers.NewTelemetryController(logger, settings, vehicleSvc, telemetryAPI)
