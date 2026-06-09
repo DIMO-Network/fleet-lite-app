@@ -1,0 +1,64 @@
+{{- range .Values.cronJobs }}
+{{- if .enabled }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "fleet-lite-app.fullname" $ }}-{{ .name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "fleet-lite-app.labels" $ | nindent 4 }}
+spec:
+  schedule: {{ .schedule | quote }}
+  concurrencyPolicy: {{ .concurrencyPolicy | default "Forbid" }}
+  successfulJobsHistoryLimit: {{ .successfulJobsHistoryLimit | default 3 }}
+  failedJobsHistoryLimit: {{ .failedJobsHistoryLimit | default 3 }}
+  jobTemplate:
+    spec:
+      backoffLimit: {{ .backoffLimit | default 1 }}
+      activeDeadlineSeconds: {{ .activeDeadlineSeconds | default 1800 }}
+      ttlSecondsAfterFinished: {{ .ttlSecondsAfterFinished | default 3600 }}
+      template:
+        metadata:
+          labels:
+            {{- include "fleet-lite-app.selectorLabels" $ | nindent 12 }}
+            cronjob: {{ .name }}
+          {{- with $.Values.podAnnotations }}
+          annotations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        spec:
+          {{- with $.Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          serviceAccountName: {{ include "fleet-lite-app.serviceAccountName" $ }}
+          securityContext:
+            {{- toYaml $.Values.podSecurityContext | nindent 12 }}
+          restartPolicy: {{ .restartPolicy | default "Never" }}
+          terminationGracePeriodSeconds: {{ .terminationGracePeriodSeconds | default 30 }}
+          containers:
+            - name: {{ .name }}
+              securityContext:
+                {{- toYaml $.Values.securityContext | nindent 16 }}
+              image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag | default $.Chart.AppVersion }}"
+              imagePullPolicy: {{ $.Values.image.pullPolicy }}
+              command:
+                {{- toYaml .command | nindent 16 }}
+              envFrom:
+                - configMapRef:
+                    name: {{ include "fleet-lite-app.fullname" $ }}-config
+                - secretRef:
+                    name: {{ include "fleet-lite-app.fullname" $ }}-secret
+              resources:
+                {{- toYaml (.resources | default $.Values.resources) | nindent 16 }}
+          {{- with $.Values.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $.Values.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}
+{{- end }}

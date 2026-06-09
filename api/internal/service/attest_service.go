@@ -30,7 +30,12 @@ import (
 type AttestService interface {
 	AttestDocumentPair(tenant models.Tenant, input AttestInput) (*AttestResult, error)
 	Tombstone(tenant models.Tenant, parsedID, rawID, tokenDID string) (*AttestResult, error)
+	AttestVehicleGroups(tenant models.Tenant, tokenID uint64, groups []GroupRef) (string, error)
 }
+
+// VehicleGroupsCloudEventType is the CE type for a vehicle's group-membership
+// document. fetch-api admits it via its dimo.document.* prefix filter.
+const VehicleGroupsCloudEventType = "dimo.document.vehicle.groups"
 
 type AttestInput struct {
 	TokenID       string // numeric tokenID as string, for logging
@@ -290,4 +295,48 @@ func (s *attestService) Tombstone(tenant models.Tenant, parsedID, rawID, tokenDI
 	return &AttestResult{
 		ParsedSubmission: SubmissionInfo{ID: ev.ID, Type: ev.Type, Source: ev.Source},
 	}, nil
+}
+
+// AttestVehicleGroups publishes the vehicle's current group membership as a
+// single signed, parsed CloudEvent (no raw pair). The subject is the vehicle
+// DID; data is {"groups":[{id,name,color},...]}. An empty groups slice is valid
+// and represents "in no groups". Returns the new event id.
+//
+// The signature is computed over the JSON of the data map, matching the parsed
+// CE convention in AttestDocumentPair so fetch-api/verifiers can re-derive it.
+func (s *attestService) AttestVehicleGroups(tenant models.Tenant, tokenID uint64, groups []GroupRef) (string, error) {
+	if groups == nil {
+		groups = []GroupRef{}
+	}
+	developerJWT, err := s.authProvider.GetDeveloperJWT(tenant)
+	if err != nil {
+		return "", fmt.Errorf("developer JWT: %w", err)
+	}
+
+	dataMap := map[string]interface{}{"groups": groups}
+	dataBytes, err := json.Marshal(dataMap)
+	if err != nil {
+		return "", fmt.Errorf("marshal groups data: %w", err)
+	}
+	sig, err := signDataSecp256k1(dataBytes, tenant.DIMOPrivateKey)
+	if err != nil {
+		return "", fmt.Errorf("sign groups data: %w", err)
+	}
+
+	ev := signedCloudEvent{
+		SpecVersion:     "1.0",
+		ID:              uuid.New().String(),
+		Source:          tenant.ClientID,
+		Type:            VehicleGroupsCloudEventType,
+		Subject:         s.authProvider.BuildVehicleDID(tokenID),
+		Time:            time.Now().UTC().Format(time.RFC3339),
+		DataContentType: "application/json",
+		Data:            dataMap,
+		Signature:       sig,
+	}
+	s.logger.Info().Uint64("tokenID", tokenID).Int("groups", len(groups)).Msg("Submitting vehicle groups cloud event")
+	if err := s.submitCloudEvent(ev, developerJWT); err != nil {
+		return "", fmt.Errorf("submit vehicle groups cloud event: %w", err)
+	}
+	return ev.ID, nil
 }
