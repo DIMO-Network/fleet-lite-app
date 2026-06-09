@@ -88,7 +88,7 @@ serviceMonitor:
   interval: 30s
 cronJobs:
   - name: import-group-attestations-warm
-    enabled: false
+    enabled: true
     schedule: 0 6 * * *
     command:
       - /bin/sh
@@ -103,7 +103,7 @@ cronJobs:
         cpu: 500m
         memory: 256Mi
   - name: import-group-attestations-full
-    enabled: false
+    enabled: true
     schedule: 0 4 * * 0
     activeDeadlineSeconds: 3600
     command:
