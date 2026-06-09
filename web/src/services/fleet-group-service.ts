@@ -1,5 +1,16 @@
 import { ApiService } from './api-service.ts';
 import { FleetGroup, FleetGroupsResponse } from '../types/group.ts';
+import { VehicleGroupRef } from '../types/vehicle.ts';
+
+/** Response of POST /fleet/vehicles/:tokenId/groups/sync (lazy per-vehicle sync). */
+export interface VehicleGroupsSyncResponse {
+    /** The vehicle's current groups after the additive merge. */
+    groups: VehicleGroupRef[];
+    /** false when the cooldown short-circuited the pull (cached groups returned). */
+    synced: boolean;
+    /** Memberships added by this sync. */
+    added: number;
+}
 
 /**
  * Singleton client over the tenant-scoped /fleet/groups API. ApiService injects
@@ -52,6 +63,19 @@ export class FleetGroupService {
     public removeVehicle(tokenId: number, groupId: string): Promise<void> {
         return ApiService.getInstance().delete<void>(
             `/fleet/vehicles/${tokenId}/group/${encodeURIComponent(groupId)}`,
+        );
+    }
+
+    /**
+     * POST /fleet/vehicles/:tokenId/groups/sync — lazy per-vehicle sync. Pulls
+     * this vehicle's group attestations, additively merges them, and returns its
+     * current groups. Cooldown-gated server-side, so it's cheap to call on every
+     * vehicle view.
+     */
+    public syncGroups(tokenId: number): Promise<VehicleGroupsSyncResponse> {
+        return ApiService.getInstance().post<VehicleGroupsSyncResponse>(
+            `/fleet/vehicles/${tokenId}/groups/sync`,
+            {},
         );
     }
 }

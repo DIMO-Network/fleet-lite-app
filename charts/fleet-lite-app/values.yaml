@@ -86,10 +86,33 @@ serviceMonitor:
   path: /metrics
   port: mon-http
   interval: 30s
+# Group-sync (attestation-backed) is activity-tiered — see docs/GROUP_SYNC.md.
+# A daily "warm" pass covers tenants with a recent member login (active fleets);
+# a weekly "full" pass sweeps every vehicle so dormant fleets and foreign-app
+# changes still converge within a week. Both ship opt-in (enabled: false) and
+# should be validated with `-dry-run` before being switched on in an env.
 cronJobs:
-  - name: import-group-attestations
+  # Daily warm pass: only tenants whose members logged in within ~7 days.
+  - name: import-group-attestations-warm
     enabled: false
-    schedule: 0 * * * *
+    schedule: 0 6 * * *
+    command:
+      - /bin/sh
+      - '-c'
+      - |
+        /fleet-lite-app import-group-attestations -warm-only; exit $?
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+  # Weekly full pass: every vehicle of every tenant (catch-all).
+  - name: import-group-attestations-full
+    enabled: false
+    schedule: 0 4 * * 0
+    activeDeadlineSeconds: 3600
     command:
       - /bin/sh
       - '-c'

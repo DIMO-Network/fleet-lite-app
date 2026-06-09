@@ -173,6 +173,17 @@ func (s *TenantService) TouchLogin(ctx context.Context, tenantID, wallet, email 
 	return err
 }
 
+// HasRecentLogin reports whether any of the tenant's members logged in within
+// the given window. Drives the group-sync cron's warm/cold tiering: a tenant is
+// "warm" (gets the daily pass) if someone is actively using its fleet.
+func (s *TenantService) HasRecentLogin(ctx context.Context, tenantID string, within time.Duration) (bool, error) {
+	threshold := time.Now().Add(-within)
+	return dbmodels.TenantUsers(
+		dbmodels.TenantUserWhere.TenantID.EQ(tenantID),
+		dbmodels.TenantUserWhere.LastLoginAt.GTE(null.TimeFrom(threshold)),
+	).Exists(ctx, s.pdb.DBS().Reader)
+}
+
 // RemoveMember deletes a wallet's membership from a tenant.
 func (s *TenantService) RemoveMember(ctx context.Context, tenantID, wallet string) error {
 	_, err := dbmodels.TenantUsers(

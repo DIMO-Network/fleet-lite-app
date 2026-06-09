@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	dbmodels "github.com/DIMO-Network/fleet-lite-app/internal/db/models"
 	"github.com/DIMO-Network/fleet-lite-app/internal/models"
@@ -198,6 +199,7 @@ func (s *FleetGroupService) AddVehicle(ctx context.Context, tenantID string, tok
 	if err := m.Insert(ctx, s.pdb.DBS().Writer, boil.Infer()); err != nil {
 		return false, fmt.Errorf("add vehicle to group: %w", err)
 	}
+	s.touchGroupsUpdatedAt(ctx, tenantID, tokenID)
 	return true, nil
 }
 
@@ -215,7 +217,25 @@ func (s *FleetGroupService) RemoveVehicle(ctx context.Context, tenantID string, 
 	if err != nil {
 		return false, fmt.Errorf("remove vehicle from group: %w", err)
 	}
+	if n > 0 {
+		s.touchGroupsUpdatedAt(ctx, tenantID, tokenID)
+	}
 	return n > 0, nil
+}
+
+// touchGroupsUpdatedAt stamps the vehicle's groups_updated_at to now after a
+// local membership change. Lets the cron prioritise recently-changed vehicles
+// and is the Phase-2 write guard against the Fetch-API publish lag. Best
+// effort — a failure here doesn't undo the membership change, so it's logged
+// and swallowed.
+func (s *FleetGroupService) touchGroupsUpdatedAt(ctx context.Context, tenantID string, tokenID int64) {
+	if _, err := dbmodels.Vehicles(
+		dbmodels.VehicleWhere.TenantID.EQ(tenantID),
+		dbmodels.VehicleWhere.TokenID.EQ(tokenID),
+	).UpdateAll(ctx, s.pdb.DBS().Writer, dbmodels.M{"groups_updated_at": time.Now()}); err != nil {
+		s.logger.Warn().Err(err).Str("tenant_id", tenantID).Int64("token_id", tokenID).
+			Msg("stamp groups_updated_at")
+	}
 }
 
 // LoadVehicleGroups returns the groups a vehicle currently belongs to (tenant-

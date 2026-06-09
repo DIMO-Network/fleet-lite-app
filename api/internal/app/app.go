@@ -72,7 +72,8 @@ func App(
 	// Controllers
 	identityCtrl := controllers.NewIdentityController(settings, logger)
 	vehiclesCtrl := controllers.NewVehiclesController(settings, logger, vehicleSvc, groupSvc)
-	fleetGroupsCtrl := controllers.NewFleetGroupsController(logger, groupSvc, attestSvc)
+	groupSyncSvc := service.NewGroupSyncService(logger, pdb, fetchAPI, authProvider)
+	fleetGroupsCtrl := controllers.NewFleetGroupsController(logger, groupSvc, groupSyncSvc, attestSvc)
 	settingsCtrl := controllers.NewSettingsController(settings, logger)
 	tenantsCtrl := controllers.NewTenantsController(logger, settings, tenantSvc, vehicleSvc, identity, authProvider)
 
@@ -117,6 +118,7 @@ func App(
 	tenantApp.Delete("/fleet/groups/:id", fleetGroupsCtrl.DeleteGroup)
 	tenantApp.Post("/fleet/vehicles/:tokenID/group/:groupID", fleetGroupsCtrl.AddVehicleToGroup)
 	tenantApp.Delete("/fleet/vehicles/:tokenID/group/:groupID", fleetGroupsCtrl.RemoveVehicleFromGroup)
+	tenantApp.Post("/fleet/vehicles/:tokenID/groups/sync", fleetGroupsCtrl.SyncVehicleGroups)
 
 	// Telemetry (vehicle-details charts)
 	telemetryCtrl := controllers.NewTelemetryController(logger, settings, vehicleSvc, telemetryAPI)

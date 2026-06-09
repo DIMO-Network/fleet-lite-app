@@ -23,7 +23,7 @@ var curatedLatestSignals = []string{
 	"lowVoltageBatteryCurrentVoltage",                   // 12V battery (V)
 	"powertrainCombustionEngineDieselExhaustFluidLevel", // AdBlue % (diesel)
 	"powertrainTractionBatteryStateOfChargeCurrent",     // EV SoC %
-	"speed",                                             // current speed (km/h)
+	"speed", // current speed (km/h)
 }
 
 type TelemetryController struct {
