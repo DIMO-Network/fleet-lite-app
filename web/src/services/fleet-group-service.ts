@@ -10,6 +10,8 @@ export interface VehicleGroupsSyncResponse {
     synced: boolean;
     /** Memberships added by this sync. */
     added: number;
+    /** Memberships removed by this sync (Phase 2 reconcile; 0 when the removal gate is closed). */
+    removed: number;
 }
 
 /**

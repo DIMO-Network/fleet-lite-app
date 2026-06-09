@@ -132,10 +132,11 @@ func (p *importGroupAttestationsCmd) Execute(ctx context.Context, _ *flag.FlagSe
 				p.logger.Debug().Err(serr).Int64("token_id", v.TokenID).Msg("sync vehicle, skipping")
 				continue
 			}
-			if res.Added > 0 {
+			if res.Added > 0 || res.Removed > 0 {
 				changed++
 				p.logger.Info().Str("tenant_id", dt.ID).Int64("token_id", v.TokenID).
-					Int("added", res.Added).Bool("dry_run", p.dryRun).Msg("merged group attestations")
+					Int("added", res.Added).Int("removed", res.Removed).
+					Bool("dry_run", p.dryRun).Msg("reconciled group attestations")
 			}
 		}
 	}

@@ -66,16 +66,27 @@ stale sync can't revert anything.
 Producer is empty today (see Authoritative model), so Phase 2 starts by **making
 our own attestations self-identifying**:
 
-- **Write path:** stamp a stable `producer` on every CE we publish (pending
-  confirmation the Attest API persists it).
-- **Sync becomes hybrid:** **mirror** the latest CE from *our* producer (so removals
-  we make propagate), and stay **additive** for all other producers (never remove a
-  group a sibling/foreign app asserts).
-- **CE-time write guard** for the lag: *adds* always apply; *removals* apply only
-  when our producer's latest CE `time` ≥ the vehicle's `groups_updated_at` (our
-  attestation has caught up). If it's behind, keep the optimistic local state.
-- Optional: **post-write confirmation** — after publishing, poll Fetch until our CE
-  appears, mark the row confirmed; also tells the guard the lag has cleared.
+> **BUILT (2026-06-09, PR pending):** producer stamping + reconcile sync with the
+> freshness gate. Decision revised from the original "additive-for-foreign" stance:
+> we **honor all producers' removals** (see below) — it's lighter and more correct
+> than mirror-our-own-only, which would have needed per-membership provenance.
+
+- **Write path:** stamp a stable `producer` (`GroupAttestationProducer =
+  "fleet-lite-app"`) on every group CE we publish. ✅ confirmed the Attest API
+  persists it (see Open questions).
+- **Reconcile sync:** the authoritative set is the union of the latest CE per
+  producer (`desiredGroups`). Local is reconciled to it — **adds always apply;
+  removals apply when the freshness gate is open**. This honors *any* producer's
+  removal (our own and siblings'), since a dropped group simply leaves the union.
+  Foreign removals come for free; the defensive "only our own" alternative would
+  have required a provenance column.
+- **Freshness gate (`removalAllowed`)** for the 5–10s publish lag: removals apply
+  only when there is no pending local change ahead of the chain — `groups_updated_at`
+  is NULL, or our own producer's latest CE `time` ≥ `groups_updated_at`. Otherwise
+  additive-only that cycle, so an optimistic local write is never reverted. Extra
+  rail: an empty Fetch read never triggers removals.
+- Optional / deferred: **post-write confirmation** polling — the gate already makes
+  the next sync correct, so it only shortens the window; skipped for v1.
 
 ## Decisions (locked)
 
@@ -123,8 +134,10 @@ our own attestations self-identifying**:
 
 ## Open questions / to verify
 
-- **Attest API persists a caller-set `producer`?** Gates Phase 2. Verify the CE
-  envelope accepts `producer` and Fetch returns it.
+- **Attest API persists a caller-set `producer`?** ✅ **RESOLVED (2026-06-09):**
+  yes. Spike published a group CE with `producer: "fleet-lite-app"` and Fetch
+  returned it verbatim (a freeform non-address string was accepted). Phase 2 now
+  stamps `GroupAttestationProducer` on every group CE.
 - **Source of `name`** for `tenant_users` — DIMO JWT name claim, DIMO identity/account
   profile, or user-entered in Settings.
 - **Where to hook login** for `last_login_at` — there's no explicit login endpoint

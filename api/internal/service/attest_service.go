@@ -64,6 +64,7 @@ type signedCloudEvent struct {
 	SpecVersion     string                 `json:"specversion"`
 	ID              string                 `json:"id"`
 	Source          string                 `json:"source"`
+	Producer        string                 `json:"producer,omitempty"`
 	Type            string                 `json:"type"`
 	Subject         string                 `json:"subject"`
 	Time            string                 `json:"time"`
@@ -72,6 +73,12 @@ type signedCloudEvent struct {
 	Signature       string                 `json:"signature"`
 	FileHash        string                 `json:"filehash"`
 }
+
+// GroupAttestationProducer is the stable identifier we stamp as the CE `producer`
+// on vehicle-group attestations, so the sync can distinguish our app's
+// assertions from sibling/foreign apps that share the org's dimo_client_id
+// (which is the CE `source`). SPIKE: verifying the Attest API persists this.
+const GroupAttestationProducer = "fleet-lite-app"
 
 // signedRawCloudEvent — raw/binary attestation.
 type signedRawCloudEvent struct {
@@ -327,6 +334,7 @@ func (s *attestService) AttestVehicleGroups(tenant models.Tenant, tokenID uint64
 		SpecVersion:     "1.0",
 		ID:              uuid.New().String(),
 		Source:          tenant.ClientID,
+		Producer:        GroupAttestationProducer,
 		Type:            VehicleGroupsCloudEventType,
 		Subject:         s.authProvider.BuildVehicleDID(tokenID),
 		Time:            time.Now().UTC().Format(time.RFC3339),

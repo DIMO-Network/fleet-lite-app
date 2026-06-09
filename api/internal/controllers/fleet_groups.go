@@ -245,7 +245,7 @@ func (fc *FleetGroupsController) SyncVehicleGroups(c *fiber.Ctx) error {
 	if groups == nil {
 		groups = []service.GroupRef{}
 	}
-	return c.JSON(fiber.Map{"groups": groups, "synced": !res.Skipped, "added": res.Added})
+	return c.JSON(fiber.Map{"groups": groups, "synced": !res.Skipped, "added": res.Added, "removed": res.Removed})
 }
 
 // republishVehicles (re)publishes the group-membership attestation for each
