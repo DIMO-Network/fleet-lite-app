@@ -4,11 +4,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/DIMO-Network/fleet-lite-app/internal/config"
-	"github.com/DIMO-Network/fleet-lite-app/internal/models"
 	"github.com/DIMO-Network/fleet-lite-app/internal/service"
 	"github.com/gofiber/fiber/v2"
 	"github.com/patrickmn/go-cache"
