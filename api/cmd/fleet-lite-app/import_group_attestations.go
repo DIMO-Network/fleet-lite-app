@@ -21,13 +21,21 @@ import (
 )
 
 // importGroupAttestationsCmd pulls vehicle group-membership attestations from
-// fetch-api and reconciles the local DB to match them (full mirror). It is the
-// "pull" half of the sync: foreign producers (other fleet apps writing under
-// their own developer license) become the source of truth for groups we did not
-// author. Our own attestations are skipped — for those the DB is authoritative.
+// fetch-api and merges them into the local DB. It is the "pull" half of the
+// sync: groups any producer has attested for a vehicle are added to the local
+// membership set.
 //
-// Reconcile semantics (locked): full mirror (add + remove), foreign-only (skip
-// our own dimo_client_id), auto-create unknown groups.
+// Producers are NOT filtered by dimo_client_id: a tenant/org may run several
+// apps (this one, other DIMO apps, third-party apps) under the same developer
+// credentials, so the producer wallet does not reliably distinguish "ours" from
+// a sibling app. Instead the sync is additive and de-duplicated.
+//
+// Merge semantics: additive union — take the latest group attestation per
+// distinct producer (Source), union their groups, and add any membership not
+// already present. Never removes (no single producer is authoritative over
+// removals when credentials are shared). De-dup is guaranteed by the
+// (tenant_id, token_id, fleet_group_id) primary key. Unknown groups are
+// auto-created.
 type importGroupAttestationsCmd struct {
 	logger   zerolog.Logger
 	settings config.Settings
@@ -40,13 +48,14 @@ type importGroupAttestationsCmd struct {
 
 func (*importGroupAttestationsCmd) Name() string { return "import-group-attestations" }
 func (*importGroupAttestationsCmd) Synopsis() string {
-	return "pull vehicle group attestations from fetch-api and reconcile the DB (full mirror, foreign-only)"
+	return "pull vehicle group attestations from fetch-api and merge them into the DB (additive, de-duplicated)"
 }
 func (*importGroupAttestationsCmd) Usage() string {
 	return `import-group-attestations [-tenant-id ID] [-token-id N] [-dry-run]:
-	Pulls the latest dimo.document.vehicle.groups attestation per vehicle and
-	makes vehicle_fleet_groups match it. Skips attestations we produced. Unknown
-	groups are auto-created. -dry-run logs changes without writing.
+	Pulls dimo.document.vehicle.groups attestations per vehicle (latest per
+	producer) and adds any group membership not already present in
+	vehicle_fleet_groups. Additive only — never removes; de-duplicated by primary
+	key. Unknown groups are auto-created. -dry-run logs changes without writing.
   `
 }
 
@@ -92,7 +101,6 @@ func (p *importGroupAttestationsCmd) Execute(ctx context.Context, _ *flag.FlagSe
 			p.logger.Warn().Str("tenant_id", dt.ID).Msg("tenant has no DIMO client id, skipping")
 			continue
 		}
-		ourClient := common.HexToAddress(tenant.ClientID)
 
 		// Vehicles for this tenant (optionally one token id).
 		var vehicles dbmodels.VehicleSlice
@@ -118,34 +126,21 @@ func (p *importGroupAttestationsCmd) Execute(ctx context.Context, _ *flag.FlagSe
 				p.logger.Debug().Err(ferr).Int64("token_id", v.TokenID).Msg("fetch attestations, skipping vehicle")
 				continue
 			}
-			latest := latestGroupsEntry(entries)
-			if latest == nil {
-				continue
-			}
-			// Foreign-only: skip attestations we produced — for those the DB is
-			// authoritative and the write-path keeps them current.
-			if common.IsHexAddress(latest.Source) && common.HexToAddress(latest.Source) == ourClient {
+			desired := desiredGroups(entries, p.logger, v.TokenID)
+			if len(desired) == 0 {
 				continue
 			}
 
-			var doc struct {
-				Groups []models.GroupRef `json:"groups"`
-			}
-			if uerr := json.Unmarshal(latest.Data, &doc); uerr != nil {
-				p.logger.Err(uerr).Int64("token_id", v.TokenID).Msg("parse groups document, skipping")
-				continue
-			}
-
-			didChange, rerr := p.reconcile(ctx, dt.ID, v.TokenID, doc.Groups)
+			added, rerr := p.merge(ctx, dt.ID, v.TokenID, desired)
 			if rerr != nil {
-				p.logger.Err(rerr).Int64("token_id", v.TokenID).Msg("reconcile, skipping")
+				p.logger.Err(rerr).Int64("token_id", v.TokenID).Msg("merge, skipping")
 				continue
 			}
-			if didChange {
+			if added > 0 {
 				changed++
 				p.logger.Info().Str("tenant_id", dt.ID).Int64("token_id", v.TokenID).
-					Str("producer", latest.Source).Int("groups", len(doc.Groups)).
-					Bool("dry_run", p.dryRun).Msg("imported foreign group attestation")
+					Int("added", added).Int("groups", len(desired)).
+					Bool("dry_run", p.dryRun).Msg("merged group attestations")
 			}
 		}
 	}
@@ -155,28 +150,71 @@ func (p *importGroupAttestationsCmd) Execute(ctx context.Context, _ *flag.FlagSe
 	return subcommands.ExitSuccess
 }
 
-// latestGroupsEntry returns the most recent dimo.document.vehicle.groups entry by
-// CE time, or nil if there is none.
-func latestGroupsEntry(entries []gateway.AttestationEntry) *gateway.AttestationEntry {
-	var latest *gateway.AttestationEntry
-	var latestTime time.Time
+// desiredGroups returns the union of group memberships a vehicle should have,
+// taken from the latest dimo.document.vehicle.groups attestation per distinct
+// producer. Producers are NOT filtered by dimo_client_id: a tenant/org may run
+// several apps under the same developer credentials (same CE source), so the
+// producer wallet — not the source — is what distinguishes one app's view from
+// a sibling's. Each producer's most-recent attestation contributes its groups,
+// which respects a producer's own removals while still merging in siblings.
+func desiredGroups(entries []gateway.AttestationEntry, logger zerolog.Logger, tokenID int64) []models.GroupRef {
+	// Latest group attestation per producer (falling back to source when a CE
+	// carries no producer).
+	producerKey := func(e *gateway.AttestationEntry) string {
+		if e.Producer != "" {
+			return e.Producer
+		}
+		return e.Source
+	}
+	latest := map[string]*gateway.AttestationEntry{}
+	latestTime := map[string]time.Time{}
 	for i := range entries {
 		e := &entries[i]
 		if e.Type != service.VehicleGroupsCloudEventType {
 			continue
 		}
+		k := producerKey(e)
 		t, _ := time.Parse(time.RFC3339, e.Time)
-		if latest == nil || t.After(latestTime) {
-			latest = e
-			latestTime = t
+		if _, ok := latest[k]; !ok || t.After(latestTime[k]) {
+			latest[k] = e
+			latestTime[k] = t
 		}
 	}
-	return latest
+
+	// Union their groups, de-duplicated by group id.
+	byID := map[string]models.GroupRef{}
+	for _, e := range latest {
+		var doc struct {
+			Groups []models.GroupRef `json:"groups"`
+		}
+		if err := json.Unmarshal(e.Data, &doc); err != nil {
+			logger.Err(err).Int64("token_id", tokenID).Str("producer", e.Source).
+				Msg("parse groups document, skipping producer")
+			continue
+		}
+		for _, g := range doc.Groups {
+			if g.ID == "" {
+				continue
+			}
+			if _, ok := byID[g.ID]; !ok {
+				byID[g.ID] = g
+			}
+		}
+	}
+
+	out := make([]models.GroupRef, 0, len(byID))
+	for _, g := range byID {
+		out = append(out, g)
+	}
+	return out
 }
 
-// reconcile makes the vehicle's memberships match the desired set (full mirror).
-// Returns whether any change was made (or would be, in dry-run).
-func (p *importGroupAttestationsCmd) reconcile(ctx context.Context, tenantID string, tokenID int64, desired []models.GroupRef) (bool, error) {
+// merge adds any desired group membership not already present for the vehicle.
+// Additive only — never removes (no producer is authoritative over removals when
+// developer credentials are shared). De-dup is guaranteed by the
+// (tenant_id, token_id, fleet_group_id) primary key. Returns the number of
+// memberships added (or that would be added, in dry-run).
+func (p *importGroupAttestationsCmd) merge(ctx context.Context, tenantID string, tokenID int64, desired []models.GroupRef) (int, error) {
 	desiredIDs := make(map[string]bool, len(desired))
 	for _, g := range desired {
 		if g.ID == "" {
@@ -197,50 +235,39 @@ func (p *importGroupAttestationsCmd) reconcile(ctx context.Context, tenantID str
 		dbmodels.VehicleFleetGroupWhere.TokenID.EQ(tokenID),
 	).All(ctx, p.pdb.DBS().Reader)
 	if err != nil {
-		return false, err
+		return 0, err
 	}
 	currentIDs := make(map[string]bool, len(current))
 	for _, m := range current {
 		currentIDs[m.FleetGroupID] = true
 	}
 
-	var toAdd, toRemove []string
+	var toAdd []string
 	for id := range desiredIDs {
 		if !currentIDs[id] {
 			toAdd = append(toAdd, id)
 		}
 	}
-	for id := range currentIDs {
-		if !desiredIDs[id] {
-			toRemove = append(toRemove, id)
-		}
-	}
-	if len(toAdd) == 0 && len(toRemove) == 0 {
-		return false, nil
+	if len(toAdd) == 0 {
+		return 0, nil
 	}
 
 	if p.dryRun {
 		p.logger.Info().Str("tenant_id", tenantID).Int64("token_id", tokenID).
-			Strs("add", toAdd).Strs("remove", toRemove).Msg("would reconcile memberships")
-		return true, nil
+			Strs("add", toAdd).Msg("would add memberships")
+		return len(toAdd), nil
 	}
 
+	added := 0
 	for _, id := range toAdd {
 		m := &dbmodels.VehicleFleetGroup{TenantID: tenantID, TokenID: tokenID, FleetGroupID: id}
 		if err := m.Insert(ctx, p.pdb.DBS().Writer, boil.Infer()); err != nil {
 			p.logger.Err(err).Int64("token_id", tokenID).Str("group_id", id).Msg("add membership")
+			continue
 		}
+		added++
 	}
-	for _, id := range toRemove {
-		if _, err := dbmodels.VehicleFleetGroups(
-			dbmodels.VehicleFleetGroupWhere.TenantID.EQ(tenantID),
-			dbmodels.VehicleFleetGroupWhere.TokenID.EQ(tokenID),
-			dbmodels.VehicleFleetGroupWhere.FleetGroupID.EQ(id),
-		).DeleteAll(ctx, p.pdb.DBS().Writer); err != nil {
-			p.logger.Err(err).Int64("token_id", tokenID).Str("group_id", id).Msg("remove membership")
-		}
-	}
-	return true, nil
+	return added, nil
 }
 
 // ensureGroup creates the fleet group if it does not already exist for the
