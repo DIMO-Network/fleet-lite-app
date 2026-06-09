@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/aarondl/null/v8"
 	"github.com/aarondl/sqlboiler/v4/boil"
 	"github.com/aarondl/sqlboiler/v4/queries"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
@@ -23,58 +24,152 @@ import (
 
 // TenantUser is an object representing the database table.
 type TenantUser struct {
-	TenantID  string    `boil:"tenant_id" json:"tenant_id" toml:"tenant_id" yaml:"tenant_id"`
-	Wallet    string    `boil:"wallet" json:"wallet" toml:"wallet" yaml:"wallet"`
-	Role      string    `boil:"role" json:"role" toml:"role" yaml:"role"`
-	CreatedAt time.Time `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
-	UpdatedAt time.Time `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
+	TenantID    string      `boil:"tenant_id" json:"tenant_id" toml:"tenant_id" yaml:"tenant_id"`
+	Wallet      string      `boil:"wallet" json:"wallet" toml:"wallet" yaml:"wallet"`
+	Role        string      `boil:"role" json:"role" toml:"role" yaml:"role"`
+	CreatedAt   time.Time   `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
+	UpdatedAt   time.Time   `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
+	LastLoginAt null.Time   `boil:"last_login_at" json:"last_login_at,omitempty" toml:"last_login_at" yaml:"last_login_at,omitempty"`
+	Email       null.String `boil:"email" json:"email,omitempty" toml:"email" yaml:"email,omitempty"`
 
 	R *tenantUserR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L tenantUserL  `boil:"-" json:"-" toml:"-" yaml:"-"`
 }
 
 var TenantUserColumns = struct {
-	TenantID  string
-	Wallet    string
-	Role      string
-	CreatedAt string
-	UpdatedAt string
+	TenantID    string
+	Wallet      string
+	Role        string
+	CreatedAt   string
+	UpdatedAt   string
+	LastLoginAt string
+	Email       string
 }{
-	TenantID:  "tenant_id",
-	Wallet:    "wallet",
-	Role:      "role",
-	CreatedAt: "created_at",
-	UpdatedAt: "updated_at",
+	TenantID:    "tenant_id",
+	Wallet:      "wallet",
+	Role:        "role",
+	CreatedAt:   "created_at",
+	UpdatedAt:   "updated_at",
+	LastLoginAt: "last_login_at",
+	Email:       "email",
 }
 
 var TenantUserTableColumns = struct {
-	TenantID  string
-	Wallet    string
-	Role      string
-	CreatedAt string
-	UpdatedAt string
+	TenantID    string
+	Wallet      string
+	Role        string
+	CreatedAt   string
+	UpdatedAt   string
+	LastLoginAt string
+	Email       string
 }{
-	TenantID:  "tenant_users.tenant_id",
-	Wallet:    "tenant_users.wallet",
-	Role:      "tenant_users.role",
-	CreatedAt: "tenant_users.created_at",
-	UpdatedAt: "tenant_users.updated_at",
+	TenantID:    "tenant_users.tenant_id",
+	Wallet:      "tenant_users.wallet",
+	Role:        "tenant_users.role",
+	CreatedAt:   "tenant_users.created_at",
+	UpdatedAt:   "tenant_users.updated_at",
+	LastLoginAt: "tenant_users.last_login_at",
+	Email:       "tenant_users.email",
 }
 
 // Generated where
 
+type whereHelpernull_Time struct{ field string }
+
+func (w whereHelpernull_Time) EQ(x null.Time) qm.QueryMod {
+	return qmhelper.WhereNullEQ(w.field, false, x)
+}
+func (w whereHelpernull_Time) NEQ(x null.Time) qm.QueryMod {
+	return qmhelper.WhereNullEQ(w.field, true, x)
+}
+func (w whereHelpernull_Time) LT(x null.Time) qm.QueryMod {
+	return qmhelper.Where(w.field, qmhelper.LT, x)
+}
+func (w whereHelpernull_Time) LTE(x null.Time) qm.QueryMod {
+	return qmhelper.Where(w.field, qmhelper.LTE, x)
+}
+func (w whereHelpernull_Time) GT(x null.Time) qm.QueryMod {
+	return qmhelper.Where(w.field, qmhelper.GT, x)
+}
+func (w whereHelpernull_Time) GTE(x null.Time) qm.QueryMod {
+	return qmhelper.Where(w.field, qmhelper.GTE, x)
+}
+
+func (w whereHelpernull_Time) IsNull() qm.QueryMod    { return qmhelper.WhereIsNull(w.field) }
+func (w whereHelpernull_Time) IsNotNull() qm.QueryMod { return qmhelper.WhereIsNotNull(w.field) }
+
+type whereHelpernull_String struct{ field string }
+
+func (w whereHelpernull_String) EQ(x null.String) qm.QueryMod {
+	return qmhelper.WhereNullEQ(w.field, false, x)
+}
+func (w whereHelpernull_String) NEQ(x null.String) qm.QueryMod {
+	return qmhelper.WhereNullEQ(w.field, true, x)
+}
+func (w whereHelpernull_String) LT(x null.String) qm.QueryMod {
+	return qmhelper.Where(w.field, qmhelper.LT, x)
+}
+func (w whereHelpernull_String) LTE(x null.String) qm.QueryMod {
+	return qmhelper.Where(w.field, qmhelper.LTE, x)
+}
+func (w whereHelpernull_String) GT(x null.String) qm.QueryMod {
+	return qmhelper.Where(w.field, qmhelper.GT, x)
+}
+func (w whereHelpernull_String) GTE(x null.String) qm.QueryMod {
+	return qmhelper.Where(w.field, qmhelper.GTE, x)
+}
+func (w whereHelpernull_String) LIKE(x null.String) qm.QueryMod {
+	return qm.Where(w.field+" LIKE ?", x)
+}
+func (w whereHelpernull_String) NLIKE(x null.String) qm.QueryMod {
+	return qm.Where(w.field+" NOT LIKE ?", x)
+}
+func (w whereHelpernull_String) ILIKE(x null.String) qm.QueryMod {
+	return qm.Where(w.field+" ILIKE ?", x)
+}
+func (w whereHelpernull_String) NILIKE(x null.String) qm.QueryMod {
+	return qm.Where(w.field+" NOT ILIKE ?", x)
+}
+func (w whereHelpernull_String) SIMILAR(x null.String) qm.QueryMod {
+	return qm.Where(w.field+" SIMILAR TO ?", x)
+}
+func (w whereHelpernull_String) NSIMILAR(x null.String) qm.QueryMod {
+	return qm.Where(w.field+" NOT SIMILAR TO ?", x)
+}
+func (w whereHelpernull_String) IN(slice []string) qm.QueryMod {
+	values := make([]any, 0, len(slice))
+	for _, value := range slice {
+		values = append(values, value)
+	}
+	return qm.WhereIn(fmt.Sprintf("%s IN ?", w.field), values...)
+}
+func (w whereHelpernull_String) NIN(slice []string) qm.QueryMod {
+	values := make([]any, 0, len(slice))
+	for _, value := range slice {
+		values = append(values, value)
+	}
+	return qm.WhereNotIn(fmt.Sprintf("%s NOT IN ?", w.field), values...)
+}
+
+func (w whereHelpernull_String) IsNull() qm.QueryMod    { return qmhelper.WhereIsNull(w.field) }
+func (w whereHelpernull_String) IsNotNull() qm.QueryMod { return qmhelper.WhereIsNotNull(w.field) }
+
 var TenantUserWhere = struct {
-	TenantID  whereHelperstring
-	Wallet    whereHelperstring
-	Role      whereHelperstring
-	CreatedAt whereHelpertime_Time
-	UpdatedAt whereHelpertime_Time
+	TenantID    whereHelperstring
+	Wallet      whereHelperstring
+	Role        whereHelperstring
+	CreatedAt   whereHelpertime_Time
+	UpdatedAt   whereHelpertime_Time
+	LastLoginAt whereHelpernull_Time
+	Email       whereHelpernull_String
 }{
-	TenantID:  whereHelperstring{field: "\"tenant_users\".\"tenant_id\""},
-	Wallet:    whereHelperstring{field: "\"tenant_users\".\"wallet\""},
-	Role:      whereHelperstring{field: "\"tenant_users\".\"role\""},
-	CreatedAt: whereHelpertime_Time{field: "\"tenant_users\".\"created_at\""},
-	UpdatedAt: whereHelpertime_Time{field: "\"tenant_users\".\"updated_at\""},
+	TenantID:    whereHelperstring{field: "\"tenant_users\".\"tenant_id\""},
+	Wallet:      whereHelperstring{field: "\"tenant_users\".\"wallet\""},
+	Role:        whereHelperstring{field: "\"tenant_users\".\"role\""},
+	CreatedAt:   whereHelpertime_Time{field: "\"tenant_users\".\"created_at\""},
+	UpdatedAt:   whereHelpertime_Time{field: "\"tenant_users\".\"updated_at\""},
+	LastLoginAt: whereHelpernull_Time{field: "\"tenant_users\".\"last_login_at\""},
+	Email:       whereHelpernull_String{field: "\"tenant_users\".\"email\""},
 }
 
 // TenantUserRels is where relationship names are stored.
@@ -114,9 +209,9 @@ func (r *tenantUserR) GetTenant() *Tenant {
 type tenantUserL struct{}
 
 var (
-	tenantUserAllColumns            = []string{"tenant_id", "wallet", "role", "created_at", "updated_at"}
+	tenantUserAllColumns            = []string{"tenant_id", "wallet", "role", "created_at", "updated_at", "last_login_at", "email"}
 	tenantUserColumnsWithoutDefault = []string{"tenant_id", "wallet"}
-	tenantUserColumnsWithDefault    = []string{"role", "created_at", "updated_at"}
+	tenantUserColumnsWithDefault    = []string{"role", "created_at", "updated_at", "last_login_at", "email"}
 	tenantUserPrimaryKeyColumns     = []string{"tenant_id", "wallet"}
 	tenantUserGeneratedColumns      = []string{}
 )
