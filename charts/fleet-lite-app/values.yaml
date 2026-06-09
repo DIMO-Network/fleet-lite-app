@@ -2,7 +2,7 @@ replicaCount: 1
 image:
   repository: dimozone/fleet-lite-app
   pullPolicy: IfNotPresent
-  tag: '3483128'
+  tag: fb7dd17
 imagePullSecrets: []
 nameOverride: ''
 fullnameOverride: ''
@@ -86,3 +86,19 @@ serviceMonitor:
   path: /metrics
   port: mon-http
   interval: 30s
+cronJobs:
+  - name: import-group-attestations
+    enabled: false
+    schedule: 0 * * * *
+    command:
+      - /bin/sh
+      - '-c'
+      - |
+        /fleet-lite-app import-group-attestations; exit $?
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
