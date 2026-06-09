@@ -13,6 +13,7 @@ import (
 	"github.com/DIMO-Network/fleet-lite-app/internal/gateway"
 	"github.com/DIMO-Network/fleet-lite-app/internal/models"
 	"github.com/DIMO-Network/shared/pkg/db"
+	"github.com/aarondl/null/v8"
 	"github.com/aarondl/sqlboiler/v4/boil"
 	"github.com/rs/zerolog"
 )
@@ -23,16 +24,18 @@ const DefaultFetchLimit = 50
 
 // GroupSyncService is the shared "pull" half of the attestation-backed group
 // sync: it reads a vehicle's group-membership attestations from Fetch API and
-// additively merges them into the local vehicle_fleet_groups cache. Both the
+// reconciles the local vehicle_fleet_groups cache to them. Both the
 // import-group-attestations cron and the lazy per-vehicle endpoint drive it, so
-// the merge semantics live here once (see docs/GROUP_SYNC.md).
+// the reconcile semantics live here once (see docs/GROUP_SYNC.md).
 //
-// Merge semantics: additive union — take the latest dimo.document.vehicle.groups
-// attestation per distinct producer, union their groups, and add any membership
-// not already present. Never removes (no single producer is authoritative over
-// removals when developer credentials are shared — that is Phase 2). De-dup is
-// guaranteed by the (tenant_id, token_id, fleet_group_id) primary key. Unknown
-// groups are auto-created.
+// Reconcile semantics: the authoritative set is the union of the latest
+// dimo.document.vehicle.groups attestation per distinct producer. Adds always
+// apply; removals (local groups no longer in any producer's latest CE) apply
+// only when the freshness gate is open — our own producer-stamped CE has caught
+// up to groups_updated_at — so a sync inside the 5-10s publish lag never reverts
+// an optimistic local write. De-dup on add is guaranteed by the
+// (tenant_id, token_id, fleet_group_id) primary key. Unknown groups are
+// auto-created.
 type GroupSyncService struct {
 	logger       *zerolog.Logger
 	pdb          *db.Store
@@ -59,34 +62,37 @@ type SyncOpts struct {
 // SyncResult reports what a SyncVehicle call did.
 type SyncResult struct {
 	Added   int  // memberships added to the local cache
+	Removed int  // memberships removed (Phase 2 reconcile; 0 when the removal gate is closed)
 	Skipped bool // true when the cooldown short-circuited the pull (no fetch performed)
 }
 
-// SyncVehicle pulls one vehicle's group attestations and additively merges them.
-// It stamps last_group_sync_at on success (so the cooldown and cron freshness
-// selection can see it). Returns ErrVehicleNotFound when a cooldown check is
-// requested for an unknown vehicle.
+// SyncVehicle pulls one vehicle's group attestations and reconciles the local
+// cache to the authoritative set (union of the latest CE per producer). Adds
+// always apply; removals apply only when the freshness gate is open — i.e. our
+// own latest producer-stamped CE has caught up to groups_updated_at, so a sync
+// running inside the 5-10s publish lag can never revert an optimistic local
+// write (see docs/GROUP_SYNC.md Phase 2). Stamps last_group_sync_at on success.
+// Returns ErrVehicleNotFound for an unknown vehicle.
 func (s *GroupSyncService) SyncVehicle(ctx context.Context, tenant models.Tenant, tokenID int64, opts SyncOpts) (SyncResult, error) {
 	limit := opts.Limit
 	if limit <= 0 {
 		limit = DefaultFetchLimit
 	}
 
+	v, err := dbmodels.Vehicles(
+		dbmodels.VehicleWhere.TenantID.EQ(tenant.ID),
+		dbmodels.VehicleWhere.TokenID.EQ(tokenID),
+	).One(ctx, s.pdb.DBS().Reader)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return SyncResult{}, ErrVehicleNotFound
+		}
+		return SyncResult{}, fmt.Errorf("load vehicle: %w", err)
+	}
+
 	// Cooldown: skip the (asset-JWT) Fetch call when we synced recently.
-	if opts.Cooldown > 0 {
-		v, err := dbmodels.Vehicles(
-			dbmodels.VehicleWhere.TenantID.EQ(tenant.ID),
-			dbmodels.VehicleWhere.TokenID.EQ(tokenID),
-		).One(ctx, s.pdb.DBS().Reader)
-		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return SyncResult{}, ErrVehicleNotFound
-			}
-			return SyncResult{}, fmt.Errorf("load vehicle: %w", err)
-		}
-		if v.LastGroupSyncAt.Valid && time.Since(v.LastGroupSyncAt.Time) < opts.Cooldown {
-			return SyncResult{Skipped: true}, nil
-		}
+	if opts.Cooldown > 0 && v.LastGroupSyncAt.Valid && time.Since(v.LastGroupSyncAt.Time) < opts.Cooldown {
+		return SyncResult{Skipped: true}, nil
 	}
 
 	did := s.authProvider.BuildVehicleDID(uint64(tokenID))
@@ -96,17 +102,45 @@ func (s *GroupSyncService) SyncVehicle(ctx context.Context, tenant models.Tenant
 	}
 
 	desired := desiredGroups(entries, *s.logger, tokenID)
-	added := 0
-	if len(desired) > 0 {
-		added, err = s.merge(ctx, tenant.ID, tokenID, desired, opts.DryRun)
-		if err != nil {
-			return SyncResult{}, err
-		}
+	// Removals are honored only when the gate is open AND the fetch actually
+	// returned CEs — a successful-but-empty read must never wipe local groups.
+	allowRemove := len(entries) > 0 && removalAllowed(entries, v.GroupsUpdatedAt)
+
+	added, removed, err := s.reconcile(ctx, tenant.ID, tokenID, desired, allowRemove, opts.DryRun)
+	if err != nil {
+		return SyncResult{}, err
 	}
 	if !opts.DryRun {
 		s.touchLastGroupSyncAt(ctx, tenant.ID, tokenID)
 	}
-	return SyncResult{Added: added}, nil
+	return SyncResult{Added: added, Removed: removed}, nil
+}
+
+// removalAllowed reports whether it is safe to honor removals for a vehicle —
+// i.e. our local state is not ahead of what we've published on-chain, so the
+// authoritative union can be trusted to drop groups. Open when there is no
+// pending local change (groups_updated_at is NULL), or our latest
+// producer-stamped CE is at least as recent as groups_updated_at. Closed when we
+// have a local change but no producer CE confirming it has reached the chain yet
+// (don't revert the optimistic write across the publish lag).
+func removalAllowed(entries []gateway.AttestationEntry, groupsUpdatedAt null.Time) bool {
+	if !groupsUpdatedAt.Valid {
+		return true
+	}
+	var ourLatest time.Time
+	for i := range entries {
+		e := &entries[i]
+		if e.Producer != GroupAttestationProducer {
+			continue
+		}
+		if t, err := time.Parse(time.RFC3339, e.Time); err == nil && t.After(ourLatest) {
+			ourLatest = t
+		}
+	}
+	if ourLatest.IsZero() {
+		return false
+	}
+	return !ourLatest.Before(groupsUpdatedAt.Time)
 }
 
 // touchLastGroupSyncAt stamps the vehicle's last_group_sync_at to now. Best
@@ -181,11 +215,13 @@ func desiredGroups(entries []gateway.AttestationEntry, logger zerolog.Logger, to
 	return out
 }
 
-// merge adds any desired group membership not already present for the vehicle.
-// Additive only — never removes. De-dup is guaranteed by the
-// (tenant_id, token_id, fleet_group_id) primary key. Returns the number of
-// memberships added (or that would be added, in dry-run).
-func (s *GroupSyncService) merge(ctx context.Context, tenantID string, tokenID int64, desired []models.GroupRef, dryRun bool) (int, error) {
+// reconcile brings the vehicle's local memberships in line with the desired set
+// (the authoritative union of latest CE per producer). Adds always apply; the
+// removals of locally-present groups absent from desired apply only when
+// allowRemove is true (the freshness gate). De-dup on add is guaranteed by the
+// (tenant_id, token_id, fleet_group_id) primary key. Returns counts of
+// memberships added and removed (or that would change, in dry-run).
+func (s *GroupSyncService) reconcile(ctx context.Context, tenantID string, tokenID int64, desired []models.GroupRef, allowRemove, dryRun bool) (int, int, error) {
 	desiredIDs := make(map[string]bool, len(desired))
 	for _, g := range desired {
 		if g.ID == "" {
@@ -206,7 +242,7 @@ func (s *GroupSyncService) merge(ctx context.Context, tenantID string, tokenID i
 		dbmodels.VehicleFleetGroupWhere.TokenID.EQ(tokenID),
 	).All(ctx, s.pdb.DBS().Reader)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	currentIDs := make(map[string]bool, len(current))
 	for _, m := range current {
@@ -219,14 +255,23 @@ func (s *GroupSyncService) merge(ctx context.Context, tenantID string, tokenID i
 			toAdd = append(toAdd, id)
 		}
 	}
-	if len(toAdd) == 0 {
-		return 0, nil
+	var toRemove []string
+	if allowRemove {
+		for id := range currentIDs {
+			if !desiredIDs[id] {
+				toRemove = append(toRemove, id)
+			}
+		}
+	}
+	if len(toAdd) == 0 && len(toRemove) == 0 {
+		return 0, 0, nil
 	}
 
 	if dryRun {
 		s.logger.Info().Str("tenant_id", tenantID).Int64("token_id", tokenID).
-			Strs("add", toAdd).Msg("would add memberships")
-		return len(toAdd), nil
+			Strs("add", toAdd).Strs("remove", toRemove).Bool("allow_remove", allowRemove).
+			Msg("would reconcile memberships")
+		return len(toAdd), len(toRemove), nil
 	}
 
 	added := 0
@@ -238,7 +283,20 @@ func (s *GroupSyncService) merge(ctx context.Context, tenantID string, tokenID i
 		}
 		added++
 	}
-	return added, nil
+	removed := 0
+	for _, id := range toRemove {
+		n, err := dbmodels.VehicleFleetGroups(
+			dbmodels.VehicleFleetGroupWhere.TenantID.EQ(tenantID),
+			dbmodels.VehicleFleetGroupWhere.TokenID.EQ(tokenID),
+			dbmodels.VehicleFleetGroupWhere.FleetGroupID.EQ(id),
+		).DeleteAll(ctx, s.pdb.DBS().Writer)
+		if err != nil {
+			s.logger.Err(err).Int64("token_id", tokenID).Str("group_id", id).Msg("remove membership")
+			continue
+		}
+		removed += int(n)
+	}
+	return added, removed, nil
 }
 
 // ensureGroup creates the fleet group if it does not already exist for the
