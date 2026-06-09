@@ -80,6 +80,20 @@ export class ApiService {
         return res.json();
     }
 
+    public async patch<T>(endpoint: string, body: unknown, auth: boolean = true): Promise<T> {
+        const res = await fetch(this.buildUrl(endpoint), {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', ...this.authHeader(auth) },
+            body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+            const text = await safeText(res);
+            this.handle401IfAuthed(res.status, auth, text);
+            throw new ApiError(res.status, text);
+        }
+        return parseJson<T>(res);
+    }
+
     public async delete<T>(endpoint: string, auth: boolean = true): Promise<T> {
         const res = await fetch(this.buildUrl(endpoint), {
             method: 'DELETE',
@@ -90,7 +104,7 @@ export class ApiService {
             this.handle401IfAuthed(res.status, auth, text);
             throw new ApiError(res.status, text);
         }
-        return res.json();
+        return parseJson<T>(res);
     }
 }
 
@@ -106,4 +120,15 @@ async function safeText(res: Response): Promise<string> {
     } catch {
         return res.statusText;
     }
+}
+
+/**
+ * Parse a JSON response body, tolerating an empty body (e.g. a 204 No Content
+ * from DELETE) by resolving to undefined instead of throwing on `res.json()`.
+ */
+async function parseJson<T>(res: Response): Promise<T> {
+    if (res.status === 204) return undefined as T;
+    const text = await res.text();
+    if (!text) return undefined as T;
+    return JSON.parse(text) as T;
 }

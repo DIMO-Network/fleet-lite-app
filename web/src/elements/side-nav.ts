@@ -3,13 +3,14 @@ import { customElement, property } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { logout } from '../utils/token.ts';
 
-type NavKey = 'vehicles' | 'stats' | 'glovebox' | 'settings';
+type NavKey = 'vehicles' | 'stats' | 'groups' | 'glovebox' | 'settings';
 
 // `suffix` is appended to the current tenant prefix (`#/<tenantId>`) to form the
 // link, so all nav stays within the active tenant's routes.
 const ITEMS: { key: NavKey; icon: string; label: string; suffix: string }[] = [
     { key: 'vehicles', icon: 'directions_car', label: 'Vehicles', suffix: '/' },
     { key: 'stats',    icon: 'bar_chart',      label: 'Stats',    suffix: '/stats' },
+    { key: 'groups',   icon: 'workspaces',     label: 'Groups',   suffix: '/groups' },
     { key: 'glovebox', icon: 'inventory_2',    label: 'Glovebox', suffix: '/glovebox' },
     { key: 'settings', icon: 'settings',       label: 'Settings', suffix: '/settings' },
 ];

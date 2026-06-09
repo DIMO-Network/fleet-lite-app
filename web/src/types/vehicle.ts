@@ -17,6 +17,13 @@ export interface AftermarketDevice {
     imei: string;
 }
 
+/** A fleet group a vehicle belongs to, as embedded in the /vehicles response. */
+export interface VehicleGroupRef {
+    id: string;
+    name: string;
+    color: string;
+}
+
 export interface Vehicle {
     id: string;
     tokenId: number;
@@ -26,6 +33,8 @@ export interface Vehicle {
     syntheticDevice: SyntheticDevice;
     aftermarketDevice?: AftermarketDevice | null;
     isFavorite?: boolean;
+    /** Groups this vehicle belongs to (always present, [] when none). */
+    groups: VehicleGroupRef[];
 }
 
 export interface VehiclesResponse {
@@ -42,4 +51,6 @@ export interface VehicleCard {
     errorMessage?: string;
     noPermissions?: boolean;
     isFavorite?: boolean;
+    /** Groups this vehicle belongs to, for the map/list group filter. */
+    groups?: VehicleGroupRef[];
 }

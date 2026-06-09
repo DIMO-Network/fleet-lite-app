@@ -1,4 +1,4 @@
-import { LitElement, html, css, unsafeCSS } from 'lit';
+import { LitElement, html, css, unsafeCSS, nothing } from 'lit';
 import { customElement, state, property } from 'lit/decorators.js';
 import L from 'leaflet';
 import leafletCss from 'leaflet/dist/leaflet.css?inline';
@@ -6,12 +6,16 @@ import { sharedStyles } from '../global-styles.ts';
 import { ApiService } from '../services/api-service.ts';
 import { TelemetryService } from '../services/telemetry-service.ts';
 import { FleetCache } from '../services/fleet-cache.ts';
-import { Vehicle, VehicleCard, VehiclesResponse } from '../types/vehicle.ts';
+import { Vehicle, VehicleCard, VehiclesResponse, VehicleGroupRef } from '../types/vehicle.ts';
 
 @customElement('fleet-overview-view')
 export class FleetOverviewView extends LitElement {
     @property({ type: String }) tenantId = '';
     @state() private vehicles: VehicleCard[] = [];
+    // Selected group id for the map/list filter ('' = all vehicles). Group
+    // membership rides on each VehicleCard, so the dropdown options and the
+    // filtered card/marker sets all derive from `this.vehicles`.
+    @state() private selectedGroupId = '';
     @state() private loading = true;
     @state() private errorMessage: string | null = null;
 
@@ -73,6 +77,7 @@ export class FleetOverviewView extends LitElement {
             online: integrated,
             errorMessage: integrated ? undefined : 'No DIMO integration — pair a device to stream telemetry',
             isFavorite: v.isFavorite ?? false,
+            groups: v.groups ?? [],
         };
     }
 
@@ -88,7 +93,9 @@ export class FleetOverviewView extends LitElement {
         this.markers.clear();
 
         const titleMap = new Map(this.vehicles.map((v) => [v.tokenId, v.title]));
+        const allowed = this.selectedGroupId ? this.visibleTokenIds() : null;
         for (const [tokenId, coords] of Object.entries(this.lastLocations)) {
+            if (allowed && !allowed.has(tokenId)) continue;
             const marker = L.circleMarker([coords.lat, coords.lon], {
                 radius: 8,
                 fillColor: '#69dbad',
@@ -219,6 +226,28 @@ export class FleetOverviewView extends LitElement {
         this.markers.clear();
         this.leafletMap?.remove();
         this.leafletMap = null;
+    }
+
+    /** Distinct groups across all vehicles, for the filter dropdown (by name). */
+    private groupOptions(): VehicleGroupRef[] {
+        const byId = new Map<string, VehicleGroupRef>();
+        for (const c of this.vehicles) {
+            for (const g of c.groups || []) {
+                if (!byId.has(g.id)) byId.set(g.id, g);
+            }
+        }
+        return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    /** Cards in the selected group (or all when no group is selected). */
+    private visibleCards(): VehicleCard[] {
+        if (!this.selectedGroupId) return this.vehicles;
+        return this.vehicles.filter((c) => (c.groups || []).some((g) => g.id === this.selectedGroupId));
+    }
+
+    /** Token ids visible under the current filter — used to filter map markers. */
+    private visibleTokenIds(): Set<string> {
+        return new Set(this.visibleCards().map((c) => c.tokenId));
     }
 
     static styles = [
@@ -485,6 +514,32 @@ export class FleetOverviewView extends LitElement {
                 transition: background 0.15s ease;
             }
             .panel-header button:hover { background: var(--surface-container-high); }
+
+            .group-filter {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 12px 24px;
+                border-bottom: 1px solid var(--outline-variant);
+            }
+            .group-filter .swatch {
+                width: 12px;
+                height: 12px;
+                border-radius: var(--radius-full);
+                border: 1px solid var(--outline-variant);
+                flex-shrink: 0;
+            }
+            .group-filter select {
+                flex: 1;
+                background: var(--surface-container-low);
+                color: var(--on-surface);
+                border: 1px solid var(--outline-variant);
+                border-radius: var(--radius-md);
+                padding: 8px 10px;
+                font-family: inherit;
+                font-size: 13px;
+            }
+            .group-filter select:focus { outline: 1px solid var(--primary); }
 
             .vehicle-list {
                 flex: 1;
@@ -774,20 +829,43 @@ export class FleetOverviewView extends LitElement {
                 <div class="drag-handle" @click=${() => { this.panelCollapsed = false; }}><div></div></div>
                 <div class="panel-header">
                     <h3>Your cars</h3>
-                    <button><span class="material-symbols-outlined">add</span></button>
+                    <a href="#/${this.tenantId}/groups" title="Manage groups">
+                        <button><span class="material-symbols-outlined">workspaces</span></button>
+                    </a>
                 </div>
+                ${this.renderGroupFilter()}
                 <div class="vehicle-list custom-scrollbar">
-                    ${this.loading
-                        ? html`<p class="empty-state">Loading vehicles…</p>`
-                        : this.errorMessage
-                            ? html`<p class="empty-state error">${this.errorMessage}</p>`
-                            : this.vehicles.length === 0
-                                ? html`<p class="empty-state">No vehicles found on this account.</p>`
-                                : this.vehicles.map(v => this.panelExpanded ? this.renderCard(v) : this.renderCompactCard(v))
-                    }
+                    ${this.renderList()}
                 </div>
             </div>
         `;
+    }
+
+    private renderGroupFilter() {
+        const options = this.groupOptions();
+        if (options.length === 0) return nothing;
+        const selected = options.find((g) => g.id === this.selectedGroupId);
+        return html`
+            <div class="group-filter">
+                <span class="swatch" style="background:${selected ? selected.color : 'transparent'}"></span>
+                <select @change=${(e: Event) => { this.selectedGroupId = (e.target as HTMLSelectElement).value; this.placeMarkers(); }}>
+                    <option value="" ?selected=${this.selectedGroupId === ''}>All groups</option>
+                    ${options.map((g) => html`
+                        <option value=${g.id} ?selected=${g.id === this.selectedGroupId}>${g.name}</option>
+                    `)}
+                </select>
+            </div>
+        `;
+    }
+
+    private renderList() {
+        if (this.loading) return html`<p class="empty-state">Loading vehicles…</p>`;
+        if (this.errorMessage) return html`<p class="empty-state error">${this.errorMessage}</p>`;
+        const cards = this.visibleCards();
+        if (cards.length === 0) {
+            return html`<p class="empty-state">${this.selectedGroupId ? 'No vehicles in this group.' : 'No vehicles found on this account.'}</p>`;
+        }
+        return cards.map((c) => this.panelExpanded ? this.renderCard(c) : this.renderCompactCard(c));
     }
 }
 
