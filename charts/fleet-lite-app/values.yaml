@@ -86,3 +86,25 @@ serviceMonitor:
   path: /metrics
   port: mon-http
   interval: 30s
+
+# Scheduled jobs. Rendered by templates/cronjobs.yaml only when `enabled: true`.
+# import-group-attestations performs a DESTRUCTIVE full-mirror reconcile of
+# vehicle_fleet_groups against foreign group attestations from fetch-api — ships
+# DISABLED. Validate first by running the command with -dry-run, then flip
+# enabled to true (per-environment) once the diff looks right.
+cronJobs:
+  - name: import-group-attestations
+    enabled: false
+    schedule: "0 * * * *" # hourly
+    command:
+      - /bin/sh
+      - "-c"
+      - |
+        /fleet-lite-app import-group-attestations; exit $?
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi

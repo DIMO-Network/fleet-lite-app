@@ -56,6 +56,7 @@ func main() {
 		subcommands.Register(subcommands.FlagsCommand(), "")
 		subcommands.Register(subcommands.CommandsCommand(), "")
 		subcommands.Register(&migrateDBCmd{logger: logger, settings: settings}, "database")
+		subcommands.Register(&importGroupAttestationsCmd{logger: logger, settings: settings}, "attestations")
 		flag.Parse()
 		os.Exit(int(subcommands.Execute(ctx)))
 	}
