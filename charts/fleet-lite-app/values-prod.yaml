@@ -32,11 +32,11 @@ env:
   DIMO_AUTH_CLIENT_ID: '0x51dacC165f1306Abfbf0a6312ec96E13AAA826DB'
   DIMO_AUTH_REDIRECT_URL: https://fleets.dimo.co/login.html
   ALLOWED_ORIGINS: https://fleets.dimo.co,https://console.dimo.org
-  IDENTITY_API_ENDPOINT: https://identity-api.dimo.zone/query
-  EXTRACT_API_URL: https://extract.dimo.zone/extract
-  FETCH_API_URL: https://fetch-api.dimo.zone/v1/fetch/objects
-  ATTEST_API_URL: https://attest.dimo.zone
-  TELEMETRY_API_URL: https://telemetry-api.dimo.zone/query
+  IDENTITY_API_ENDPOINT: http://identity-api-prod.prod.svc.cluster.local:8080/query
+  EXTRACT_API_URL: http://extract-prod.prod.svc.cluster.local:8000/extract
+  FETCH_API_URL: http://fetch-api-prod.prod.svc.cluster.local:8080/query
+  ATTEST_API_URL: http://dis-prod-attest.prod.svc.cluster.local:8080
+  TELEMETRY_API_URL: http://telemetry-api-prod.prod.svc.cluster.local:8080/query
   CHAIN_ID: '137'
   VEHICLE_NFT_ADDRESS: '0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF'
 service:

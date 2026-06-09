@@ -19,6 +19,7 @@ type AttestationEntry struct {
 	ID              string          `json:"id,omitempty"`
 	Type            string          `json:"type,omitempty"`
 	Source          string          `json:"source,omitempty"`
+	Producer        string          `json:"producer,omitempty"`
 	Subject         string          `json:"subject,omitempty"`
 	Time            string          `json:"time,omitempty"`
 	FileHash        string          `json:"filehash,omitempty"`
@@ -52,7 +53,15 @@ func (f *FetchAPI) ListByDID(tenant models.Tenant, tokenDID string, limit int) (
 		return nil, fmt.Errorf("asset JWT: %w", err)
 	}
 
-	body, err := json.Marshal(map[string]interface{}{"did": tokenDID, "limit": limit})
+	// fetch-api is a GraphQL endpoint (POST /query). Request the recent cloud
+	// events for the DID; callers filter by type in-process.
+	gqlQuery := fmt.Sprintf(`query {
+  cloudEvents(did: %q, limit: %d) {
+    data
+    header { id type source producer subject time }
+  }
+}`, tokenDID, limit)
+	body, err := json.Marshal(map[string]string{"query": gqlQuery})
 	if err != nil {
 		return nil, fmt.Errorf("marshal fetch request: %w", err)
 	}
@@ -99,6 +108,7 @@ func (f *FetchAPI) ListByDID(tenant models.Tenant, tokenDID string, limit int) (
 		readStr(ce.Header, "id", &entry.ID)
 		readStr(ce.Header, "type", &entry.Type)
 		readStr(ce.Header, "source", &entry.Source)
+		readStr(ce.Header, "producer", &entry.Producer)
 		readStr(ce.Header, "subject", &entry.Subject)
 		readStr(ce.Header, "time", &entry.Time)
 		readStr(ce.Header, "filehash", &entry.FileHash)

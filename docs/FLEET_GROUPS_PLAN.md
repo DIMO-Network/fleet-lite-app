@@ -59,8 +59,14 @@ triggers, the import command + CronJob, and the UI.
    kaufmann-oracle. (`fetch_api.ListByDID` admits it via its `dimo.document.*` prefix filter.)
 4. **UI: group rename disabled** (name immutable after creation) to bound re-attest fan-out — same
    as kaufmann/b2b.
-5. **Import reconcile semantics** (same as kaufmann): **full mirror** (add+remove), **foreign
-   producers only** (skip our own `dimo_client_id`), **auto-create unknown groups**.
+5. **Import merge semantics** (revised — diverges from kaufmann): **additive merge**, not full
+   mirror. A tenant/org may run several apps (this one, other DIMO apps, third-party) under the
+   **same `dimo_client_id`**, so the producer wallet — not the CE source/client id — distinguishes
+   one app's view from a sibling's. The import therefore: takes the **latest group attestation per
+   producer**, **unions** their groups, **adds** any membership not already present, and **never
+   removes** (no producer is authoritative over removals when credentials are shared). De-dup is
+   guaranteed by the `(tenant_id, token_id, fleet_group_id)` primary key. Unknown groups are
+   auto-created. **No `dimo_client_id` skip** (the old "foreign-only" filter is removed).
 6. **Map filter UX:** **single-select** group dropdown that filters both the vehicle list and the
    map pins.
 
