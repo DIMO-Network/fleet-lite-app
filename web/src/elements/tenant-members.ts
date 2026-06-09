@@ -45,6 +45,7 @@ export class TenantMembers extends LitElement {
             .member:last-child { border-bottom: none; }
             .member .left-group { display: flex; align-items: center; gap: 16px; min-width: 0; }
             .member .right-group { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+            .member .identity { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
             .member .wallet {
                 font: var(--type-body-md);
                 font-family: var(--font-mono);
@@ -53,6 +54,9 @@ export class TenantMembers extends LitElement {
                 text-overflow: ellipsis;
                 white-space: nowrap;
             }
+            /* When we have an email, show it in the normal UI font, not mono. */
+            .member .wallet.email { font-family: inherit; color: var(--on-surface); }
+            .member .last-seen { font-size: 12px; color: var(--on-surface-variant); }
             .member .you {
                 font: var(--type-label-caps);
                 letter-spacing: 0.05em;
@@ -205,7 +209,14 @@ export class TenantMembers extends LitElement {
                     <span class="material-symbols-outlined" style="color: var(--on-surface-variant);">
                         ${isOwnerRole ? 'shield_person' : 'person'}
                     </span>
-                    <span class="wallet" title=${m.wallet}>${shortWallet(m.wallet)}</span>
+                    <div class="identity">
+                        <span class="wallet ${m.email ? 'email' : ''}" title=${m.wallet}>
+                            ${m.email || shortWallet(m.wallet)}
+                        </span>
+                        ${m.lastLoginAt
+                            ? html`<span class="last-seen">Last login ${new Date(m.lastLoginAt).toLocaleDateString()}</span>`
+                            : ''}
+                    </div>
                     ${isSelf ? html`<span class="you">You</span>` : ''}
                 </div>
                 <div class="right-group">

@@ -31,6 +31,8 @@ export class AppRoot extends LitElement {
     // The current tenant id (first hash segment). Drives nav links + the
     // Tenant-Id header (via ApiService). Empty while onboarding.
     @state() private tenantId = '';
+    // Tenant we've already recorded a login for this session (login is touched once).
+    private loginRecordedFor = '';
 
     static styles = [
         sharedStyles,
@@ -100,6 +102,12 @@ export class AppRoot extends LitElement {
         this.tenantId = tenantId;
         // Remember the active tenant so the next tenant-less load returns here.
         localStorage.setItem('lastTenantId', tenantId);
+        // Record this session's login once per tenant (best-effort): bumps the
+        // member's last_login_at and stores their email for the Members list.
+        if (this.loginRecordedFor !== tenantId) {
+            this.loginRecordedFor = tenantId;
+            void this.tenantService.recordLogin(tenantId).catch(() => {});
+        }
         this.activeNav = this.deriveActive('/' + seg.slice(1).join('/'));
         this.router.goto(path);
         this.requestUpdate();

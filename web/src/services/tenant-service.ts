@@ -13,6 +13,10 @@ interface TenantsResponse {
 export interface Member {
     wallet: string;
     role: string;
+    /** Email shown in Members (DIMO's JWT has no name; this comes from the OAuth redirect). */
+    email?: string;
+    /** ISO timestamp of the member's last recorded login, if any. */
+    lastLoginAt?: string;
 }
 
 interface MembersResponse {
@@ -59,6 +63,19 @@ export class TenantService {
     public async fetchTenants(): Promise<Tenant[]> {
         const res = await ApiService.getInstance().get<TenantsResponse>('/tenants');
         return res.tenants ?? [];
+    }
+
+    /**
+     * POST /tenants/:id/login — record this session's login: bumps the member's
+     * last_login_at (drives the group-sync cron tiering) and stores the email
+     * from the OAuth redirect (DIMO's JWT carries no name/email). Best-effort.
+     */
+    public async recordLogin(tenantId: string): Promise<void> {
+        const email = localStorage.getItem('email') ?? '';
+        await ApiService.getInstance().post(
+            `/tenants/${encodeURIComponent(tenantId)}/login`,
+            { email },
+        );
     }
 
     /** GET /tenants/:id/members — every wallet that belongs to the tenant. */

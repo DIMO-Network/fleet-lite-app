@@ -99,6 +99,7 @@ func App(
 	authApp.Get("/tenants/:id/members", tenantsCtrl.GetMembers)
 	authApp.Post("/tenants/:id/members", tenantsCtrl.AddMember)
 	authApp.Delete("/tenants/:id/members/:wallet", tenantsCtrl.RemoveMember)
+	authApp.Post("/tenants/:id/login", tenantsCtrl.LoginTouch)
 
 	// Tenant-scoped data routes (JWT + Tenant-Id header membership check).
 	tenantApp := authApp.Group("", NewTenantMiddleware(tenantSvc, logger))

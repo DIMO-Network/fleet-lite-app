@@ -150,6 +150,29 @@ func (s *TenantService) AddMember(ctx context.Context, tenantID, wallet, role st
 		[]string{"tenant_id", "wallet"}, boil.Whitelist("role", "updated_at"), boil.Infer())
 }
 
+// TouchLogin records a member's login: bumps last_login_at to now and stores
+// the email (the human-readable identity — DIMO's JWT carries neither name nor
+// email, so the client supplies the email from the OAuth redirect). A blank
+// email leaves any existing one intact. No-op if the wallet isn't a member.
+func (s *TenantService) TouchLogin(ctx context.Context, tenantID, wallet, email string) error {
+	tu, err := dbmodels.TenantUsers(
+		dbmodels.TenantUserWhere.TenantID.EQ(tenantID),
+		dbmodels.TenantUserWhere.Wallet.EQ(strings.ToLower(wallet)),
+	).One(ctx, s.pdb.DBS().Reader)
+	if err != nil {
+		return err
+	}
+	now := time.Now()
+	tu.LastLoginAt = null.TimeFrom(now)
+	tu.UpdatedAt = now
+	if email != "" {
+		tu.Email = null.StringFrom(email)
+	}
+	_, err = tu.Update(ctx, s.pdb.DBS().Writer,
+		boil.Whitelist("last_login_at", "email", "updated_at"))
+	return err
+}
+
 // RemoveMember deletes a wallet's membership from a tenant.
 func (s *TenantService) RemoveMember(ctx context.Context, tenantID, wallet string) error {
 	_, err := dbmodels.TenantUsers(

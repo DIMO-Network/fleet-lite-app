@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"time"
+
 	"github.com/DIMO-Network/fleet-lite-app/internal/config"
 	"github.com/DIMO-Network/fleet-lite-app/internal/gateway"
 	"github.com/DIMO-Network/fleet-lite-app/internal/models"
@@ -151,8 +153,10 @@ func (t *TenantsController) SyncVehicles(c *fiber.Ctx) error {
 }
 
 type memberJSON struct {
-	Wallet string `json:"wallet"`
-	Role   string `json:"role"`
+	Wallet      string  `json:"wallet"`
+	Role        string  `json:"role"`
+	Email       string  `json:"email,omitempty"`
+	LastLoginAt *string `json:"lastLoginAt,omitempty"`
 }
 
 // GetMembers — GET /tenants/:id/members. Any member can list the tenant's members.
@@ -167,9 +171,36 @@ func (t *TenantsController) GetMembers(c *fiber.Ctx) error {
 	}
 	out := make([]memberJSON, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, memberJSON{Wallet: r.Wallet, Role: r.Role})
+		m := memberJSON{Wallet: r.Wallet, Role: r.Role, Email: r.Email.String}
+		if r.LastLoginAt.Valid {
+			s := r.LastLoginAt.Time.UTC().Format(time.RFC3339)
+			m.LastLoginAt = &s
+		}
+		out = append(out, m)
 	}
 	return c.JSON(fiber.Map{"members": out})
+}
+
+type loginRequest struct {
+	Email string `json:"email"`
+}
+
+// LoginTouch — POST /tenants/:id/login. Records the caller's last_login_at and
+// email (the client supplies the email, since the DIMO JWT carries neither name
+// nor email). Drives the group-sync cron's tenant-activity tiering and powers
+// the Members list. Any member may touch their own login.
+func (t *TenantsController) LoginTouch(c *fiber.Ctx) error {
+	wallet, _, err := t.requireMember(c)
+	if err != nil {
+		return err
+	}
+	var req loginRequest
+	_ = c.BodyParser(&req) // email is optional
+	if err := t.tenantSvc.TouchLogin(c.Context(), c.Params("id"), wallet, req.Email); err != nil {
+		t.logger.Err(err).Str("tenant", c.Params("id")).Msg("touch login")
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to record login")
+	}
+	return c.JSON(fiber.Map{"ok": true})
 }
 
 type addMemberRequest struct {
