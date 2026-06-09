@@ -12,7 +12,6 @@ import { Vehicle, VehicleCard, VehiclesResponse } from '../types/vehicle.ts';
 export class FleetOverviewView extends LitElement {
     @property({ type: String }) tenantId = '';
     @state() private vehicles: VehicleCard[] = [];
-    @state() private locations: VehicleLocation[] = [];
     @state() private loading = true;
     @state() private errorMessage: string | null = null;
 
@@ -735,10 +734,10 @@ export class FleetOverviewView extends LitElement {
                 </div>
             </header>
 
-            <fleet-map class="map" .vehicles=${this.locations} .tenantId=${this.tenantId}></fleet-map>
+            <div class="map"></div>
 
             <div class="map-controls">
-                <button @click=${this.recenterMap} title="Fit all vehicles">
+                <button @click=${this.centerMap} title="Fit all vehicles">
                     <span class="material-symbols-outlined">my_location</span>
                 </button>
             </div>
