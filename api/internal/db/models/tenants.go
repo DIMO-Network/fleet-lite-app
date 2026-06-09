@@ -143,10 +143,12 @@ var TenantWhere = struct {
 
 // TenantRels is where relationship names are stored.
 var TenantRels = struct {
+	FleetGroups      string
 	TenantUsers      string
 	VehicleFavorites string
 	Vehicles         string
 }{
+	FleetGroups:      "FleetGroups",
 	TenantUsers:      "TenantUsers",
 	VehicleFavorites: "VehicleFavorites",
 	Vehicles:         "Vehicles",
@@ -154,6 +156,7 @@ var TenantRels = struct {
 
 // tenantR is where relationships are stored.
 type tenantR struct {
+	FleetGroups      FleetGroupSlice      `boil:"FleetGroups" json:"FleetGroups" toml:"FleetGroups" yaml:"FleetGroups"`
 	TenantUsers      TenantUserSlice      `boil:"TenantUsers" json:"TenantUsers" toml:"TenantUsers" yaml:"TenantUsers"`
 	VehicleFavorites VehicleFavoriteSlice `boil:"VehicleFavorites" json:"VehicleFavorites" toml:"VehicleFavorites" yaml:"VehicleFavorites"`
 	Vehicles         VehicleSlice         `boil:"Vehicles" json:"Vehicles" toml:"Vehicles" yaml:"Vehicles"`
@@ -162,6 +165,22 @@ type tenantR struct {
 // NewStruct creates a new relationship struct
 func (*tenantR) NewStruct() *tenantR {
 	return &tenantR{}
+}
+
+func (o *Tenant) GetFleetGroups() FleetGroupSlice {
+	if o == nil {
+		return nil
+	}
+
+	return o.R.GetFleetGroups()
+}
+
+func (r *tenantR) GetFleetGroups() FleetGroupSlice {
+	if r == nil {
+		return nil
+	}
+
+	return r.FleetGroups
 }
 
 func (o *Tenant) GetTenantUsers() TenantUserSlice {
@@ -528,6 +547,20 @@ func (q tenantQuery) Exists(ctx context.Context, exec boil.ContextExecutor) (boo
 	return count > 0, nil
 }
 
+// FleetGroups retrieves all the fleet_group's FleetGroups with an executor.
+func (o *Tenant) FleetGroups(mods ...qm.QueryMod) fleetGroupQuery {
+	var queryMods []qm.QueryMod
+	if len(mods) != 0 {
+		queryMods = append(queryMods, mods...)
+	}
+
+	queryMods = append(queryMods,
+		qm.Where("\"fleet_groups\".\"tenant_id\"=?", o.ID),
+	)
+
+	return FleetGroups(queryMods...)
+}
+
 // TenantUsers retrieves all the tenant_user's TenantUsers with an executor.
 func (o *Tenant) TenantUsers(mods ...qm.QueryMod) tenantUserQuery {
 	var queryMods []qm.QueryMod
@@ -568,6 +601,119 @@ func (o *Tenant) Vehicles(mods ...qm.QueryMod) vehicleQuery {
 	)
 
 	return Vehicles(queryMods...)
+}
+
+// LoadFleetGroups allows an eager lookup of values, cached into the
+// loaded structs of the objects. This is for a 1-M or N-M relationship.
+func (tenantL) LoadFleetGroups(ctx context.Context, e boil.ContextExecutor, singular bool, maybeTenant any, mods queries.Applicator) error {
+	var slice []*Tenant
+	var object *Tenant
+
+	if singular {
+		var ok bool
+		object, ok = maybeTenant.(*Tenant)
+		if !ok {
+			object = new(Tenant)
+			ok = queries.SetFromEmbeddedStruct(&object, &maybeTenant)
+			if !ok {
+				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", object, maybeTenant))
+			}
+		}
+	} else {
+		s, ok := maybeTenant.(*[]*Tenant)
+		if ok {
+			slice = *s
+		} else {
+			ok = queries.SetFromEmbeddedStruct(&slice, maybeTenant)
+			if !ok {
+				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", slice, maybeTenant))
+			}
+		}
+	}
+
+	args := make(map[any]struct{})
+	if singular {
+		if object.R == nil {
+			object.R = &tenantR{}
+		}
+		args[object.ID] = struct{}{}
+	} else {
+		for _, obj := range slice {
+			if obj.R == nil {
+				obj.R = &tenantR{}
+			}
+			args[obj.ID] = struct{}{}
+		}
+	}
+
+	if len(args) == 0 {
+		return nil
+	}
+
+	argsSlice := make([]any, len(args))
+	i := 0
+	for arg := range args {
+		argsSlice[i] = arg
+		i++
+	}
+
+	query := NewQuery(
+		qm.From(`fleet_groups`),
+		qm.WhereIn(`fleet_groups.tenant_id in ?`, argsSlice...),
+	)
+	if mods != nil {
+		mods.Apply(query)
+	}
+
+	results, err := query.QueryContext(ctx, e)
+	if err != nil {
+		return errors.Wrap(err, "failed to eager load fleet_groups")
+	}
+
+	var resultSlice []*FleetGroup
+	if err = queries.Bind(results, &resultSlice); err != nil {
+		return errors.Wrap(err, "failed to bind eager loaded slice fleet_groups")
+	}
+
+	if err = results.Close(); err != nil {
+		return errors.Wrap(err, "failed to close results in eager load on fleet_groups")
+	}
+	if err = results.Err(); err != nil {
+		return errors.Wrap(err, "error occurred during iteration of eager loaded relations for fleet_groups")
+	}
+
+	if len(fleetGroupAfterSelectHooks) != 0 {
+		for _, obj := range resultSlice {
+			if err := obj.doAfterSelectHooks(ctx, e); err != nil {
+				return err
+			}
+		}
+	}
+	if singular {
+		object.R.FleetGroups = resultSlice
+		for _, foreign := range resultSlice {
+			if foreign.R == nil {
+				foreign.R = &fleetGroupR{}
+			}
+			foreign.R.Tenant = object
+		}
+		return nil
+	}
+
+	for _, foreign := range resultSlice {
+		for _, local := range slice {
+			if local.ID == foreign.TenantID {
+				local.R.FleetGroups = append(local.R.FleetGroups, foreign)
+				if foreign.R == nil {
+					foreign.R = &fleetGroupR{}
+				}
+				foreign.R.Tenant = local
+				break
+			}
+		}
+	}
+
+	return nil
 }
 
 // LoadTenantUsers allows an eager lookup of values, cached into the
@@ -906,6 +1052,59 @@ func (tenantL) LoadVehicles(ctx context.Context, e boil.ContextExecutor, singula
 		}
 	}
 
+	return nil
+}
+
+// AddFleetGroups adds the given related objects to the existing relationships
+// of the tenant, optionally inserting them as new records.
+// Appends related to o.R.FleetGroups.
+// Sets related.R.Tenant appropriately.
+func (o *Tenant) AddFleetGroups(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*FleetGroup) error {
+	var err error
+	for _, rel := range related {
+		if insert {
+			rel.TenantID = o.ID
+			if err = rel.Insert(ctx, exec, boil.Infer()); err != nil {
+				return errors.Wrap(err, "failed to insert into foreign table")
+			}
+		} else {
+			updateQuery := fmt.Sprintf(
+				"UPDATE \"fleet_groups\" SET %s WHERE %s",
+				strmangle.SetParamNames("\"", "\"", 1, []string{"tenant_id"}),
+				strmangle.WhereClause("\"", "\"", 2, fleetGroupPrimaryKeyColumns),
+			)
+			values := []any{o.ID, rel.ID}
+
+			if boil.IsDebug(ctx) {
+				writer := boil.DebugWriterFrom(ctx)
+				fmt.Fprintln(writer, updateQuery)
+				fmt.Fprintln(writer, values)
+			}
+			if _, err = exec.ExecContext(ctx, updateQuery, values...); err != nil {
+				return errors.Wrap(err, "failed to update foreign table")
+			}
+
+			rel.TenantID = o.ID
+		}
+	}
+
+	if o.R == nil {
+		o.R = &tenantR{
+			FleetGroups: related,
+		}
+	} else {
+		o.R.FleetGroups = append(o.R.FleetGroups, related...)
+	}
+
+	for _, rel := range related {
+		if rel.R == nil {
+			rel.R = &fleetGroupR{
+				Tenant: o,
+			}
+		} else {
+			rel.R.Tenant = o
+		}
+	}
 	return nil
 }
 
@@ -1431,7 +1630,7 @@ func (o *Tenant) Upsert(ctx context.Context, exec boil.ContextExecutor, updateOn
 
 	value := reflect.Indirect(reflect.ValueOf(o))
 	vals := queries.ValuesFromMapping(value, cache.valueMapping)
-	var returns []any
+	var returns []interface{}
 	if len(cache.retMapping) != 0 {
 		returns = queries.PtrsFromMapping(value, cache.retMapping)
 	}

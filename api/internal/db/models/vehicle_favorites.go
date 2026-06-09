@@ -966,7 +966,7 @@ func (o *VehicleFavorite) Upsert(ctx context.Context, exec boil.ContextExecutor,
 
 	value := reflect.Indirect(reflect.ValueOf(o))
 	vals := queries.ValuesFromMapping(value, cache.valueMapping)
-	var returns []any
+	var returns []interface{}
 	if len(cache.retMapping) != 0 {
 		returns = queries.PtrsFromMapping(value, cache.retMapping)
 	}

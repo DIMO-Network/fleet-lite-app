@@ -74,13 +74,14 @@ func main() {
 	telemetryAPI := service.NewTelemetryAPIService(logger, &settings, authProvider)
 	tenantSvc := service.NewTenantService(&logger, &pdb, &settings, identityService)
 	vehicleSvc := service.NewVehicleService(&logger, &pdb, identityService)
+	groupSvc := service.NewFleetGroupService(&logger, &pdb)
 
 	monApp := createMonitoringServer()
 	group, gCtx := errgroup.WithContext(ctx)
 
 	webAPI := app.App(&settings, &logger, CommitHash, &pdb, identityService,
 		authProvider, extractAPI, attestSvc, fetchAPI, telemetryAPI,
-		tenantSvc, vehicleSvc,
+		tenantSvc, vehicleSvc, groupSvc,
 	)
 
 	logger.Info().Int("port", settings.MonitoringPort).Msg("Starting monitoring server")
