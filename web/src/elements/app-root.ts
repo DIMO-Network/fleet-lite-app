@@ -3,6 +3,8 @@ import { customElement, state } from 'lit/decorators.js';
 import { Routes } from '@lit-labs/router';
 import { sharedStyles } from '../global-styles.ts';
 import { TenantService } from '../services/tenant-service.ts';
+import { PrefsService } from '../services/prefs-service.ts';
+import { setLocale } from '../localization.ts';
 import './side-nav.ts';
 import './tenant-switcher.ts';
 import '../views/fleet-overview.ts';
@@ -68,8 +70,12 @@ export class AppRoot extends LitElement {
         ]);
     }
 
-    connectedCallback() {
+    async connectedCallback() {
         super.connectedCallback();
+        // Activate the saved/browser locale before the first route renders so the
+        // initial paint is already localized (lit-localize runtime mode).
+        const locale = PrefsService.getInstance().getLocale();
+        if (locale === 'es') await setLocale(locale);
         window.addEventListener('hashchange', this.boundOnHashChange);
         this.onHashChange();
     }

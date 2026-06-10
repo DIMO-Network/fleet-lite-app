@@ -1,4 +1,5 @@
 import { LitElement, html, css, nothing } from 'lit';
+import { msg, str } from '@lit/localize';
 import { customElement, state, property } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { ApiService } from '../services/api-service.ts';
@@ -21,10 +22,13 @@ interface MissingItem {
     blurb: string;
 }
 
-const MISSING_BLURBS: Record<string, string> = {
-    'dimo.document.vehicle.insurance':    'Track renewals',
-    'dimo.document.vehicle.registration': 'Track expiration',
-    'dimo.document.vehicle.inspection':   'Track next inspection',
+// Thunks, not precomputed strings: msg() must run at render time to pick up the
+// active locale (a module-load value would freeze the source locale before
+// setLocale() runs).
+const MISSING_BLURBS: Record<string, () => string> = {
+    'dimo.document.vehicle.insurance':    () => msg('Track renewals'),
+    'dimo.document.vehicle.registration': () => msg('Track expiration'),
+    'dimo.document.vehicle.inspection':   () => msg('Track next inspection'),
 };
 
 @customElement('glovebox-view')
@@ -87,8 +91,8 @@ export class GloveboxView extends LitElement {
             .filter((t) => !presentTypes.has(t))
             .map((t) => ({
                 ceType: t,
-                label: `Add ${categoryLabel(t).toLowerCase()}`,
-                blurb: MISSING_BLURBS[t] ?? '',
+                label: msg(str`Add ${categoryLabel(t).toLowerCase()}`),
+                blurb: MISSING_BLURBS[t]?.() ?? '',
             }));
     }
 
@@ -431,8 +435,8 @@ export class GloveboxView extends LitElement {
                 <div class="vehicle-meta">
                     <h3>${vehicleTitle(v)}</h3>
                     <p>${v.tokenId === this.selected?.tokenId
-                            ? (this.loadingDocs ? 'Loading…' : `${this.documents.length} Record${this.documents.length === 1 ? '' : 's'}`)
-                            : 'View documents'}</p>
+                            ? (this.loadingDocs ? msg('Loading…') : msg(str`${this.documents.length} Record${this.documents.length === 1 ? '' : 's'}`))
+                            : msg('View documents')}</p>
                 </div>
                 <div class="right-group">
                     <span class="material-symbols-outlined">chevron_right</span>
@@ -470,19 +474,19 @@ export class GloveboxView extends LitElement {
         return html`
             <section class="list-panel">
                 <header class="list-header">
-                    <h1>Glovebox</h1>
+                    <h1>${msg('Glovebox')}</h1>
                     <button
                         ?disabled=${!this.selected}
                         @click=${this.openUpload}
-                        title="Add a document">
+                        title="${msg('Add a document')}">
                         <span class="material-symbols-outlined">add</span>
                     </button>
                 </header>
                 <div class="vehicle-list custom-scrollbar">
                     ${this.loadingVehicles
-                        ? html`<p style="padding:24px;color:var(--on-surface-variant);">Loading…</p>`
+                        ? html`<p style="padding:24px;color:var(--on-surface-variant);">${msg('Loading…')}</p>`
                         : this.vehicles.length === 0
-                            ? html`<p style="padding:24px;color:var(--on-surface-variant);">No vehicles on this account.</p>`
+                            ? html`<p style="padding:24px;color:var(--on-surface-variant);">${msg('No vehicles on this account.')}</p>`
                             : this.vehicles.map((v) => this.renderListCard(v))
                     }
                 </div>
@@ -494,8 +498,8 @@ export class GloveboxView extends LitElement {
                         <span class="material-symbols-outlined">directions_car</span>
                     </div>
                     <div>
-                        <h2>${this.selected ? vehicleTitle(this.selected) : 'Select a vehicle'}</h2>
-                        <p>${this.selected ? `${total} Record${total === 1 ? '' : 's'}` : 'Pick a vehicle from the list'}</p>
+                        <h2>${this.selected ? vehicleTitle(this.selected) : msg('Select a vehicle')}</h2>
+                        <p>${this.selected ? msg(str`${total} Record${total === 1 ? '' : 's'}`) : msg('Pick a vehicle from the list')}</p>
                     </div>
                     <tenant-switcher .currentTenantId=${this.tenantId} style="margin-left:auto;"></tenant-switcher>
                 </div>
@@ -505,28 +509,28 @@ export class GloveboxView extends LitElement {
                         ${this.permissionsRequired ? html`
                             <div class="perms-banner">
                                 <div>
-                                    <strong>Grant DIMO permissions to view documents on this vehicle.</strong>
+                                    <strong>${msg('Grant DIMO permissions to view documents on this vehicle.')}</strong>
                                     <p>
-                                        The fleet-lite dev license <code>${this.devLicense}</code>
+                                        ${msg(html`The fleet-lite dev license <code>${this.devLicense}</code>
                                         needs SACD permissions on this vehicle before the document list can load.
-                                        Documents you upload here are still saved — you just can't list or download them yet.
+                                        Documents you upload here are still saved — you just can't list or download them yet.`)}
                                     </p>
                                 </div>
                                 <a class="grant" href="https://console.dimo.org" target="_blank" rel="noopener">
-                                    Open DIMO console
+                                    ${msg('Open DIMO console')}
                                     <span class="material-symbols-outlined" style="font-size:14px;">open_in_new</span>
                                 </a>
                             </div>
                         ` : nothing}
                         <div class="filter-row">
-                            <button class="filter-pill">All <span class="sep">•</span> ${total}</button>
+                            <button class="filter-pill">${msg('All')} <span class="sep">•</span> ${total}</button>
                         </div>
 
                         ${missing.length ? html`
                             <div class="missing-section">
                                 <div class="missing-head">
                                     <span class="dot"></span>
-                                    <h3>Missing</h3>
+                                    <h3>${msg('Missing')}</h3>
                                 </div>
                                 <div class="missing-list">
                                     ${missing.map((m) => html`
@@ -540,13 +544,13 @@ export class GloveboxView extends LitElement {
                         ` : nothing}
 
                         ${this.loadingDocs
-                            ? html`<div class="docs-loading">Loading documents…</div>`
+                            ? html`<div class="docs-loading">${msg('Loading documents…')}</div>`
                             : groups.length === 0
                                 ? html`
                                     <div class="empty-state">
-                                        <h3>No records yet.</h3>
-                                        <p>— upload anything: receipt, insurance pdf, reg card</p>
-                                        <button class="add-doc" @click=${this.openUpload}>Add document</button>
+                                        <h3>${msg('No records yet.')}</h3>
+                                        <p>${msg('— upload anything: receipt, insurance pdf, reg card')}</p>
+                                        <button class="add-doc" @click=${this.openUpload}>${msg('Add document')}</button>
                                     </div>
                                 `
                                 : groups.map((g) => html`

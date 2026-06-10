@@ -1,5 +1,6 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { msg, str } from '@lit/localize';
 import { sharedStyles } from '../global-styles.ts';
 import { ApiService } from '../services/api-service.ts';
 import { FleetCache } from '../services/fleet-cache.ts';
@@ -220,7 +221,7 @@ export class VehicleDetailsView extends LitElement {
                 height,
                 value: typeof v === 'number' ? v : null,
                 label: this.dayLabel(b.timestamp),
-                tooltip: typeof v === 'number' ? `${this.weekdayLong(b.timestamp)}: ${formatValue(v)}` : 'No data',
+                tooltip: typeof v === 'number' ? `${this.weekdayLong(b.timestamp)}: ${formatValue(v)}` : msg('No data'),
             };
         });
     }
@@ -259,7 +260,7 @@ export class VehicleDetailsView extends LitElement {
                         <div class="bar-label">&nbsp;</div>
                     </div>
                 `)}
-                <div class="chart-empty-overlay">No data</div>
+                <div class="chart-empty-overlay">${msg('No data')}</div>
             </div>`;
         }
         return html`<div class="chart ${color} ${density === 'narrow' ? 'narrow' : ''}">
@@ -782,17 +783,17 @@ export class VehicleDetailsView extends LitElement {
         return html`
             <div class="data-card col-6 card-tall">
                 <div class="data-card-head">
-                    <h4>Speed</h4>
+                    <h4>${msg('Speed')}</h4>
                     <span class="material-symbols-outlined">chevron_right</span>
                 </div>
                 <div class="stat-row">
                     <div class="stat-col">
                         <div>
-                            <p class="stat-label">Top</p>
+                            <p class="stat-label">${msg('Top')}</p>
                             <div class="stat-value-lg"><span class="num">${topFmt.value}</span><span class="unit">${topFmt.unit}</span></div>
                         </div>
                         <div>
-                            <p class="stat-label">Average</p>
+                            <p class="stat-label">${msg('Average')}</p>
                             <div class="stat-value-md"><span class="num">${avgFmt.value}</span><span class="unit">${avgFmt.unit}</span></div>
                         </div>
                     </div>
@@ -808,12 +809,12 @@ export class VehicleDetailsView extends LitElement {
         return html`
             <div class="data-card col-6 card-tall placeholder">
                 <div class="data-card-head">
-                    <h4>Utilization</h4>
+                    <h4>${msg('Utilization')}</h4>
                     <span class="material-symbols-outlined">hourglass_empty</span>
                 </div>
                 <div class="placeholder-body">
-                    <p>Driving hours aren't exposed directly by telemetry-api.</p>
-                    <p class="small">Will be derived from ignition + speed segments in a future phase.</p>
+                    <p>${msg("Driving hours aren't exposed directly by telemetry-api.")}</p>
+                    <p class="small">${msg('Will be derived from ignition + speed segments in a future phase.')}</p>
                 </div>
             </div>
         `;
@@ -826,7 +827,7 @@ export class VehicleDetailsView extends LitElement {
         return html`
             <div class="data-card col-4 card-mid">
                 <div class="data-card-head">
-                    <h4>Fuel level</h4>
+                    <h4>${msg('Fuel level')}</h4>
                     <span class="material-symbols-outlined">local_gas_station</span>
                 </div>
                 <div>
@@ -846,12 +847,12 @@ export class VehicleDetailsView extends LitElement {
         return html`
             <div class="data-card col-4 card-mid">
                 <div class="data-card-head" style="border-bottom: 1px solid var(--outline-variant); padding-bottom: 16px; margin-bottom: 16px;">
-                    <h4>Coolant temperature</h4>
+                    <h4>${msg('Coolant temperature')}</h4>
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:flex-end;">
                     <div class="stat-value-lg"><span class="num">${fmt.value}</span><span class="unit">${fmt.unit}</span></div>
                     ${typeof c === 'number'
-                        ? html`<span class="pill-normal">${normal ? 'Normal' : 'Check'}</span>`
+                        ? html`<span class="pill-normal">${normal ? msg('Normal') : msg('Check')}</span>`
                         : nothing}
                 </div>
             </div>
@@ -880,7 +881,7 @@ export class VehicleDetailsView extends LitElement {
         return html`
             <div class="data-card col-4 card-mid">
                 <div class="data-card-head">
-                    <h4>Distance · 7d</h4>
+                    <h4>${msg('Distance · 7d')}</h4>
                     <span class="material-symbols-outlined">chevron_right</span>
                 </div>
                 <div class="distance-row">
@@ -899,7 +900,7 @@ export class VehicleDetailsView extends LitElement {
         return html`
             <div class="data-card col-3 card-short">
                 <div class="data-card-head">
-                    <h4>Battery voltage</h4>
+                    <h4>${msg('Battery voltage')}</h4>
                     <span class="material-symbols-outlined">battery_full</span>
                 </div>
                 <div class="stat-value-md"><span class="num">${fmt.value}</span><span class="unit">${fmt.unit}</span></div>
@@ -911,14 +912,14 @@ export class VehicleDetailsView extends LitElement {
         return html`
             <div class="data-card col-3 card-short relative placeholder">
                 <div class="data-card-head">
-                    <h4>Error codes</h4>
+                    <h4>${msg('Error codes')}</h4>
                     <span class="material-symbols-outlined">hourglass_empty</span>
                 </div>
                 <div>
                     <div class="stat-value-md" style="margin-bottom: 8px;">
-                        <span class="num">—</span><span class="unit">DTCs</span>
+                        <span class="num">—</span><span class="unit">${msg('DTCs')}</span>
                     </div>
-                    <p class="stat-label">Not yet wired</p>
+                    <p class="stat-label">${msg('Not yet wired')}</p>
                 </div>
                 <span class="material-symbols-outlined err-engineering">engineering</span>
             </div>
@@ -930,7 +931,7 @@ export class VehicleDetailsView extends LitElement {
         const fmt = formatDistance(km);
         return html`
             <div class="data-card col-3 card-short">
-                <div class="data-card-head"><h4>Odometer</h4></div>
+                <div class="data-card-head"><h4>${msg('Odometer')}</h4></div>
                 <div class="stat-value-md"><span class="num">${fmt.value}</span><span class="unit">${fmt.unit}</span></div>
             </div>
         `;
@@ -953,16 +954,16 @@ export class VehicleDetailsView extends LitElement {
                 <div class="left">
                     <h2>${this.vehicleTitle}</h2>
                     <nav>
-                        <a href="#" class="active">Overview</a>
-                        <a href="#">Diagnostics</a>
-                        <a href="#">Trips</a>
+                        <a href="#" class="active">${msg('Overview')}</a>
+                        <a href="#">${msg('Diagnostics')}</a>
+                        <a href="#">${msg('Trips')}</a>
                     </nav>
                 </div>
                 <div class="right">
                     <tenant-switcher .currentTenantId=${this.tenantId}></tenant-switcher>
                     <button class="live-tracking">
                         <span class="status-dot"></span>
-                        Live Tracking
+                        ${msg('Live Tracking')}
                     </button>
                     <button class="icon-btn"><span class="material-symbols-outlined">notifications</span></button>
                     <button class="icon-btn"><span class="material-symbols-outlined">account_circle</span></button>
@@ -973,21 +974,21 @@ export class VehicleDetailsView extends LitElement {
                 <div class="hero-status">
                     <div class="chip">
                         <span class="material-symbols-outlined">tag</span>
-                        <span>Token #${this.tokenId}</span>
+                        <span>${msg(str`Token #${this.tokenId}`)}</span>
                     </div>
                     ${this.vehicle?.aftermarketDevice
                         ? html`<div class="meta">
                             <span class="dot"></span>
-                            <span>Aftermarket device #${this.vehicle.aftermarketDevice.tokenId}</span>
+                            <span>${msg(str`Aftermarket device #${this.vehicle.aftermarketDevice.tokenId}`)}</span>
                         </div>`
                         : this.vehicle?.syntheticDevice && this.vehicle.syntheticDevice.tokenId > 0
                             ? html`<div class="meta">
                                 <span class="dot"></span>
-                                <span>Synthetic device #${this.vehicle.syntheticDevice.tokenId}</span>
+                                <span>${msg(str`Synthetic device #${this.vehicle.syntheticDevice.tokenId}`)}</span>
                             </div>`
                             : html`<div class="meta">
                                 <span class="dot"></span>
-                                <span>No DIMO integration yet</span>
+                                <span>${msg('No DIMO integration yet')}</span>
                             </div>`
                     }
                 </div>
@@ -998,7 +999,7 @@ export class VehicleDetailsView extends LitElement {
                         <div class="trips-bg"></div>
                         <div class="trips-content">
                             <div class="trips-top">
-                                <h3>Trips</h3>
+                                <h3>${msg('Trips')}</h3>
                                 <span class="chip">3h ago</span>
                             </div>
                             <div class="trips-bottom">
@@ -1016,20 +1017,22 @@ export class VehicleDetailsView extends LitElement {
                         </div>
                     </div>
 
-                    <div class="section-label">Last 7 days</div>
+                    <div class="section-label">${msg('Last 7 days')}</div>
 
                     ${this.telemetryPermissionsRequired ? html`
                         <div class="perms-banner">
                             <div>
-                                <strong>Grant DIMO permissions to see live telemetry on this vehicle.</strong>
+                                <strong>${msg('Grant DIMO permissions to see live telemetry on this vehicle.')}</strong>
                                 <p>
+                                    ${msg(html`
                                     The fleet-lite dev license <code>${this.telemetryDevLicense}</code>
                                     needs SACD permissions on this vehicle before we can read signals from
                                     telemetry-api. Charts below are placeholders until permissions are granted.
+                                `)}
                                 </p>
                             </div>
                             <a class="grant" href="https://console.dimo.org" target="_blank" rel="noopener">
-                                Open DIMO console
+                                ${msg('Open DIMO console')}
                                 <span class="material-symbols-outlined" style="font-size:14px;">open_in_new</span>
                             </a>
                         </div>
@@ -1041,7 +1044,7 @@ export class VehicleDetailsView extends LitElement {
                     ${this.renderCoolantCard()}
                     ${this.renderDistanceCard()}
 
-                    <div class="section-headline">Vehicle status</div>
+                    <div class="section-headline">${msg('Vehicle status')}</div>
 
                     ${this.renderBatteryCard()}
                     ${this.renderErrorCodesPlaceholder()}
@@ -1055,13 +1058,13 @@ export class VehicleDetailsView extends LitElement {
                             <span class="material-symbols-outlined ${this.vehicle?.isFavorite ? 'favorite-on' : 'muted'}">
                                 ${this.vehicle?.isFavorite ? 'star' : 'star_border'}
                             </span>
-                            <span class="label">${this.vehicle?.isFavorite ? 'Remove favorite' : 'Make favorite'}</span>
+                            <span class="label">${this.vehicle?.isFavorite ? msg('Remove favorite') : msg('Make favorite')}</span>
                         </div>
                     </button>
                     <button>
                         <div class="left-group">
                             <span class="material-symbols-outlined muted">wifi</span>
-                            <span class="label">Data sources</span>
+                            <span class="label">${msg('Data sources')}</span>
                         </div>
                         <span class="material-symbols-outlined muted">chevron_right</span>
                     </button>

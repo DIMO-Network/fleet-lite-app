@@ -1,4 +1,5 @@
 import { LitElement, html, css, nothing } from 'lit';
+import { msg, str } from '@lit/localize';
 import { customElement, property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { ApiService } from '../services/api-service.ts';
@@ -43,7 +44,7 @@ export class GroupsManagementView extends LitElement {
             this.errorMessage = null;
         } catch (e) {
             console.error('Failed to load groups', e);
-            this.errorMessage = e instanceof Error ? e.message : 'Failed to load groups';
+            this.errorMessage = e instanceof Error ? e.message : msg('Failed to load groups');
         } finally {
             this.loading = false;
         }
@@ -56,7 +57,7 @@ export class GroupsManagementView extends LitElement {
             await this.load();
         } catch (e) {
             console.error('Failed to delete group', e);
-            this.errorMessage = e instanceof Error ? e.message : 'Failed to delete group';
+            this.errorMessage = e instanceof Error ? e.message : msg('Failed to delete group');
         }
     }
 
@@ -127,22 +128,22 @@ export class GroupsManagementView extends LitElement {
                     <span class="dot" style="background:${g.color}"></span>
                     <span class="name">${g.name}</span>
                 </div>
-                <span class="count">${g.vehicleCount ?? 0} ${(g.vehicleCount ?? 0) === 1 ? 'vehicle' : 'vehicles'}</span>
+                <span class="count">${g.vehicleCount ?? 0} ${(g.vehicleCount ?? 0) === 1 ? msg('vehicle') : msg('vehicles')}</span>
                 ${confirming
                     ? html`<div class="confirm">
-                        <span>Delete “${g.name}”?</span>
-                        <button class="yes" @click=${() => this.onDelete(g)}>Delete</button>
-                        <button class="no" @click=${() => { this.confirmingDeleteId = null; }}>Cancel</button>
+                        <span>${msg(str`Delete “${g.name}”?`)}</span>
+                        <button class="yes" @click=${() => this.onDelete(g)}>${msg('Delete')}</button>
+                        <button class="no" @click=${() => { this.confirmingDeleteId = null; }}>${msg('Cancel')}</button>
                     </div>`
                     : html`<div class="card-actions">
                         <button @click=${() => { this.managing = g; }}>
-                            <span class="material-symbols-outlined">directions_car</span> Vehicles
+                            <span class="material-symbols-outlined">directions_car</span> ${msg('Vehicles')}
                         </button>
                         <button @click=${() => { this.editing = g; }}>
-                            <span class="material-symbols-outlined">palette</span> Color
+                            <span class="material-symbols-outlined">palette</span> ${msg('Color')}
                         </button>
                         <button class="danger" @click=${() => { this.confirmingDeleteId = g.id; }}>
-                            <span class="material-symbols-outlined">delete</span> Delete
+                            <span class="material-symbols-outlined">delete</span> ${msg('Delete')}
                         </button>
                     </div>`}
             </div>
@@ -152,21 +153,21 @@ export class GroupsManagementView extends LitElement {
     render() {
         return html`
             <header class="top-bar">
-                <h2>Fleet Groups</h2>
+                <h2>${msg('Fleet Groups')}</h2>
                 <button class="new-btn" @click=${() => { this.creating = true; }}>
-                    <span class="material-symbols-outlined">add</span> New group
+                    <span class="material-symbols-outlined">add</span> ${msg('New group')}
                 </button>
             </header>
 
             <div class="canvas">
                 ${this.loading
-                    ? html`<p class="empty-state">Loading groups…</p>`
+                    ? html`<p class="empty-state">${msg('Loading groups…')}</p>`
                     : this.errorMessage
                         ? html`<p class="empty-state error">${this.errorMessage}</p>`
                         : this.groups.length === 0
                             ? html`<div class="empty-state">
                                 <span class="material-symbols-outlined">workspaces</span>
-                                No groups yet. Create one to organize your fleet.
+                                ${msg('No groups yet. Create one to organize your fleet.')}
                             </div>`
                             : html`<div class="grid">${this.groups.map((g) => this.renderCard(g))}</div>`}
             </div>

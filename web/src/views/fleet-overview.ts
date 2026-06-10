@@ -1,5 +1,6 @@
 import { LitElement, html, css, unsafeCSS, nothing } from 'lit';
 import { customElement, state, property } from 'lit/decorators.js';
+import { msg } from '@lit/localize';
 import L from 'leaflet';
 import leafletCss from 'leaflet/dist/leaflet.css?inline';
 import { sharedStyles } from '../global-styles.ts';
@@ -75,7 +76,7 @@ export class FleetOverviewView extends LitElement {
             location: integration,
             seenAt: `Token #${v.tokenId}`,
             online: integrated,
-            errorMessage: integrated ? undefined : 'No DIMO integration — pair a device to stream telemetry',
+            errorMessage: integrated ? undefined : msg('No DIMO integration — pair a device to stream telemetry'),
             isFavorite: v.isFavorite ?? false,
             groups: v.groups ?? [],
         };
@@ -139,7 +140,7 @@ export class FleetOverviewView extends LitElement {
             // ApiService already redirected to /login.html on 401/400.
             this.loading = false;
             console.error('Failed to load vehicles', e);
-            this.errorMessage = e instanceof Error ? e.message : 'Failed to load vehicles';
+            this.errorMessage = e instanceof Error ? e.message : msg('Failed to load vehicles');
             return;
         }
 
@@ -715,7 +716,7 @@ export class FleetOverviewView extends LitElement {
         return html`
             <a class=${cls} href="#/${this.tenantId}/vehicles/${v.tokenId}">
                 ${this.markers.has(v.tokenId) ? html`
-                    <button class="zoom-btn" title="Zoom to vehicle" @click=${(e: Event) => this.zoomToVehicle(e, v.tokenId)}>
+                    <button class="zoom-btn" title="${msg('Zoom to vehicle')}" @click=${(e: Event) => this.zoomToVehicle(e, v.tokenId)}>
                         <span class="material-symbols-outlined">my_location</span>
                     </button>
                 ` : ''}
@@ -726,7 +727,7 @@ export class FleetOverviewView extends LitElement {
                     </div>
                     <div class="vehicle-meta">
                         <h4>
-                            ${v.isFavorite ? html`<span class="material-symbols-outlined favorite-star" title="Favorite">star</span>` : ''}
+                            ${v.isFavorite ? html`<span class="material-symbols-outlined favorite-star" title="${msg('Favorite')}">star</span>` : ''}
                             ${v.title}
                         </h4>
                         ${v.online ? html`
@@ -741,7 +742,7 @@ export class FleetOverviewView extends LitElement {
                             ${v.noPermissions ? html`
                                 <div class="no-permissions-badge">
                                     <span class="material-symbols-outlined">lock</span>
-                                    <span>No location access</span>
+                                    <span>${msg('No location access')}</span>
                                 </div>
                             ` : ''}
                         ` : html`
@@ -760,10 +761,10 @@ export class FleetOverviewView extends LitElement {
         return html`
             <a class="vehicle-card-compact" href="#/${this.tenantId}/vehicles/${v.tokenId}" title=${v.title}>
                 <span class="status-dot ${this.statusClass(v)}"></span>
-                ${v.isFavorite ? html`<span class="material-symbols-outlined favorite-star-compact" title="Favorite">star</span>` : ''}
+                ${v.isFavorite ? html`<span class="material-symbols-outlined favorite-star-compact" title="${msg('Favorite')}">star</span>` : ''}
                 <span class="compact-token-id">${v.tokenId}</span>
                 ${this.markers.has(v.tokenId) ? html`
-                    <button class="zoom-btn" title="Zoom to vehicle" @click=${(e: Event) => this.zoomToVehicle(e, v.tokenId)}>
+                    <button class="zoom-btn" title="${msg('Zoom to vehicle')}" @click=${(e: Event) => this.zoomToVehicle(e, v.tokenId)}>
                         <span class="material-symbols-outlined">my_location</span>
                     </button>
                 ` : ''}
@@ -775,15 +776,15 @@ export class FleetOverviewView extends LitElement {
         return html`
             <header class="top-bar">
                 <div class="left">
-                    <h2>Fleet Overview</h2>
+                    <h2>${msg('Fleet Overview')}</h2>
                     <nav>
-                        <a href="#/${this.tenantId}/" class="active">Map View</a>
-                        <a href="#/${this.tenantId}/stats">List View</a>
+                        <a href="#/${this.tenantId}/" class="active">${msg('Map View')}</a>
+                        <a href="#/${this.tenantId}/stats">${msg('List View')}</a>
                     </nav>
                 </div>
                 <div class="right">
                     <tenant-switcher .currentTenantId=${this.tenantId}></tenant-switcher>
-                    <button class="live-tracking">Live Tracking</button>
+                    <button class="live-tracking">${msg('Live Tracking')}</button>
                     <button class="icon-btn"><span class="material-symbols-outlined">notifications</span></button>
                     <button class="icon-btn"><span class="material-symbols-outlined">account_circle</span></button>
                 </div>
@@ -792,24 +793,24 @@ export class FleetOverviewView extends LitElement {
             <div class="map"></div>
 
             <div class="map-controls">
-                <button @click=${this.centerMap} title="Fit all vehicles">
+                <button @click=${this.centerMap} title="${msg('Fit all vehicles')}">
                     <span class="material-symbols-outlined">my_location</span>
                 </button>
             </div>
 
             <div class="map-legend">
-                <button title="Center map" @click=${() => this.centerMap()}>
+                <button title="${msg('Center map')}" @click=${() => this.centerMap()}>
                     <span class="material-symbols-outlined">center_focus_strong</span>
                 </button>
-                <button title="Zoom in" @click=${() => this.leafletMap?.zoomIn()}>
+                <button title="${msg('Zoom in')}" @click=${() => this.leafletMap?.zoomIn()}>
                     <span class="material-symbols-outlined">add</span>
                 </button>
-                <button title="Zoom out" @click=${() => this.leafletMap?.zoomOut()}>
+                <button title="${msg('Zoom out')}" @click=${() => this.leafletMap?.zoomOut()}>
                     <span class="material-symbols-outlined">remove</span>
                 </button>
                 <button
                     class=${this.refreshing ? 'spinning' : ''}
-                    title="Refresh vehicle state"
+                    title="${msg('Refresh vehicle state')}"
                     ?disabled=${this.refreshing}
                     @click=${() => this.refreshVehicles()}
                 >
@@ -819,7 +820,7 @@ export class FleetOverviewView extends LitElement {
 
             <button
                 class="chevron-tab ${!this.panelExpanded ? 'narrow' : ''}"
-                title="${this.panelExpanded ? 'Collapse panel' : 'Expand panel'}"
+                title="${this.panelExpanded ? msg('Collapse panel') : msg('Expand panel')}"
                 @click=${() => { this.panelExpanded = !this.panelExpanded; }}
             >
                 <span class="material-symbols-outlined">${this.panelExpanded ? 'chevron_right' : 'chevron_left'}</span>
@@ -828,8 +829,8 @@ export class FleetOverviewView extends LitElement {
             <div class="vehicles-panel ${this.panelCollapsed ? 'collapsed' : ''} ${!this.panelExpanded ? 'narrow' : ''}">
                 <div class="drag-handle" @click=${() => { this.panelCollapsed = false; }}><div></div></div>
                 <div class="panel-header">
-                    <h3>Your cars</h3>
-                    <a href="#/${this.tenantId}/groups" title="Manage groups">
+                    <h3>${msg('Your cars')}</h3>
+                    <a href="#/${this.tenantId}/groups" title="${msg('Manage groups')}">
                         <button><span class="material-symbols-outlined">workspaces</span></button>
                     </a>
                 </div>
@@ -849,7 +850,7 @@ export class FleetOverviewView extends LitElement {
             <div class="group-filter">
                 <span class="swatch" style="background:${selected ? selected.color : 'transparent'}"></span>
                 <select @change=${(e: Event) => { this.selectedGroupId = (e.target as HTMLSelectElement).value; this.placeMarkers(); }}>
-                    <option value="" ?selected=${this.selectedGroupId === ''}>All groups</option>
+                    <option value="" ?selected=${this.selectedGroupId === ''}>${msg('All groups')}</option>
                     ${options.map((g) => html`
                         <option value=${g.id} ?selected=${g.id === this.selectedGroupId}>${g.name}</option>
                     `)}
@@ -859,11 +860,11 @@ export class FleetOverviewView extends LitElement {
     }
 
     private renderList() {
-        if (this.loading) return html`<p class="empty-state">Loading vehicles…</p>`;
+        if (this.loading) return html`<p class="empty-state">${msg('Loading vehicles…')}</p>`;
         if (this.errorMessage) return html`<p class="empty-state error">${this.errorMessage}</p>`;
         const cards = this.visibleCards();
         if (cards.length === 0) {
-            return html`<p class="empty-state">${this.selectedGroupId ? 'No vehicles in this group.' : 'No vehicles found on this account.'}</p>`;
+            return html`<p class="empty-state">${this.selectedGroupId ? msg('No vehicles in this group.') : msg('No vehicles found on this account.')}</p>`;
         }
         return cards.map((c) => this.panelExpanded ? this.renderCard(c) : this.renderCompactCard(c));
     }

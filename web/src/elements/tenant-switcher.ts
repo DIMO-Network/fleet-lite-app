@@ -1,4 +1,5 @@
 import { LitElement, html, css } from 'lit';
+import { msg } from '@lit/localize';
 import { customElement, property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { TenantService, Tenant } from '../services/tenant-service.ts';
@@ -101,7 +102,7 @@ export class TenantSwitcher extends LitElement {
 
     private currentName(): string {
         const t = this.tenants.find(x => x.id === this.currentTenantId);
-        return t?.name || 'Fleet';
+        return t?.name || msg('Fleet');
     }
 
     private select(id: string) {
@@ -134,7 +135,7 @@ export class TenantSwitcher extends LitElement {
                     <div class="sep"></div>
                     <button class="item add" @click=${this.addTenant}>
                         <span class="material-symbols-outlined">add</span>
-                        <span>Add fleet</span>
+                        <span>${msg('Add fleet')}</span>
                     </button>
                 </div>
             ` : ''}

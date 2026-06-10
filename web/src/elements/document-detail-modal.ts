@@ -1,4 +1,5 @@
 import { LitElement, html, css, nothing } from 'lit';
+import { msg } from '@lit/localize';
 import { customElement, property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { DocumentService } from '../services/document-service.ts';
@@ -150,14 +151,14 @@ export class DocumentDetailModal extends LitElement {
         try {
             await DocumentService.getInstance().download(this.tokenId, this.document.fileHash);
         } catch (e) {
-            this.errorMessage = e instanceof Error ? e.message : 'Download failed';
+            this.errorMessage = e instanceof Error ? e.message : msg('Download failed');
         } finally {
             this.downloading = false;
         }
     }
 
     private async onDelete() {
-        if (!confirm('Delete this document? This emits a tombstone CloudEvent — the underlying file stays on DIMO infrastructure but no longer surfaces here.')) {
+        if (!confirm(msg('Delete this document? This emits a tombstone CloudEvent — the underlying file stays on DIMO infrastructure but no longer surfaces here.'))) {
             return;
         }
         this.deleting = true;
@@ -170,7 +171,7 @@ export class DocumentDetailModal extends LitElement {
                 composed: true,
             }));
         } catch (e) {
-            this.errorMessage = e instanceof Error ? e.message : 'Delete failed';
+            this.errorMessage = e instanceof Error ? e.message : msg('Delete failed');
             this.deleting = false;
         }
     }
@@ -188,26 +189,26 @@ export class DocumentDetailModal extends LitElement {
                 ${this.errorMessage ? html`<div class="error-text">${this.errorMessage}</div>` : nothing}
 
                 <dl>
-                    <dt>Cloud event</dt>
+                    <dt>${msg('Cloud event')}</dt>
                     <dd><code>${this.document.id}</code></dd>
-                    <dt>File hash</dt>
+                    <dt>${msg('File hash')}</dt>
                     <dd><code>${this.document.fileHash || '—'}</code></dd>
                     ${fields.length
                         ? fields.map(([k, v]) => html`<dt>${k}</dt><dd>${v}</dd>`)
-                        : html`<dt>Fields</dt><dd class="empty">No structured fields extracted</dd>`
+                        : html`<dt>${msg('Fields')}</dt><dd class="empty">${msg('No structured fields extracted')}</dd>`
                     }
                 </dl>
 
                 <div class="actions">
                     <button class="danger" ?disabled=${this.deleting} @click=${this.onDelete}>
-                        ${this.deleting ? 'Deleting…' : 'Delete'}
+                        ${this.deleting ? msg('Deleting…') : msg('Delete')}
                     </button>
-                    <button class="ghost" @click=${this.dispatchClose}>Close</button>
+                    <button class="ghost" @click=${this.dispatchClose}>${msg('Close')}</button>
                     <button
                         class="primary"
                         ?disabled=${this.downloading || !this.document.fileHash}
                         @click=${this.onDownload}>
-                        ${this.downloading ? 'Downloading…' : 'Download'}
+                        ${this.downloading ? msg('Downloading…') : msg('Download')}
                     </button>
                 </div>
             </div>

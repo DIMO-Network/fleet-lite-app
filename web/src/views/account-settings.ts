@@ -1,8 +1,10 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { msg } from '@lit/localize';
 import { sharedStyles } from '../global-styles.ts';
 import { getTokenClaims, logout } from '../utils/token.ts';
-import { PrefsService } from '../services/prefs-service.ts';
+import { PrefsService, localeLabel } from '../services/prefs-service.ts';
+import { setLocale } from '../localization.ts';
 import { unitsLabel } from '../utils/units.ts';
 import '../elements/tenant-members.ts';
 
@@ -36,24 +38,32 @@ export class AccountSettingsView extends LitElement {
     private privacyRows(): Row[] {
         const prefs = PrefsService.getInstance();
         return [
-            { icon: 'directions_car', label: 'Manage Subscription' },
-            { icon: 'vpn_key',        label: 'Passkey' },
-            { icon: 'language',       label: 'Language' },
-            { icon: 'developer_mode', label: 'Advanced' },
+            { icon: 'directions_car', label: msg('Manage Subscription') },
+            { icon: 'vpn_key',        label: msg('Passkey') },
+            {
+                icon: 'language',
+                label: msg('Language'),
+                trailing: localeLabel(prefs.getLocale()),
+                onClick: () => {
+                    const next = prefs.toggleLocale();
+                    setLocale(next).then(() => window.location.reload());
+                },
+            },
+            { icon: 'developer_mode', label: msg('Advanced') },
             {
                 icon: 'straighten',
-                label: 'Measurement Units',
+                label: msg('Measurement Units'),
                 trailing: unitsLabel(prefs.getUnits()),
                 onClick: () => { prefs.toggleUnits(); },
             },
-            { icon: 'mail',           label: 'Email Preferences' },
-            { icon: 'logout',         label: 'Log out', onClick: () => logout() },
+            { icon: 'mail',           label: msg('Email Preferences') },
+            { icon: 'logout',         label: msg('Log out'), onClick: () => logout() },
         ];
     }
 
     private supportRows(): Row[] {
         return [
-            { icon: 'support_agent', label: 'FAQ' },
+            { icon: 'support_agent', label: msg('FAQ') },
         ];
     }
 
@@ -216,12 +226,12 @@ export class AccountSettingsView extends LitElement {
     render() {
         return html`
             <header class="top-bar">
-                <h2>Account</h2>
+                <h2>${msg('Account')}</h2>
                 <div class="right">
                     <tenant-switcher .currentTenantId=${this.tenantId}></tenant-switcher>
                     <button class="icon-btn"><span class="material-symbols-outlined">notifications</span></button>
                     <div class="avatar">
-                        <img alt="User profile"
+                        <img alt="${msg('User profile')}"
                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuCq6qWKURsjqwSIJCKjZAmUcVFqT9SNg8mTq8fW242Gn57aMJoxPyNcyU6lHWIrYnzQxXNf5_pIr1S-8d8rkPyNBAXEKykdqU5lGv5ZJfcs0ewK6-xDbmEdPA6YxjJ4K40St9VgnpafSWDI7qNo-bL7Gbhss7D3_VFiHmsNG_nl3lIRZmutx5u1jXGT-5yxwdpM6MM0qyutbkf5kwwLNG3GfXXSG0EvYM8fA6g7UpvV1v1nseFlv6C5vbhDGk33tHgj392rOE5Us7o" />
                     </div>
                 </div>
@@ -233,30 +243,30 @@ export class AccountSettingsView extends LitElement {
                         ? html`
                             <div class="wallet">
                                 <span>${this.wallet}</span>
-                                <button @click=${this.copyWallet} title="Copy wallet address">
+                                <button @click=${this.copyWallet} title="${msg('Copy wallet address')}">
                                     <span class="material-symbols-outlined" style="font-size: 16px;">content_copy</span>
                                 </button>
                             </div>
                             ${this.email ? html`<div class="email">${this.email}</div>` : ''}
                         `
-                        : html`<div class="empty">Not signed in.</div>`
+                        : html`<div class="empty">${msg('Not signed in.')}</div>`
                     }
                 </div>
 
                 <div class="section">
-                    <h3 class="section-title">Privacy & Account</h3>
+                    <h3 class="section-title">${msg('Privacy & Account')}</h3>
                     <div class="row-group">
                         ${this.privacyRows().map(r => this.renderRow(r))}
                     </div>
                 </div>
 
                 <div class="section">
-                    <h3 class="section-title">Fleet Members</h3>
+                    <h3 class="section-title">${msg('Fleet Members')}</h3>
                     <tenant-members .tenantId=${this.tenantId}></tenant-members>
                 </div>
 
                 <div class="section">
-                    <h3 class="section-title">Support</h3>
+                    <h3 class="section-title">${msg('Support')}</h3>
                     <div class="row-group">
                         ${this.supportRows().map(r => this.renderRow(r))}
                     </div>

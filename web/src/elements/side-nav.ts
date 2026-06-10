@@ -1,4 +1,5 @@
 import { LitElement, html, css } from 'lit';
+import { msg } from '@lit/localize';
 import { customElement, property } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { logout } from '../utils/token.ts';
@@ -7,12 +8,15 @@ type NavKey = 'vehicles' | 'stats' | 'groups' | 'glovebox' | 'settings';
 
 // `suffix` is appended to the current tenant prefix (`#/<tenantId>`) to form the
 // link, so all nav stays within the active tenant's routes.
-const ITEMS: { key: NavKey; icon: string; label: string; suffix: string }[] = [
-    { key: 'vehicles', icon: 'directions_car', label: 'Vehicles', suffix: '/' },
-    { key: 'stats',    icon: 'bar_chart',      label: 'Stats',    suffix: '/stats' },
-    { key: 'groups',   icon: 'workspaces',     label: 'Groups',   suffix: '/groups' },
-    { key: 'glovebox', icon: 'inventory_2',    label: 'Glovebox', suffix: '/glovebox' },
-    { key: 'settings', icon: 'settings',       label: 'Settings', suffix: '/settings' },
+// `label` is a thunk, not a precomputed string: msg() must run at render time so
+// it picks up the active locale. Evaluating it here at module load would capture
+// the source locale before setLocale() runs and never re-localize.
+const ITEMS: { key: NavKey; icon: string; label: () => string; suffix: string }[] = [
+    { key: 'vehicles', icon: 'directions_car', label: () => msg('Vehicles'), suffix: '/' },
+    { key: 'stats',    icon: 'bar_chart',      label: () => msg('Stats'),    suffix: '/stats' },
+    { key: 'groups',   icon: 'workspaces',     label: () => msg('Groups'),   suffix: '/groups' },
+    { key: 'glovebox', icon: 'inventory_2',    label: () => msg('Glovebox'), suffix: '/glovebox' },
+    { key: 'settings', icon: 'settings',       label: () => msg('Settings'), suffix: '/settings' },
 ];
 
 @customElement('side-nav')
@@ -119,23 +123,23 @@ export class SideNav extends LitElement {
     render() {
         return html`
             <div class="brand">
-                <img src="/assets/dimo-logo-d.png" alt="DIMO" />
+                <img src="/assets/dimo-logo-d.png" alt="${msg('DIMO')}" />
                 <div>
-                    <h1>DIMO Dashboard</h1>
-                    <p>Precision Telemetry</p>
+                    <h1>${msg('DIMO Dashboard')}</h1>
+                    <p>${msg('Precision Telemetry')}</p>
                 </div>
             </div>
             <nav class="items">
-                ${ITEMS.map(i => this.item(i.key, i.icon, i.label, i.suffix))}
+                ${ITEMS.map(i => this.item(i.key, i.icon, i.label(), i.suffix))}
             </nav>
             <div class="footer">
                 <a class="nav-item" href="#/${this.tenantId}/settings">
                     <span class="material-symbols-outlined">help</span>
-                    <span class="label">Support</span>
+                    <span class="label">${msg('Support')}</span>
                 </a>
                 <a class="nav-item" href="#" @click=${(e: Event) => { e.preventDefault(); logout(); }}>
                     <span class="material-symbols-outlined">logout</span>
-                    <span class="label">Sign Out</span>
+                    <span class="label">${msg('Sign Out')}</span>
                 </a>
             </div>
         `;

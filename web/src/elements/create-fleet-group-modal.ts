@@ -1,4 +1,5 @@
 import { LitElement, html, css, nothing } from 'lit';
+import { msg } from '@lit/localize';
 import { customElement, property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { FleetGroupService } from '../services/fleet-group-service.ts';
@@ -134,7 +135,7 @@ export class CreateFleetGroupModal extends LitElement {
     private async onSave() {
         const name = this.name.trim();
         if (!this.isEdit && !name) {
-            this.errorMessage = 'Please enter a group name.';
+            this.errorMessage = msg('Please enter a group name.');
             return;
         }
         this.saving = true;
@@ -147,7 +148,7 @@ export class CreateFleetGroupModal extends LitElement {
             this.dispatchEvent(new CustomEvent('saved', { detail: { group }, bubbles: true, composed: true }));
         } catch (err) {
             console.error(err);
-            this.errorMessage = err instanceof Error ? err.message : 'Failed to save group';
+            this.errorMessage = err instanceof Error ? err.message : msg('Failed to save group');
             this.saving = false;
         }
     }
@@ -170,29 +171,29 @@ export class CreateFleetGroupModal extends LitElement {
                 <button class="close" @click=${this.dispatchClose}>
                     <span class="material-symbols-outlined">close</span>
                 </button>
-                <h2>${this.isEdit ? 'Edit group' : 'New group'}</h2>
+                <h2>${this.isEdit ? msg('Edit group') : msg('New group')}</h2>
                 <p class="sub">${this.isEdit
-                    ? 'Update the color. Group names can’t be changed.'
-                    : 'Name the group and pick a color. You can assign vehicles next.'}</p>
+                    ? msg('Update the color. Group names can’t be changed.')
+                    : msg('Name the group and pick a color. You can assign vehicles next.')}</p>
 
                 <div class="field">
-                    <label for="name">Name</label>
+                    <label for="name">${msg('Name')}</label>
                     <input
                         id="name"
                         type="text"
-                        placeholder="e.g. East Coast"
+                        placeholder="${msg('e.g. East Coast')}"
                         .value=${this.name}
                         ?disabled=${this.isEdit}
                         @input=${(e: Event) => { this.name = (e.target as HTMLInputElement).value; }}
                     />
-                    ${this.isEdit ? html`<span class="hint">Name is locked after creation.</span>` : nothing}
+                    ${this.isEdit ? html`<span class="hint">${msg('Name is locked after creation.')}</span>` : nothing}
                 </div>
 
                 <div class="field">
-                    <label>Color</label>
+                    <label>${msg('Color')}</label>
                     <div class="swatches">
                         ${PRESET_COLORS.map((c) => this.renderSwatch(c))}
-                        <label class="swatch custom" title="Custom color">
+                        <label class="swatch custom" title="${msg('Custom color')}">
                             <span class="material-symbols-outlined" style="font-size:18px;">palette</span>
                             <input
                                 type="color"
@@ -205,15 +206,15 @@ export class CreateFleetGroupModal extends LitElement {
 
                 <div class="preview">
                     <span class="dot" style="background:${this.color}"></span>
-                    <span class="text">${name || 'Group preview'}</span>
+                    <span class="text">${name || msg('Group preview')}</span>
                 </div>
 
                 ${this.errorMessage ? html`<div class="error-text">${this.errorMessage}</div>` : nothing}
 
                 <div class="actions">
-                    <button class="ghost" @click=${this.dispatchClose}>Cancel</button>
+                    <button class="ghost" @click=${this.dispatchClose}>${msg('Cancel')}</button>
                     <button class="primary" ?disabled=${!canSave || this.saving} @click=${this.onSave}>
-                        ${this.saving ? 'Saving…' : this.isEdit ? 'Save' : 'Create group'}
+                        ${this.saving ? msg('Saving…') : this.isEdit ? msg('Save') : msg('Create group')}
                     </button>
                 </div>
             </div>

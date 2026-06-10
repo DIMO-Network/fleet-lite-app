@@ -1,4 +1,5 @@
 import { LitElement, html, css } from 'lit';
+import { msg } from '@lit/localize';
 import { customElement, state } from 'lit/decorators.js';
 import { SettingsService } from '../services/settings-service.ts';
 
@@ -66,13 +67,13 @@ export class LoginElement extends LitElement {
         if (this.noClient) {
             return html`
                 <div class="no-client">
-                    <h3>No Client ID configured</h3>
-                    <p>Set <code>DIMO_AUTH_CLIENT_ID</code> in the API <code>settings.yaml</code> and register
+                    <h3>${msg('No Client ID configured')}</h3>
+                    ${msg(html`<p>Set <code>DIMO_AUTH_CLIENT_ID</code> in the API <code>settings.yaml</code> and register
                     <code>${location.origin}/login.html</code> as a redirect URI in the
-                    <a href="https://console.dimo.org">DIMO Developer Console</a>.</p>
+                    <a href="https://console.dimo.org">DIMO Developer Console</a>.</p>`)}
                 </div>
             `;
         }
-        return html`<a id="loginLink" href=${this.loginUrl}>Sign in with DIMO</a>`;
+        return html`<a id="loginLink" href=${this.loginUrl}>${msg('Sign in with DIMO')}</a>`;
     }
 }
