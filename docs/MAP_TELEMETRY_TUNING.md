@@ -4,7 +4,7 @@
 > and add text search to the vehicle list/map.
 
 Created: 2026-06-10
-Status: in progress
+Status: fixes 1–3 + 6 implemented (perf/map-telemetry-tuning); 4 deferred, 5 external
 
 ---
 
@@ -79,10 +79,10 @@ becomes necessary if/when server paging is introduced.
 
 | Order | Fix | Effort | Status |
 |---|---|---|---|
-| 1 | Bounded-concurrency fan-out | ~1 h | **in progress** |
-| 2 | Tenant result cache (30–60 s) | ~1 h | pending |
-| 3 | JWT cache TTL from `exp` | ~30 m | pending |
-| 6 | Frontend text search | ~1–2 h | pending |
+| 1 | Bounded-concurrency fan-out | ~1 h | **done** |
+| 2 | Tenant result cache (45 s + `?force=true`) | ~1 h | **done** |
+| 3 | JWT cache TTL from `exp` (vehicle/asset + developer) | ~30 m | **done** |
+| 6 | Frontend text search (list + markers, localized) | ~1–2 h | **done** |
 | 4 | Progressive loading | larger | deferred (≥500-vehicle tenants) |
 | 5 | Upstream batch query | external | raise with telemetry team |
 
