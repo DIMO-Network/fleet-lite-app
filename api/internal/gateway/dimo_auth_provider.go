@@ -12,9 +12,32 @@ import (
 	"github.com/DIMO-Network/fleet-lite-app/internal/models"
 	"github.com/DIMO-Network/shared/pkg/dimoauth"
 	"github.com/ethereum/go-ethereum/common"
+	jwtlib "github.com/golang-jwt/jwt/v5"
 	"github.com/patrickmn/go-cache"
 	"github.com/rs/zerolog"
 )
+
+// cacheTTLFromJWT derives a cache TTL from the token's own exp claim (minus a
+// safety margin) so we neither serve an expired token (fixed TTL too long) nor
+// re-exchange a token that is still valid (fixed TTL too short). The token is
+// parsed unverified — it comes straight from the trusted exchange and is only
+// inspected for its lifetime, never trusted for auth. Falls back when exp is
+// absent/unreadable or already inside the margin.
+func cacheTTLFromJWT(raw string, margin, fallback time.Duration) time.Duration {
+	token, _, err := jwtlib.NewParser().ParseUnverified(raw, jwtlib.MapClaims{})
+	if err != nil {
+		return fallback
+	}
+	exp, err := token.Claims.GetExpirationTime()
+	if err != nil || exp == nil {
+		return fallback
+	}
+	ttl := time.Until(exp.Time) - margin
+	if ttl <= 0 {
+		return fallback
+	}
+	return ttl
+}
 
 // DimoAuthProvider manages per-tenant DIMO developer/vehicle/asset JWTs. Each
 // tenant supplies its own developer license (client ID + decrypted private key);
@@ -54,7 +77,8 @@ func (p *DimoAuthProvider) GetDeveloperJWT(tenant models.Tenant) (string, error)
 	if jwt == nil {
 		return "", fmt.Errorf("failed to get developer JWT for tenant %s", tenant.ID)
 	}
-	p.developerJWTCache.Set(tenant.ID, jwt.Raw, 14*24*time.Hour)
+	p.developerJWTCache.Set(tenant.ID, jwt.Raw,
+		cacheTTLFromJWT(jwt.Raw, 5*time.Minute, 14*24*time.Hour))
 	return jwt.Raw, nil
 }
 
@@ -78,7 +102,8 @@ func (p *DimoAuthProvider) GetVehicleJWT(tenant models.Tenant, tokenID uint64) (
 	if err != nil {
 		return "", fmt.Errorf("exchange for vehicle JWT: %w", err)
 	}
-	p.vehicleJWTCache.Set(cacheKey, vehicleJWT, 10*time.Minute)
+	p.vehicleJWTCache.Set(cacheKey, vehicleJWT,
+		cacheTTLFromJWT(vehicleJWT, time.Minute, 10*time.Minute))
 	return vehicleJWT, nil
 }
 
@@ -109,7 +134,8 @@ func (p *DimoAuthProvider) GetAssetJWT(tenant models.Tenant, tokenDID string) (s
 	if err != nil {
 		return "", fmt.Errorf("exchange for asset JWT: %w", err)
 	}
-	p.vehicleJWTCache.Set(cacheKey, assetJWT, 10*time.Minute)
+	p.vehicleJWTCache.Set(cacheKey, assetJWT,
+		cacheTTLFromJWT(assetJWT, time.Minute, 10*time.Minute))
 	return assetJWT, nil
 }
 

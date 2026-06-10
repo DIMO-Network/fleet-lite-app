@@ -17,6 +17,9 @@ export class FleetOverviewView extends LitElement {
     // membership rides on each VehicleCard, so the dropdown options and the
     // filtered card/marker sets all derive from `this.vehicles`.
     @state() private selectedGroupId = '';
+    // Free-text filter applied on top of the group filter; matches title,
+    // token id, and integration label. Filters both the list and the markers.
+    @state() private searchQuery = '';
     @state() private loading = true;
     @state() private errorMessage: string | null = null;
 
@@ -94,7 +97,7 @@ export class FleetOverviewView extends LitElement {
         this.markers.clear();
 
         const titleMap = new Map(this.vehicles.map((v) => [v.tokenId, v.title]));
-        const allowed = this.selectedGroupId ? this.visibleTokenIds() : null;
+        const allowed = (this.selectedGroupId || this.searchQuery.trim()) ? this.visibleTokenIds() : null;
         for (const [tokenId, coords] of Object.entries(this.lastLocations)) {
             if (allowed && !allowed.has(tokenId)) continue;
             const marker = L.circleMarker([coords.lat, coords.lon], {
@@ -148,7 +151,7 @@ export class FleetOverviewView extends LitElement {
         // Single request for all vehicle locations. Per-vehicle JWT check on the
         // backend determines which vehicles the dev license has SACD access to.
         try {
-            const res = await TelemetryService.getInstance().fleetLocations();
+            const res = await TelemetryService.getInstance().fleetLocations(force);
 
             // Mark vehicles where JWT exchange failed (no SACD permissions).
             const noPermSet = new Set(res.noPermissions ?? []);
@@ -240,10 +243,20 @@ export class FleetOverviewView extends LitElement {
         return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
     }
 
-    /** Cards in the selected group (or all when no group is selected). */
+    /** Cards passing the group filter and the text search. */
     private visibleCards(): VehicleCard[] {
-        if (!this.selectedGroupId) return this.vehicles;
-        return this.vehicles.filter((c) => (c.groups || []).some((g) => g.id === this.selectedGroupId));
+        let cards = this.vehicles;
+        if (this.selectedGroupId) {
+            cards = cards.filter((c) => (c.groups || []).some((g) => g.id === this.selectedGroupId));
+        }
+        const q = this.searchQuery.trim().toLowerCase();
+        if (q) {
+            cards = cards.filter((c) =>
+                c.title.toLowerCase().includes(q)
+                || c.tokenId.includes(q)
+                || c.location.toLowerCase().includes(q));
+        }
+        return cards;
     }
 
     /** Token ids visible under the current filter — used to filter map markers. */
@@ -515,6 +528,42 @@ export class FleetOverviewView extends LitElement {
                 transition: background 0.15s ease;
             }
             .panel-header button:hover { background: var(--surface-container-high); }
+
+            .search-filter {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 12px 24px;
+                border-bottom: 1px solid var(--outline-variant);
+            }
+            .search-filter > .material-symbols-outlined {
+                font-size: 18px;
+                color: var(--on-surface-variant);
+                flex-shrink: 0;
+            }
+            .search-filter input {
+                flex: 1;
+                min-width: 0;
+                background: none;
+                border: none;
+                color: var(--on-surface);
+                font: var(--type-body-sm);
+            }
+            .search-filter input:focus { outline: none; }
+            .search-filter input::placeholder { color: var(--on-surface-variant); }
+            /* Hide the native WebKit clear button — we render our own. */
+            .search-filter input::-webkit-search-cancel-button { display: none; }
+            .search-filter .clear {
+                background: none;
+                border: none;
+                color: var(--on-surface-variant);
+                padding: 2px;
+                border-radius: var(--radius-full);
+                cursor: pointer;
+                display: inline-flex;
+            }
+            .search-filter .clear:hover { color: var(--primary); background: var(--surface-container-high); }
+            .search-filter .clear .material-symbols-outlined { font-size: 16px; }
 
             .group-filter {
                 display: flex;
@@ -834,10 +883,36 @@ export class FleetOverviewView extends LitElement {
                         <button><span class="material-symbols-outlined">workspaces</span></button>
                     </a>
                 </div>
+                ${this.renderSearch()}
                 ${this.renderGroupFilter()}
                 <div class="vehicle-list custom-scrollbar">
                     ${this.renderList()}
                 </div>
+            </div>
+        `;
+    }
+
+    private renderSearch() {
+        if (this.vehicles.length === 0) return nothing;
+        return html`
+            <div class="search-filter">
+                <span class="material-symbols-outlined">search</span>
+                <input
+                    type="search"
+                    placeholder="${msg('Search vehicles…')}"
+                    .value=${this.searchQuery}
+                    @input=${(e: Event) => {
+                        this.searchQuery = (e.target as HTMLInputElement).value;
+                        this.placeMarkers();
+                    }}
+                />
+                ${this.searchQuery
+                    ? html`
+                        <button class="clear" title="${msg('Clear search')}"
+                            @click=${() => { this.searchQuery = ''; this.placeMarkers(); }}>
+                            <span class="material-symbols-outlined">close</span>
+                        </button>`
+                    : nothing}
             </div>
         `;
     }
@@ -864,6 +939,9 @@ export class FleetOverviewView extends LitElement {
         if (this.errorMessage) return html`<p class="empty-state error">${this.errorMessage}</p>`;
         const cards = this.visibleCards();
         if (cards.length === 0) {
+            if (this.searchQuery.trim()) {
+                return html`<p class="empty-state">${msg('No vehicles match your search.')}</p>`;
+            }
             return html`<p class="empty-state">${this.selectedGroupId ? msg('No vehicles in this group.') : msg('No vehicles found on this account.')}</p>`;
         }
         return cards.map((c) => this.panelExpanded ? this.renderCard(c) : this.renderCompactCard(c));

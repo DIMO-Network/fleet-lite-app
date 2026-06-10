@@ -99,7 +99,8 @@ func (t *TelemetryController) GetLatest(c *fiber.Ctx) error {
 }
 
 // GetFleetLocations — GET /telemetry/locations. Returns last-known coordinates
-// for all integrated vehicles in the tenant in a single telemetry-api request.
+// for all integrated vehicles in the tenant (bounded-concurrency fan-out to
+// telemetry-api; one request per vehicle is forced by per-vehicle JWT auth).
 func (t *TelemetryController) GetFleetLocations(c *fiber.Ctx) error {
 	tenant, err := GetTenant(c)
 	if err != nil {
@@ -115,7 +116,9 @@ func (t *TelemetryController) GetFleetLocations(c *fiber.Ctx) error {
 			tokenIDs = append(tokenIDs, uint64(v.TokenID))
 		}
 	}
-	result, err := t.telemetry.FleetLocations(tenant, tokenIDs)
+	// force=true (the map's manual refresh) bypasses the per-tenant cache.
+	force := c.Query("force") == "true"
+	result, err := t.telemetry.FleetLocations(c.Context(), tenant, tokenIDs, force)
 	if err != nil {
 		t.logger.Err(err).Msg("fleet locations failed")
 		return fiber.NewError(fiber.StatusBadGateway, "fleet locations failed: "+err.Error())

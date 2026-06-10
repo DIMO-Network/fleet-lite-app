@@ -2,18 +2,33 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/DIMO-Network/fleet-lite-app/internal/config"
 	"github.com/DIMO-Network/fleet-lite-app/internal/gateway"
 	"github.com/DIMO-Network/fleet-lite-app/internal/models"
+	"github.com/patrickmn/go-cache"
 	"github.com/rs/zerolog"
+	"golang.org/x/sync/errgroup"
 )
+
+// fleetLocationsConcurrency bounds the per-vehicle fan-out (JWT exchange +
+// telemetry query each). High enough to collapse the serial latency, low
+// enough to be polite to token-exchange and telemetry-api.
+const fleetLocationsConcurrency = 10
+
+// fleetLocationsCacheTTL is how long a tenant's assembled location set is
+// served from memory. Repeat map loads (and other users on the same tenant)
+// within the window skip the whole fan-out. The map's manual refresh button
+// bypasses it via force.
+const fleetLocationsCacheTTL = 45 * time.Second
 
 // TelemetryAPIService wraps telemetry-api.dimo.zone/query (GraphQL).
 //
@@ -40,9 +55,12 @@ type TelemetryAPIService interface {
 	TimeSeries(tenant models.Tenant, tokenID uint64, signal, from, to, interval string) ([]TimeSeriesBucket, error)
 	// FleetLocations checks per-vehicle JWT availability to determine which
 	// vehicles the tenant's dev license has SACD permissions for, then fetches
-	// coordinates for those vehicles in a single aliased GraphQL request.
-	// Vehicles where JWT exchange fails are returned in NoPermissions.
-	FleetLocations(tenant models.Tenant, tokenIDs []uint64) (FleetLocationsResult, error)
+	// each permitted vehicle's coordinates with its own JWT (telemetry-api
+	// rejects developer JWTs, so one request per vehicle is unavoidable).
+	// Requests run concurrently with a bounded worker pool. Vehicles where
+	// JWT exchange fails are returned in NoPermissions. Results are cached
+	// per tenant for fleetLocationsCacheTTL; force bypasses the cache.
+	FleetLocations(ctx context.Context, tenant models.Tenant, tokenIDs []uint64, force bool) (FleetLocationsResult, error)
 }
 
 // VehicleLocation is a vehicle's latest GPS fix from telemetry-api's
@@ -73,6 +91,7 @@ type telemetryAPIService struct {
 	logger       zerolog.Logger
 	authProvider *gateway.DimoAuthProvider
 	endpoint     string
+	locCache     *cache.Cache // tenant ID -> FleetLocationsResult
 }
 
 func NewTelemetryAPIService(logger zerolog.Logger, settings *config.Settings, authProvider *gateway.DimoAuthProvider) TelemetryAPIService {
@@ -80,6 +99,7 @@ func NewTelemetryAPIService(logger zerolog.Logger, settings *config.Settings, au
 		logger:       logger,
 		authProvider: authProvider,
 		endpoint:     settings.TelemetryAPIURL.String(),
+		locCache:     cache.New(fleetLocationsCacheTTL, 2*fleetLocationsCacheTTL),
 	}
 }
 
@@ -206,53 +226,98 @@ func (t *telemetryAPIService) TimeSeries(tenant models.Tenant, tokenID uint64, s
 // FleetLocations checks per-vehicle JWT availability (definitive SACD check),
 // then fetches coordinates for each permitted vehicle using its own JWT.
 // The developer JWT is intentionally not used here — it is rejected by the
-// telemetry API as invalid in most deployment configurations.
-func (t *telemetryAPIService) FleetLocations(tenant models.Tenant, tokenIDs []uint64) (FleetLocationsResult, error) {
+// telemetry API as invalid in most deployment configurations. That auth
+// constraint forces one request per vehicle, so the fan-out runs through a
+// bounded worker pool instead of serially (a large fleet done one-by-one
+// blows past the ingress timeout).
+func (t *telemetryAPIService) FleetLocations(ctx context.Context, tenant models.Tenant, tokenIDs []uint64, force bool) (FleetLocationsResult, error) {
 	if len(tokenIDs) == 0 {
 		return FleetLocationsResult{Locations: map[uint64]LocationCoords{}}, nil
 	}
 
-	locs := make(map[uint64]LocationCoords, len(tokenIDs))
-	var noPerms []uint64
-
-	for _, id := range tokenIDs {
-		jwt, err := t.authProvider.GetVehicleJWT(tenant, id)
-		if err != nil {
-			noPerms = append(noPerms, id)
-			continue
+	if !force {
+		if cached, found := t.locCache.Get(tenant.ID); found {
+			return cached.(FleetLocationsResult), nil
 		}
-
-		q := fmt.Sprintf(`query { signalsLatest(tokenId: %d) { currentLocationCoordinates { value { latitude longitude } } } }`, id)
-		raw, err := t.doQuery(jwt, q)
-		if err != nil {
-			// JWT worked but query failed (e.g. telemetry API hiccup) — skip silently.
-			t.logger.Warn().Uint64("tokenId", id).Err(err).Msg("fleet locations: skip vehicle query error")
-			continue
-		}
-
-		var resp struct {
-			Data struct {
-				SignalsLatest struct {
-					CurrentLocationCoordinates *struct {
-						Value *struct {
-							Latitude  float64 `json:"latitude"`
-							Longitude float64 `json:"longitude"`
-						} `json:"value"`
-					} `json:"currentLocationCoordinates"`
-				} `json:"signalsLatest"`
-			} `json:"data"`
-		}
-		if err := json.Unmarshal(raw, &resp); err != nil {
-			continue
-		}
-		coords := resp.Data.SignalsLatest.CurrentLocationCoordinates
-		if coords == nil || coords.Value == nil {
-			continue
-		}
-		locs[id] = LocationCoords{Lat: coords.Value.Latitude, Lon: coords.Value.Longitude}
 	}
 
-	return FleetLocationsResult{Locations: locs, NoPermissions: noPerms}, nil
+	// Warm the developer JWT once so concurrent vehicle exchanges below all
+	// hit the cache instead of racing N simultaneous dev-JWT exchanges.
+	if _, err := t.authProvider.GetDeveloperJWT(tenant); err != nil {
+		// Every vehicle exchange would fail the same way — same outcome as
+		// the serial version (all vehicles land in NoPermissions), minus N calls.
+		t.logger.Warn().Err(err).Msg("fleet locations: developer JWT unavailable")
+		return FleetLocationsResult{Locations: map[uint64]LocationCoords{}, NoPermissions: tokenIDs}, nil
+	}
+
+	var (
+		mu      sync.Mutex
+		locs    = make(map[uint64]LocationCoords, len(tokenIDs))
+		noPerms []uint64
+	)
+
+	g, ctx := errgroup.WithContext(ctx)
+	g.SetLimit(fleetLocationsConcurrency)
+
+	for _, id := range tokenIDs {
+		if ctx.Err() != nil {
+			break // caller gone — stop scheduling work
+		}
+		g.Go(func() error {
+			jwt, err := t.authProvider.GetVehicleJWT(tenant, id)
+			if err != nil {
+				mu.Lock()
+				noPerms = append(noPerms, id)
+				mu.Unlock()
+				return nil
+			}
+
+			q := fmt.Sprintf(`query { signalsLatest(tokenId: %d) { currentLocationCoordinates { value { latitude longitude } } } }`, id)
+			raw, err := t.doQuery(ctx, jwt, q)
+			if err != nil {
+				// JWT worked but query failed (e.g. telemetry API hiccup) — skip silently.
+				t.logger.Warn().Uint64("tokenId", id).Err(err).Msg("fleet locations: skip vehicle query error")
+				return nil
+			}
+
+			var resp struct {
+				Data struct {
+					SignalsLatest struct {
+						CurrentLocationCoordinates *struct {
+							Value *struct {
+								Latitude  float64 `json:"latitude"`
+								Longitude float64 `json:"longitude"`
+							} `json:"value"`
+						} `json:"currentLocationCoordinates"`
+					} `json:"signalsLatest"`
+				} `json:"data"`
+			}
+			if err := json.Unmarshal(raw, &resp); err != nil {
+				return nil
+			}
+			coords := resp.Data.SignalsLatest.CurrentLocationCoordinates
+			if coords == nil || coords.Value == nil {
+				return nil
+			}
+			mu.Lock()
+			locs[id] = LocationCoords{Lat: coords.Value.Latitude, Lon: coords.Value.Longitude}
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	// Workers never return errors (per-vehicle failures degrade to skips, same
+	// as the serial version), so Wait only reflects context cancellation.
+	if err := g.Wait(); err != nil {
+		return FleetLocationsResult{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return FleetLocationsResult{}, err
+	}
+
+	result := FleetLocationsResult{Locations: locs, NoPermissions: noPerms}
+	t.locCache.Set(tenant.ID, result, fleetLocationsCacheTTL)
+	return result, nil
 }
 
 func (t *telemetryAPIService) query(tenant models.Tenant, tokenID uint64, gql string) ([]byte, error) {
@@ -260,15 +325,15 @@ func (t *telemetryAPIService) query(tenant models.Tenant, tokenID uint64, gql st
 	if err != nil {
 		return nil, fmt.Errorf("vehicle JWT: %w", err)
 	}
-	return t.doQuery(jwt, gql)
+	return t.doQuery(context.Background(), jwt, gql)
 }
 
-func (t *telemetryAPIService) doQuery(jwt, gql string) ([]byte, error) {
+func (t *telemetryAPIService) doQuery(ctx context.Context, jwt, gql string) ([]byte, error) {
 	payload, err := json.Marshal(map[string]string{"query": gql})
 	if err != nil {
 		return nil, fmt.Errorf("marshal gql: %w", err)
 	}
-	req, err := http.NewRequest("POST", t.endpoint, bytes.NewBuffer(payload))
+	req, err := http.NewRequestWithContext(ctx, "POST", t.endpoint, bytes.NewBuffer(payload))
 	if err != nil {
 		return nil, fmt.Errorf("build telemetry request: %w", err)
 	}

@@ -16,13 +16,19 @@ export class TelemetryService {
     }
 
     /**
+     * GET /telemetry/locations — last-known coordinates for the whole fleet.
+     * `force` bypasses the backend's per-tenant cache (manual refresh).
+     */
+    fleetLocations(force = false): Promise<FleetLocationsResponse> {
+        return ApiService.getInstance().get<FleetLocationsResponse>(
+            `/telemetry/locations${force ? '?force=true' : ''}`,
+        );
+    }
+
+    /**
      * GET /telemetry/:tokenId/timeseries — aggregation buckets for one signal.
      * Caller picks interval (e.g. `1d` for 7 daily buckets).
      */
-    fleetLocations(): Promise<FleetLocationsResponse> {
-        return ApiService.getInstance().get<FleetLocationsResponse>('/telemetry/locations');
-    }
-
     timeSeries(tokenId: number, signal: string, from: string, to: string, interval = '1d'): Promise<TimeSeriesResponse> {
         const q = new URLSearchParams({ signal, from, to, interval });
         return ApiService.getInstance().get<TimeSeriesResponse>(`/telemetry/${tokenId}/timeseries?${q.toString()}`);
