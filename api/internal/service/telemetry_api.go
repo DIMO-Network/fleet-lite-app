@@ -14,6 +14,7 @@ import (
 	"github.com/DIMO-Network/fleet-lite-app/internal/config"
 	"github.com/DIMO-Network/fleet-lite-app/internal/gateway"
 	"github.com/DIMO-Network/fleet-lite-app/internal/models"
+	"github.com/patrickmn/go-cache"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 )
@@ -22,6 +23,12 @@ import (
 // telemetry query each). High enough to collapse the serial latency, low
 // enough to be polite to token-exchange and telemetry-api.
 const fleetLocationsConcurrency = 10
+
+// fleetLocationsCacheTTL is how long a tenant's assembled location set is
+// served from memory. Repeat map loads (and other users on the same tenant)
+// within the window skip the whole fan-out. The map's manual refresh button
+// bypasses it via force.
+const fleetLocationsCacheTTL = 45 * time.Second
 
 // TelemetryAPIService wraps telemetry-api.dimo.zone/query (GraphQL).
 //
@@ -51,8 +58,9 @@ type TelemetryAPIService interface {
 	// each permitted vehicle's coordinates with its own JWT (telemetry-api
 	// rejects developer JWTs, so one request per vehicle is unavoidable).
 	// Requests run concurrently with a bounded worker pool. Vehicles where
-	// JWT exchange fails are returned in NoPermissions.
-	FleetLocations(ctx context.Context, tenant models.Tenant, tokenIDs []uint64) (FleetLocationsResult, error)
+	// JWT exchange fails are returned in NoPermissions. Results are cached
+	// per tenant for fleetLocationsCacheTTL; force bypasses the cache.
+	FleetLocations(ctx context.Context, tenant models.Tenant, tokenIDs []uint64, force bool) (FleetLocationsResult, error)
 }
 
 // VehicleLocation is a vehicle's latest GPS fix from telemetry-api's
@@ -83,6 +91,7 @@ type telemetryAPIService struct {
 	logger       zerolog.Logger
 	authProvider *gateway.DimoAuthProvider
 	endpoint     string
+	locCache     *cache.Cache // tenant ID -> FleetLocationsResult
 }
 
 func NewTelemetryAPIService(logger zerolog.Logger, settings *config.Settings, authProvider *gateway.DimoAuthProvider) TelemetryAPIService {
@@ -90,6 +99,7 @@ func NewTelemetryAPIService(logger zerolog.Logger, settings *config.Settings, au
 		logger:       logger,
 		authProvider: authProvider,
 		endpoint:     settings.TelemetryAPIURL.String(),
+		locCache:     cache.New(fleetLocationsCacheTTL, 2*fleetLocationsCacheTTL),
 	}
 }
 
@@ -220,9 +230,15 @@ func (t *telemetryAPIService) TimeSeries(tenant models.Tenant, tokenID uint64, s
 // constraint forces one request per vehicle, so the fan-out runs through a
 // bounded worker pool instead of serially (a large fleet done one-by-one
 // blows past the ingress timeout).
-func (t *telemetryAPIService) FleetLocations(ctx context.Context, tenant models.Tenant, tokenIDs []uint64) (FleetLocationsResult, error) {
+func (t *telemetryAPIService) FleetLocations(ctx context.Context, tenant models.Tenant, tokenIDs []uint64, force bool) (FleetLocationsResult, error) {
 	if len(tokenIDs) == 0 {
 		return FleetLocationsResult{Locations: map[uint64]LocationCoords{}}, nil
+	}
+
+	if !force {
+		if cached, found := t.locCache.Get(tenant.ID); found {
+			return cached.(FleetLocationsResult), nil
+		}
 	}
 
 	// Warm the developer JWT once so concurrent vehicle exchanges below all
@@ -299,7 +315,9 @@ func (t *telemetryAPIService) FleetLocations(ctx context.Context, tenant models.
 		return FleetLocationsResult{}, err
 	}
 
-	return FleetLocationsResult{Locations: locs, NoPermissions: noPerms}, nil
+	result := FleetLocationsResult{Locations: locs, NoPermissions: noPerms}
+	t.locCache.Set(tenant.ID, result, fleetLocationsCacheTTL)
+	return result, nil
 }
 
 func (t *telemetryAPIService) query(tenant models.Tenant, tokenID uint64, gql string) ([]byte, error) {

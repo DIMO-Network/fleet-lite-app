@@ -116,7 +116,9 @@ func (t *TelemetryController) GetFleetLocations(c *fiber.Ctx) error {
 			tokenIDs = append(tokenIDs, uint64(v.TokenID))
 		}
 	}
-	result, err := t.telemetry.FleetLocations(c.Context(), tenant, tokenIDs)
+	// force=true (the map's manual refresh) bypasses the per-tenant cache.
+	force := c.Query("force") == "true"
+	result, err := t.telemetry.FleetLocations(c.Context(), tenant, tokenIDs, force)
 	if err != nil {
 		t.logger.Err(err).Msg("fleet locations failed")
 		return fiber.NewError(fiber.StatusBadGateway, "fleet locations failed: "+err.Error())

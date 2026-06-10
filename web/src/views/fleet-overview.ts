@@ -148,7 +148,7 @@ export class FleetOverviewView extends LitElement {
         // Single request for all vehicle locations. Per-vehicle JWT check on the
         // backend determines which vehicles the dev license has SACD access to.
         try {
-            const res = await TelemetryService.getInstance().fleetLocations();
+            const res = await TelemetryService.getInstance().fleetLocations(force);
 
             // Mark vehicles where JWT exchange failed (no SACD permissions).
             const noPermSet = new Set(res.noPermissions ?? []);
