@@ -24,11 +24,25 @@ import (
 // enough to be polite to token-exchange and telemetry-api.
 const fleetLocationsConcurrency = 10
 
-// fleetLocationsCacheTTL is how long a tenant's assembled location set is
+// fleetLocationsCacheTTL is how long a vehicle's resolved location outcome is
 // served from memory. Repeat map loads (and other users on the same tenant)
-// within the window skip the whole fan-out. The map's manual refresh button
-// bypasses it via force.
+// within the window skip that vehicle's fan-out. The map's manual refresh
+// button bypasses reads via force (fresh outcomes are still written back).
 const fleetLocationsCacheTTL = 45 * time.Second
+
+// locCacheEntry is one vehicle's resolved outcome. Cached per vehicle (not
+// per tenant snapshot) so the frontend's paged subset requests compose with
+// full-fleet requests instead of each maintaining a separate snapshot.
+// Semantics: noPerm -> NoPermissions; coords set -> Locations; neither ->
+// queried fine but no location data. Transient query errors are not cached.
+type locCacheEntry struct {
+	coords *LocationCoords
+	noPerm bool
+}
+
+func locCacheKey(tenantID string, tokenID uint64) string {
+	return fmt.Sprintf("%s:%d", tenantID, tokenID)
+}
 
 // TelemetryAPIService wraps telemetry-api.dimo.zone/query (GraphQL).
 //
@@ -91,7 +105,7 @@ type telemetryAPIService struct {
 	logger       zerolog.Logger
 	authProvider *gateway.DimoAuthProvider
 	endpoint     string
-	locCache     *cache.Cache // tenant ID -> FleetLocationsResult
+	locCache     *cache.Cache // "tenantID:tokenID" -> locCacheEntry
 }
 
 func NewTelemetryAPIService(logger zerolog.Logger, settings *config.Settings, authProvider *gateway.DimoAuthProvider) TelemetryAPIService {
@@ -235,9 +249,33 @@ func (t *telemetryAPIService) FleetLocations(ctx context.Context, tenant models.
 		return FleetLocationsResult{Locations: map[uint64]LocationCoords{}}, nil
 	}
 
+	var (
+		mu      sync.Mutex
+		locs    = make(map[uint64]LocationCoords, len(tokenIDs))
+		noPerms []uint64
+	)
+
+	// Resolve from the per-vehicle cache first; only cache misses fan out.
+	// force skips reads but fresh outcomes still refresh the cache below.
+	remaining := tokenIDs
 	if !force {
-		if cached, found := t.locCache.Get(tenant.ID); found {
-			return cached.(FleetLocationsResult), nil
+		remaining = make([]uint64, 0, len(tokenIDs))
+		for _, id := range tokenIDs {
+			cached, found := t.locCache.Get(locCacheKey(tenant.ID, id))
+			if !found {
+				remaining = append(remaining, id)
+				continue
+			}
+			entry := cached.(locCacheEntry)
+			switch {
+			case entry.noPerm:
+				noPerms = append(noPerms, id)
+			case entry.coords != nil:
+				locs[id] = *entry.coords
+			}
+		}
+		if len(remaining) == 0 {
+			return FleetLocationsResult{Locations: locs, NoPermissions: noPerms}, nil
 		}
 	}
 
@@ -250,22 +288,17 @@ func (t *telemetryAPIService) FleetLocations(ctx context.Context, tenant models.
 		return FleetLocationsResult{Locations: map[uint64]LocationCoords{}, NoPermissions: tokenIDs}, nil
 	}
 
-	var (
-		mu      sync.Mutex
-		locs    = make(map[uint64]LocationCoords, len(tokenIDs))
-		noPerms []uint64
-	)
-
 	g, ctx := errgroup.WithContext(ctx)
 	g.SetLimit(fleetLocationsConcurrency)
 
-	for _, id := range tokenIDs {
+	for _, id := range remaining {
 		if ctx.Err() != nil {
 			break // caller gone — stop scheduling work
 		}
 		g.Go(func() error {
 			jwt, err := t.authProvider.GetVehicleJWT(tenant, id)
 			if err != nil {
+				t.locCache.Set(locCacheKey(tenant.ID, id), locCacheEntry{noPerm: true}, fleetLocationsCacheTTL)
 				mu.Lock()
 				noPerms = append(noPerms, id)
 				mu.Unlock()
@@ -297,10 +330,15 @@ func (t *telemetryAPIService) FleetLocations(ctx context.Context, tenant models.
 			}
 			coords := resp.Data.SignalsLatest.CurrentLocationCoordinates
 			if coords == nil || coords.Value == nil {
+				// Queried fine, just no location data — cache so the next
+				// window doesn't re-query a vehicle that reports nothing.
+				t.locCache.Set(locCacheKey(tenant.ID, id), locCacheEntry{}, fleetLocationsCacheTTL)
 				return nil
 			}
+			c := LocationCoords{Lat: coords.Value.Latitude, Lon: coords.Value.Longitude}
+			t.locCache.Set(locCacheKey(tenant.ID, id), locCacheEntry{coords: &c}, fleetLocationsCacheTTL)
 			mu.Lock()
-			locs[id] = LocationCoords{Lat: coords.Value.Latitude, Lon: coords.Value.Longitude}
+			locs[id] = c
 			mu.Unlock()
 			return nil
 		})
@@ -315,9 +353,7 @@ func (t *telemetryAPIService) FleetLocations(ctx context.Context, tenant models.
 		return FleetLocationsResult{}, err
 	}
 
-	result := FleetLocationsResult{Locations: locs, NoPermissions: noPerms}
-	t.locCache.Set(tenant.ID, result, fleetLocationsCacheTTL)
-	return result, nil
+	return FleetLocationsResult{Locations: locs, NoPermissions: noPerms}, nil
 }
 
 func (t *telemetryAPIService) query(tenant models.Tenant, tokenID uint64, gql string) ([]byte, error) {

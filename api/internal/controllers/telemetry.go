@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -99,8 +100,12 @@ func (t *TelemetryController) GetLatest(c *fiber.Ctx) error {
 }
 
 // GetFleetLocations — GET /telemetry/locations. Returns last-known coordinates
-// for all integrated vehicles in the tenant (bounded-concurrency fan-out to
-// telemetry-api; one request per vehicle is forced by per-vehicle JWT auth).
+// for the tenant's vehicles (bounded-concurrency fan-out to telemetry-api; one
+// request per vehicle is forced by per-vehicle JWT auth). An optional
+// ?tokenIds=1,2,3 restricts the call to a subset — the map view pages the
+// fleet through this so markers stream in instead of waiting on one big call.
+// Requested ids are intersected with the tenant's vehicles, so a subset call
+// can never probe another tenant's tokens.
 func (t *TelemetryController) GetFleetLocations(c *fiber.Ctx) error {
 	tenant, err := GetTenant(c)
 	if err != nil {
@@ -115,6 +120,20 @@ func (t *TelemetryController) GetFleetLocations(c *fiber.Ctx) error {
 		if v.TokenID > 0 {
 			tokenIDs = append(tokenIDs, uint64(v.TokenID))
 		}
+	}
+	if raw := c.Query("tokenIds"); raw != "" {
+		allowed := make(map[uint64]bool, len(tokenIDs))
+		for _, id := range tokenIDs {
+			allowed[id] = true
+		}
+		subset := make([]uint64, 0, 32)
+		for _, part := range strings.Split(raw, ",") {
+			id, err := strconv.ParseUint(strings.TrimSpace(part), 10, 64)
+			if err == nil && allowed[id] {
+				subset = append(subset, id)
+			}
+		}
+		tokenIDs = subset
 	}
 	// force=true (the map's manual refresh) bypasses the per-tenant cache.
 	force := c.Query("force") == "true"
