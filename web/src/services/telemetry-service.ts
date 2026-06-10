@@ -16,12 +16,18 @@ export class TelemetryService {
     }
 
     /**
-     * GET /telemetry/locations — last-known coordinates for the whole fleet.
-     * `force` bypasses the backend's per-tenant cache (manual refresh).
+     * GET /telemetry/locations — last-known coordinates for the fleet.
+     * `tokenIds` restricts the call to a subset (the map pages the fleet in
+     * chunks so markers stream in); omitted = whole fleet. `force` bypasses
+     * the backend's per-vehicle cache (manual refresh).
      */
-    fleetLocations(force = false): Promise<FleetLocationsResponse> {
+    fleetLocations(force = false, tokenIds?: string[]): Promise<FleetLocationsResponse> {
+        const params = new URLSearchParams();
+        if (force) params.set('force', 'true');
+        if (tokenIds?.length) params.set('tokenIds', tokenIds.join(','));
+        const q = params.toString();
         return ApiService.getInstance().get<FleetLocationsResponse>(
-            `/telemetry/locations${force ? '?force=true' : ''}`,
+            `/telemetry/locations${q ? `?${q}` : ''}`,
         );
     }
 

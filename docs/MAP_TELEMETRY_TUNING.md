@@ -55,12 +55,21 @@ stop re-running the whole fan-out; telemetry-api pressure drops.
 the JWT's actual `exp` claim and cache until shortly before expiry
 (e.g. `exp - 1 min`). Halves the steady-state per-vehicle cost.
 
-### 4. Progressive loading (only when a tenant nears ~500+ vehicles)
-Paging is mostly a red herring: `ListVehicles` is one indexed DB query, and the
-map needs all locations anyway. The scale fix is incremental delivery — return
-locations in chunks/stream (SSE or chunked JSON), with the frontend dropping
-markers as they arrive, so the map paints progressively instead of all-or-504.
-Defer until a real tenant approaches this size.
+### 4. Progressive loading — implemented as client-side paging
+Even with the parallel fan-out, one monolithic call means the map paints
+nothing until the slowest vehicle resolves. Implemented as client paging:
+- Backend: `GET /telemetry/locations?tokenIds=1,2,3` restricts the call to a
+  subset (intersected with the tenant's vehicles — no cross-tenant probing).
+  The result cache became **per-vehicle** (`tenantID:tokenID` →
+  coords/noPerm/no-data outcome, 45 s) so subset and full-fleet requests
+  compose instead of keeping separate snapshots.
+- Frontend (`fleet-overview.ts`): pages the fleet in chunks of 20 with 3
+  requests in flight (sized against the backend's 10-worker pool), adding
+  markers per batch (`addMarkers` is additive; full `placeMarkers` redraw only
+  on filter changes). Map framed on the first batch with data, re-fit at the
+  end. A load-generation counter discards stale chunk results after a tenant
+  switch or manual refresh. Old backend + new frontend degrades gracefully
+  (each chunk returns the full fleet; frontend dedupes).
 
 ### 5. Upstream structural fix (telemetry team ask)
 The 2N-requests shape is forced by per-vehicle JWT auth. Ask the telemetry-api
@@ -83,7 +92,7 @@ becomes necessary if/when server paging is introduced.
 | 2 | Tenant result cache (45 s + `?force=true`) | ~1 h | **done** |
 | 3 | JWT cache TTL from `exp` (vehicle/asset + developer) | ~30 m | **done** |
 | 6 | Frontend text search (list + markers, localized) | ~1–2 h | **done** |
-| 4 | Progressive loading | larger | deferred (≥500-vehicle tenants) |
+| 4 | Progressive loading (client paging, chunk 20 × 3 in flight) | ~2 h | **done** |
 | 5 | Upstream batch query | external | raise with telemetry team |
 
 (1–3 are one backend PR candidate; 6 is a frontend PR; 4–5 deferred.)

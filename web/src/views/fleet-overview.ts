@@ -27,6 +27,14 @@ export class FleetOverviewView extends LitElement {
     private markers = new Map<string, L.CircleMarker>();
     private lastLocations: Record<string, { lat: number; lon: number }> = {};
     private resizeObserver: ResizeObserver | null = null;
+    // Progressive location loading: page the fleet in chunks of this size with
+    // this many requests in flight. Sized against the backend's own fan-out
+    // pool (10) so a chunk resolves in ~2 rounds and batches stream steadily.
+    private static readonly LOCATIONS_CHUNK_SIZE = 20;
+    private static readonly LOCATIONS_PARALLEL = 3;
+    // Incremented per load; lets stale in-flight chunk results from a
+    // superseded load (tenant switch, manual refresh) be discarded.
+    private loadGeneration = 0;
     @state() private panelCollapsed = false;
     @state() private panelExpanded = true;
     @state() private refreshing = false;
@@ -90,15 +98,17 @@ export class FleetOverviewView extends LitElement {
         return [...cards].sort((a, b) => Number(!!b.isFavorite) - Number(!!a.isFavorite));
     }
 
-    /** (Re)place map markers from `this.vehicles` + `this.lastLocations`. No-op until the map exists. */
-    private placeMarkers() {
+    /**
+     * Add markers for `locations` that aren't on the map yet, respecting the
+     * current group/search filter. Additive on purpose: the progressive loader
+     * calls this per batch so markers stream in without clearing the map.
+     */
+    private addMarkers(locations: Record<string, { lat: number; lon: number }>) {
         if (!this.leafletMap) return;
-        this.markers.forEach((m) => m.remove());
-        this.markers.clear();
-
         const titleMap = new Map(this.vehicles.map((v) => [v.tokenId, v.title]));
         const allowed = (this.selectedGroupId || this.searchQuery.trim()) ? this.visibleTokenIds() : null;
-        for (const [tokenId, coords] of Object.entries(this.lastLocations)) {
+        for (const [tokenId, coords] of Object.entries(locations)) {
+            if (this.markers.has(tokenId)) continue;
             if (allowed && !allowed.has(tokenId)) continue;
             const marker = L.circleMarker([coords.lat, coords.lon], {
                 radius: 8,
@@ -111,6 +121,14 @@ export class FleetOverviewView extends LitElement {
             marker.addTo(this.leafletMap);
             this.markers.set(tokenId, marker);
         }
+    }
+
+    /** (Re)place map markers from `this.vehicles` + `this.lastLocations`. No-op until the map exists. */
+    private placeMarkers() {
+        if (!this.leafletMap) return;
+        this.markers.forEach((m) => m.remove());
+        this.markers.clear();
+        this.addMarkers(this.lastLocations);
 
         if (this.markers.size > 0) {
             const group = L.featureGroup([...this.markers.values()]);
@@ -148,22 +166,52 @@ export class FleetOverviewView extends LitElement {
         }
 
         this.lastLocations = {};
-        // Single request for all vehicle locations. Per-vehicle JWT check on the
-        // backend determines which vehicles the dev license has SACD access to.
-        try {
-            const res = await TelemetryService.getInstance().fleetLocations(force);
+        // Locations load progressively: the fleet is paged in chunks with a
+        // few requests in flight, and markers drop onto the map as each chunk
+        // resolves — a 100+ vehicle fleet paints in seconds instead of waiting
+        // for one monolithic call. Per-vehicle JWT checks on the backend
+        // determine which vehicles the dev license has SACD access to.
+        const gen = ++this.loadGeneration;
+        const ids = this.vehicles.map((v) => v.tokenId);
+        const chunks: string[][] = [];
+        for (let i = 0; i < ids.length; i += FleetOverviewView.LOCATIONS_CHUNK_SIZE) {
+            chunks.push(ids.slice(i, i + FleetOverviewView.LOCATIONS_CHUNK_SIZE));
+        }
 
-            // Mark vehicles where JWT exchange failed (no SACD permissions).
-            const noPermSet = new Set(res.noPermissions ?? []);
-            if (noPermSet.size > 0) {
-                this.vehicles = this.vehicles.map((v) =>
-                    noPermSet.has(v.tokenId) ? { ...v, noPermissions: true } : v
-                );
+        const noPermSet = new Set<string>();
+        let nextChunk = 0;
+        let fittedOnce = false;
+        const worker = async () => {
+            while (nextChunk < chunks.length) {
+                if (gen !== this.loadGeneration) return; // superseded by a newer load
+                const batch = chunks[nextChunk++];
+                try {
+                    const res = await TelemetryService.getInstance().fleetLocations(force, batch);
+                    if (gen !== this.loadGeneration) return;
+                    for (const id of res.noPermissions ?? []) noPermSet.add(id);
+                    Object.assign(this.lastLocations, res.locations);
+                    this.addMarkers(res.locations);
+                    // Frame the map as soon as anything is placed; the final
+                    // fit below covers the full set.
+                    if (!fittedOnce && this.markers.size > 0) {
+                        fittedOnce = true;
+                        this.centerMap();
+                    }
+                } catch {
+                    // Batch failed (network) — keep going; map shows what it has.
+                }
             }
+        };
+        await Promise.all(
+            Array.from({ length: Math.min(FleetOverviewView.LOCATIONS_PARALLEL, chunks.length) }, () => worker()),
+        );
+        if (gen !== this.loadGeneration) return;
 
-            this.lastLocations = res.locations;
-        } catch {
-            // Network failure — map stays at default view.
+        // Mark vehicles where JWT exchange failed (no SACD permissions).
+        if (noPermSet.size > 0) {
+            this.vehicles = this.vehicles.map((v) =>
+                noPermSet.has(v.tokenId) ? { ...v, noPermissions: true } : v
+            );
         }
 
         this.placeMarkers();
