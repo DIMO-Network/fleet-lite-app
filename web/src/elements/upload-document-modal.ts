@@ -1,4 +1,5 @@
 import { LitElement, html, css, nothing } from 'lit';
+import { msg, str } from '@lit/localize';
 import { customElement, property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { DocumentService, fileToBase64 } from '../services/document-service.ts';
@@ -184,7 +185,7 @@ export class UploadDocumentModal extends LitElement {
     private formatTitle(v: Vehicle): string {
         const d = v.definition;
         const parts = [d.year ? String(d.year) : '', d.make, d.model].filter(Boolean);
-        return parts.length ? parts.join(' ') : `Vehicle #${v.tokenId}`;
+        return parts.length ? parts.join(' ') : msg(str`Vehicle #${v.tokenId}`);
     }
 
     connectedCallback() {
@@ -211,7 +212,7 @@ export class UploadDocumentModal extends LitElement {
             }
         } catch (err) {
             console.error(err);
-            this.errorMessage = err instanceof Error ? err.message : 'Extract failed';
+            this.errorMessage = err instanceof Error ? err.message : msg('Extract failed');
             this.step = 'error';
         }
     }
@@ -242,36 +243,36 @@ export class UploadDocumentModal extends LitElement {
             }));
         } catch (err) {
             console.error(err);
-            this.errorMessage = err instanceof Error ? err.message : 'Upload failed';
+            this.errorMessage = err instanceof Error ? err.message : msg('Upload failed');
             this.step = 'error';
         }
     }
 
     private renderPick() {
         return html`
-            <h2>Add a document</h2>
-            <p class="sub">PDF, JPG, or PNG. We'll read the VIN and any structured fields, then attest a CloudEvent pair on your behalf.</p>
+            <h2>${msg('Add a document')}</h2>
+            <p class="sub">${msg("PDF, JPG, or PNG. We'll read the VIN and any structured fields, then attest a CloudEvent pair on your behalf.")}</p>
             <label class="drop">
                 <input type="file" accept="application/pdf,image/jpeg,image/png" @change=${this.onFilePicked} />
                 <div class="icon"><span class="material-symbols-outlined">upload_file</span></div>
-                <div>Drop a file here, or <strong>click to choose</strong></div>
-                <div class="hint">PDF · JPG · PNG, max 25 MB</div>
+                <div>${msg(html`Drop a file here, or <strong>click to choose</strong>`)}</div>
+                <div class="hint">${msg('PDF · JPG · PNG, max 25 MB')}</div>
             </label>
             <div class="actions">
-                <button class="ghost" @click=${this.dispatchClose}>Cancel</button>
+                <button class="ghost" @click=${this.dispatchClose}>${msg('Cancel')}</button>
             </div>
         `;
     }
 
     private renderReview() {
         if (!this.extractResult) {
-            return html`<div class="status"><div class="big">Reading document…</div><div>Calling the DIMO extract API.</div></div>`;
+            return html`<div class="status"><div class="big">${msg('Reading document…')}</div><div>${msg('Calling the DIMO extract API.')}</div></div>`;
         }
         const vin = this.extractResult.vin?.trim();
         const canSubmit = this.selectedTokenId !== null;
         return html`
-            <h2>Confirm</h2>
-            <p class="sub">Pick which vehicle this belongs to and confirm the category.</p>
+            <h2>${msg('Confirm')}</h2>
+            <p class="sub">${msg('Pick which vehicle this belongs to and confirm the category.')}</p>
 
             ${this.file ? html`
                 <div class="picked-file">
@@ -284,18 +285,18 @@ export class UploadDocumentModal extends LitElement {
             ${vin
                 ? html`<div class="vin-row">
                     <span class="material-symbols-outlined" style="font-size:16px;">qr_code</span>
-                    <span>Detected VIN <span class="vin">${vin}</span></span>
+                    <span>${msg(html`Detected VIN <span class="vin">${vin}</span>`)}</span>
                 </div>`
                 : html`<div class="vin-row no-vin">
                     <span class="material-symbols-outlined" style="font-size:16px;">info</span>
-                    <span>No VIN detected — pick the vehicle manually.</span>
+                    <span>${msg('No VIN detected — pick the vehicle manually.')}</span>
                 </div>`
             }
 
             <div class="field">
-                <label for="veh">Vehicle</label>
+                <label for="veh">${msg('Vehicle')}</label>
                 <select id="veh" @change=${(e: Event) => { this.selectedTokenId = Number((e.target as HTMLSelectElement).value); }}>
-                    <option value="" ?selected=${this.selectedTokenId === null}>Select a vehicle…</option>
+                    <option value="" ?selected=${this.selectedTokenId === null}>${msg('Select a vehicle…')}</option>
                     ${this.vehicles.map((v) => html`
                         <option value=${v.tokenId} ?selected=${v.tokenId === this.selectedTokenId}>${this.formatTitle(v)}</option>
                     `)}
@@ -303,7 +304,7 @@ export class UploadDocumentModal extends LitElement {
             </div>
 
             <div class="field">
-                <label for="cat">Category</label>
+                <label for="cat">${msg('Category')}</label>
                 <select id="cat" @change=${(e: Event) => { this.selectedCategory = (e.target as HTMLSelectElement).value; }}>
                     ${UPLOAD_CATEGORIES.map((c) => html`
                         <option value=${c.ceType} ?selected=${c.ceType === this.selectedCategory}>${c.label}</option>
@@ -314,31 +315,31 @@ export class UploadDocumentModal extends LitElement {
             ${this.errorMessage ? html`<div class="error-text">${this.errorMessage}</div>` : nothing}
 
             <div class="actions">
-                <button class="ghost" @click=${this.dispatchClose}>Cancel</button>
-                <button class="primary" ?disabled=${!canSubmit} @click=${this.onConfirm}>Save document</button>
+                <button class="ghost" @click=${this.dispatchClose}>${msg('Cancel')}</button>
+                <button class="primary" ?disabled=${!canSubmit} @click=${this.onConfirm}>${msg('Save document')}</button>
             </div>
         `;
     }
 
     private renderSubmitting() {
-        return html`<div class="status"><div class="big">Signing & attesting…</div><div>Posting raw + parsed CloudEvents to attest.dimo.zone.</div></div>`;
+        return html`<div class="status"><div class="big">${msg('Signing & attesting…')}</div><div>${msg('Posting raw + parsed CloudEvents to attest.dimo.zone.')}</div></div>`;
     }
 
     private renderDone() {
         return html`
-            <h2>Saved</h2>
-            <p class="sub">Your document is attested on DIMO. The list will refresh.</p>
-            <div class="actions"><button class="primary" @click=${this.dispatchClose}>Done</button></div>
+            <h2>${msg('Saved')}</h2>
+            <p class="sub">${msg('Your document is attested on DIMO. The list will refresh.')}</p>
+            <div class="actions"><button class="primary" @click=${this.dispatchClose}>${msg('Done')}</button></div>
         `;
     }
 
     private renderError() {
         return html`
-            <h2>Something went wrong</h2>
-            <div class="error-text">${this.errorMessage || 'Unknown error'}</div>
+            <h2>${msg('Something went wrong')}</h2>
+            <div class="error-text">${this.errorMessage || msg('Unknown error')}</div>
             <div class="actions">
-                <button class="ghost" @click=${this.dispatchClose}>Close</button>
-                <button class="primary" @click=${() => { this.step = this.file ? 'review' : 'pick'; this.errorMessage = ''; }}>Try again</button>
+                <button class="ghost" @click=${this.dispatchClose}>${msg('Close')}</button>
+                <button class="primary" @click=${() => { this.step = this.file ? 'review' : 'pick'; this.errorMessage = ''; }}>${msg('Try again')}</button>
             </div>
         `;
     }

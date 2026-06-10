@@ -1,4 +1,5 @@
 import { LitElement, html, css } from 'lit';
+import { msg } from '@lit/localize';
 import { customElement, state } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { ApiService, ApiError } from '../services/api-service.ts';
@@ -140,7 +141,7 @@ export class OnboardTenantView extends LitElement {
         e.preventDefault();
         this.error = '';
         if (!this.clientId.trim() || !this.apiKey.trim()) {
-            this.error = 'Client ID and API key are required.';
+            this.error = msg('Client ID and API key are required.');
             return;
         }
         this.submitting = true;
@@ -152,7 +153,7 @@ export class OnboardTenantView extends LitElement {
             });
             location.hash = `/${tenant.id}/`;
         } catch (err) {
-            this.error = extractMessage(err) || 'Could not create the fleet.';
+            this.error = extractMessage(err) || msg('Could not create the fleet.');
         } finally {
             this.submitting = false;
         }
@@ -163,25 +164,25 @@ export class OnboardTenantView extends LitElement {
             <div class="topbar">
                 <button class="logout-btn" type="button" @click=${() => logout()}>
                     <span class="material-symbols-outlined">logout</span>
-                    Log out
+                    ${msg('Log out')}
                 </button>
             </div>
             <form class="card" @submit=${this.submit}>
-                <h1>Set up your fleet</h1>
+                <h1>${msg('Set up your fleet')}</h1>
                 <p class="sub">
-                    You're not part of a fleet yet. Create one with your DIMO developer
-                    license — the client ID and API key from your DIMO developer console.
+                    ${msg(`You're not part of a fleet yet. Create one with your DIMO developer
+                    license — the client ID and API key from your DIMO developer console.`)}
                 </p>
 
-                <label for="name">Fleet name</label>
+                <label for="name">${msg('Fleet name')}</label>
                 <input
                     id="name"
                     .value=${this.name}
                     @input=${(e: Event) => (this.name = (e.target as HTMLInputElement).value)}
-                    placeholder="My Fleet (optional)"
+                    placeholder="${msg('My Fleet (optional)')}"
                 />
 
-                <label for="clientId">DIMO client ID</label>
+                <label for="clientId">${msg('DIMO client ID')}</label>
                 <input
                     id="clientId"
                     .value=${this.clientId}
@@ -190,21 +191,21 @@ export class OnboardTenantView extends LitElement {
                     autocomplete="off"
                 />
 
-                <label for="apiKey">DIMO API key</label>
+                <label for="apiKey">${msg('DIMO API key')}</label>
                 <input
                     id="apiKey"
                     type="password"
                     .value=${this.apiKey}
                     @input=${(e: Event) => (this.apiKey = (e.target as HTMLInputElement).value)}
-                    placeholder="developer API key"
+                    placeholder="${msg('developer API key')}"
                     autocomplete="off"
                 />
-                <div class="hint">Stored encrypted; used to read your fleet's vehicles and telemetry.</div>
+                <div class="hint">${msg(`Stored encrypted; used to read your fleet's vehicles and telemetry.`)}</div>
 
                 ${this.error ? html`<div class="error">${this.error}</div>` : ''}
 
                 <button type="submit" ?disabled=${this.submitting}>
-                    ${this.submitting ? 'Creating…' : 'Create fleet'}
+                    ${this.submitting ? msg('Creating…') : msg('Create fleet')}
                 </button>
             </form>
         `;

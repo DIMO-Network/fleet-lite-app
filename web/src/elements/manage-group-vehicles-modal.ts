@@ -1,4 +1,5 @@
 import { LitElement, html, css, nothing } from 'lit';
+import { msg, str } from '@lit/localize';
 import { customElement, property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { FleetGroupService } from '../services/fleet-group-service.ts';
@@ -112,7 +113,7 @@ export class ManageGroupVehiclesModal extends LitElement {
     private vehicleTitle(v: Vehicle): string {
         const d = v.definition;
         const parts = [d.year ? String(d.year) : '', d.make, d.model].filter(Boolean);
-        return parts.length ? parts.join(' ') : `Vehicle #${v.tokenId}`;
+        return parts.length ? parts.join(' ') : msg(str`Vehicle #${v.tokenId}`);
     }
 
     private dispatchClose() {
@@ -142,7 +143,7 @@ export class ManageGroupVehiclesModal extends LitElement {
             this.changed = true;
         } catch (err) {
             console.error(err);
-            this.errorMessage = err instanceof Error ? err.message : 'Failed to update membership';
+            this.errorMessage = err instanceof Error ? err.message : msg('Failed to update membership');
         } finally {
             const next = new Set(this.busy);
             next.delete(tokenId);
@@ -162,12 +163,12 @@ export class ManageGroupVehiclesModal extends LitElement {
                     <span class="material-symbols-outlined">close</span>
                 </button>
                 <h2><span class="dot" style="background:${this.group.color}"></span>${this.group.name}</h2>
-                <p class="sub">${this.memberIds.size} of ${this.vehicles.length} vehicles in this group.</p>
+                <p class="sub">${msg(str`${this.memberIds.size} of ${this.vehicles.length} vehicles in this group.`)}</p>
 
                 <div class="search">
                     <input
                         type="text"
-                        placeholder="Search vehicles…"
+                        placeholder="${msg('Search vehicles…')}"
                         .value=${this.query}
                         @input=${(e: Event) => { this.query = (e.target as HTMLInputElement).value; }}
                     />
@@ -175,19 +176,19 @@ export class ManageGroupVehiclesModal extends LitElement {
 
                 <div class="list">
                     ${filtered.length === 0
-                        ? html`<p class="empty-state">No vehicles match.</p>`
+                        ? html`<p class="empty-state">${msg('No vehicles match.')}</p>`
                         : filtered.map((v) => {
                             const member = this.memberIds.has(v.tokenId);
                             return html`
                                 <div class="row">
                                     <div class="meta">
                                         <div class="title">${this.vehicleTitle(v)}</div>
-                                        <div class="sub2">Token #${v.tokenId}</div>
+                                        <div class="sub2">${msg(str`Token #${v.tokenId}`)}</div>
                                     </div>
                                     <button
                                         class=${member ? 'toggle member' : 'toggle'}
                                         ?disabled=${this.busy.has(v.tokenId)}
-                                        title=${member ? 'Remove from group' : 'Add to group'}
+                                        title=${member ? msg('Remove from group') : msg('Add to group')}
                                         @click=${() => this.toggle(v)}
                                     >
                                         <span class="material-symbols-outlined">${member ? 'check' : 'add'}</span>
@@ -200,7 +201,7 @@ export class ManageGroupVehiclesModal extends LitElement {
                 ${this.errorMessage ? html`<div class="error-text">${this.errorMessage}</div>` : nothing}
 
                 <div class="footer">
-                    <button @click=${this.dispatchClose}>Done</button>
+                    <button @click=${this.dispatchClose}>${msg('Done')}</button>
                 </div>
             </div>
         `;

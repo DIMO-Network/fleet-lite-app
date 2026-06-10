@@ -1,4 +1,5 @@
 import { LitElement, html, css } from 'lit';
+import { msg, str } from '@lit/localize';
 import { customElement, property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { getTokenClaims } from '../utils/token.ts';
@@ -154,7 +155,7 @@ export class TenantMembers extends LitElement {
         try {
             this.members = await TenantService.getInstance().fetchMembers(this.tenantId);
         } catch (err) {
-            this.error = extractMessage(err) || 'Could not load members.';
+            this.error = extractMessage(err) || msg('Could not load members.');
             this.members = [];
         } finally {
             this.loading = false;
@@ -166,11 +167,11 @@ export class TenantMembers extends LitElement {
         this.addError = '';
         const wallet = this.newWallet.trim();
         if (!/^0x[a-fA-F0-9]{40}$/.test(wallet)) {
-            this.addError = 'Enter a valid wallet address (0x…, 40 hex characters).';
+            this.addError = msg('Enter a valid wallet address (0x…, 40 hex characters).');
             return;
         }
         if (this.members.some(m => m.wallet.toLowerCase() === wallet.toLowerCase())) {
-            this.addError = 'That wallet is already a member.';
+            this.addError = msg('That wallet is already a member.');
             return;
         }
         this.adding = true;
@@ -179,7 +180,7 @@ export class TenantMembers extends LitElement {
             this.newWallet = '';
             await this.load();
         } catch (err) {
-            this.addError = extractMessage(err) || 'Could not add member.';
+            this.addError = extractMessage(err) || msg('Could not add member.');
         } finally {
             this.adding = false;
         }
@@ -192,7 +193,7 @@ export class TenantMembers extends LitElement {
             await TenantService.getInstance().removeMember(this.tenantId, wallet);
             await this.load();
         } catch (err) {
-            this.error = extractMessage(err) || 'Could not remove member.';
+            this.error = extractMessage(err) || msg('Could not remove member.');
         } finally {
             this.busyWallet = '';
         }
@@ -214,10 +215,10 @@ export class TenantMembers extends LitElement {
                             ${m.email || shortWallet(m.wallet)}
                         </span>
                         ${m.lastLoginAt
-                            ? html`<span class="last-seen">Last login ${new Date(m.lastLoginAt).toLocaleDateString()}</span>`
+                            ? html`<span class="last-seen">${msg(str`Last login ${new Date(m.lastLoginAt).toLocaleDateString()}`)}</span>`
                             : ''}
                     </div>
-                    ${isSelf ? html`<span class="you">You</span>` : ''}
+                    ${isSelf ? html`<span class="you">${msg('You')}</span>` : ''}
                 </div>
                 <div class="right-group">
                     <span class="badge ${isOwnerRole ? 'owner' : ''}">${m.role}</span>
@@ -225,7 +226,7 @@ export class TenantMembers extends LitElement {
                         ? html`
                             <button
                                 class="remove-btn"
-                                title="Remove member"
+                                title="${msg('Remove member')}"
                                 ?disabled=${this.busyWallet === m.wallet}
                                 @click=${() => this.removeMember(m.wallet)}
                             >
@@ -240,7 +241,7 @@ export class TenantMembers extends LitElement {
 
     render() {
         if (this.loading) {
-            return html`<div class="row-group"><div class="state">Loading members…</div></div>`;
+            return html`<div class="row-group"><div class="state">${msg('Loading members…')}</div></div>`;
         }
         if (this.error && this.members.length === 0) {
             return html`<div class="row-group"><div class="state error">${this.error}</div></div>`;
@@ -248,7 +249,7 @@ export class TenantMembers extends LitElement {
         return html`
             <div class="row-group">
                 ${this.members.length === 0
-                    ? html`<div class="state">No members yet.</div>`
+                    ? html`<div class="state">${msg('No members yet.')}</div>`
                     : this.members.map(m => this.renderMember(m))}
             </div>
             ${this.error && this.members.length > 0 ? html`<div class="error">${this.error}</div>` : ''}
@@ -256,13 +257,13 @@ export class TenantMembers extends LitElement {
                 ? html`
                     <form class="add-form" @submit=${this.addMember}>
                         <input
-                            placeholder="0x… wallet address"
+                            placeholder="${msg('0x… wallet address')}"
                             autocomplete="off"
                             .value=${this.newWallet}
                             @input=${(e: Event) => (this.newWallet = (e.target as HTMLInputElement).value)}
                         />
                         <button type="submit" ?disabled=${this.adding}>
-                            ${this.adding ? 'Adding…' : 'Add member'}
+                            ${this.adding ? msg('Adding…') : msg('Add member')}
                         </button>
                     </form>
                     ${this.addError ? html`<div class="error">${this.addError}</div>` : ''}

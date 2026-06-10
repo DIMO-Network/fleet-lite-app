@@ -1,7 +1,14 @@
 export type UnitSystem = 'imperial' | 'metric';
+export type Locale = 'en' | 'es';
 
 const STORAGE_KEY = 'fleet-lite:units';
+const LOCALE_KEY = 'fleet-lite:locale';
 const EVENT_NAME = 'fleet-lite-prefs-changed';
+
+/** Friendly endonym for the language itself (shown in its own language). */
+export function localeLabel(l: Locale): string {
+    return l === 'es' ? 'Español' : 'English';
+}
 
 /**
  * Singleton holding user preferences that don't yet need a DB (units,
@@ -33,6 +40,27 @@ export class PrefsService {
     public toggleUnits(): UnitSystem {
         const next: UnitSystem = this.getUnits() === 'imperial' ? 'metric' : 'imperial';
         this.setUnits(next);
+        return next;
+    }
+
+    /**
+     * Returns the current locale. Defaults to a saved choice, else the
+     * browser language (es-* → 'es'), else English.
+     */
+    public getLocale(): Locale {
+        const saved = localStorage.getItem(LOCALE_KEY);
+        if (saved === 'es' || saved === 'en') return saved;
+        return navigator.language.startsWith('es') ? 'es' : 'en';
+    }
+
+    public setLocale(l: Locale): void {
+        localStorage.setItem(LOCALE_KEY, l);
+        window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: { locale: l } }));
+    }
+
+    public toggleLocale(): Locale {
+        const next: Locale = this.getLocale() === 'en' ? 'es' : 'en';
+        this.setLocale(next);
         return next;
     }
 

@@ -1,0 +1,797 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2">
+<file target-language="es" source-language="en" original="lit-localize-inputs" datatype="plaintext">
+<body>
+<trans-unit id="s962aa1cd6b510dfe">
+  <source>Please enter a group name.</source>
+  <target>Por favor ingrese un nombre de grupo.</target>
+</trans-unit>
+<trans-unit id="sf98b5ad2ae1420e1">
+  <source>Failed to save group</source>
+  <target>Error al guardar grupo</target>
+</trans-unit>
+<trans-unit id="s64e5fde46831987a">
+  <source>Edit group</source>
+  <target>Editar grupo</target>
+</trans-unit>
+<trans-unit id="s1f39912acbe52bba">
+  <source>New group</source>
+  <target>Nuevo grupo</target>
+</trans-unit>
+<trans-unit id="sb008088ce3d7098b">
+  <source>Update the color. Group names can’t be changed.</source>
+  <target>Actualice el color. Los nombres de grupo no se pueden cambiar.</target>
+</trans-unit>
+<trans-unit id="sff8f897f159ae5a4">
+  <source>Name the group and pick a color. You can assign vehicles next.</source>
+  <target>Nombre el grupo y elija un color. Luego podrá asignar vehículos.</target>
+</trans-unit>
+<trans-unit id="sef49aec68fd1dc66">
+  <source>Name</source>
+  <target>Nombre</target>
+</trans-unit>
+<trans-unit id="s019255e2c936db36">
+  <source>e.g. East Coast</source>
+  <target>ej. Costa Este</target>
+</trans-unit>
+<trans-unit id="scd8f37f5e5868b87">
+  <source>Name is locked after creation.</source>
+  <target>El nombre queda bloqueado después de la creación.</target>
+</trans-unit>
+<trans-unit id="s344ea8f4939cdc98">
+  <source>Color</source>
+  <target>Color</target>
+</trans-unit>
+<trans-unit id="s1995a948733ac7bd">
+  <source>Custom color</source>
+  <target>Color personalizado</target>
+</trans-unit>
+<trans-unit id="secad22ddc2c1ba60">
+  <source>Group preview</source>
+  <target>Vista previa del grupo</target>
+</trans-unit>
+<trans-unit id="sb060188bb28bfa9f">
+  <source>Saving…</source>
+  <target>Guardando…</target>
+</trans-unit>
+<trans-unit id="s33f85f24c0f5f008">
+  <source>Save</source>
+  <target>Guardar</target>
+</trans-unit>
+<trans-unit id="s7c5774fad9d050ce">
+  <source>Create group</source>
+  <target>Crear grupo</target>
+</trans-unit>
+<trans-unit id="se3182737589484f6">
+  <source>Download failed</source>
+  <target>Error al descargar</target>
+</trans-unit>
+<trans-unit id="s30f4c80302a9dfa9">
+  <source>Delete this document? This emits a tombstone CloudEvent — the underlying file stays on DIMO infrastructure but no longer surfaces here.</source>
+  <target>¿Eliminar este documento? Esto emite un CloudEvent de tipo tombstone — el archivo subyacente permanece en la infraestructura de DIMO pero ya no aparece aquí.</target>
+</trans-unit>
+<trans-unit id="se50bb7aee2221dff">
+  <source>Delete failed</source>
+  <target>Error al eliminar</target>
+</trans-unit>
+<trans-unit id="s78cea1ee53a45cd6">
+  <source>Cloud event</source>
+  <target>Cloud event</target>
+</trans-unit>
+<trans-unit id="s149aa6bc7c32b9a5">
+  <source>File hash</source>
+  <target>Hash del archivo</target>
+</trans-unit>
+<trans-unit id="s36cb242ac90353bc">
+  <source>Fields</source>
+  <target>Campos</target>
+</trans-unit>
+<trans-unit id="s71ad206448636a0a">
+  <source>No structured fields extracted</source>
+  <target>No se extrajeron campos estructurados</target>
+</trans-unit>
+<trans-unit id="saf7b6785c8312e71">
+  <source>Deleting…</source>
+  <target>Eliminando…</target>
+</trans-unit>
+<trans-unit id="sdc673e73b5c13aea">
+  <source>Delete</source>
+  <target>Eliminar</target>
+</trans-unit>
+<trans-unit id="se669394f6cda2953">
+  <source>Downloading…</source>
+  <target>Descargando…</target>
+</trans-unit>
+<trans-unit id="sd3386a2ef42e80b9">
+  <source>Download</source>
+  <target>Descargar</target>
+</trans-unit>
+<trans-unit id="se2625ea08370df1e">
+  <source>No Client ID configured</source>
+  <target>No hay Client ID configurado</target>
+</trans-unit>
+<trans-unit id="h7d06fca4f9d88ac5">
+  <source><x id="0" equiv-text="&lt;p&gt;"/>Set <x id="1" equiv-text="&lt;code&gt;"/>DIMO_AUTH_CLIENT_ID<x id="2" equiv-text="&lt;/code&gt;"/> in the API <x id="3" equiv-text="&lt;code&gt;"/>settings.yaml<x id="4" equiv-text="&lt;/code&gt;"/> and register
+                    <x id="5" equiv-text="&lt;code&gt;${location.origin}"/>/login.html<x id="6" equiv-text="&lt;/code&gt;"/> as a redirect URI in the
+                    <x id="7" equiv-text="&lt;a href=&quot;https://console.dimo.org&quot;&gt;"/>DIMO Developer Console<x id="8" equiv-text="&lt;/a&gt;"/>.<x id="9" equiv-text="&lt;/p&gt;"/></source>
+  <target><x id="0" equiv-text="&lt;p&gt;"/>Configure <x id="1" equiv-text="&lt;code&gt;"/>DIMO_AUTH_CLIENT_ID<x id="2" equiv-text="&lt;/code&gt;"/> en el <x id="3" equiv-text="&lt;code&gt;"/>settings.yaml<x id="4" equiv-text="&lt;/code&gt;"/> de la API y registre
+                    <x id="5" equiv-text="&lt;code&gt;${location.origin}"/>/login.html<x id="6" equiv-text="&lt;/code&gt;"/> como URI de redirección en la
+                    <x id="7" equiv-text="&lt;a href=&quot;https://console.dimo.org&quot;&gt;"/>DIMO Developer Console<x id="8" equiv-text="&lt;/a&gt;"/>.<x id="9" equiv-text="&lt;/p&gt;"/></target>
+</trans-unit>
+<trans-unit id="s89765e47a0bb7888">
+  <source>Sign in with DIMO</source>
+  <target>Iniciar sesión con DIMO</target>
+</trans-unit>
+<trans-unit id="sa79b468e9bb9775e">
+  <source>Failed to update membership</source>
+  <target>Error al actualizar membresía</target>
+</trans-unit>
+<trans-unit id="s0cb91fef252d799f">
+  <source><x id="0" equiv-text="${this.memberIds.size}"/> of <x id="1" equiv-text="${this.vehicles.length}"/> vehicles in this group.</source>
+  <target><x id="0" equiv-text="${this.memberIds.size}"/> de <x id="1" equiv-text="${this.vehicles.length}"/> vehículos en este grupo.</target>
+</trans-unit>
+<trans-unit id="saf975462813691c8">
+  <source>Search vehicles…</source>
+  <target>Buscar vehículos…</target>
+</trans-unit>
+<trans-unit id="s539d9fe5d59f4f94">
+  <source>No vehicles match.</source>
+  <target>Ningún vehículo coincide.</target>
+</trans-unit>
+<trans-unit id="s7b1c2ef6fc719af8">
+  <source>Remove from group</source>
+  <target>Quitar del grupo</target>
+</trans-unit>
+<trans-unit id="s70109493c65e2876">
+  <source>Add to group</source>
+  <target>Agregar al grupo</target>
+</trans-unit>
+<trans-unit id="s3c699cca4f4dbfb4">
+  <source>Vehicles</source>
+  <target>Vehículos</target>
+</trans-unit>
+<trans-unit id="sae238413b7c6ebac">
+  <source>Stats</source>
+  <target>Estadísticas</target>
+</trans-unit>
+<trans-unit id="s9f26843287bb592d">
+  <source>Groups</source>
+  <target>Grupos</target>
+</trans-unit>
+<trans-unit id="s02795b9b8f085e7b">
+  <source>Glovebox</source>
+  <target>Guantera</target>
+</trans-unit>
+<trans-unit id="s9d8b8aa2b404c2c8">
+  <source>Settings</source>
+  <target>Configuración</target>
+</trans-unit>
+<trans-unit id="sdeddc072bb580102">
+  <source>DIMO</source>
+  <target>DIMO</target>
+</trans-unit>
+<trans-unit id="saa9caac4d34e88f6">
+  <source>DIMO Dashboard</source>
+  <target>Panel de DIMO</target>
+</trans-unit>
+<trans-unit id="sf2aae326542d86d0">
+  <source>Precision Telemetry</source>
+  <target>Telemetría de Precisión</target>
+</trans-unit>
+<trans-unit id="s3736464cf8d6fa08">
+  <source>Support</source>
+  <target>Soporte</target>
+</trans-unit>
+<trans-unit id="s8fa032cdafb3c9b0">
+  <source>Sign Out</source>
+  <target>Cerrar sesión</target>
+</trans-unit>
+<trans-unit id="sae0d84bbaa95a2e0">
+  <source>Could not load members.</source>
+  <target>No se pudieron cargar los miembros.</target>
+</trans-unit>
+<trans-unit id="s9a7e860521a14477">
+  <source>Enter a valid wallet address (0x…, 40 hex characters).</source>
+  <target>Ingrese una dirección de wallet válida (0x…, 40 caracteres hexadecimales).</target>
+</trans-unit>
+<trans-unit id="s5bdd260a177a9e18">
+  <source>That wallet is already a member.</source>
+  <target>Esa wallet ya es miembro.</target>
+</trans-unit>
+<trans-unit id="s41e7876c024b72a0">
+  <source>Could not add member.</source>
+  <target>No se pudo agregar el miembro.</target>
+</trans-unit>
+<trans-unit id="s87e746b950339c11">
+  <source>Could not remove member.</source>
+  <target>No se pudo quitar el miembro.</target>
+</trans-unit>
+<trans-unit id="sabb87633a7b7cc02">
+  <source>Last login <x id="0" equiv-text="${new Date(m.lastLoginAt).toLocaleDateString()}"/></source>
+  <target>Último inicio de sesión <x id="0" equiv-text="${new Date(m.lastLoginAt).toLocaleDateString()}"/></target>
+</trans-unit>
+<trans-unit id="scb6a9c1a1757adbc">
+  <source>You</source>
+  <target>Usted</target>
+</trans-unit>
+<trans-unit id="sb38253b7012e60c5">
+  <source>Remove member</source>
+  <target>Quitar miembro</target>
+</trans-unit>
+<trans-unit id="s79fa1c508e20f3b2">
+  <source>Loading members…</source>
+  <target>Cargando miembros…</target>
+</trans-unit>
+<trans-unit id="s339cc6ad232433e3">
+  <source>No members yet.</source>
+  <target>Aún no hay miembros.</target>
+</trans-unit>
+<trans-unit id="sbf935a8f617fc8d2">
+  <source>0x… wallet address</source>
+  <target>Dirección de wallet 0x…</target>
+</trans-unit>
+<trans-unit id="sbf0cc12a885e39a6">
+  <source>Adding…</source>
+  <target>Agregando…</target>
+</trans-unit>
+<trans-unit id="s75ac7d15cf5d458e">
+  <source>Add member</source>
+  <target>Agregar miembro</target>
+</trans-unit>
+<trans-unit id="s0a53e00afba279af">
+  <source>Fleet</source>
+  <target>Flota</target>
+</trans-unit>
+<trans-unit id="s3417e7c6fb7eb400">
+  <source>Add fleet</source>
+  <target>Agregar flota</target>
+</trans-unit>
+<trans-unit id="s2b79e852aa6fd94c">
+  <source>Vehicle #<x id="0" equiv-text="${v.tokenId}"/></source>
+  <target>Vehículo #<x id="0" equiv-text="${v.tokenId}"/></target>
+</trans-unit>
+<trans-unit id="s43ab54f81e2bc4cb">
+  <source>Extract failed</source>
+  <target>Error al extraer</target>
+</trans-unit>
+<trans-unit id="sc0ffeb5d53b60209">
+  <source>Upload failed</source>
+  <target>Error al subir</target>
+</trans-unit>
+<trans-unit id="s8773d074e96d8e74">
+  <source>Add a document</source>
+  <target>Agregar un documento</target>
+</trans-unit>
+<trans-unit id="s8188c86759436652">
+  <source>PDF, JPG, or PNG. We'll read the VIN and any structured fields, then attest a CloudEvent pair on your behalf.</source>
+  <target>PDF, JPG o PNG. Leeremos el VIN y cualquier campo estructurado, luego certificaremos un par de CloudEvents en su nombre.</target>
+</trans-unit>
+<trans-unit id="h68eb2ca9278bb2bf">
+  <source>Drop a file here, or <x id="0" equiv-text="&lt;strong&gt;"/>click to choose<x id="1" equiv-text="&lt;/strong&gt;"/></source>
+  <target>Suelte un archivo aquí, o <x id="0" equiv-text="&lt;strong&gt;"/>haga clic para elegir<x id="1" equiv-text="&lt;/strong&gt;"/></target>
+</trans-unit>
+<trans-unit id="s37181e73850a6ddd">
+  <source>PDF · JPG · PNG, max 25 MB</source>
+  <target>PDF · JPG · PNG, máx 25 MB</target>
+</trans-unit>
+<trans-unit id="s2ceb11be2290bb1b">
+  <source>Cancel</source>
+  <target>Cancelar</target>
+</trans-unit>
+<trans-unit id="s0a47e8c52033e05a">
+  <source>Reading document…</source>
+  <target>Leyendo documento…</target>
+</trans-unit>
+<trans-unit id="s70304ce49c7370b0">
+  <source>Calling the DIMO extract API.</source>
+  <target>Llamando a la API de extracción de DIMO.</target>
+</trans-unit>
+<trans-unit id="sb85774dc5d18ff0f">
+  <source>Confirm</source>
+  <target>Confirmar</target>
+</trans-unit>
+<trans-unit id="sd3a0bbaf0419cba8">
+  <source>Pick which vehicle this belongs to and confirm the category.</source>
+  <target>Elija a qué vehículo pertenece y confirme la categoría.</target>
+</trans-unit>
+<trans-unit id="h3da2e750affa6331">
+  <source>Detected VIN <x id="0" equiv-text="&lt;span class=&quot;vin&quot;&gt;${vin}&lt;/span&gt;"/></source>
+  <target>VIN detectado <x id="0" equiv-text="&lt;span class=&quot;vin&quot;&gt;${vin}&lt;/span&gt;"/></target>
+</trans-unit>
+<trans-unit id="saae49cb481e5d6da">
+  <source>No VIN detected — pick the vehicle manually.</source>
+  <target>No se detectó VIN — seleccione el vehículo manualmente.</target>
+</trans-unit>
+<trans-unit id="se06ad64a9de6df0f">
+  <source>Vehicle</source>
+  <target>Vehículo</target>
+</trans-unit>
+<trans-unit id="sbf0f73b52aa60c84">
+  <source>Select a vehicle…</source>
+  <target>Seleccione un vehículo…</target>
+</trans-unit>
+<trans-unit id="s079a052719914d71">
+  <source>Category</source>
+  <target>Categoría</target>
+</trans-unit>
+<trans-unit id="s1df5bff8121eccf1">
+  <source>Save document</source>
+  <target>Guardar documento</target>
+</trans-unit>
+<trans-unit id="sca48cd086a646831">
+  <source>Signing &amp; attesting…</source>
+  <target>Firmando y certificando…</target>
+</trans-unit>
+<trans-unit id="sd3589ee7ac34fea4">
+  <source>Posting raw + parsed CloudEvents to attest.dimo.zone.</source>
+  <target>Enviando CloudEvents en bruto + procesados a attest.dimo.zone.</target>
+</trans-unit>
+<trans-unit id="s44fa1773e1e78784">
+  <source>Saved</source>
+  <target>Guardado</target>
+</trans-unit>
+<trans-unit id="s6e37e1ae8665c6ef">
+  <source>Your document is attested on DIMO. The list will refresh.</source>
+  <target>Su documento está certificado en DIMO. La lista se actualizará.</target>
+</trans-unit>
+<trans-unit id="s0379fc73608ab971">
+  <source>Done</source>
+  <target>Listo</target>
+</trans-unit>
+<trans-unit id="sb9bd4f5a3810b77e">
+  <source>Something went wrong</source>
+  <target>Algo salió mal</target>
+</trans-unit>
+<trans-unit id="s5787e20cab57b383">
+  <source>Unknown error</source>
+  <target>Error desconocido</target>
+</trans-unit>
+<trans-unit id="s5e8250fb85d64c23">
+  <source>Close</source>
+  <target>Cerrar</target>
+</trans-unit>
+<trans-unit id="scd1dd6ff53d0d01a">
+  <source>Try again</source>
+  <target>Intentar de nuevo</target>
+</trans-unit>
+<trans-unit id="se313da332d8c6937">
+  <source>Manage Subscription</source>
+  <target>Administrar Suscripción</target>
+</trans-unit>
+<trans-unit id="se5bd9ff649bb7e07">
+  <source>Passkey</source>
+  <target>Passkey</target>
+</trans-unit>
+<trans-unit id="sefcf950b3cc4fc3b">
+  <source>Language</source>
+  <target>Idioma</target>
+</trans-unit>
+<trans-unit id="s21b06c38fc4164db">
+  <source>Advanced</source>
+  <target>Avanzado</target>
+</trans-unit>
+<trans-unit id="s7217759ddfc4c5e0">
+  <source>Measurement Units</source>
+  <target>Unidades de Medida</target>
+</trans-unit>
+<trans-unit id="s50adeb711f7009bd">
+  <source>Email Preferences</source>
+  <target>Preferencias de Correo</target>
+</trans-unit>
+<trans-unit id="sb64127e4e4f0b575">
+  <source>Log out</source>
+  <target>Cerrar sesión</target>
+</trans-unit>
+<trans-unit id="sf32ec7199cf4745b">
+  <source>FAQ</source>
+  <target>Preguntas Frecuentes</target>
+</trans-unit>
+<trans-unit id="s846b3790b6e25c1c">
+  <source>Account</source>
+  <target>Cuenta</target>
+</trans-unit>
+<trans-unit id="s96a2c98044e2cd3b">
+  <source>User profile</source>
+  <target>Perfil de usuario</target>
+</trans-unit>
+<trans-unit id="sf35a744f0aba8b09">
+  <source>Copy wallet address</source>
+  <target>Copiar dirección de wallet</target>
+</trans-unit>
+<trans-unit id="s72c2c61080d15d3d">
+  <source>Not signed in.</source>
+  <target>No ha iniciado sesión.</target>
+</trans-unit>
+<trans-unit id="s07db37d6a443feee">
+  <source>Privacy &amp; Account</source>
+  <target>Privacidad y Cuenta</target>
+</trans-unit>
+<trans-unit id="sf8a96a87d2b00338">
+  <source>Fleet Members</source>
+  <target>Miembros de la Flota</target>
+</trans-unit>
+<trans-unit id="s127a0f60d8f0a0d3">
+  <source>Zoom to vehicle</source>
+  <target>Acercar al vehículo</target>
+</trans-unit>
+<trans-unit id="s51ba5321a04109cd">
+  <source>Favorite</source>
+  <target>Favorito</target>
+</trans-unit>
+<trans-unit id="sd775bc59932f680d">
+  <source>No location access</source>
+  <target>Sin acceso a la ubicación</target>
+</trans-unit>
+<trans-unit id="s6694b6896680ffb2">
+  <source>Fleet Overview</source>
+  <target>Resumen de Flota</target>
+</trans-unit>
+<trans-unit id="s44138cee9b6a3826">
+  <source>Map View</source>
+  <target>Vista de Mapa</target>
+</trans-unit>
+<trans-unit id="s70315aaffba9e636">
+  <source>List View</source>
+  <target>Vista de Lista</target>
+</trans-unit>
+<trans-unit id="s25bebd009ff852a4">
+  <source>Live Tracking</source>
+  <target>Seguimiento en Vivo</target>
+</trans-unit>
+<trans-unit id="s4ccb84efe836feac">
+  <source>Fit all vehicles</source>
+  <target>Ajustar todos los vehículos</target>
+</trans-unit>
+<trans-unit id="s29c5803a032fcf72">
+  <source>Center map</source>
+  <target>Centrar mapa</target>
+</trans-unit>
+<trans-unit id="s236ae937cbcd6a39">
+  <source>Zoom in</source>
+  <target>Acercar</target>
+</trans-unit>
+<trans-unit id="sc65ea2cf2f21a13a">
+  <source>Zoom out</source>
+  <target>Alejar</target>
+</trans-unit>
+<trans-unit id="sa5e39898013227d1">
+  <source>Refresh vehicle state</source>
+  <target>Actualizar estado del vehículo</target>
+</trans-unit>
+<trans-unit id="s25c9b139cc1a6be8">
+  <source>Collapse panel</source>
+  <target>Contraer panel</target>
+</trans-unit>
+<trans-unit id="sad56195767615a3b">
+  <source>Expand panel</source>
+  <target>Expandir panel</target>
+</trans-unit>
+<trans-unit id="s8aeca3c87bb07669">
+  <source>Your cars</source>
+  <target>Sus autos</target>
+</trans-unit>
+<trans-unit id="sed2d862127717b92">
+  <source>Manage groups</source>
+  <target>Administrar grupos</target>
+</trans-unit>
+<trans-unit id="s5c82363c1f9fa8a4">
+  <source>All groups</source>
+  <target>Todos los grupos</target>
+</trans-unit>
+<trans-unit id="s902de20a95e404c6">
+  <source>Loading vehicles…</source>
+  <target>Cargando vehículos…</target>
+</trans-unit>
+<trans-unit id="s8f3220072c4f82f1">
+  <source>No vehicles in this group.</source>
+  <target>No hay vehículos en este grupo.</target>
+</trans-unit>
+<trans-unit id="s56f9bb1b15f5160b">
+  <source>No vehicles found on this account.</source>
+  <target>No se encontraron vehículos en esta cuenta.</target>
+</trans-unit>
+<trans-unit id="s53ae2830817e95f5">
+  <source>Track renewals</source>
+  <target>Seguir renovaciones</target>
+</trans-unit>
+<trans-unit id="sa6251b7f6467df51">
+  <source>Track expiration</source>
+  <target>Seguir vencimiento</target>
+</trans-unit>
+<trans-unit id="s063fde6f359d59a1">
+  <source>Track next inspection</source>
+  <target>Seguir próxima inspección</target>
+</trans-unit>
+<trans-unit id="se7a2360e38fc5886">
+  <source>Add <x id="0" equiv-text="${categoryLabel(t).toLowerCase()}"/></source>
+  <target>Agregar <x id="0" equiv-text="${categoryLabel(t).toLowerCase()}"/></target>
+</trans-unit>
+<trans-unit id="s6ebc9bd6feae62a3">
+  <source>Loading…</source>
+  <target>Cargando…</target>
+</trans-unit>
+<trans-unit id="s558c3d600c58d654">
+  <source><x id="0" equiv-text="${this.documents.length}"/> Record<x id="1" equiv-text="${this.documents.length === 1 ? '' : 's'}"/></source>
+  <target><x id="0" equiv-text="${this.documents.length}"/> Registro<x id="1" equiv-text="${this.documents.length === 1 ? '' : 's'}"/></target>
+</trans-unit>
+<trans-unit id="s5de6302caaf70c36">
+  <source>View documents</source>
+  <target>Ver documentos</target>
+</trans-unit>
+<trans-unit id="s1c85e4cb564ee2fb">
+  <source>No vehicles on this account.</source>
+  <target>No hay vehículos en esta cuenta.</target>
+</trans-unit>
+<trans-unit id="sc2b308d865e8f74a">
+  <source>Select a vehicle</source>
+  <target>Seleccione un vehículo</target>
+</trans-unit>
+<trans-unit id="s6f3ab51192dc929e">
+  <source>Pick a vehicle from the list</source>
+  <target>Elija un vehículo de la lista</target>
+</trans-unit>
+<trans-unit id="s98b3c841368a7b6f">
+  <source>Grant DIMO permissions to view documents on this vehicle.</source>
+  <target>Otorgue permisos de DIMO para ver documentos de este vehículo.</target>
+</trans-unit>
+<trans-unit id="hda00449e21a287da">
+  <source>The fleet-lite dev license <x id="0" equiv-text="&lt;code&gt;${this.devLicense}&lt;/code&gt;"/>
+                                        needs SACD permissions on this vehicle before the document list can load.
+                                        Documents you upload here are still saved — you just can't list or download them yet.</source>
+  <target>La licencia de desarrollador de fleet-lite <x id="0" equiv-text="&lt;code&gt;${this.devLicense}&lt;/code&gt;"/>
+                                        necesita permisos SACD sobre este vehículo antes de que se pueda cargar la lista de documentos.
+                                        Los documentos que suba aquí igual se guardan — simplemente aún no puede listarlos ni descargarlos.</target>
+</trans-unit>
+<trans-unit id="sf993bb199fefbe04">
+  <source>All</source>
+  <target>Todos</target>
+</trans-unit>
+<trans-unit id="sb52f6b2e5a4bc127">
+  <source>Missing</source>
+  <target>Faltantes</target>
+</trans-unit>
+<trans-unit id="s98743891246c44c9">
+  <source>Loading documents…</source>
+  <target>Cargando documentos…</target>
+</trans-unit>
+<trans-unit id="se2a982f53e3bd234">
+  <source>No records yet.</source>
+  <target>Aún no hay registros.</target>
+</trans-unit>
+<trans-unit id="s13dec33091fe72ca">
+  <source>— upload anything: receipt, insurance pdf, reg card</source>
+  <target>— suba lo que sea: recibo, pdf del seguro, tarjeta de registro</target>
+</trans-unit>
+<trans-unit id="sf0d0b6de3ff78c2d">
+  <source>Add document</source>
+  <target>Agregar documento</target>
+</trans-unit>
+<trans-unit id="s8a44928ccb5b1acd">
+  <source>Failed to load groups</source>
+  <target>Error al cargar grupos</target>
+</trans-unit>
+<trans-unit id="s5eb07d8976d63fb7">
+  <source>Failed to delete group</source>
+  <target>Error al eliminar grupo</target>
+</trans-unit>
+<trans-unit id="sfad9715041e583af">
+  <source>vehicle</source>
+  <target>vehículo</target>
+</trans-unit>
+<trans-unit id="s24ff675ff8ff0ed4">
+  <source>vehicles</source>
+  <target>vehículos</target>
+</trans-unit>
+<trans-unit id="s8b491ccba1cefcb0">
+  <source>Delete “<x id="0" equiv-text="${g.name}"/>”?</source>
+  <target>¿Eliminar “<x id="0" equiv-text="${g.name}"/>”?</target>
+</trans-unit>
+<trans-unit id="s47f4637aaa012055">
+  <source>Fleet Groups</source>
+  <target>Grupos de Flota</target>
+</trans-unit>
+<trans-unit id="s080fe94680935fa1">
+  <source>Loading groups…</source>
+  <target>Cargando grupos…</target>
+</trans-unit>
+<trans-unit id="sb3be08d826f659c3">
+  <source>No groups yet. Create one to organize your fleet.</source>
+  <target>Aún no hay grupos. Cree uno para organizar su flota.</target>
+</trans-unit>
+<trans-unit id="sfddc1a3e571e109e">
+  <source>Client ID and API key are required.</source>
+  <target>Se requieren Client ID y API key.</target>
+</trans-unit>
+<trans-unit id="sa6815948005b11a4">
+  <source>Could not create the fleet.</source>
+  <target>No se pudo crear la flota.</target>
+</trans-unit>
+<trans-unit id="sb09779a1122e2f27">
+  <source>Set up your fleet</source>
+  <target>Configure su flota</target>
+</trans-unit>
+<trans-unit id="sa70b8203e798876d">
+  <source>You're not part of a fleet yet. Create one with your DIMO developer
+                    license — the client ID and API key from your DIMO developer console.</source>
+  <target>Aún no forma parte de una flota. Cree una con su licencia de desarrollador
+                    de DIMO — el client ID y la API key de su consola de desarrollador de DIMO.</target>
+</trans-unit>
+<trans-unit id="s8a257df09705a53e">
+  <source>Fleet name</source>
+  <target>Nombre de la flota</target>
+</trans-unit>
+<trans-unit id="s5cfbe2592af6cdbe">
+  <source>My Fleet (optional)</source>
+  <target>Mi Flota (opcional)</target>
+</trans-unit>
+<trans-unit id="s9504547ce8b04d22">
+  <source>DIMO client ID</source>
+  <target>DIMO client ID</target>
+</trans-unit>
+<trans-unit id="s075fdcd6e3f2ab6d">
+  <source>DIMO API key</source>
+  <target>DIMO API key</target>
+</trans-unit>
+<trans-unit id="sf22cdc8cca7661ee">
+  <source>developer API key</source>
+  <target>API key de desarrollador</target>
+</trans-unit>
+<trans-unit id="scbf200db3881b4b7">
+  <source>Stored encrypted; used to read your fleet's vehicles and telemetry.</source>
+  <target>Se almacena cifrada; se usa para leer los vehículos y la telemetría de su flota.</target>
+</trans-unit>
+<trans-unit id="s84fe348d9e99e6b0">
+  <source>Creating…</source>
+  <target>Creando…</target>
+</trans-unit>
+<trans-unit id="s3187dddb2a1a56c9">
+  <source>Create fleet</source>
+  <target>Crear flota</target>
+</trans-unit>
+<trans-unit id="s187528426100c44e">
+  <source>No data</source>
+  <target>Sin datos</target>
+</trans-unit>
+<trans-unit id="se24130f1123560a0">
+  <source>Speed</source>
+  <target>Velocidad</target>
+</trans-unit>
+<trans-unit id="s6d02dc19e21eb49c">
+  <source>Top</source>
+  <target>Máxima</target>
+</trans-unit>
+<trans-unit id="s467b030b9a34b3c8">
+  <source>Average</source>
+  <target>Promedio</target>
+</trans-unit>
+<trans-unit id="s1684fecae47e9fbf">
+  <source>Utilization</source>
+  <target>Utilización</target>
+</trans-unit>
+<trans-unit id="s29ac4f3fce9252db">
+  <source>Driving hours aren't exposed directly by telemetry-api.</source>
+  <target>Las horas de conducción no son expuestas directamente por telemetry-api.</target>
+</trans-unit>
+<trans-unit id="s63187197a34348a6">
+  <source>Will be derived from ignition + speed segments in a future phase.</source>
+  <target>Se derivarán de los segmentos de encendido + velocidad en una fase futura.</target>
+</trans-unit>
+<trans-unit id="s8f9af0ae53120447">
+  <source>Fuel level</source>
+  <target>Nivel de combustible</target>
+</trans-unit>
+<trans-unit id="s780d736ae0ce0f93">
+  <source>Coolant temperature</source>
+  <target>Temperatura del refrigerante</target>
+</trans-unit>
+<trans-unit id="s9ff3121d30f88d52">
+  <source>Normal</source>
+  <target>Normal</target>
+</trans-unit>
+<trans-unit id="s42cbd8dca939a9c7">
+  <source>Check</source>
+  <target>Revisar</target>
+</trans-unit>
+<trans-unit id="s0a5d6c42a9a74a8a">
+  <source>Distance · 7d</source>
+  <target>Distancia · 7d</target>
+</trans-unit>
+<trans-unit id="sfd6d1a6564abd0e8">
+  <source>Battery voltage</source>
+  <target>Voltaje de la batería</target>
+</trans-unit>
+<trans-unit id="s31935452f8d87e4b">
+  <source>Error codes</source>
+  <target>Códigos de error</target>
+</trans-unit>
+<trans-unit id="s38bf79725cd14a53">
+  <source>DTCs</source>
+  <target>DTCs</target>
+</trans-unit>
+<trans-unit id="sa2f22e1ff53ba0c7">
+  <source>Not yet wired</source>
+  <target>Aún no conectado</target>
+</trans-unit>
+<trans-unit id="se2f2dc6fb02a09f8">
+  <source>Odometer</source>
+  <target>Odómetro</target>
+</trans-unit>
+<trans-unit id="s3d197283cb019b5a">
+  <source>Overview</source>
+  <target>Resumen</target>
+</trans-unit>
+<trans-unit id="s56df31a121d65bd7">
+  <source>Diagnostics</source>
+  <target>Diagnósticos</target>
+</trans-unit>
+<trans-unit id="se39db80d5e146efb">
+  <source>Trips</source>
+  <target>Viajes</target>
+</trans-unit>
+<trans-unit id="s2c5a7ccf5915e2e3">
+  <source>Token #<x id="0" equiv-text="${this.tokenId}"/></source>
+  <target>Token #<x id="0" equiv-text="${this.tokenId}"/></target>
+</trans-unit>
+<trans-unit id="sc2f1729e6cffd8e6">
+  <source>Aftermarket device #<x id="0" equiv-text="${this.vehicle.aftermarketDevice.tokenId}"/></source>
+  <target>Dispositivo de posventa #<x id="0" equiv-text="${this.vehicle.aftermarketDevice.tokenId}"/></target>
+</trans-unit>
+<trans-unit id="sf273893857f4ae53">
+  <source>Synthetic device #<x id="0" equiv-text="${this.vehicle.syntheticDevice.tokenId}"/></source>
+  <target>Dispositivo sintético #<x id="0" equiv-text="${this.vehicle.syntheticDevice.tokenId}"/></target>
+</trans-unit>
+<trans-unit id="sd12e9358e7e366cd">
+  <source>No DIMO integration yet</source>
+  <target>Aún no hay integración con DIMO</target>
+</trans-unit>
+<trans-unit id="s0c2d1faf314a032f">
+  <source>Last 7 days</source>
+  <target>Últimos 7 días</target>
+</trans-unit>
+<trans-unit id="s76cd303740058bca">
+  <source>Grant DIMO permissions to see live telemetry on this vehicle.</source>
+  <target>Otorgue permisos de DIMO para ver telemetría en vivo de este vehículo.</target>
+</trans-unit>
+<trans-unit id="hd8cd8096d46d8f48">
+  <source>
+                                    The fleet-lite dev license <x id="0" equiv-text="&lt;code&gt;${this.telemetryDevLicense}&lt;/code&gt;"/>
+                                    needs SACD permissions on this vehicle before we can read signals from
+                                    telemetry-api. Charts below are placeholders until permissions are granted.
+                                </source>
+  <target>
+                                    La licencia de desarrollador de fleet-lite <x id="0" equiv-text="&lt;code&gt;${this.telemetryDevLicense}&lt;/code&gt;"/>
+                                    necesita permisos SACD sobre este vehículo antes de poder leer señales de
+                                    telemetry-api. Los gráficos a continuación son marcadores de posición hasta que se otorguen los permisos.
+                                </target>
+</trans-unit>
+<trans-unit id="s3a5535d697ab14d5">
+  <source>Open DIMO console</source>
+  <target>Abrir consola de DIMO</target>
+</trans-unit>
+<trans-unit id="s02e8d6f62a289f87">
+  <source>Vehicle status</source>
+  <target>Estado del vehículo</target>
+</trans-unit>
+<trans-unit id="s2f05a22cc69bd2e7">
+  <source>Remove favorite</source>
+  <target>Quitar favorito</target>
+</trans-unit>
+<trans-unit id="s7776d28794050425">
+  <source>Make favorite</source>
+  <target>Marcar como favorito</target>
+</trans-unit>
+<trans-unit id="s2565333bced3752b">
+  <source>Data sources</source>
+  <target>Fuentes de datos</target>
+</trans-unit>
+<trans-unit id="s9c82d2018344f8bc">
+  <source>No DIMO integration — pair a device to stream telemetry</source>
+  <target>Sin integración DIMO — vincule un dispositivo para transmitir telemetría</target>
+</trans-unit>
+<trans-unit id="sd23937b02cb5d454">
+  <source>Failed to load vehicles</source>
+  <target>No se pudieron cargar los vehículos</target>
+</trans-unit>
+</body>
+</file>
+</xliff>
