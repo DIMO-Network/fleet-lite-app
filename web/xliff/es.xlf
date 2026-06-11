@@ -792,6 +792,42 @@
   <source>No vehicles match your search.</source>
   <target>Ningún vehículo coincide con su búsqueda.</target>
 </trans-unit>
+<trans-unit id="sb0d17b84dc5cd2ad">
+  <source>Fuel</source>
+  <target>Combustible</target>
+</trans-unit>
+<trans-unit id="s0f2fa21712471c91">
+  <source>Charge</source>
+  <target>Carga</target>
+</trans-unit>
+<trans-unit id="s2eda024d0ca3dbae">
+  <source>Battery</source>
+  <target>Batería</target>
+</trans-unit>
+<trans-unit id="s905f72536873fdcd">
+  <source>Coolant</source>
+  <target>Refrigerante</target>
+</trans-unit>
+<trans-unit id="saf9a16cf6a762b42">
+  <source>Loading telemetry…</source>
+  <target>Cargando telemetría…</target>
+</trans-unit>
+<trans-unit id="se4196af20ae36bf6">
+  <source>No telemetry data reported yet.</source>
+  <target>Aún no se han reportado datos de telemetría.</target>
+</trans-unit>
+<trans-unit id="s7cf5cb05cbde8fba">
+  <source>Trips are on the way</source>
+  <target>Los viajes están en camino</target>
+</trans-unit>
+<trans-unit id="s602ed118f0b5a372">
+  <source>soon</source>
+  <target>pronto</target>
+</trans-unit>
+<trans-unit id="se6406ce7686384a2">
+  <source>Full details</source>
+  <target>Detalles completos</target>
+</trans-unit>
 </body>
 </file>
 </xliff>

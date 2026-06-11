@@ -8,6 +8,7 @@ import { ApiService } from '../services/api-service.ts';
 import { TelemetryService } from '../services/telemetry-service.ts';
 import { FleetCache } from '../services/fleet-cache.ts';
 import { Vehicle, VehicleCard, VehiclesResponse, VehicleGroupRef } from '../types/vehicle.ts';
+import '../elements/vehicle-quick-view.ts';
 
 @customElement('fleet-overview-view')
 export class FleetOverviewView extends LitElement {
@@ -36,6 +37,10 @@ export class FleetOverviewView extends LitElement {
     // Incremented per load; lets stale in-flight chunk results from a
     // superseded load (tenant switch, manual refresh) be discarded.
     private loadGeneration = 0;
+    // Vehicle shown in the quick-view overlay (null = closed). Opened by
+    // clicking a marker or a list card; full details remain a click away
+    // inside the overlay.
+    @state() private quickViewVehicle: VehicleCard | null = null;
     @state() private panelCollapsed = false;
     @state() private panelExpanded = true;
     @state() private refreshing = false;
@@ -59,6 +64,32 @@ export class FleetOverviewView extends LitElement {
         if (window.innerWidth < 768) {
             this.panelCollapsed = true;
         }
+    }
+
+    /** Default and selected circle-marker styles for the quick-view highlight. */
+    private static readonly MARKER_STYLE = { radius: 8, fillColor: '#69dbad', color: '#ffffff', weight: 2, opacity: 0.9, fillOpacity: 0.85 };
+    private static readonly MARKER_STYLE_SELECTED = { radius: 11, fillColor: '#f5c84b', color: '#ffffff', weight: 3, opacity: 1, fillOpacity: 0.95 };
+
+    private openQuickView(v: VehicleCard) {
+        // Restore the previously selected marker, highlight the new one.
+        if (this.quickViewVehicle) {
+            this.markers.get(this.quickViewVehicle.tokenId)?.setStyle(FleetOverviewView.MARKER_STYLE);
+        }
+        this.quickViewVehicle = v;
+        const marker = this.markers.get(v.tokenId);
+        if (marker && this.leafletMap) {
+            marker.setStyle(FleetOverviewView.MARKER_STYLE_SELECTED);
+            this.leafletMap.flyTo(marker.getLatLng(), Math.max(this.leafletMap.getZoom(), 12));
+        }
+        // On mobile the bottom sheet covers the list anyway; collapse it.
+        if (window.innerWidth < 768) this.panelCollapsed = true;
+    }
+
+    private closeQuickView() {
+        if (this.quickViewVehicle) {
+            this.markers.get(this.quickViewVehicle.tokenId)?.setStyle(FleetOverviewView.MARKER_STYLE);
+        }
+        this.quickViewVehicle = null;
     }
 
     private statusClass(v: VehicleCard): string {
@@ -111,14 +142,15 @@ export class FleetOverviewView extends LitElement {
         for (const [tokenId, coords] of Object.entries(locations)) {
             if (this.markers.has(tokenId)) continue;
             if (allowed && !allowed.has(tokenId)) continue;
-            const marker = L.circleMarker([coords.lat, coords.lon], {
-                radius: 8,
-                fillColor: '#69dbad',
-                color: '#ffffff',
-                weight: 2,
-                opacity: 0.9,
-                fillOpacity: 0.85,
-            }).bindTooltip(titleMap.get(tokenId) ?? `Vehicle ${tokenId}`, { permanent: false, direction: 'top', offset: [0, -10] });
+            const selected = this.quickViewVehicle?.tokenId === tokenId;
+            const marker = L.circleMarker(
+                [coords.lat, coords.lon],
+                selected ? FleetOverviewView.MARKER_STYLE_SELECTED : FleetOverviewView.MARKER_STYLE,
+            ).bindTooltip(titleMap.get(tokenId) ?? `Vehicle ${tokenId}`, { permanent: false, direction: 'top', offset: [0, -10] });
+            marker.on('click', () => {
+                const v = this.vehicles.find((c) => c.tokenId === tokenId);
+                if (v) this.openQuickView(v);
+            });
             marker.addTo(this.leafletMap);
             this.markers.set(tokenId, marker);
         }
@@ -811,8 +843,11 @@ export class FleetOverviewView extends LitElement {
 
     private renderCard(v: VehicleCard) {
         const cls = v.online ? 'vehicle-card' : 'vehicle-card offline';
+        // Plain click opens the quick-view overlay (map context preserved);
+        // the href stays so middle-click/cmd-click still opens full details.
         return html`
-            <a class=${cls} href="#/${this.tenantId}/vehicles/${v.tokenId}">
+            <a class=${cls} href="#/${this.tenantId}/vehicles/${v.tokenId}"
+               @click=${(e: MouseEvent) => { if (!e.metaKey && !e.ctrlKey) { e.preventDefault(); this.openQuickView(v); } }}>
                 ${this.markers.has(v.tokenId) ? html`
                     <button class="zoom-btn" title="${msg('Zoom to vehicle')}" @click=${(e: Event) => this.zoomToVehicle(e, v.tokenId)}>
                         <span class="material-symbols-outlined">my_location</span>
@@ -857,7 +892,8 @@ export class FleetOverviewView extends LitElement {
 
     private renderCompactCard(v: VehicleCard) {
         return html`
-            <a class="vehicle-card-compact" href="#/${this.tenantId}/vehicles/${v.tokenId}" title=${v.title}>
+            <a class="vehicle-card-compact" href="#/${this.tenantId}/vehicles/${v.tokenId}" title=${v.title}
+               @click=${(e: MouseEvent) => { if (!e.metaKey && !e.ctrlKey) { e.preventDefault(); this.openQuickView(v); } }}>
                 <span class="status-dot ${this.statusClass(v)}"></span>
                 ${v.isFavorite ? html`<span class="material-symbols-outlined favorite-star-compact" title="${msg('Favorite')}">star</span>` : ''}
                 <span class="compact-token-id">${v.tokenId}</span>
@@ -889,6 +925,12 @@ export class FleetOverviewView extends LitElement {
             </header>
 
             <div class="map"></div>
+
+            <vehicle-quick-view
+                .tenantId=${this.tenantId}
+                .vehicle=${this.quickViewVehicle}
+                @close=${this.closeQuickView}
+            ></vehicle-quick-view>
 
             <div class="map-controls">
                 <button @click=${this.centerMap} title="${msg('Fit all vehicles')}">
