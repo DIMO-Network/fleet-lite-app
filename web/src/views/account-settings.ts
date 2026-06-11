@@ -39,7 +39,6 @@ export class AccountSettingsView extends LitElement {
         const prefs = PrefsService.getInstance();
         return [
             { icon: 'directions_car', label: msg('Manage Subscription') },
-            { icon: 'vpn_key',        label: msg('Passkey') },
             {
                 icon: 'language',
                 label: msg('Language'),

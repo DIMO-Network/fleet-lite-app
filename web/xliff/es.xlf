@@ -358,10 +358,6 @@
   <source>Manage Subscription</source>
   <target>Administrar Suscripción</target>
 </trans-unit>
-<trans-unit id="se5bd9ff649bb7e07">
-  <source>Passkey</source>
-  <target>Passkey</target>
-</trans-unit>
 <trans-unit id="sefcf950b3cc4fc3b">
   <source>Language</source>
   <target>Idioma</target>
