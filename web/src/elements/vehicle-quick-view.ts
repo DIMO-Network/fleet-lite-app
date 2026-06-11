@@ -6,7 +6,21 @@ import { TelemetryService } from '../services/telemetry-service.ts';
 import { PrefsService } from '../services/prefs-service.ts';
 import { formatSpeed, formatDistance, formatTemperature, formatVoltage, formatPercent, FormattedValue } from '../utils/units.ts';
 import { VehicleCard } from '../types/vehicle.ts';
-import { SignalLatest } from '../types/telemetry.ts';
+import { SignalLatest, Trip } from '../types/telemetry.ts';
+
+/** Lookup one aggregation value on a trip (e.g. speed AVG). */
+function tripSignal(trip: Trip, name: string, agg: string): number | undefined {
+    return trip.signals?.find((s) => s.name === name && s.agg === agg)?.value;
+}
+
+/** Trip distance in km: odometer LAST − FIRST (how the b2b app derives it). */
+function tripDistanceKm(trip: Trip): number | undefined {
+    const first = tripSignal(trip, 'powertrainTransmissionTravelledDistance', 'FIRST');
+    const last = tripSignal(trip, 'powertrainTransmissionTravelledDistance', 'LAST');
+    if (first == null || last == null) return undefined;
+    const d = last - first;
+    return d >= 0 ? d : undefined;
+}
 
 /**
  * Floating quick-view panel for one vehicle, docked over the map (bottom
@@ -23,6 +37,14 @@ export class VehicleQuickView extends LitElement {
     @state() private signals: Record<string, SignalLatest> = {};
     @state() private loading = false;
     @state() private permissionsRequired = false;
+
+    @state() private trips: Trip[] = [];
+    @state() private tripsLoading = false;
+    @state() private selectedTrip: Trip | null = null;
+    @state() private routeLoading = false;
+
+    /** Trips window, matching the b2b details screen's weekly view. */
+    private static readonly TRIPS_WINDOW_DAYS = 7;
 
     private unsubscribePrefs: (() => void) | null = null;
     private boundOnKeyDown = (e: KeyboardEvent) => {
@@ -44,11 +66,15 @@ export class VehicleQuickView extends LitElement {
 
     willUpdate(changed: Map<string, unknown>) {
         if (changed.has('vehicle') && this.vehicle) {
+            // Switching vehicles invalidates any selected trip route.
+            this.clearTripSelection();
             void this.loadSignals();
+            void this.loadTrips();
         }
     }
 
     private close() {
+        this.clearTripSelection();
         this.dispatchEvent(new CustomEvent('close', { bubbles: true, composed: true }));
     }
 
@@ -69,6 +95,81 @@ export class VehicleQuickView extends LitElement {
         } finally {
             if (this.vehicle?.tokenId === tokenId) this.loading = false;
         }
+    }
+
+    private async loadTrips() {
+        const tokenId = this.vehicle?.tokenId;
+        if (!tokenId) return;
+        this.tripsLoading = true;
+        this.trips = [];
+        try {
+            const to = new Date();
+            const from = new Date(to.getTime() - VehicleQuickView.TRIPS_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+            const res = await TelemetryService.getInstance().segments(Number(tokenId), from.toISOString(), to.toISOString());
+            if (this.vehicle?.tokenId !== tokenId) return; // superseded
+            this.trips = res.segments || [];
+        } catch {
+            // Trips section degrades to its empty state; signals stay useful.
+        } finally {
+            if (this.vehicle?.tokenId === tokenId) this.tripsLoading = false;
+        }
+    }
+
+    /**
+     * Select a trip and fetch its route for the parent map to draw; clicking
+     * the selected trip again deselects and clears the route. The parent owns
+     * the map — this element only emits `trip-route` events.
+     */
+    private async selectTrip(trip: Trip) {
+        if (this.selectedTrip === trip) {
+            this.clearTripSelection();
+            return;
+        }
+        const tokenId = this.vehicle?.tokenId;
+        if (!tokenId) return;
+        this.selectedTrip = trip;
+        this.routeLoading = true;
+        try {
+            const res = await TelemetryService.getInstance().tripRoute(
+                Number(tokenId), trip.start.timestamp, trip.end.timestamp);
+            // The user may have switched trips/vehicles while this was in flight.
+            if (this.selectedTrip !== trip || this.vehicle?.tokenId !== tokenId) return;
+            const points = (res.points || []).map((p) => [p.lat, p.lon] as [number, number]);
+            // Fall back to the trip's own endpoints when sampling found nothing,
+            // so the map always shows at least the start->end line.
+            if (points.length === 0) {
+                points.push(
+                    [trip.start.value.latitude, trip.start.value.longitude],
+                    [trip.end.value.latitude, trip.end.value.longitude],
+                );
+            }
+            this.dispatchEvent(new CustomEvent('trip-route', {
+                detail: { points, trip },
+                bubbles: true,
+                composed: true,
+            }));
+        } catch {
+            this.clearTripSelection();
+        } finally {
+            if (this.selectedTrip === trip) this.routeLoading = false;
+        }
+    }
+
+    private clearTripSelection() {
+        if (!this.selectedTrip) return;
+        this.selectedTrip = null;
+        this.routeLoading = false;
+        this.dispatchEvent(new CustomEvent('trip-route', {
+            detail: { points: null, trip: null },
+            bubbles: true,
+            composed: true,
+        }));
+    }
+
+    /** "Wed 2:15 PM" in the user's locale — compact enough for a row. */
+    private formatTripTime(iso: string): string {
+        const d = new Date(iso);
+        return d.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' });
     }
 
     private signalValue(name: string): number | undefined {
@@ -246,6 +347,71 @@ export class VehicleQuickView extends LitElement {
             .state-row.perms { color: #f5c84b; display: flex; gap: 8px; align-items: flex-start; }
             .state-row.perms .material-symbols-outlined { font-size: 16px; margin-top: 1px; }
 
+            .trips-head {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 12px 16px 8px;
+                border-top: 1px solid var(--outline-variant);
+            }
+            .trips-head .title {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                font: var(--type-label-caps);
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                color: var(--on-surface-variant);
+            }
+            .trips-head .title .material-symbols-outlined { font-size: 15px; }
+            .trips-head .window { font: var(--type-body-sm); color: var(--on-surface-variant); opacity: 0.7; }
+            .trips-list { max-height: 220px; overflow-y: auto; }
+            .trip-row {
+                width: 100%;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 10px;
+                padding: 10px 16px;
+                background: none;
+                border: none;
+                border-top: 1px solid var(--outline-variant);
+                cursor: pointer;
+                text-align: left;
+                transition: background 0.15s ease;
+            }
+            .trip-row:hover { background: var(--surface-container-high); }
+            .trip-row.selected {
+                background: var(--surface-container-high);
+                box-shadow: inset 3px 0 0 #f5c84b;
+            }
+            .trip-row .when { min-width: 0; }
+            .trip-row .when .times {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                font: var(--type-body-sm);
+                color: var(--on-surface);
+                white-space: nowrap;
+            }
+            .trip-row .when .times .material-symbols-outlined { font-size: 13px; color: var(--on-surface-variant); }
+            .trip-row .when .ongoing {
+                font: var(--type-label-caps);
+                font-size: 9px;
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                color: #69dbad;
+            }
+            .trip-row .stats {
+                flex-shrink: 0;
+                text-align: right;
+                font: var(--type-body-sm);
+                color: var(--on-surface-variant);
+                white-space: nowrap;
+            }
+            .trip-row .stats .dist { color: var(--primary); font-weight: 600; }
+            .trip-row .route-spin { font-size: 14px; color: var(--on-surface-variant); }
+
             footer {
                 display: flex;
                 gap: 10px;
@@ -282,6 +448,54 @@ export class VehicleQuickView extends LitElement {
             }
         `,
     ];
+
+    private renderTrips() {
+        return html`
+            <div class="trips-head">
+                <span class="title"><span class="material-symbols-outlined">route</span>${msg('Trips')}</span>
+                <span class="window">${msg('Last 7 days')}</span>
+            </div>
+            ${this.tripsLoading
+                ? html`<div class="state-row" style="border-top:none;">${msg('Loading trips…')}</div>`
+                : this.trips.length === 0
+                    ? html`<div class="state-row" style="border-top:none;">${msg('No trips in the last 7 days.')}</div>`
+                    : html`
+                        <div class="trips-list custom-scrollbar">
+                            ${this.trips.map((trip) => this.renderTripRow(trip))}
+                        </div>`
+            }
+        `;
+    }
+
+    private renderTripRow(trip: Trip) {
+        const selected = this.selectedTrip === trip;
+        const dist = tripDistanceKm(trip);
+        const avg = tripSignal(trip, 'speed', 'AVG');
+        const max = tripSignal(trip, 'speed', 'MAX');
+        const distFv = dist != null ? formatDistance(dist, 1) : null;
+        const avgFv = avg != null ? formatSpeed(avg) : null;
+        const maxFv = max != null ? formatSpeed(max) : null;
+        return html`
+            <button class="trip-row ${selected ? 'selected' : ''}" @click=${() => this.selectTrip(trip)}>
+                <span class="when">
+                    <span class="times">
+                        ${this.formatTripTime(trip.start.timestamp)}
+                        <span class="material-symbols-outlined">arrow_forward</span>
+                        ${trip.isOngoing ? '' : this.formatTripTime(trip.end.timestamp)}
+                    </span>
+                    ${trip.isOngoing ? html`<span class="ongoing">${msg('Ongoing')}</span>` : ''}
+                </span>
+                <span class="stats">
+                    ${selected && this.routeLoading
+                        ? html`<span class="material-symbols-outlined route-spin">progress_activity</span>`
+                        : html`
+                            ${distFv ? html`<span class="dist">${distFv.value} ${distFv.unit}</span>` : ''}
+                            ${avgFv && maxFv ? html`<br />${avgFv.value}/${maxFv.value} ${maxFv.unit}` : ''}
+                        `}
+                </span>
+            </button>
+        `;
+    }
 
     render() {
         const v = this.vehicle;
@@ -335,11 +549,9 @@ export class VehicleQuickView extends LitElement {
                             : html`<div class="state-row">${msg('No telemetry data reported yet.')}</div>`
                 }
 
+                ${this.renderTrips()}
+
                 <footer>
-                    <button class="btn" disabled title="${msg('Trips are on the way')}">
-                        <span class="material-symbols-outlined" style="font-size:16px;">route</span>
-                        ${msg('Trips')}&nbsp;<span class="soon">(${msg('soon')})</span>
-                    </button>
                     <a class="btn primary" href="#/${this.tenantId}/vehicles/${v.tokenId}">
                         ${msg('Full details')}
                     </a>

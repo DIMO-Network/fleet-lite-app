@@ -67,6 +67,13 @@ type TelemetryAPIService interface {
 	Latest(tenant models.Tenant, tokenID uint64, signals []string) (map[string]SignalLatest, error)
 	LatestLocation(tenant models.Tenant, tokenID uint64) (*VehicleLocation, error)
 	TimeSeries(tenant models.Tenant, tokenID uint64, signal, from, to, interval string) ([]TimeSeriesBucket, error)
+	// Segments queries telemetry-api's trip detection (`segments`) for one
+	// vehicle. mechanism is a telemetry-api enum: "ignitionDetection" or
+	// "frequencyAnalysis" (aftermarket devices only support the latter).
+	Segments(tenant models.Tenant, tokenID uint64, from, to, mechanism string) ([]Segment, error)
+	// RoutePoints samples currentLocationCoordinates at a 3s interval over a
+	// trip's time window, returning the polyline points in order.
+	RoutePoints(tenant models.Tenant, tokenID uint64, from, to string) ([]LocationCoords, error)
 	// FleetLocations checks per-vehicle JWT availability to determine which
 	// vehicles the tenant's dev license has SACD permissions for, then fetches
 	// each permitted vehicle's coordinates with its own JWT (telemetry-api
@@ -75,6 +82,32 @@ type TelemetryAPIService interface {
 	// JWT exchange fails are returned in NoPermissions. Results are cached
 	// per tenant for fleetLocationsCacheTTL; force bypasses the cache.
 	FleetLocations(ctx context.Context, tenant models.Tenant, tokenIDs []uint64, force bool) (FleetLocationsResult, error)
+}
+
+// SegmentPoint is one end of a detected trip: a GPS fix plus its timestamp.
+type SegmentPoint struct {
+	Value struct {
+		Latitude  float64 `json:"latitude"`
+		Longitude float64 `json:"longitude"`
+	} `json:"value"`
+	Timestamp string `json:"timestamp"`
+}
+
+// SegmentSignal is one requested aggregation over the trip window (e.g.
+// odometer FIRST/LAST for distance, speed AVG/MAX).
+type SegmentSignal struct {
+	Name  string  `json:"name"`
+	Agg   string  `json:"agg"`
+	Value float64 `json:"value"`
+}
+
+// Segment is one detected trip from telemetry-api's `segments` query — the
+// same shape the b2b fleet manager consumes on its details screen.
+type Segment struct {
+	Start     SegmentPoint    `json:"start"`
+	End       SegmentPoint    `json:"end"`
+	IsOngoing bool            `json:"isOngoing"`
+	Signals   []SegmentSignal `json:"signals"`
 }
 
 // VehicleLocation is a vehicle's latest GPS fix from telemetry-api's
@@ -235,6 +268,90 @@ func (t *telemetryAPIService) TimeSeries(tenant models.Tenant, tokenID uint64, s
 		buckets = append(buckets, b)
 	}
 	return buckets, nil
+}
+
+// Segments queries trip detection for one vehicle. Query shape mirrors the
+// b2b fleet manager's details screen: odometer FIRST/LAST (distance) and
+// speed AVG/MAX per segment. mechanism is interpolated unquoted — it is a
+// GraphQL enum — and restricted to known values to keep the query well-formed.
+func (t *telemetryAPIService) Segments(tenant models.Tenant, tokenID uint64, from, to, mechanism string) ([]Segment, error) {
+	if mechanism != "ignitionDetection" && mechanism != "frequencyAnalysis" {
+		return nil, fmt.Errorf("unknown segments mechanism %q", mechanism)
+	}
+	q := fmt.Sprintf(`query {
+		segments(
+			tokenId: %d
+			from: %q
+			to: %q
+			mechanism: %s
+			limit: 60
+			signalRequests: [
+				{ name: "powertrainTransmissionTravelledDistance", agg: FIRST }
+				{ name: "powertrainTransmissionTravelledDistance", agg: LAST }
+				{ name: "speed", agg: AVG }
+				{ name: "speed", agg: MAX }
+			]
+		) {
+			start { value { latitude longitude } timestamp }
+			end { value { latitude longitude } timestamp }
+			isOngoing
+			signals { name agg value }
+		}
+	}`, tokenID, from, to, mechanism)
+
+	raw, err := t.query(tenant, tokenID, q)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp struct {
+		Data struct {
+			Segments []Segment `json:"segments"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, fmt.Errorf("parse segments: %w", err)
+	}
+	return resp.Data.Segments, nil
+}
+
+// RoutePoints samples the vehicle's location every 3s across a trip window —
+// the same query the b2b app uses to draw a trip's route polyline.
+func (t *telemetryAPIService) RoutePoints(tenant models.Tenant, tokenID uint64, from, to string) ([]LocationCoords, error) {
+	q := fmt.Sprintf(`query {
+		signals(tokenId: %d, interval: "3s", from: %q, to: %q) {
+			currentLocationCoordinates(agg: FIRST) { latitude longitude }
+		}
+	}`, tokenID, from, to)
+
+	raw, err := t.query(tenant, tokenID, q)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp struct {
+		Data struct {
+			Signals []struct {
+				CurrentLocationCoordinates *struct {
+					Latitude  float64 `json:"latitude"`
+					Longitude float64 `json:"longitude"`
+				} `json:"currentLocationCoordinates"`
+			} `json:"signals"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, fmt.Errorf("parse route points: %w", err)
+	}
+
+	points := make([]LocationCoords, 0, len(resp.Data.Signals))
+	for _, s := range resp.Data.Signals {
+		c := s.CurrentLocationCoordinates
+		if c == nil || (c.Latitude == 0 && c.Longitude == 0) {
+			continue
+		}
+		points = append(points, LocationCoords{Lat: c.Latitude, Lon: c.Longitude})
+	}
+	return points, nil
 }
 
 // FleetLocations checks per-vehicle JWT availability (definitive SACD check),
