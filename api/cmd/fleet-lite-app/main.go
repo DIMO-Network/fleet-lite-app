@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"syscall"
+	"time"
 
 	"github.com/DIMO-Network/fleet-lite-app/internal/app"
 	"github.com/DIMO-Network/fleet-lite-app/internal/config"
@@ -47,8 +49,13 @@ func main() {
 		logger = logger.Level(lvl)
 	}
 
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer cancel()
+	// stop unregisters the handler; it is called again right after the first
+	// signal (in runFiber) so a second Ctrl-C falls through to the OS default
+	// and force-kills instead of being swallowed while shutdown drains.
+	// SIGTERM is what Kubernetes sends on pod termination — without it pods
+	// ignore the graceful window and get SIGKILLed after the grace period.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	// Subcommands (migrate, etc.) — invoked when extra positional args are present.
 	if len(os.Args) > 1 {
@@ -86,10 +93,10 @@ func main() {
 	)
 
 	logger.Info().Int("port", settings.MonitoringPort).Msg("Starting monitoring server")
-	runFiber(gCtx, monApp, ":"+strconv.Itoa(settings.MonitoringPort), group, false)
+	runFiber(gCtx, monApp, ":"+strconv.Itoa(settings.MonitoringPort), group, false, stop)
 
 	logger.Info().Int("port", settings.APIPort).Msg("Starting web server")
-	runFiber(gCtx, webAPI, ":"+strconv.Itoa(settings.APIPort), group, settings.UseDevCerts)
+	runFiber(gCtx, webAPI, ":"+strconv.Itoa(settings.APIPort), group, settings.UseDevCerts, stop)
 
 	if err := group.Wait(); err != nil {
 		logger.Fatal().Err(err).Msg("Server failed.")
@@ -97,7 +104,12 @@ func main() {
 	logger.Info().Msg("Server stopped.")
 }
 
-func runFiber(ctx context.Context, fiberApp *fiber.App, addr string, group *errgroup.Group, useTLS bool) {
+// shutdownTimeout bounds the graceful drain on interrupt. Without it,
+// Shutdown waits indefinitely for in-flight requests (a slow fleet-locations
+// fan-out is enough) and Ctrl-C appears to do nothing.
+const shutdownTimeout = 10 * time.Second
+
+func runFiber(ctx context.Context, fiberApp *fiber.App, addr string, group *errgroup.Group, useTLS bool, stop context.CancelFunc) {
 	group.Go(func() error {
 		if useTLS {
 			if err := fiberApp.ListenTLS(LocalDevDomain+addr, "../web/.mkcert/cert.pem", "../web/.mkcert/dev.pem"); err != nil {
@@ -112,7 +124,10 @@ func runFiber(ctx context.Context, fiberApp *fiber.App, addr string, group *errg
 	})
 	group.Go(func() error {
 		<-ctx.Done()
-		if err := fiberApp.Shutdown(); err != nil {
+		// First signal received: unregister the handler so a second Ctrl-C
+		// gets the OS default (force-kill) instead of being swallowed.
+		stop()
+		if err := fiberApp.ShutdownWithTimeout(shutdownTimeout); err != nil {
 			return fmt.Errorf("failed to shutdown server: %w", err)
 		}
 		return nil
