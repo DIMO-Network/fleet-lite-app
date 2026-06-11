@@ -63,7 +63,7 @@ nothing until the slowest vehicle resolves. Implemented as client paging:
   The result cache became **per-vehicle** (`tenantID:tokenID` →
   coords/noPerm/no-data outcome, 45 s) so subset and full-fleet requests
   compose instead of keeping separate snapshots.
-- Frontend (`fleet-overview.ts`): pages the fleet in chunks of 20 with 3
+- Frontend (`fleet-overview.ts`): pages the fleet in chunks of 3 with 3
   requests in flight (sized against the backend's 10-worker pool), adding
   markers per batch (`addMarkers` is additive; full `placeMarkers` redraw only
   on filter changes). Map framed on the first batch with data, re-fit at the
@@ -92,7 +92,7 @@ becomes necessary if/when server paging is introduced.
 | 2 | Tenant result cache (45 s + `?force=true`) | ~1 h | **done** |
 | 3 | JWT cache TTL from `exp` (vehicle/asset + developer) | ~30 m | **done** |
 | 6 | Frontend text search (list + markers, localized) | ~1–2 h | **done** |
-| 4 | Progressive loading (client paging, chunk 20 × 3 in flight) | ~2 h | **done** |
+| 4 | Progressive loading (client paging, chunk 3 × 3 in flight) | ~2 h | **done** |
 | 5 | Upstream batch query | external | raise with telemetry team |
 
 (1–3 are one backend PR candidate; 6 is a frontend PR; 4–5 deferred.)
