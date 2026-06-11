@@ -41,6 +41,9 @@ export class FleetOverviewView extends LitElement {
     // clicking a marker or a list card; full details remain a click away
     // inside the overlay.
     @state() private quickViewVehicle: VehicleCard | null = null;
+    // Selected trip's route drawn on the map (polyline + start/end dots).
+    private tripRouteLayer: L.Polyline | null = null;
+    private tripEndpointLayers: L.CircleMarker[] = [];
     @state() private panelCollapsed = false;
     @state() private panelExpanded = true;
     @state() private refreshing = false;
@@ -71,10 +74,12 @@ export class FleetOverviewView extends LitElement {
     private static readonly MARKER_STYLE_SELECTED = { radius: 11, fillColor: '#f5c84b', color: '#ffffff', weight: 3, opacity: 1, fillOpacity: 0.95 };
 
     private openQuickView(v: VehicleCard) {
-        // Restore the previously selected marker, highlight the new one.
+        // Restore the previously selected marker, highlight the new one. Any
+        // trip route belongs to the previous vehicle — clear it.
         if (this.quickViewVehicle) {
             this.markers.get(this.quickViewVehicle.tokenId)?.setStyle(FleetOverviewView.MARKER_STYLE);
         }
+        this.clearTripRoute();
         this.quickViewVehicle = v;
         const marker = this.markers.get(v.tokenId);
         if (marker && this.leafletMap) {
@@ -89,7 +94,33 @@ export class FleetOverviewView extends LitElement {
         if (this.quickViewVehicle) {
             this.markers.get(this.quickViewVehicle.tokenId)?.setStyle(FleetOverviewView.MARKER_STYLE);
         }
+        this.clearTripRoute();
         this.quickViewVehicle = null;
+    }
+
+    /** Draw (or clear, when points is null) the selected trip's route. */
+    private onTripRoute(e: CustomEvent<{ points: Array<[number, number]> | null }>) {
+        this.clearTripRoute();
+        const points = e.detail.points;
+        if (!points || points.length === 0 || !this.leafletMap) return;
+        this.tripRouteLayer = L.polyline(points, {
+            color: '#f5c84b',
+            weight: 4,
+            opacity: 0.85,
+        }).addTo(this.leafletMap);
+        // Start/end dots so direction is readable at a glance.
+        this.tripEndpointLayers = [
+            L.circleMarker(points[0], { radius: 5, fillColor: '#69dbad', color: '#ffffff', weight: 2, fillOpacity: 1 }).addTo(this.leafletMap),
+            L.circleMarker(points[points.length - 1], { radius: 5, fillColor: '#f5c84b', color: '#ffffff', weight: 2, fillOpacity: 1 }).addTo(this.leafletMap),
+        ];
+        this.leafletMap.fitBounds(this.tripRouteLayer.getBounds(), { padding: [40, 40], maxZoom: 15 });
+    }
+
+    private clearTripRoute() {
+        this.tripRouteLayer?.remove();
+        this.tripRouteLayer = null;
+        this.tripEndpointLayers.forEach((m) => m.remove());
+        this.tripEndpointLayers = [];
     }
 
     private statusClass(v: VehicleCard): string {
@@ -930,6 +961,7 @@ export class FleetOverviewView extends LitElement {
                 .tenantId=${this.tenantId}
                 .vehicle=${this.quickViewVehicle}
                 @close=${this.closeQuickView}
+                @trip-route=${this.onTripRoute}
             ></vehicle-quick-view>
 
             <div class="map-controls">

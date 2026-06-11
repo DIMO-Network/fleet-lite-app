@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -190,4 +191,93 @@ func (t *TelemetryController) GetTimeSeries(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadGateway, "telemetry time-series failed: "+err.Error())
 	}
 	return c.JSON(fiber.Map{"signal": signal, "interval": interval, "buckets": buckets})
+}
+
+// GetSegments — GET /telemetry/:tokenID/segments?from=...&to=... Returns
+// detected trips for the vehicle in the window, newest first. The detection
+// mechanism follows the b2b fleet manager's heuristic: aftermarket devices
+// only support frequencyAnalysis; everything else tries ignitionDetection
+// first and falls back to frequencyAnalysis when it detects nothing.
+func (t *TelemetryController) GetSegments(c *fiber.Ctx) error {
+	tenant, err := GetTenant(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	tokenID, err := ParseTokenIDParam(c, "tokenID")
+	if err != nil {
+		return err
+	}
+	from := c.Query("from")
+	to := c.Query("to")
+	if from == "" || to == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "from, to query params are required")
+	}
+	vehicle, verr := t.vehicleSvc.GetVehicle(c.Context(), tenant.ID, int64(tokenID))
+	if verr != nil {
+		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
+	}
+
+	mechanism := "ignitionDetection"
+	if vehicle.AftermarketDevice != nil && vehicle.AftermarketDevice.TokenID > 0 {
+		mechanism = "frequencyAnalysis"
+	}
+	segments, err := t.telemetry.Segments(tenant, tokenID, from, to, mechanism)
+	if err == nil && len(segments) == 0 && mechanism == "ignitionDetection" {
+		// Some synthetic integrations never report ignition — retry with the
+		// frequency-based detector before concluding there were no trips.
+		mechanism = "frequencyAnalysis"
+		segments, err = t.telemetry.Segments(tenant, tokenID, from, to, mechanism)
+	}
+	if err != nil {
+		if isPermissionError(err) {
+			return c.JSON(fiber.Map{
+				"segments":            []interface{}{},
+				"permissionsRequired": true,
+				"devLicense":          tenant.ClientID,
+			})
+		}
+		t.logger.Err(err).Uint64("tokenID", tokenID).Msg("telemetry segments failed")
+		return fiber.NewError(fiber.StatusBadGateway, "telemetry segments failed: "+err.Error())
+	}
+
+	// Newest trips first — the panel shows the most recent activity on top.
+	sort.Slice(segments, func(i, j int) bool {
+		return segments[i].Start.Timestamp > segments[j].Start.Timestamp
+	})
+	return c.JSON(fiber.Map{"segments": segments, "mechanism": mechanism})
+}
+
+// GetTripRoute — GET /telemetry/:tokenID/route?from=...&to=... Returns the
+// sampled location points across one trip's window, for drawing its polyline.
+func (t *TelemetryController) GetTripRoute(c *fiber.Ctx) error {
+	tenant, err := GetTenant(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	tokenID, err := ParseTokenIDParam(c, "tokenID")
+	if err != nil {
+		return err
+	}
+	from := c.Query("from")
+	to := c.Query("to")
+	if from == "" || to == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "from, to query params are required")
+	}
+	if !t.vehicleInTenant(c.Context(), tenant.ID, tokenID) {
+		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
+	}
+
+	points, err := t.telemetry.RoutePoints(tenant, tokenID, from, to)
+	if err != nil {
+		if isPermissionError(err) {
+			return c.JSON(fiber.Map{
+				"points":              []interface{}{},
+				"permissionsRequired": true,
+				"devLicense":          tenant.ClientID,
+			})
+		}
+		t.logger.Err(err).Uint64("tokenID", tokenID).Msg("telemetry route failed")
+		return fiber.NewError(fiber.StatusBadGateway, "telemetry route failed: "+err.Error())
+	}
+	return c.JSON(fiber.Map{"points": points})
 }

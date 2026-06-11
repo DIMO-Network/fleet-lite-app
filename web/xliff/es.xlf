@@ -816,17 +816,21 @@
   <source>No telemetry data reported yet.</source>
   <target>Aún no se han reportado datos de telemetría.</target>
 </trans-unit>
-<trans-unit id="s7cf5cb05cbde8fba">
-  <source>Trips are on the way</source>
-  <target>Los viajes están en camino</target>
-</trans-unit>
-<trans-unit id="s602ed118f0b5a372">
-  <source>soon</source>
-  <target>pronto</target>
-</trans-unit>
 <trans-unit id="se6406ce7686384a2">
   <source>Full details</source>
   <target>Detalles completos</target>
+</trans-unit>
+<trans-unit id="s2dc18a6f5153c757">
+  <source>Loading trips…</source>
+  <target>Cargando viajes…</target>
+</trans-unit>
+<trans-unit id="sf69e4aeffd3f119c">
+  <source>No trips in the last 7 days.</source>
+  <target>No hay viajes en los últimos 7 días.</target>
+</trans-unit>
+<trans-unit id="s0cd0f490954a4ee2">
+  <source>Ongoing</source>
+  <target>En curso</target>
 </trans-unit>
 </body>
 </file>

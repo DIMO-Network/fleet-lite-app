@@ -1,5 +1,5 @@
 import { ApiService } from './api-service.ts';
-import { FleetLocationsResponse, LatestSignalsResponse, TimeSeriesResponse } from '../types/telemetry.ts';
+import { FleetLocationsResponse, LatestSignalsResponse, SegmentsResponse, TimeSeriesResponse, TripRouteResponse } from '../types/telemetry.ts';
 
 export class TelemetryService {
     private static instance: TelemetryService;
@@ -38,5 +38,17 @@ export class TelemetryService {
     timeSeries(tokenId: number, signal: string, from: string, to: string, interval = '1d'): Promise<TimeSeriesResponse> {
         const q = new URLSearchParams({ signal, from, to, interval });
         return ApiService.getInstance().get<TimeSeriesResponse>(`/telemetry/${tokenId}/timeseries?${q.toString()}`);
+    }
+
+    /** GET /telemetry/:tokenId/segments — detected trips in the window, newest first. */
+    segments(tokenId: number, from: string, to: string): Promise<SegmentsResponse> {
+        const q = new URLSearchParams({ from, to });
+        return ApiService.getInstance().get<SegmentsResponse>(`/telemetry/${tokenId}/segments?${q.toString()}`);
+    }
+
+    /** GET /telemetry/:tokenId/route — sampled location points across one trip. */
+    tripRoute(tokenId: number, from: string, to: string): Promise<TripRouteResponse> {
+        const q = new URLSearchParams({ from, to });
+        return ApiService.getInstance().get<TripRouteResponse>(`/telemetry/${tokenId}/route?${q.toString()}`);
     }
 }
