@@ -27,11 +27,11 @@ export class FleetOverviewView extends LitElement {
     private markers = new Map<string, L.CircleMarker>();
     private lastLocations: Record<string, { lat: number; lon: number }> = {};
     private resizeObserver: ResizeObserver | null = null;
-    // Progressive location loading: page the fleet in chunks of this size with
-    // this many requests in flight. Small chunks (3) keep each request fast —
-    // a chunk resolves in one round of the backend's fan-out pool, so markers
-    // trickle onto the map vehicle-by-vehicle instead of in big batches.
-    private static readonly LOCATIONS_CHUNK_SIZE = 3;
+    // Progressive location loading: one tokenId per request, three requests
+    // in flight. Each response carries exactly one vehicle, so every marker
+    // paints the moment its location resolves — no batch ever waits on a
+    // slower neighbor.
+    private static readonly LOCATIONS_CHUNK_SIZE = 1;
     private static readonly LOCATIONS_PARALLEL = 3;
     // Incremented per load; lets stale in-flight chunk results from a
     // superseded load (tenant switch, manual refresh) be discarded.
