@@ -39,7 +39,6 @@ export class AccountSettingsView extends LitElement {
         const prefs = PrefsService.getInstance();
         return [
             { icon: 'directions_car', label: msg('Manage Subscription') },
-            { icon: 'vpn_key',        label: msg('Passkey') },
             {
                 icon: 'language',
                 label: msg('Language'),
@@ -56,7 +55,6 @@ export class AccountSettingsView extends LitElement {
                 trailing: unitsLabel(prefs.getUnits()),
                 onClick: () => { prefs.toggleUnits(); },
             },
-            { icon: 'mail',           label: msg('Email Preferences') },
             { icon: 'logout',         label: msg('Log out'), onClick: () => logout() },
         ];
     }
