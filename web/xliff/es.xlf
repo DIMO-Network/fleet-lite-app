@@ -358,10 +358,6 @@
   <source>Manage Subscription</source>
   <target>Administrar Suscripción</target>
 </trans-unit>
-<trans-unit id="se5bd9ff649bb7e07">
-  <source>Passkey</source>
-  <target>Passkey</target>
-</trans-unit>
 <trans-unit id="sefcf950b3cc4fc3b">
   <source>Language</source>
   <target>Idioma</target>
@@ -373,10 +369,6 @@
 <trans-unit id="s7217759ddfc4c5e0">
   <source>Measurement Units</source>
   <target>Unidades de Medida</target>
-</trans-unit>
-<trans-unit id="s50adeb711f7009bd">
-  <source>Email Preferences</source>
-  <target>Preferencias de Correo</target>
 </trans-unit>
 <trans-unit id="sb64127e4e4f0b575">
   <source>Log out</source>
