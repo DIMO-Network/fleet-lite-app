@@ -79,7 +79,6 @@
 's467b030b9a34b3c8': `Promedio`,
 's47f4637aaa012055': `Grupos de Flota`,
 's4ccb84efe836feac': `Ajustar todos los vehículos`,
-'s50adeb711f7009bd': `Preferencias de Correo`,
 's51ba5321a04109cd': `Favorito`,
 's539d9fe5d59f4f94': `Ningún vehículo coincide.`,
 's53ae2830817e95f5': `Seguir renovaciones`,

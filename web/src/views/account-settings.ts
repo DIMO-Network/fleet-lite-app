@@ -55,7 +55,6 @@ export class AccountSettingsView extends LitElement {
                 trailing: unitsLabel(prefs.getUnits()),
                 onClick: () => { prefs.toggleUnits(); },
             },
-            { icon: 'mail',           label: msg('Email Preferences') },
             { icon: 'logout',         label: msg('Log out'), onClick: () => logout() },
         ];
     }

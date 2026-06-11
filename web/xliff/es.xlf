@@ -370,10 +370,6 @@
   <source>Measurement Units</source>
   <target>Unidades de Medida</target>
 </trans-unit>
-<trans-unit id="s50adeb711f7009bd">
-  <source>Email Preferences</source>
-  <target>Preferencias de Correo</target>
-</trans-unit>
 <trans-unit id="sb64127e4e4f0b575">
   <source>Log out</source>
   <target>Cerrar sesión</target>
