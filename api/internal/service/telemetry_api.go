@@ -288,11 +288,15 @@ func (t *telemetryAPIService) FleetLocations(ctx context.Context, tenant models.
 		return FleetLocationsResult{Locations: map[uint64]LocationCoords{}, NoPermissions: tokenIDs}, nil
 	}
 
-	g, ctx := errgroup.WithContext(ctx)
+	// NOTE: keep the errgroup-derived context in its own variable. errgroup
+	// cancels the derived context when Wait returns — even on success — so
+	// checking the parent's liveness must use `ctx`, never `gctx`. (Shadowing
+	// ctx here once turned every successful fan-out into a 502.)
+	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(fleetLocationsConcurrency)
 
 	for _, id := range remaining {
-		if ctx.Err() != nil {
+		if gctx.Err() != nil {
 			break // caller gone — stop scheduling work
 		}
 		g.Go(func() error {
@@ -306,7 +310,7 @@ func (t *telemetryAPIService) FleetLocations(ctx context.Context, tenant models.
 			}
 
 			q := fmt.Sprintf(`query { signalsLatest(tokenId: %d) { currentLocationCoordinates { value { latitude longitude } } } }`, id)
-			raw, err := t.doQuery(ctx, jwt, q)
+			raw, err := t.doQuery(gctx, jwt, q)
 			if err != nil {
 				// JWT worked but query failed (e.g. telemetry API hiccup) — skip silently.
 				t.logger.Warn().Uint64("tokenId", id).Err(err).Msg("fleet locations: skip vehicle query error")
