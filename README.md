@@ -60,6 +60,28 @@ make web   # frontend only (Vite dev server, generates the mkcert certs)
 make api   # backend only  (settings + migrations + Go server; needs the certs)
 ```
 
+## CLI commands
+
+The API binary doubles as a CLI (google/subcommands). With no arguments it
+starts the server; with a subcommand it runs the task and exits. Locally:
+`go run ./cmd/fleet-lite-app <subcommand>` from `api/`; in a pod the binary
+is `/fleet-lite-app`.
+
+| Subcommand | What it does | Flags |
+|---|---|---|
+| `migrate` | Migrate the database | `-up`, `-down` |
+| `import-group-attestations` | Pull `dimo.document.vehicle.groups` attestations from fetch-api (latest per producer) and merge into `vehicle_fleet_groups`. Additive + de-duplicated, never removes; unknown groups auto-created. See `docs/GROUP_SYNC.md`. | `-tenant-id`, `-token-id`, `-warm-only`, `-warm-days N` (default 7), `-dry-run` |
+
+The Helm chart schedules `import-group-attestations` as two CronJobs: a daily
+**warm** pass (`-warm-only`, tenants with a member login in the last 7 days)
+and a weekly **full** pass. To trigger an ad-hoc prod run:
+
+```sh
+kubectl create job --from=cronjob/fleet-lite-app-import-group-attestations-full manual-sync -n prod
+# or exec into a pod for a dry run first:
+kubectl exec -n prod deploy/fleet-lite-app -c fleet-lite-app -- /fleet-lite-app import-group-attestations -dry-run
+```
+
 ## Design source
 
 The UI was ported from `/Users/jreate/Source/stitch_fleet-lite-dimo/`:
