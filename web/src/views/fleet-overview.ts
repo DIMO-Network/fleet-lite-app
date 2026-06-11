@@ -28,9 +28,10 @@ export class FleetOverviewView extends LitElement {
     private lastLocations: Record<string, { lat: number; lon: number }> = {};
     private resizeObserver: ResizeObserver | null = null;
     // Progressive location loading: page the fleet in chunks of this size with
-    // this many requests in flight. Sized against the backend's own fan-out
-    // pool (10) so a chunk resolves in ~2 rounds and batches stream steadily.
-    private static readonly LOCATIONS_CHUNK_SIZE = 20;
+    // this many requests in flight. Small chunks (3) keep each request fast —
+    // a chunk resolves in one round of the backend's fan-out pool, so markers
+    // trickle onto the map vehicle-by-vehicle instead of in big batches.
+    private static readonly LOCATIONS_CHUNK_SIZE = 3;
     private static readonly LOCATIONS_PARALLEL = 3;
     // Incremented per load; lets stale in-flight chunk results from a
     // superseded load (tenant switch, manual refresh) be discarded.
