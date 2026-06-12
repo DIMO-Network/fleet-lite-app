@@ -70,8 +70,12 @@ export class FleetOverviewView extends LitElement {
     }
 
     /** Default and selected circle-marker styles for the quick-view highlight. */
-    private static readonly MARKER_STYLE = { radius: 8, fillColor: '#69dbad', color: '#ffffff', weight: 2, opacity: 0.9, fillOpacity: 0.85 };
-    private static readonly MARKER_STYLE_SELECTED = { radius: 11, fillColor: '#f5c84b', color: '#ffffff', weight: 3, opacity: 1, fillOpacity: 0.95 };
+    // Small dots by default — fleets can run to thousands of vehicles, so the
+    // map must stay readable at density. Hover grows the dot to make it an
+    // easier click target; selection grows it further and recolors.
+    private static readonly MARKER_STYLE = { radius: 4, fillColor: '#69dbad', color: '#ffffff', weight: 1.5, opacity: 0.9, fillOpacity: 0.85 };
+    private static readonly MARKER_STYLE_HOVER = { radius: 8, fillColor: '#69dbad', color: '#ffffff', weight: 2, opacity: 1, fillOpacity: 0.95 };
+    private static readonly MARKER_STYLE_SELECTED = { radius: 9, fillColor: '#f5c84b', color: '#ffffff', weight: 2.5, opacity: 1, fillOpacity: 0.95 };
 
     private openQuickView(v: VehicleCard) {
         // Restore the previously selected marker, highlight the new one. Any
@@ -181,6 +185,18 @@ export class FleetOverviewView extends LitElement {
             marker.on('click', () => {
                 const v = this.vehicles.find((c) => c.tokenId === tokenId);
                 if (v) this.openQuickView(v);
+            });
+            // Grow on hover for an easier click target; never shrink the
+            // selected marker back down.
+            marker.on('mouseover', () => {
+                if (this.quickViewVehicle?.tokenId !== tokenId) {
+                    marker.setStyle(FleetOverviewView.MARKER_STYLE_HOVER);
+                }
+            });
+            marker.on('mouseout', () => {
+                if (this.quickViewVehicle?.tokenId !== tokenId) {
+                    marker.setStyle(FleetOverviewView.MARKER_STYLE);
+                }
             });
             marker.addTo(this.leafletMap);
             this.markers.set(tokenId, marker);
