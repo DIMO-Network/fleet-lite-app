@@ -43,8 +43,8 @@ export class VehicleQuickView extends LitElement {
     @state() private selectedTrip: Trip | null = null;
     @state() private routeLoading = false;
 
-    /** Trips window, matching the b2b details screen's weekly view. */
-    private static readonly TRIPS_WINDOW_DAYS = 7;
+    /** How far back the trips list looks. */
+    private static readonly TRIPS_WINDOW_DAYS = 14;
 
     private unsubscribePrefs: (() => void) | null = null;
     private boundOnKeyDown = (e: KeyboardEvent) => {
@@ -453,12 +453,12 @@ export class VehicleQuickView extends LitElement {
         return html`
             <div class="trips-head">
                 <span class="title"><span class="material-symbols-outlined">route</span>${msg('Trips')}</span>
-                <span class="window">${msg('Last 7 days')}</span>
+                <span class="window">${msg('Last 2 weeks')}</span>
             </div>
             ${this.tripsLoading
                 ? html`<div class="state-row" style="border-top:none;">${msg('Loading trips…')}</div>`
                 : this.trips.length === 0
-                    ? html`<div class="state-row" style="border-top:none;">${msg('No trips in the last 7 days.')}</div>`
+                    ? html`<div class="state-row" style="border-top:none;">${msg('No trips in the last 2 weeks.')}</div>`
                     : html`
                         <div class="trips-list custom-scrollbar">
                             ${this.trips.map((trip) => this.renderTripRow(trip))}
