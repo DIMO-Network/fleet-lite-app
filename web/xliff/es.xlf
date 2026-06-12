@@ -824,13 +824,17 @@
   <source>Loading trips…</source>
   <target>Cargando viajes…</target>
 </trans-unit>
-<trans-unit id="sf69e4aeffd3f119c">
-  <source>No trips in the last 7 days.</source>
-  <target>No hay viajes en los últimos 7 días.</target>
-</trans-unit>
 <trans-unit id="s0cd0f490954a4ee2">
   <source>Ongoing</source>
   <target>En curso</target>
+</trans-unit>
+<trans-unit id="sfc73e619cc0f1e56">
+  <source>Last 2 weeks</source>
+  <target>Últimas 2 semanas</target>
+</trans-unit>
+<trans-unit id="se8cd9f22365bee61">
+  <source>No trips in the last 2 weeks.</source>
+  <target>No hay viajes en las últimas 2 semanas.</target>
 </trans-unit>
 </body>
 </file>
