@@ -5,22 +5,9 @@ import { sharedStyles } from '../global-styles.ts';
 import { TelemetryService } from '../services/telemetry-service.ts';
 import { PrefsService } from '../services/prefs-service.ts';
 import { formatSpeed, formatDistance, formatTemperature, formatVoltage, formatPercent, FormattedValue } from '../utils/units.ts';
+import { tripSignal, tripDistanceKm, tripTimeShort } from '../utils/trips.ts';
 import { VehicleCard } from '../types/vehicle.ts';
 import { SignalLatest, Trip } from '../types/telemetry.ts';
-
-/** Lookup one aggregation value on a trip (e.g. speed AVG). */
-function tripSignal(trip: Trip, name: string, agg: string): number | undefined {
-    return trip.signals?.find((s) => s.name === name && s.agg === agg)?.value;
-}
-
-/** Trip distance in km: odometer LAST − FIRST (how the b2b app derives it). */
-function tripDistanceKm(trip: Trip): number | undefined {
-    const first = tripSignal(trip, 'powertrainTransmissionTravelledDistance', 'FIRST');
-    const last = tripSignal(trip, 'powertrainTransmissionTravelledDistance', 'LAST');
-    if (first == null || last == null) return undefined;
-    const d = last - first;
-    return d >= 0 ? d : undefined;
-}
 
 /**
  * Floating quick-view panel for one vehicle, docked over the map (bottom
@@ -164,12 +151,6 @@ export class VehicleQuickView extends LitElement {
             bubbles: true,
             composed: true,
         }));
-    }
-
-    /** "Wed 2:15 PM" in the user's locale — compact enough for a row. */
-    private formatTripTime(iso: string): string {
-        const d = new Date(iso);
-        return d.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' });
     }
 
     private signalValue(name: string): number | undefined {
@@ -479,9 +460,9 @@ export class VehicleQuickView extends LitElement {
             <button class="trip-row ${selected ? 'selected' : ''}" @click=${() => this.selectTrip(trip)}>
                 <span class="when">
                     <span class="times">
-                        ${this.formatTripTime(trip.start.timestamp)}
+                        ${tripTimeShort(trip.start.timestamp)}
                         <span class="material-symbols-outlined">arrow_forward</span>
-                        ${trip.isOngoing ? '' : this.formatTripTime(trip.end.timestamp)}
+                        ${trip.isOngoing ? '' : tripTimeShort(trip.end.timestamp)}
                     </span>
                     ${trip.isOngoing ? html`<span class="ongoing">${msg('Ongoing')}</span>` : ''}
                 </span>

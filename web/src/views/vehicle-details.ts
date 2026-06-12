@@ -7,15 +7,18 @@ import { FleetCache } from '../services/fleet-cache.ts';
 import { FleetGroupService } from '../services/fleet-group-service.ts';
 import { Vehicle } from '../types/vehicle.ts';
 import { TelemetryService } from '../services/telemetry-service.ts';
-import { SignalLatest, TimeSeriesBucket } from '../types/telemetry.ts';
+import { SignalLatest, TimeSeriesBucket, Trip } from '../types/telemetry.ts';
 import { PrefsService } from '../services/prefs-service.ts';
 import {
     formatDistance,
+    formatHours,
     formatPercent,
     formatSpeed,
     formatTemperature,
     formatVoltage,
 } from '../utils/units.ts';
+import { tripDurationMs } from '../utils/trips.ts';
+import '../elements/vehicle-trips-panel.ts';
 
 interface ChartBar {
     height: number;    // 0..100, normalized to the max in the series
@@ -37,6 +40,22 @@ export class VehicleDetailsView extends LitElement {
     @state() private telemetryPermissionsRequired = false;
     @state() private telemetryDevLicense = '';
     @state() private favoriteBusy = false;
+    // Detected trips over the last 7 days, for the Utilization (driving time)
+    // card. The trips panel fetches its own (selectable) window separately.
+    @state() private weekSegments: Trip[] = [];
+    @state() private weekSegmentsLoaded = false;
+    // Which header tab is highlighted; tabs scroll to in-page sections.
+    @state() private activeTab: 'overview' | 'trips' | 'status' = 'overview';
+
+    private goToSection(e: Event, tab: 'overview' | 'trips' | 'status') {
+        e.preventDefault();
+        this.activeTab = tab;
+        if (tab === 'overview') {
+            this.renderRoot.querySelector('.canvas')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            return;
+        }
+        this.renderRoot.querySelector(`#${tab}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
 
     private unsubscribePrefs: (() => void) | null = null;
 
@@ -74,7 +93,7 @@ export class VehicleDetailsView extends LitElement {
         const fromIso = from.toISOString();
         const toIso = to.toISOString();
 
-        const [latestRes, speedRes, distRes] = await Promise.allSettled([
+        const [latestRes, speedRes, distRes, segmentsRes] = await Promise.allSettled([
             TelemetryService.getInstance().latest(tokenIdNum),
             TelemetryService.getInstance().timeSeries(tokenIdNum, 'speed', fromIso, toIso, '1d'),
             TelemetryService.getInstance().timeSeries(
@@ -82,6 +101,7 @@ export class VehicleDetailsView extends LitElement {
                 'powertrainTransmissionTravelledDistance',
                 fromIso, toIso, '1d',
             ),
+            TelemetryService.getInstance().segments(tokenIdNum, fromIso, toIso),
         ]);
 
         if (latestRes.status === 'fulfilled') {
@@ -93,6 +113,10 @@ export class VehicleDetailsView extends LitElement {
         }
         if (speedRes.status === 'fulfilled') this.speedBuckets = speedRes.value.buckets || [];
         if (distRes.status === 'fulfilled')  this.distanceBuckets = distRes.value.buckets || [];
+        if (segmentsRes.status === 'fulfilled') {
+            this.weekSegments = segmentsRes.value.segments || [];
+            this.weekSegmentsLoaded = true;
+        }
 
         this.loading = false;
     }
@@ -316,43 +340,6 @@ export class VehicleDetailsView extends LitElement {
                 border-bottom: 2px solid var(--primary);
             }
             header.top-bar .right { display: flex; align-items: center; gap: 16px; }
-            .live-tracking {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                padding: 8px 16px;
-                border-radius: var(--radius-full);
-                border: 1px solid var(--outline-variant);
-                color: var(--primary);
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                background: none;
-            }
-            .live-tracking:hover { background: var(--surface-container-high); }
-            .status-dot {
-                width: 8px;
-                height: 8px;
-                border-radius: var(--radius-full);
-                background: var(--tertiary-fixed-dim);
-                position: relative;
-            }
-            .status-dot::after {
-                content: '';
-                position: absolute;
-                inset: -4px;
-                background: inherit;
-                border-radius: var(--radius-full);
-                filter: blur(4px);
-                opacity: 0.5;
-            }
-            .icon-btn {
-                color: var(--on-surface-variant);
-                background: none;
-                border: none;
-                padding: 4px;
-            }
-
             .canvas {
                 flex: 1;
                 padding: var(--margin-desktop);
@@ -434,69 +421,6 @@ export class VehicleDetailsView extends LitElement {
                 .col-12, .col-6, .col-4, .col-3 { grid-column: span 1; }
             }
 
-            .trips-card {
-                position: relative;
-                grid-column: span 12;
-                min-height: 300px;
-                border-radius: var(--radius-lg);
-                overflow: hidden;
-                border: 1px solid var(--outline-variant);
-            }
-            .trips-bg {
-                position: absolute;
-                inset: 0;
-                background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCUEePP8X7lhZsYuKcY97xNfG4loiGb-LmVCARxTGWO0EQyT5v5ozen4q9d9KfdN_MhsqKS0yFqeFrR4zLYzT3iSl-4nksBYrRgd-AmsnlMKA5U_gZdRNrM2SMq9628-jevQ3MFdQU9cgKBV2CYDD_lPR0fB_w2H7VYjJVZeS-LoqYp4-saTHHer7ouvx0RezGPbPVUFTY0dr4jOcrTMFxanTNy6M4NMo2-wY0-hZ3RsjhKviJ625RW8FKjzcHSbFnHxX1xCCoOT5E');
-                background-size: cover;
-                background-position: center;
-            }
-            .trips-content {
-                position: absolute;
-                inset: 0;
-                background: linear-gradient(180deg, rgba(19, 19, 19, 0.2) 0%, rgba(19, 19, 19, 1) 100%);
-                padding: var(--gutter);
-                display: flex;
-                flex-direction: column;
-                justify-content: space-between;
-            }
-            .trips-top {
-                display: flex;
-                justify-content: space-between;
-                align-items: flex-start;
-            }
-            .trips-top h3 { font: var(--type-headline-md); color: var(--primary); }
-            .trips-top .chip {
-                background: rgba(53, 53, 52, 0.8);
-                backdrop-filter: blur(8px);
-                color: var(--primary);
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                padding: 4px 12px;
-                border-radius: var(--radius-full);
-                border: 1px solid var(--outline-variant);
-            }
-            .trips-bottom .from {
-                font: var(--type-body-lg);
-                font-weight: 500;
-                color: var(--primary);
-                margin-bottom: 4px;
-            }
-            .trips-bottom .to {
-                font: var(--type-body-md);
-                color: var(--on-surface-variant);
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                margin-bottom: 16px;
-            }
-            .trips-bottom .to .material-symbols-outlined { font-size: 16px; }
-            .trips-bottom .stats {
-                display: flex;
-                gap: 24px;
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                color: var(--on-surface-variant);
-            }
 
             .section-label {
                 grid-column: span 12;
@@ -803,18 +727,46 @@ export class VehicleDetailsView extends LitElement {
         `;
     }
 
-    private renderUtilizationPlaceholder() {
-        // Telemetry-api doesn't directly expose "hours driven"; would need to
-        // derive from speed-based ignition segments. Defer to a future phase.
+    /**
+     * Driving time over the last 7 days, derived from telemetry-api trip
+     * segments (sum of segment durations; ongoing trips clipped at now).
+     */
+    private renderUtilizationCard() {
+        const totalMs = this.weekSegments.reduce((sum, t) => sum + tripDurationMs(t), 0);
+        const totalH = totalMs / 3_600_000;
+        const total = formatHours(totalH, 1);
+        const perDay = formatHours(totalH / 7, 1);
         return html`
-            <div class="data-card col-6 card-tall placeholder">
+            <div class="data-card col-6 card-tall">
                 <div class="data-card-head">
-                    <h4>${msg('Utilization')}</h4>
-                    <span class="material-symbols-outlined">hourglass_empty</span>
+                    <h4>${msg('Driving time')}</h4>
+                    <span class="material-symbols-outlined">schedule</span>
                 </div>
-                <div class="placeholder-body">
-                    <p>${msg("Driving hours aren't exposed directly by telemetry-api.")}</p>
-                    <p class="small">${msg('Will be derived from ignition + speed segments in a future phase.')}</p>
+                <div class="stat-row">
+                    <div class="stat-col">
+                        <div>
+                            <p class="stat-label">${msg('Total')}</p>
+                            <div class="stat-value-lg">
+                                <span class="num">${this.weekSegmentsLoaded ? total.value : '—'}</span>
+                                <span class="unit">${total.unit}</span>
+                            </div>
+                        </div>
+                        <div>
+                            <p class="stat-label">${msg('Avg per day')}</p>
+                            <div class="stat-value-md">
+                                <span class="num">${this.weekSegmentsLoaded ? perDay.value : '—'}</span>
+                                <span class="unit">${perDay.unit}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="stat-col">
+                        <div>
+                            <p class="stat-label">${msg('Trips')}</p>
+                            <div class="stat-value-md">
+                                <span class="num">${this.weekSegmentsLoaded ? this.weekSegments.length : '—'}</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
@@ -954,19 +906,16 @@ export class VehicleDetailsView extends LitElement {
                 <div class="left">
                     <h2>${this.vehicleTitle}</h2>
                     <nav>
-                        <a href="#" class="active">${msg('Overview')}</a>
-                        <a href="#">${msg('Diagnostics')}</a>
-                        <a href="#">${msg('Trips')}</a>
+                        <a href="#" class=${this.activeTab === 'overview' ? 'active' : ''}
+                           @click=${(e: Event) => this.goToSection(e, 'overview')}>${msg('Overview')}</a>
+                        <a href="#" class=${this.activeTab === 'trips' ? 'active' : ''}
+                           @click=${(e: Event) => this.goToSection(e, 'trips')}>${msg('Trips')}</a>
+                        <a href="#" class=${this.activeTab === 'status' ? 'active' : ''}
+                           @click=${(e: Event) => this.goToSection(e, 'status')}>${msg('Diagnostics')}</a>
                     </nav>
                 </div>
                 <div class="right">
                     <tenant-switcher .currentTenantId=${this.tenantId}></tenant-switcher>
-                    <button class="live-tracking">
-                        <span class="status-dot"></span>
-                        ${msg('Live Tracking')}
-                    </button>
-                    <button class="icon-btn"><span class="material-symbols-outlined">notifications</span></button>
-                    <button class="icon-btn"><span class="material-symbols-outlined">account_circle</span></button>
                 </div>
             </header>
 
@@ -994,27 +943,9 @@ export class VehicleDetailsView extends LitElement {
                 </div>
 
                 <div class="grid">
-                    <!-- Trips -->
-                    <div class="trips-card">
-                        <div class="trips-bg"></div>
-                        <div class="trips-content">
-                            <div class="trips-top">
-                                <h3>${msg('Trips')}</h3>
-                                <span class="chip">3h ago</span>
-                            </div>
-                            <div class="trips-bottom">
-                                <p class="from">Las Encinas 641, Cerrillos</p>
-                                <p class="to">
-                                    <span class="material-symbols-outlined">arrow_forward</span>
-                                    <span>Avenida Gladys Marín 6096, Estación Central</span>
-                                </p>
-                                <div class="stats">
-                                    <span>14.3 mi</span>
-                                    <span>1h 5m</span>
-                                    <span>11:31 AM</span>
-                                </div>
-                            </div>
-                        </div>
+                    <!-- Trips: live mini-map + period picker + detected trips -->
+                    <div class="col-12" id="trips">
+                        <vehicle-trips-panel .tokenId=${this.tokenId}></vehicle-trips-panel>
                     </div>
 
                     <div class="section-label">${msg('Last 7 days')}</div>
@@ -1039,12 +970,12 @@ export class VehicleDetailsView extends LitElement {
                     ` : nothing}
 
                     ${this.renderSpeedCard()}
-                    ${this.renderUtilizationPlaceholder()}
+                    ${this.renderUtilizationCard()}
                     ${this.renderFuelCard()}
                     ${this.renderCoolantCard()}
                     ${this.renderDistanceCard()}
 
-                    <div class="section-headline">${msg('Vehicle status')}</div>
+                    <div class="section-headline" id="status">${msg('Vehicle status')}</div>
 
                     ${this.renderBatteryCard()}
                     ${this.renderErrorCodesPlaceholder()}
@@ -1060,13 +991,6 @@ export class VehicleDetailsView extends LitElement {
                             </span>
                             <span class="label">${this.vehicle?.isFavorite ? msg('Remove favorite') : msg('Make favorite')}</span>
                         </div>
-                    </button>
-                    <button>
-                        <div class="left-group">
-                            <span class="material-symbols-outlined muted">wifi</span>
-                            <span class="label">${msg('Data sources')}</span>
-                        </div>
-                        <span class="material-symbols-outlined muted">chevron_right</span>
                     </button>
                 </div>
             </div>
