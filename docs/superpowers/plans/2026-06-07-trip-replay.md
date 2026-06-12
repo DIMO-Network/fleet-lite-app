@@ -885,7 +885,7 @@ git commit -m "feat(web): add trip-replay-modal element with animated GPS playba
 **Files:**
 - Modify: `web/src/views/vehicle-details.ts`
 
-- [ ] **Step 1: Import the new element and add `replayTrip` state**
+- [x] **Step 1: Import the new element and add `replayTrip` state**
 
 At the top of `web/src/views/vehicle-details.ts`, add an import after the existing element/service imports (e.g. near line 9, after the `PrefsService` import):
 
@@ -899,7 +899,7 @@ Add a new state property after `@state() private tripsExpanded = false;` (line 3
     @state() private replayTrip: Trip | null = null;
 ```
 
-- [ ] **Step 2: Add the Replay button to `renderTripRow`**
+- [x] **Step 2: Add the Replay button to `renderTripRow`**
 
 In `renderTripRow` (lines 231-263), add a Replay button to `.trip-stats`, shown only for completed trips with both timestamps. Replace the closing of the `.trip-stats` div — change:
 
@@ -931,7 +931,7 @@ to:
         `;
 ```
 
-- [ ] **Step 3: Add `.trip-replay-btn` styling**
+- [x] **Step 3: Add `.trip-replay-btn` styling**
 
 Find the `.trip-row` CSS rule in this file's `static styles` block (search for `.trip-row {`) and add a sibling rule directly after it:
 
@@ -956,7 +956,7 @@ Find the `.trip-row` CSS rule in this file's `static styles` block (search for `
             .trip-replay-btn .material-symbols-outlined { font-size: 16px; }
 ```
 
-- [ ] **Step 4: Mount the modal conditionally in `render()`**
+- [x] **Step 4: Mount the modal conditionally in `render()`**
 
 Find the end of the `render()` method's returned template in `vehicle-details.ts` (the closing of the outermost `html\`...\`` block, just before its final backtick and the method's closing brace). Add the conditional mount immediately before that closing backtick:
 
@@ -970,7 +970,7 @@ Find the end of the `render()` method's returned template in `vehicle-details.ts
             ` : nothing}
 ```
 
-- [ ] **Step 5: Reset `replayTrip` on reload**
+- [x] **Step 5: Reset `replayTrip` on reload**
 
 In `loadAll()`, in the state-reset block at the top (lines 51-57, alongside `this.trips = []` and `this.tripsExpanded = false`), add:
 
@@ -978,12 +978,12 @@ In `loadAll()`, in the state-reset block at the top (lines 51-57, alongside `thi
         this.replayTrip = null;
 ```
 
-- [ ] **Step 6: Type-check to verify it compiles**
+- [x] **Step 6: Type-check to verify it compiles**
 
 Run: `cd web && npx tsc --noEmit`
 Expected: no errors.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 cd /Users/jamesli/DIMO/fleet-lite-app
