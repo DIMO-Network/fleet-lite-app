@@ -656,18 +656,6 @@
   <source>Average</source>
   <target>Promedio</target>
 </trans-unit>
-<trans-unit id="s1684fecae47e9fbf">
-  <source>Utilization</source>
-  <target>Utilización</target>
-</trans-unit>
-<trans-unit id="s29ac4f3fce9252db">
-  <source>Driving hours aren't exposed directly by telemetry-api.</source>
-  <target>Las horas de conducción no son expuestas directamente por telemetry-api.</target>
-</trans-unit>
-<trans-unit id="s63187197a34348a6">
-  <source>Will be derived from ignition + speed segments in a future phase.</source>
-  <target>Se derivarán de los segmentos de encendido + velocidad en una fase futura.</target>
-</trans-unit>
 <trans-unit id="s8f9af0ae53120447">
   <source>Fuel level</source>
   <target>Nivel de combustible</target>
@@ -772,10 +760,6 @@
   <source>Make favorite</source>
   <target>Marcar como favorito</target>
 </trans-unit>
-<trans-unit id="s2565333bced3752b">
-  <source>Data sources</source>
-  <target>Fuentes de datos</target>
-</trans-unit>
 <trans-unit id="s9c82d2018344f8bc">
   <source>No DIMO integration — pair a device to stream telemetry</source>
   <target>Sin integración DIMO — vincule un dispositivo para transmitir telemetría</target>
@@ -835,6 +819,26 @@
 <trans-unit id="se8cd9f22365bee61">
   <source>No trips in the last 2 weeks.</source>
   <target>No hay viajes en las últimas 2 semanas.</target>
+</trans-unit>
+<trans-unit id="s00a1c2a73e54ca2a">
+  <source>No trips in this period.</source>
+  <target>No hay viajes en este período.</target>
+</trans-unit>
+<trans-unit id="sd44ca40cdcb462f3">
+  <source>Back to live</source>
+  <target>Volver a en vivo</target>
+</trans-unit>
+<trans-unit id="s46dd424bdc97f7b9">
+  <source>Driving time</source>
+  <target>Tiempo de conducción</target>
+</trans-unit>
+<trans-unit id="sed8ec5e3c64fa25d">
+  <source>Total</source>
+  <target>Total</target>
+</trans-unit>
+<trans-unit id="s78146a50a83d227a">
+  <source>Avg per day</source>
+  <target>Promedio por día</target>
 </trans-unit>
 </body>
 </file>
