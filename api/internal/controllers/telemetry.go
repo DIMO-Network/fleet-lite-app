@@ -205,7 +205,14 @@ func (t *TelemetryController) GetTrips(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "from must be an RFC3339 timestamp")
 	}
 
-	trips, err := t.telemetry.Trips(tenant, tokenID, from, to)
+	mechanism := service.DetectionMechanism(c.Query("mechanism"))
+	if mechanism == "" {
+		mechanism = service.MechanismIgnitionDetection
+	} else if !service.IsValidDetectionMechanism(string(mechanism)) {
+		return fiber.NewError(fiber.StatusBadRequest, "mechanism must be one of: ignitionDetection, frequencyAnalysis, changePointDetection, idling, refuel, recharge")
+	}
+
+	trips, err := t.telemetry.Trips(tenant, tokenID, from, to, mechanism)
 	if err != nil {
 		if isPermissionError(err) {
 			return c.JSON(fiber.Map{
