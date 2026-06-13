@@ -287,6 +287,9 @@ func (t *telemetryAPIService) FleetLocations(tenant models.Tenant, tokenIDs []ui
 // distance and avg/max speed. `end` is null for a trip still in progress
 // (isOngoing: true).
 func (t *telemetryAPIService) Trips(tenant models.Tenant, tokenID uint64, from, to string, mechanism DetectionMechanism) ([]Trip, error) {
+	if !IsValidDetectionMechanism(string(mechanism)) {
+		return nil, fmt.Errorf("invalid detection mechanism: %q", mechanism)
+	}
 	q := fmt.Sprintf(`query {
 		segments(tokenId: %d, from: %q, to: %q, mechanism: %s, limit: 100, signalRequests: [
 			{name: "speed", agg: AVG},
