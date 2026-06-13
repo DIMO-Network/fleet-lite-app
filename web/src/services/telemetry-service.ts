@@ -1,5 +1,6 @@
 import { ApiService } from './api-service.ts';
 import { FleetLocationsResponse, LatestSignalsResponse, TimeSeriesResponse, TripsResponse, TripRouteResponse } from '../types/telemetry.ts';
+import { TripMechanism } from './prefs-service.ts';
 
 export class TelemetryService {
     private static instance: TelemetryService;
@@ -31,12 +32,15 @@ export class TelemetryService {
 
     /**
      * GET /telemetry/:tokenId/trips — detected driving segments ("trips").
-     * Omit `from`/`to` to get the server's default last-3-days window.
+     * Omit `from`/`to` to get the server's default last-3-days window. `mechanism`
+     * selects telemetry-api's segment-detection strategy (defaults server-side
+     * to `ignitionDetection` if omitted).
      */
-    trips(tokenId: number, from?: string, to?: string): Promise<TripsResponse> {
+    trips(tokenId: number, from?: string, to?: string, mechanism?: TripMechanism): Promise<TripsResponse> {
         const q = new URLSearchParams();
         if (from) q.set('from', from);
         if (to) q.set('to', to);
+        if (mechanism) q.set('mechanism', mechanism);
         const suffix = q.toString() ? `?${q.toString()}` : '';
         return ApiService.getInstance().get<TripsResponse>(`/telemetry/${tokenId}/trips${suffix}`);
     }

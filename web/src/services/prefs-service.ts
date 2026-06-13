@@ -3,6 +3,11 @@ export type UnitSystem = 'imperial' | 'metric';
 const STORAGE_KEY = 'fleet-lite:units';
 const EVENT_NAME = 'fleet-lite-prefs-changed';
 
+export type TripMechanism = 'ignitionDetection' | 'frequencyAnalysis' | 'changePointDetection' | 'idling' | 'refuel' | 'recharge';
+
+const TRIP_MECHANISM_STORAGE_KEY = 'fleet-lite:trip-mechanism';
+const VALID_TRIP_MECHANISMS: readonly TripMechanism[] = ['ignitionDetection', 'frequencyAnalysis', 'changePointDetection', 'idling', 'refuel', 'recharge'];
+
 /**
  * Singleton holding user preferences that don't yet need a DB (units,
  * eventually language, etc.). Reads/writes localStorage and emits a
@@ -34,6 +39,17 @@ export class PrefsService {
         const next: UnitSystem = this.getUnits() === 'imperial' ? 'metric' : 'imperial';
         this.setUnits(next);
         return next;
+    }
+
+    /** Returns the persisted trip-detection mechanism (defaults to ignitionDetection). */
+    public getTripMechanism(): TripMechanism {
+        const v = localStorage.getItem(TRIP_MECHANISM_STORAGE_KEY);
+        return (VALID_TRIP_MECHANISMS as readonly string[]).includes(v ?? '') ? (v as TripMechanism) : 'ignitionDetection';
+    }
+
+    public setTripMechanism(m: TripMechanism): void {
+        localStorage.setItem(TRIP_MECHANISM_STORAGE_KEY, m);
+        window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: { tripMechanism: m } }));
     }
 
     /**
