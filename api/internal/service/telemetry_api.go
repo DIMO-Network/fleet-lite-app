@@ -42,12 +42,49 @@ type TelemetryAPIService interface {
 	// coordinates for those vehicles in a single aliased GraphQL request.
 	// Vehicles where JWT exchange fails are returned in NoPermissions.
 	FleetLocations(tenant models.Tenant, tokenIDs []uint64) (FleetLocationsResult, error)
-	// Trips queries detected driving segments (`segments`, ignition-based) for
-	// a vehicle within [from, to]. The telemetry-api caps this range at 31 days.
-	Trips(tenant models.Tenant, tokenID uint64, from, to string) ([]Trip, error)
+	// Trips queries detected driving segments (`segments`) for a vehicle
+	// within [from, to] using the given detection mechanism. The telemetry-api
+	// caps this range at 31 days.
+	Trips(tenant models.Tenant, tokenID uint64, from, to string, mechanism DetectionMechanism) ([]Trip, error)
 	// TripRoute fetches GPS waypoints (sampled every 30s) and behavior events
 	// for a trip's [from, to] window, used to animate route playback.
 	TripRoute(tenant models.Tenant, tokenID uint64, from, to string) ([]TripWaypoint, []TripEvent, error)
+}
+
+// DetectionMechanism is the segmentation strategy passed to telemetry-api's
+// `segments` query as the `mechanism` enum argument. Values match the
+// GraphQL enum's literal names exactly (interpolated unquoted into the query).
+type DetectionMechanism string
+
+const (
+	MechanismIgnitionDetection    DetectionMechanism = "ignitionDetection"
+	MechanismFrequencyAnalysis    DetectionMechanism = "frequencyAnalysis"
+	MechanismChangePointDetection DetectionMechanism = "changePointDetection"
+	MechanismIdling               DetectionMechanism = "idling"
+	MechanismRefuel               DetectionMechanism = "refuel"
+	MechanismRecharge             DetectionMechanism = "recharge"
+)
+
+// ValidDetectionMechanisms is the set of mechanisms accepted by the
+// `mechanism` query param on GET /telemetry/:tokenID/trips.
+var ValidDetectionMechanisms = []DetectionMechanism{
+	MechanismIgnitionDetection,
+	MechanismFrequencyAnalysis,
+	MechanismChangePointDetection,
+	MechanismIdling,
+	MechanismRefuel,
+	MechanismRecharge,
+}
+
+// IsValidDetectionMechanism reports whether s matches one of
+// ValidDetectionMechanisms.
+func IsValidDetectionMechanism(s string) bool {
+	for _, m := range ValidDetectionMechanisms {
+		if string(m) == s {
+			return true
+		}
+	}
+	return false
 }
 
 // Trip is one detected driving segment for a vehicle, derived from
@@ -245,13 +282,13 @@ func (t *telemetryAPIService) FleetLocations(tenant models.Tenant, tokenIDs []ui
 	return FleetLocationsResult{Locations: locs, NoPermissions: noPerms}, nil
 }
 
-// Trips queries `segments(tokenId, from, to, mechanism: ignitionDetection)`
-// and maps each segment to a flat Trip, requesting the signal aggregations
-// needed to derive distance and avg/max speed. `end` is null for a trip
-// still in progress (isOngoing: true).
-func (t *telemetryAPIService) Trips(tenant models.Tenant, tokenID uint64, from, to string) ([]Trip, error) {
+// Trips queries `segments(tokenId, from, to, mechanism)` and maps each
+// segment to a flat Trip, requesting the signal aggregations needed to derive
+// distance and avg/max speed. `end` is null for a trip still in progress
+// (isOngoing: true).
+func (t *telemetryAPIService) Trips(tenant models.Tenant, tokenID uint64, from, to string, mechanism DetectionMechanism) ([]Trip, error) {
 	q := fmt.Sprintf(`query {
-		segments(tokenId: %d, from: %q, to: %q, mechanism: ignitionDetection, limit: 100, signalRequests: [
+		segments(tokenId: %d, from: %q, to: %q, mechanism: %s, limit: 100, signalRequests: [
 			{name: "speed", agg: AVG},
 			{name: "speed", agg: MAX},
 			{name: "powertrainTransmissionTravelledDistance", agg: FIRST},
@@ -263,7 +300,7 @@ func (t *telemetryAPIService) Trips(tenant models.Tenant, tokenID uint64, from, 
 			isOngoing
 			signals { name agg value }
 		}
-	}`, tokenID, from, to)
+	}`, tokenID, from, to, mechanism)
 
 	raw, err := t.query(tenant, tokenID, q)
 	if err != nil {
@@ -297,7 +334,7 @@ func (t *telemetryAPIService) Trips(tenant models.Tenant, tokenID uint64, from, 
 		return nil, fmt.Errorf("parse segments: %w", err)
 	}
 	t.logger.Info().Uint64("tokenID", tokenID).Str("from", from).Str("to", to).
-		Int("segments", len(resp.Data.Segments)).Msg("telemetry segments fetched")
+		Str("mechanism", string(mechanism)).Int("segments", len(resp.Data.Segments)).Msg("telemetry segments fetched")
 
 	toCoords := func(loc signalLocation) *LocationCoords {
 		if loc.Value == nil {
