@@ -6,7 +6,7 @@ import { FleetCache } from '../services/fleet-cache.ts';
 import { Vehicle } from '../types/vehicle.ts';
 import { TelemetryService } from '../services/telemetry-service.ts';
 import { SignalLatest, TimeSeriesBucket, Trip } from '../types/telemetry.ts';
-import { PrefsService } from '../services/prefs-service.ts';
+import { PrefsService, TripMechanism } from '../services/prefs-service.ts';
 import '../elements/trip-replay-modal.ts';
 import {
     formatDistance,
@@ -81,7 +81,7 @@ export class VehicleDetailsView extends LitElement {
                 'powertrainTransmissionTravelledDistance',
                 fromIso, toIso, '24h',
             ),
-            TelemetryService.getInstance().trips(tokenIdNum),
+            this.fetchTrips(),
         ]);
 
         if (latestRes.status === 'fulfilled') {
@@ -93,12 +93,33 @@ export class VehicleDetailsView extends LitElement {
         }
         if (speedRes.status === 'fulfilled') this.speedBuckets = speedRes.value.buckets || [];
         if (distRes.status === 'fulfilled')  this.distanceBuckets = distRes.value.buckets || [];
-        if (tripsRes.status === 'fulfilled') {
-            this.trips = [...(tripsRes.value.trips || [])]
-                .sort((a, b) => Date.parse(b.startTime) - Date.parse(a.startTime));
-        }
+        if (tripsRes.status === 'fulfilled') this.trips = tripsRes.value;
 
         this.loading = false;
+    }
+
+    /**
+     * Fetches trips using the persisted detection-mechanism preference,
+     * sorted newest-first. Used by `loadAll()` and the Trips card's
+     * "Detection" dropdown.
+     */
+    private async fetchTrips(): Promise<Trip[]> {
+        const tokenIdNum = Number(this.tokenId);
+        const mechanism = PrefsService.getInstance().getTripMechanism();
+        const res = await TelemetryService.getInstance().trips(tokenIdNum, undefined, undefined, mechanism);
+        return [...(res.trips || [])].sort((a, b) => Date.parse(b.startTime) - Date.parse(a.startTime));
+    }
+
+    private async onMechanismChange(e: Event) {
+        const value = (e.target as HTMLSelectElement).value as TripMechanism;
+        PrefsService.getInstance().setTripMechanism(value);
+        this.tripsExpanded = false;
+        try {
+            this.trips = await this.fetchTrips();
+        } catch (err) {
+            console.warn('trips failed', err);
+            this.trips = [];
+        }
     }
 
     /**
@@ -303,11 +324,22 @@ export class VehicleDetailsView extends LitElement {
             `;
         }
 
+        const mechanism = PrefsService.getInstance().getTripMechanism();
         return html`
             <div class="trips-card">
                 <div class="trips-header">
                     <h3>Trips</h3>
-                    <span class="chip">Last 3 days</span>
+                    <div class="trips-header-controls">
+                        <select class="trip-mechanism-select" @change=${this.onMechanismChange} title="Trip detection method">
+                            <option value="ignitionDetection" ?selected=${mechanism === 'ignitionDetection'}>Ignition</option>
+                            <option value="frequencyAnalysis" ?selected=${mechanism === 'frequencyAnalysis'}>Frequency analysis</option>
+                            <option value="changePointDetection" ?selected=${mechanism === 'changePointDetection'}>Change-point</option>
+                            <option value="idling" ?selected=${mechanism === 'idling'}>Idling</option>
+                            <option value="refuel" ?selected=${mechanism === 'refuel'}>Refuel</option>
+                            <option value="recharge" ?selected=${mechanism === 'recharge'}>Recharge</option>
+                        </select>
+                        <span class="chip">Last 3 days</span>
+                    </div>
                 </div>
                 ${body}
             </div>
@@ -574,6 +606,21 @@ export class VehicleDetailsView extends LitElement {
                 padding: 4px 12px;
                 border-radius: var(--radius-full);
                 border: 1px solid var(--outline-variant);
+            }
+            .trips-header-controls {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .trip-mechanism-select {
+                background: var(--surface-container-high);
+                border: none;
+                color: var(--on-surface-variant);
+                font: var(--type-label-caps);
+                letter-spacing: 0.05em;
+                padding: 4px 8px;
+                border-radius: var(--radius-sm);
+                cursor: pointer;
             }
             .trips-list { display: flex; flex-direction: column; }
             .trip-row {
