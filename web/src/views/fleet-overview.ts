@@ -121,7 +121,7 @@ export class FleetOverviewView extends LitElement {
      */
     private async loadVehicleData(force = false) {
         if (!force) {
-            const cached = FleetCache.get();
+            const cached = FleetCache.get(this.tenantId);
             if (cached) {
                 this.vehicles = cached.vehicles;
                 this.lastLocations = cached.locations;
@@ -163,7 +163,7 @@ export class FleetOverviewView extends LitElement {
         }
 
         this.placeMarkers();
-        FleetCache.set({ vehicles: this.vehicles, locations: this.lastLocations });
+        FleetCache.set(this.tenantId, { vehicles: this.vehicles, locations: this.lastLocations });
     }
 
     private async refreshVehicles() {
@@ -180,6 +180,14 @@ export class FleetOverviewView extends LitElement {
     async connectedCallback() {
         super.connectedCallback();
         await this.loadVehicleData();
+    }
+
+    willUpdate(changed: Map<string, unknown>) {
+        if (changed.has('tenantId') && this.tenantId && !this.loading) {
+            this.loading = true;
+            this.errorMessage = null;
+            void this.loadVehicleData();
+        }
     }
 
     private updateMinZoom() {
