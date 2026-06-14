@@ -26,7 +26,7 @@ final task is a manual end-to-end check via `make dev`.
 **Files:**
 - Modify: `api/internal/service/telemetry_api.go` (interface lines 37-51, `Trips` method lines 252-266 and 299-300)
 
-- [ ] **Step 1: Add `DetectionMechanism` type, constants, and validator**
+- [x] **Step 1: Add `DetectionMechanism` type, constants, and validator**
 
 In `api/internal/service/telemetry_api.go`, immediately after the closing `}`
 of the `TelemetryAPIService` interface (after line 51, before the `Trip`
@@ -71,7 +71,7 @@ func IsValidDetectionMechanism(s string) bool {
 }
 ```
 
-- [ ] **Step 2: Add `mechanism` to the `Trips` interface method**
+- [x] **Step 2: Add `mechanism` to the `Trips` interface method**
 
 In the same file, in the `TelemetryAPIService` interface, replace:
 
@@ -90,7 +90,7 @@ with:
 	Trips(tenant models.Tenant, tokenID uint64, from, to string, mechanism DetectionMechanism) ([]Trip, error)
 ```
 
-- [ ] **Step 3: Add `mechanism` to the `Trips` implementation and query**
+- [x] **Step 3: Add `mechanism` to the `Trips` implementation and query**
 
 In the same file, replace the `Trips` method signature and query (currently):
 
@@ -146,12 +146,12 @@ to:
 		Str("mechanism", string(mechanism)).Int("segments", len(resp.Data.Segments)).Msg("telemetry segments fetched")
 ```
 
-- [ ] **Step 4: Build to verify it compiles**
+- [x] **Step 4: Build to verify it compiles**
 
 Run: `cd api && go build ./...`
 Expected: fails with something like `not enough arguments in call to t.telemetry.Trips` — this is expected, since the controller (Task 2) hasn't been updated yet. Confirm the error is specifically about the call site in `api/internal/controllers/telemetry.go`, not a syntax error in `telemetry_api.go`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/jamesli/DIMO/fleet-lite-app
@@ -166,7 +166,7 @@ git commit -m "feat(api): add DetectionMechanism type and parameterize Trips() s
 **Files:**
 - Modify: `api/internal/controllers/telemetry.go:177-223` (`GetTrips` handler)
 
-- [ ] **Step 1: Parse and validate the `mechanism` query param**
+- [x] **Step 1: Parse and validate the `mechanism` query param**
 
 In `api/internal/controllers/telemetry.go`, in `GetTrips`, immediately after
 the `from` parsing block (after the `else if _, err := time.Parse(...)`
@@ -183,7 +183,7 @@ call on line 208), insert:
 	}
 ```
 
-- [ ] **Step 2: Pass `mechanism` to `Trips()`**
+- [x] **Step 2: Pass `mechanism` to `Trips()`**
 
 Replace:
 
@@ -197,12 +197,12 @@ with:
 	trips, err := t.telemetry.Trips(tenant, tokenID, from, to, mechanism)
 ```
 
-- [ ] **Step 3: Build to verify it compiles**
+- [x] **Step 3: Build to verify it compiles**
 
 Run: `cd api && go build ./...`
 Expected: no output (clean build).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 cd /Users/jamesli/DIMO/fleet-lite-app
@@ -218,7 +218,7 @@ git commit -m "feat(api): validate and pass mechanism query param to Trips()"
 - Modify: `web/src/services/prefs-service.ts`
 - Modify: `web/src/services/telemetry-service.ts`
 
-- [ ] **Step 1: Add `TripMechanism` type, storage key, and getter/setter**
+- [x] **Step 1: Add `TripMechanism` type, storage key, and getter/setter**
 
 In `web/src/services/prefs-service.ts`, after the existing `UnitSystem` type
 and constants:
@@ -257,7 +257,7 @@ before `subscribe()`, add:
     }
 ```
 
-- [ ] **Step 2: Add `mechanism` to `TelemetryService.trips()`**
+- [x] **Step 2: Add `mechanism` to `TelemetryService.trips()`**
 
 In `web/src/services/telemetry-service.ts`, update the import at the top of
 the file from:
@@ -308,12 +308,12 @@ with:
     }
 ```
 
-- [ ] **Step 3: Type-check to verify it compiles**
+- [x] **Step 3: Type-check to verify it compiles**
 
 Run: `cd web && npx tsc --noEmit`
 Expected: no errors.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 cd /Users/jamesli/DIMO/fleet-lite-app
@@ -328,7 +328,7 @@ git commit -m "feat(web): add TripMechanism preference and telemetry-service par
 **Files:**
 - Modify: `web/src/views/vehicle-details.ts`
 
-- [ ] **Step 1: Import `TripMechanism`**
+- [x] **Step 1: Import `TripMechanism`**
 
 At the top of `web/src/views/vehicle-details.ts`, update:
 
@@ -342,7 +342,7 @@ to:
 import { PrefsService, TripMechanism } from '../services/prefs-service.ts';
 ```
 
-- [ ] **Step 2: Extract a `fetchTrips()` helper and use it from `loadAll()`**
+- [x] **Step 2: Extract a `fetchTrips()` helper and use it from `loadAll()`**
 
 In `loadAll()`, replace:
 
@@ -429,7 +429,7 @@ Then add the `fetchTrips()` helper and a change handler immediately after
     }
 ```
 
-- [ ] **Step 3: Add the "Detection" dropdown to `renderTripsCard`**
+- [x] **Step 3: Add the "Detection" dropdown to `renderTripsCard`**
 
 In `renderTripsCard`, replace the header:
 
@@ -475,7 +475,7 @@ This needs to be placed *before* the final `return html\`...\`` of
 `if`/`else if`/`else` block that sets `body` (the block ending at the `}`
 before the final `return html`).
 
-- [ ] **Step 4: Add `.trips-header-controls` and `.trip-mechanism-select` styling**
+- [x] **Step 4: Add `.trips-header-controls` and `.trip-mechanism-select` styling**
 
 In the `static styles` block, find the `.trips-header .chip { ... }` rule
 (it ends with a `}` on its own line). Immediately after that closing `}`,
@@ -499,12 +499,12 @@ add:
             }
 ```
 
-- [ ] **Step 5: Type-check to verify it compiles**
+- [x] **Step 5: Type-check to verify it compiles**
 
 Run: `cd web && npx tsc --noEmit`
 Expected: no errors.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /Users/jamesli/DIMO/fleet-lite-app
@@ -518,12 +518,12 @@ git commit -m "feat(web): add trip detection method dropdown to Trips card"
 
 **Files:** none (verification only)
 
-- [ ] **Step 1: Start the dev stack**
+- [x] **Step 1: Start the dev stack**
 
 Run: `make dev` (from the repo root) — brings up frontend (Vite, port 3009)
 and backend (Go, port 8084) together. Wait for both to report ready.
 
-- [ ] **Step 2: Verify the default request**
+- [x] **Step 2: Verify the default request**
 
 In a browser, navigate to `https://local-fleet-lite.dimo.org:3009`, sign in,
 open a vehicle with trip history (e.g. token 186612, which has 56 completed
@@ -532,7 +532,7 @@ default is empty). Open devtools Network tab, reload the page, and confirm
 `GET /telemetry/186612/trips...` includes `mechanism=ignitionDetection` and
 returns 200 with the existing trip list.
 
-- [ ] **Step 3: Verify switching mechanisms**
+- [x] **Step 3: Verify switching mechanisms**
 
 In the Trips card header, change the "Detection" dropdown to "Frequency
 analysis". Confirm:
@@ -548,19 +548,19 @@ produces a 200 response with `mechanism=<value>` in the query string. For
 days") is an acceptable result if the vehicle has no such segments in range —
 the goal is confirming the request succeeds, not that data exists.
 
-- [ ] **Step 4: Verify persistence**
+- [x] **Step 4: Verify persistence**
 
 With a non-default mechanism selected (e.g. "Frequency analysis"), reload the
 page. Confirm the dropdown still shows "Frequency analysis" and the initial
 `GET /telemetry/186612/trips` request includes `mechanism=frequencyAnalysis`.
 
-- [ ] **Step 5: Verify invalid mechanism handling**
+- [x] **Step 5: Verify invalid mechanism handling**
 
 Using devtools or curl with the dev JWT, request
 `GET /telemetry/186612/trips?mechanism=bogus`. Confirm a `400` response with
 a message listing the valid mechanism values.
 
-- [ ] **Step 6: Report results**
+- [x] **Step 6: Report results**
 
 Note any visual or behavioral issues found. If everything works as expected,
 the feature is complete — no further commits needed for this task.
