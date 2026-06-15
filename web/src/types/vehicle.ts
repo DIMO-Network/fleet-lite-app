@@ -43,6 +43,8 @@ export interface VehiclesResponse {
 
 export interface VehicleCard {
     tokenId: string;
+    /** Vehicle make (e.g. "Tesla"), used to resolve the OEM brand logo. */
+    make: string;
     title: string;
     location: string;
     seenAt: string;
