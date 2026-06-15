@@ -56,6 +56,22 @@ type LocationCoords struct {
 	Lon float64 `json:"lon"`
 }
 
+// TripWaypoint is one GPS fix sampled at a fixed interval across a trip's
+// window, carrying the timestamp so playback can pace to real time.
+type TripWaypoint struct {
+	Timestamp string  `json:"timestamp"`
+	Lat       float64 `json:"lat"`
+	Lng       float64 `json:"lng"`
+}
+
+// TripEvent is a discrete behavior event (e.g. harsh braking) within a trip's
+// window, placed on the replay timeline by its timestamp.
+type TripEvent struct {
+	Timestamp  string `json:"timestamp"`
+	Name       string `json:"name"`
+	DurationNs int64  `json:"durationNs"`
+}
+
 // FleetLocationsResult separates vehicles with accessible location data from
 // those where the developer license lacks SACD permissions.
 type FleetLocationsResult struct {
@@ -74,6 +90,9 @@ type TelemetryAPIService interface {
 	// RoutePoints samples currentLocationCoordinates at a 3s interval over a
 	// trip's time window, returning the polyline points in order.
 	RoutePoints(tenant models.Tenant, tokenID uint64, from, to string) ([]LocationCoords, error)
+	// TripReplay samples timestamped GPS waypoints (coarser than RoutePoints)
+	// plus discrete behavior events over a trip's window, for animated replay.
+	TripReplay(tenant models.Tenant, tokenID uint64, from, to string) ([]TripWaypoint, []TripEvent, error)
 	// FleetLocations checks per-vehicle JWT availability to determine which
 	// vehicles the tenant's dev license has SACD permissions for, then fetches
 	// each permitted vehicle's coordinates with its own JWT (telemetry-api
@@ -375,6 +394,71 @@ func (t *telemetryAPIService) RoutePoints(tenant models.Tenant, tokenID uint64, 
 		points = append(points, LocationCoords{Lat: c.Latitude, Lon: c.Longitude})
 	}
 	return points, nil
+}
+
+// TripReplay fetches timestamped GPS waypoints (sampled at a 30s interval —
+// coarser than RoutePoints' 3s, since playback animates between fixes rather
+// than drawing a static polyline) plus the trip's behavior events, for the
+// animated trip-replay modal.
+func (t *telemetryAPIService) TripReplay(tenant models.Tenant, tokenID uint64, from, to string) ([]TripWaypoint, []TripEvent, error) {
+	q := fmt.Sprintf(`query {
+		route: signals(tokenId: %d, from: %q, to: %q, interval: "30s") {
+			timestamp
+			currentLocationCoordinates(agg: LAST) { latitude longitude }
+		}
+		events(tokenId: %d, from: %q, to: %q) {
+			timestamp
+			name
+			durationNs
+		}
+	}`, tokenID, from, to, tokenID, from, to)
+
+	raw, err := t.query(tenant, tokenID, q)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var resp struct {
+		Data struct {
+			Route []struct {
+				Timestamp                  string `json:"timestamp"`
+				CurrentLocationCoordinates *struct {
+					Latitude  float64 `json:"latitude"`
+					Longitude float64 `json:"longitude"`
+				} `json:"currentLocationCoordinates"`
+			} `json:"route"`
+			Events []struct {
+				Timestamp  string `json:"timestamp"`
+				Name       string `json:"name"`
+				DurationNs int64  `json:"durationNs"`
+			} `json:"events"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, nil, fmt.Errorf("parse trip replay: %w", err)
+	}
+
+	waypoints := make([]TripWaypoint, 0, len(resp.Data.Route))
+	for _, pt := range resp.Data.Route {
+		if pt.CurrentLocationCoordinates == nil {
+			continue
+		}
+		waypoints = append(waypoints, TripWaypoint{
+			Timestamp: pt.Timestamp,
+			Lat:       pt.CurrentLocationCoordinates.Latitude,
+			Lng:       pt.CurrentLocationCoordinates.Longitude,
+		})
+	}
+
+	events := make([]TripEvent, 0, len(resp.Data.Events))
+	for _, e := range resp.Data.Events {
+		events = append(events, TripEvent{Timestamp: e.Timestamp, Name: e.Name, DurationNs: e.DurationNs})
+	}
+
+	t.logger.Info().Uint64("tokenID", tokenID).Str("from", from).Str("to", to).
+		Int("waypoints", len(waypoints)).Int("events", len(events)).Msg("telemetry trip replay fetched")
+
+	return waypoints, events, nil
 }
 
 // FleetLocations checks per-vehicle JWT availability (definitive SACD check),

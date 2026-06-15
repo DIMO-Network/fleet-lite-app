@@ -9,6 +9,7 @@ import { PrefsService, TripMechanism } from '../services/prefs-service.ts';
 import { formatDistance, formatSpeed } from '../utils/units.ts';
 import { tripSignal, tripDistanceKm, tripTimeShort } from '../utils/trips.ts';
 import { Trip } from '../types/telemetry.ts';
+import './trip-replay-modal.ts';
 
 /** One selectable trips window. */
 interface Period {
@@ -41,6 +42,8 @@ export class VehicleTripsPanel extends LitElement {
     @state() private selectedTrip: Trip | null = null;
     @state() private routeLoading = false;
     @state() private periodIndex = 0;
+    // Trip open in the full-screen replay modal (null = closed).
+    @state() private replayTrip: Trip | null = null;
 
     private map: L.Map | null = null;
     private liveMarker: L.CircleMarker | null = null;
@@ -310,8 +313,20 @@ export class VehicleTripsPanel extends LitElement {
                 .list { border-left: none; border-top: 1px solid var(--outline-variant); }
             }
 
+            .trip-row-wrap {
+                display: flex;
+                align-items: stretch;
+                border-bottom: 1px solid var(--outline-variant);
+                transition: background 0.15s ease;
+            }
+            .trip-row-wrap:hover { background: var(--surface-container-high); }
+            .trip-row-wrap.selected {
+                background: var(--surface-container-high);
+                box-shadow: inset 3px 0 0 #f5c84b;
+            }
             .trip-row {
-                width: 100%;
+                flex: 1;
+                min-width: 0;
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
@@ -319,16 +334,22 @@ export class VehicleTripsPanel extends LitElement {
                 padding: 12px 16px;
                 background: none;
                 border: none;
-                border-bottom: 1px solid var(--outline-variant);
                 cursor: pointer;
                 text-align: left;
-                transition: background 0.15s ease;
             }
-            .trip-row:hover { background: var(--surface-container-high); }
-            .trip-row.selected {
-                background: var(--surface-container-high);
-                box-shadow: inset 3px 0 0 #f5c84b;
+            .replay-btn {
+                flex-shrink: 0;
+                display: flex;
+                align-items: center;
+                padding: 0 14px;
+                background: none;
+                border: none;
+                border-left: 1px solid var(--outline-variant);
+                color: var(--on-surface-variant);
+                cursor: pointer;
             }
+            .replay-btn:hover { color: #f5c84b; }
+            .replay-btn .material-symbols-outlined { font-size: 18px; }
             .trip-row .when .times {
                 display: flex;
                 align-items: center;
@@ -373,25 +394,34 @@ export class VehicleTripsPanel extends LitElement {
         const avgFv = avg != null ? formatSpeed(avg) : null;
         const maxFv = max != null ? formatSpeed(max) : null;
         return html`
-            <button class="trip-row ${selected ? 'selected' : ''}" @click=${() => this.selectTrip(trip)}>
-                <span class="when">
-                    <span class="times">
-                        ${tripTimeShort(trip.start.timestamp)}
-                        <span class="material-symbols-outlined">arrow_forward</span>
-                        ${trip.isOngoing ? '' : tripTimeShort(trip.end.timestamp)}
+            <div class="trip-row-wrap ${selected ? 'selected' : ''}">
+                <button class="trip-row" @click=${() => this.selectTrip(trip)}>
+                    <span class="when">
+                        <span class="times">
+                            ${tripTimeShort(trip.start.timestamp)}
+                            <span class="material-symbols-outlined">arrow_forward</span>
+                            ${trip.isOngoing ? '' : tripTimeShort(trip.end.timestamp)}
+                        </span>
+                        ${trip.isOngoing ? html`<span class="ongoing">${msg('Ongoing')}</span>` : ''}
                     </span>
-                    ${trip.isOngoing ? html`<span class="ongoing">${msg('Ongoing')}</span>` : ''}
-                </span>
-                <span class="stats">
-                    ${selected && this.routeLoading
-                        ? html`<span class="material-symbols-outlined" style="font-size:14px;">progress_activity</span>`
-                        : html`
-                            ${distFv ? html`<span class="dist">${distFv.value} ${distFv.unit}</span>` : ''}
-                            ${avgFv && maxFv ? html`<br />${avgFv.value}/${maxFv.value} ${maxFv.unit}` : ''}
-                        `}
-                </span>
-            </button>
+                    <span class="stats">
+                        ${selected && this.routeLoading
+                            ? html`<span class="material-symbols-outlined" style="font-size:14px;">progress_activity</span>`
+                            : html`
+                                ${distFv ? html`<span class="dist">${distFv.value} ${distFv.unit}</span>` : ''}
+                                ${avgFv && maxFv ? html`<br />${avgFv.value}/${maxFv.value} ${maxFv.unit}` : ''}
+                            `}
+                    </span>
+                </button>
+                <button class="replay-btn" title=${msg('Replay trip')} @click=${() => this.openReplay(trip)}>
+                    <span class="material-symbols-outlined">smart_display</span>
+                </button>
+            </div>
         `;
+    }
+
+    private openReplay(trip: Trip) {
+        this.replayTrip = trip;
     }
 
     private renderList() {
@@ -440,6 +470,12 @@ export class VehicleTripsPanel extends LitElement {
                     <div class="list custom-scrollbar">${this.renderList()}</div>
                 </div>
             </div>
+            ${this.replayTrip
+                ? html`<trip-replay-modal
+                        .trip=${this.replayTrip}
+                        .tokenId=${Number(this.tokenId)}
+                        @close=${() => { this.replayTrip = null; }}></trip-replay-modal>`
+                : nothing}
         `;
     }
 }

@@ -62,3 +62,23 @@ export interface TripRouteResponse {
     points: Array<{ lat: number; lon: number }>;
     permissionsRequired?: boolean;
 }
+
+/** One timestamped GPS fix along a trip, for animated replay. */
+export interface TripWaypoint {
+    timestamp: string;
+    lat: number;
+    lng: number;
+}
+
+/** A discrete driving-behavior event (harsh braking, cornering, etc.). */
+export interface TripEvent {
+    timestamp: string;
+    name: string;
+    durationNs: number;
+}
+
+export interface TripReplayResponse {
+    waypoints: TripWaypoint[];
+    events: TripEvent[];
+    permissionsRequired?: boolean;
+}

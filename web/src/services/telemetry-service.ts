@@ -1,5 +1,5 @@
 import { ApiService } from './api-service.ts';
-import { FleetLocationsResponse, LatestSignalsResponse, SegmentsResponse, TimeSeriesResponse, TripRouteResponse } from '../types/telemetry.ts';
+import { FleetLocationsResponse, LatestSignalsResponse, SegmentsResponse, TimeSeriesResponse, TripRouteResponse, TripReplayResponse } from '../types/telemetry.ts';
 import { TripMechanism } from './prefs-service.ts';
 
 export class TelemetryService {
@@ -56,5 +56,11 @@ export class TelemetryService {
     tripRoute(tokenId: number, from: string, to: string): Promise<TripRouteResponse> {
         const q = new URLSearchParams({ from, to });
         return ApiService.getInstance().get<TripRouteResponse>(`/telemetry/${tokenId}/route?${q.toString()}`);
+    }
+
+    /** GET /telemetry/:tokenId/replay — timestamped waypoints + behavior events for replay. */
+    tripReplay(tokenId: number, from: string, to: string): Promise<TripReplayResponse> {
+        const q = new URLSearchParams({ from, to });
+        return ApiService.getInstance().get<TripReplayResponse>(`/telemetry/${tokenId}/replay?${q.toString()}`);
     }
 }
