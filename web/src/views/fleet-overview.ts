@@ -8,6 +8,8 @@ import { ApiService } from '../services/api-service.ts';
 import { TelemetryService } from '../services/telemetry-service.ts';
 import { FleetCache } from '../services/fleet-cache.ts';
 import { Vehicle, VehicleCard, VehiclesResponse, VehicleGroupRef } from '../types/vehicle.ts';
+import { brandLogoUrl } from '../utils/brand-logo.ts';
+import { contrastingBadgeBackground } from '../utils/logo-color.ts';
 import '../elements/vehicle-quick-view.ts';
 
 @customElement('fleet-overview-view')
@@ -28,6 +30,10 @@ export class FleetOverviewView extends LitElement {
     private markers = new Map<string, L.CircleMarker>();
     private lastLocations: Record<string, { lat: number; lon: number }> = {};
     private resizeObserver: ResizeObserver | null = null;
+    /** Tokens whose brand logo failed to load — fall back to the generic car icon. */
+    @state() private brokenLogos = new Set<string>();
+    /** Per-vehicle badge background colors, picked to contrast with the loaded logo. */
+    @state() private logoBadgeColors = new Map<string, string>();
     // Progressive location loading: one tokenId per request, three requests
     // in flight. Each response carries exactly one vehicle, so every marker
     // paints the moment its location resolves — no batch ever waits on a
@@ -150,6 +156,7 @@ export class FleetOverviewView extends LitElement {
                 : '';
         return {
             tokenId: String(v.tokenId),
+            make: v.definition.make,
             title: this.formatTitle(v),
             location: integration,
             seenAt: `Token #${v.tokenId}`,
@@ -223,7 +230,7 @@ export class FleetOverviewView extends LitElement {
      */
     private async loadVehicleData(force = false) {
         if (!force) {
-            const cached = FleetCache.get();
+            const cached = FleetCache.get(this.tenantId);
             if (cached) {
                 this.vehicles = cached.vehicles;
                 this.lastLocations = cached.locations;
@@ -295,7 +302,15 @@ export class FleetOverviewView extends LitElement {
         }
 
         this.placeMarkers();
-        FleetCache.set({ vehicles: this.vehicles, locations: this.lastLocations });
+        FleetCache.set(this.tenantId, { vehicles: this.vehicles, locations: this.lastLocations });
+    }
+
+    willUpdate(changed: Map<string, unknown>) {
+        if (changed.has('tenantId') && this.tenantId && !this.loading) {
+            this.loading = true;
+            this.errorMessage = null;
+            void this.loadVehicleData();
+        }
     }
 
     private async refreshVehicles() {
@@ -328,18 +343,20 @@ export class FleetOverviewView extends LitElement {
     override firstUpdated() {
         const el = this.renderRoot.querySelector<HTMLElement>('.map');
         if (!el) return;
-        const worldBounds = L.latLngBounds([[-85.051129, -180], [85.051129, 180]]);
+        // Bound latitude to Web Mercator's valid range but leave longitude open so
+        // panning across the antimeridian wraps into the next copy of the world.
+        const worldBounds = L.latLngBounds([-85.051129, -Infinity], [85.051129, Infinity]);
         this.leafletMap = L.map(el, {
             zoomControl: false,
             attributionControl: true,
             maxBounds: worldBounds,
             maxBoundsViscosity: 1.0,
+            worldCopyJump: true,
         }).setView([39.5, -98.35], 4);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
             subdomains: 'abcd',
             maxZoom: 19,
-            noWrap: true,
         }).addTo(this.leafletMap);
 
         this.resizeObserver = new ResizeObserver(() => this.updateMinZoom());
@@ -806,8 +823,15 @@ export class FleetOverviewView extends LitElement {
             }
             .vehicle-icon .status-dot { bottom: -2px; right: -2px; }
             .vehicle-icon .material-symbols-outlined { color: var(--primary); font-size: 32px; }
+            .vehicle-icon .brand-logo {
+                width: 100%;
+                height: 100%;
+                border-radius: var(--radius-full);
+                object-fit: cover;
+            }
             .vehicle-card.offline .vehicle-icon { opacity: 0.5; }
             .vehicle-card.offline .vehicle-icon .material-symbols-outlined { color: var(--on-surface-variant); }
+            .vehicle-card.offline .vehicle-icon .brand-logo { filter: grayscale(1); }
 
             .vehicle-meta { flex: 1; min-width: 0; }
             .vehicle-meta h4 {
@@ -888,6 +912,36 @@ export class FleetOverviewView extends LitElement {
         `,
     ];
 
+    /** Sample the loaded logo and pin a contrasting badge background for this vehicle. */
+    private onLogoLoad(tokenId: string, e: Event) {
+        const bg = contrastingBadgeBackground(e.target as HTMLImageElement);
+        if (bg && this.logoBadgeColors.get(tokenId) !== bg) {
+            this.logoBadgeColors.set(tokenId, bg);
+            this.requestUpdate();
+        }
+    }
+
+    /** Badge background: contrasts with the logo once sampled, default surface otherwise. */
+    private iconBadgeStyle(v: VehicleCard): string {
+        const bg = this.logoBadgeColors.get(v.tokenId);
+        return bg ? `background: ${bg};` : '';
+    }
+
+    /** Brand logo when one exists for the make, falling back to a generic car icon on load failure. */
+    private renderVehicleIcon(v: VehicleCard) {
+        const logoUrl = v.make ? brandLogoUrl(v.make) : null;
+        if (logoUrl && !this.brokenLogos.has(v.tokenId)) {
+            return html`<img
+                class="brand-logo"
+                src=${logoUrl}
+                alt=${v.make}
+                @load=${(e: Event) => this.onLogoLoad(v.tokenId, e)}
+                @error=${() => { this.brokenLogos.add(v.tokenId); this.requestUpdate(); }}
+            />`;
+        }
+        return html`<span class="material-symbols-outlined">directions_car</span>`;
+    }
+
     private renderCard(v: VehicleCard) {
         const cls = v.online ? 'vehicle-card' : 'vehicle-card offline';
         // Plain click opens the quick-view overlay (map context preserved);
@@ -901,8 +955,8 @@ export class FleetOverviewView extends LitElement {
                     </button>
                 ` : ''}
                 <div class="vehicle-row">
-                    <div class="vehicle-icon">
-                        <span class="material-symbols-outlined">directions_car</span>
+                    <div class="vehicle-icon" style=${this.iconBadgeStyle(v)}>
+                        ${this.renderVehicleIcon(v)}
                         <span class="status-dot ${this.statusClass(v)}"></span>
                     </div>
                     <div class="vehicle-meta">

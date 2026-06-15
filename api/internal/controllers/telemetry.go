@@ -193,11 +193,15 @@ func (t *TelemetryController) GetTimeSeries(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"signal": signal, "interval": interval, "buckets": buckets})
 }
 
-// GetSegments — GET /telemetry/:tokenID/segments?from=...&to=... Returns
-// detected trips for the vehicle in the window, newest first. The detection
-// mechanism follows the b2b fleet manager's heuristic: aftermarket devices
-// only support frequencyAnalysis; everything else tries ignitionDetection
-// first and falls back to frequencyAnalysis when it detects nothing.
+// GetSegments — GET /telemetry/:tokenID/segments?from=...&to=...&mechanism=...
+// Returns detected trips for the vehicle in the window, newest first.
+//
+// When `mechanism` is omitted the detection method follows the b2b fleet
+// manager's heuristic: aftermarket devices only support frequencyAnalysis;
+// everything else tries ignitionDetection first and falls back to
+// frequencyAnalysis when it detects nothing. An explicit `mechanism` (one of
+// service.ValidSegmentMechanisms) overrides the heuristic and disables the
+// fallback, so the caller sees exactly the detector they asked for.
 func (t *TelemetryController) GetSegments(c *fiber.Ctx) error {
 	tenant, err := GetTenant(c)
 	if err != nil {
@@ -217,12 +221,22 @@ func (t *TelemetryController) GetSegments(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
 	}
 
-	mechanism := "ignitionDetection"
-	if vehicle.AftermarketDevice != nil && vehicle.AftermarketDevice.TokenID > 0 {
-		mechanism = "frequencyAnalysis"
+	// Explicit mechanism (from the details-screen picker) overrides the
+	// heuristic and disables the auto-fallback below.
+	explicit := c.Query("mechanism")
+	if explicit != "" && !service.IsValidSegmentMechanism(explicit) {
+		return fiber.NewError(fiber.StatusBadRequest, "mechanism must be one of: "+strings.Join(service.ValidSegmentMechanisms, ", "))
+	}
+
+	mechanism := explicit
+	if mechanism == "" {
+		mechanism = "ignitionDetection"
+		if vehicle.AftermarketDevice != nil && vehicle.AftermarketDevice.TokenID > 0 {
+			mechanism = "frequencyAnalysis"
+		}
 	}
 	segments, err := t.telemetry.Segments(tenant, tokenID, from, to, mechanism)
-	if err == nil && len(segments) == 0 && mechanism == "ignitionDetection" {
+	if explicit == "" && err == nil && len(segments) == 0 && mechanism == "ignitionDetection" {
 		// Some synthetic integrations never report ignition — retry with the
 		// frequency-based detector before concluding there were no trips.
 		mechanism = "frequencyAnalysis"

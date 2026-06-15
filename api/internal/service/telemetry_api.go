@@ -289,12 +289,35 @@ func (t *telemetryAPIService) TimeSeries(tenant models.Tenant, tokenID uint64, s
 	return buckets, nil
 }
 
+// ValidSegmentMechanisms is the set of telemetry-api segmentation strategies
+// accepted by the segments query. Each is a GraphQL enum literal interpolated
+// unquoted into the query, so the allowlist doubles as injection protection.
+var ValidSegmentMechanisms = []string{
+	"ignitionDetection",
+	"frequencyAnalysis",
+	"changePointDetection",
+	"idling",
+	"refuel",
+	"recharge",
+}
+
+// IsValidSegmentMechanism reports whether s is one of ValidSegmentMechanisms.
+func IsValidSegmentMechanism(s string) bool {
+	for _, m := range ValidSegmentMechanisms {
+		if m == s {
+			return true
+		}
+	}
+	return false
+}
+
 // Segments queries trip detection for one vehicle. Query shape mirrors the
 // b2b fleet manager's details screen: odometer FIRST/LAST (distance) and
 // speed AVG/MAX per segment. mechanism is interpolated unquoted — it is a
-// GraphQL enum — and restricted to known values to keep the query well-formed.
+// GraphQL enum — and restricted to the known allowlist to keep the query
+// well-formed and injection-safe.
 func (t *telemetryAPIService) Segments(tenant models.Tenant, tokenID uint64, from, to, mechanism string) ([]Segment, error) {
-	if mechanism != "ignitionDetection" && mechanism != "frequencyAnalysis" {
+	if !IsValidSegmentMechanism(mechanism) {
 		return nil, fmt.Errorf("unknown segments mechanism %q", mechanism)
 	}
 	q := fmt.Sprintf(`query {

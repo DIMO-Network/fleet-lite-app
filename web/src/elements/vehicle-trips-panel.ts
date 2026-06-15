@@ -5,7 +5,7 @@ import L from 'leaflet';
 import leafletCss from 'leaflet/dist/leaflet.css?inline';
 import { sharedStyles } from '../global-styles.ts';
 import { TelemetryService } from '../services/telemetry-service.ts';
-import { PrefsService } from '../services/prefs-service.ts';
+import { PrefsService, TripMechanism } from '../services/prefs-service.ts';
 import { formatDistance, formatSpeed } from '../utils/units.ts';
 import { tripSignal, tripDistanceKm, tripTimeShort } from '../utils/trips.ts';
 import { Trip } from '../types/telemetry.ts';
@@ -19,6 +19,11 @@ interface Period {
 
 const PERIOD_DAYS = 14;
 const PERIOD_COUNT = 6;
+
+/** Detection methods offered in the picker, in display order ('auto' first). */
+const TRIP_MECHANISMS: readonly TripMechanism[] = [
+    'auto', 'ignitionDetection', 'frequencyAnalysis', 'changePointDetection', 'idling', 'refuel', 'recharge',
+];
 
 /**
  * Trips panel for the vehicle details screen: an embedded mini-map showing
@@ -133,7 +138,8 @@ export class VehicleTripsPanel extends LitElement {
         this.clearRoute();
         try {
             const p = this.periods()[this.periodIndex];
-            const res = await TelemetryService.getInstance().segments(Number(tokenId), p.from.toISOString(), p.to.toISOString());
+            const mechanism = PrefsService.getInstance().getTripMechanism();
+            const res = await TelemetryService.getInstance().segments(Number(tokenId), p.from.toISOString(), p.to.toISOString(), mechanism);
             if (gen !== this.loadGeneration) return;
             this.trips = res.segments || [];
             this.permissionsRequired = !!res.permissionsRequired;
@@ -147,6 +153,25 @@ export class VehicleTripsPanel extends LitElement {
     private onPeriodChange(e: Event) {
         this.periodIndex = Number((e.target as HTMLSelectElement).value);
         void this.loadTrips();
+    }
+
+    private onMechanismChange(e: Event) {
+        // Persist (so the choice sticks across vehicles/reloads), then refetch
+        // this vehicle's trips with the new detector.
+        PrefsService.getInstance().setTripMechanism((e.target as HTMLSelectElement).value as TripMechanism);
+        void this.loadTrips();
+    }
+
+    private mechanismLabel(m: TripMechanism): string {
+        switch (m) {
+            case 'auto': return msg('Auto');
+            case 'ignitionDetection': return msg('Ignition');
+            case 'frequencyAnalysis': return msg('Frequency');
+            case 'changePointDetection': return msg('Change point');
+            case 'idling': return msg('Idling');
+            case 'refuel': return msg('Refuel');
+            case 'recharge': return msg('Recharge');
+        }
     }
 
     private async selectTrip(trip: Trip) {
@@ -413,6 +438,7 @@ export class VehicleTripsPanel extends LitElement {
     }
 
     render() {
+        const currentMechanism = PrefsService.getInstance().getTripMechanism();
         return html`
             <div class="card">
                 <div class="head">
@@ -426,6 +452,12 @@ export class VehicleTripsPanel extends LitElement {
                                     <span class="material-symbols-outlined">my_location</span>${msg('Back to live')}
                                 </button>`
                             : nothing}
+                        <select class="mechanism" title=${msg('Trip detection method')}
+                                @change=${this.onMechanismChange}>
+                            ${TRIP_MECHANISMS.map((m) => html`
+                                <option value=${m} ?selected=${m === currentMechanism}>${this.mechanismLabel(m)}</option>
+                            `)}
+                        </select>
                         <select @change=${this.onPeriodChange} .value=${String(this.periodIndex)}>
                             ${this.periods().map((p, i) => html`
                                 <option value=${i} ?selected=${i === this.periodIndex}>${this.periodLabel(p, i)}</option>
