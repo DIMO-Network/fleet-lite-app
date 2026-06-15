@@ -1,5 +1,6 @@
 import { ApiService } from './api-service.ts';
 import { FleetLocationsResponse, LatestSignalsResponse, SegmentsResponse, TimeSeriesResponse, TripRouteResponse } from '../types/telemetry.ts';
+import { TripMechanism } from './prefs-service.ts';
 
 export class TelemetryService {
     private static instance: TelemetryService;
@@ -40,9 +41,14 @@ export class TelemetryService {
         return ApiService.getInstance().get<TimeSeriesResponse>(`/telemetry/${tokenId}/timeseries?${q.toString()}`);
     }
 
-    /** GET /telemetry/:tokenId/segments — detected trips in the window, newest first. */
-    segments(tokenId: number, from: string, to: string): Promise<SegmentsResponse> {
+    /**
+     * GET /telemetry/:tokenId/segments — detected trips in the window, newest
+     * first. `mechanism` forces a detection method; 'auto' (or omitted) lets the
+     * server apply its device-aware heuristic + fallback.
+     */
+    segments(tokenId: number, from: string, to: string, mechanism: TripMechanism = 'auto'): Promise<SegmentsResponse> {
         const q = new URLSearchParams({ from, to });
+        if (mechanism !== 'auto') q.set('mechanism', mechanism);
         return ApiService.getInstance().get<SegmentsResponse>(`/telemetry/${tokenId}/segments?${q.toString()}`);
     }
 

@@ -1,9 +1,28 @@
 export type UnitSystem = 'imperial' | 'metric';
 export type Locale = 'en' | 'es';
 
+/**
+ * Trip-detection method for the details-screen trips panel. 'auto' lets the
+ * server pick (its device-aware heuristic + fallback); the rest force a
+ * specific telemetry-api segmentation strategy.
+ */
+export type TripMechanism =
+    | 'auto'
+    | 'ignitionDetection'
+    | 'frequencyAnalysis'
+    | 'changePointDetection'
+    | 'idling'
+    | 'refuel'
+    | 'recharge';
+
 const STORAGE_KEY = 'fleet-lite:units';
 const LOCALE_KEY = 'fleet-lite:locale';
+const TRIP_MECHANISM_KEY = 'fleet-lite:trip-mechanism';
 const EVENT_NAME = 'fleet-lite-prefs-changed';
+
+const VALID_TRIP_MECHANISMS: readonly TripMechanism[] = [
+    'auto', 'ignitionDetection', 'frequencyAnalysis', 'changePointDetection', 'idling', 'refuel', 'recharge',
+];
 
 /** Friendly endonym for the language itself (shown in its own language). */
 export function localeLabel(l: Locale): string {
@@ -62,6 +81,17 @@ export class PrefsService {
         const next: Locale = this.getLocale() === 'en' ? 'es' : 'en';
         this.setLocale(next);
         return next;
+    }
+
+    /** Persisted trip-detection method (defaults to 'auto' — server decides). */
+    public getTripMechanism(): TripMechanism {
+        const v = localStorage.getItem(TRIP_MECHANISM_KEY);
+        return (VALID_TRIP_MECHANISMS as readonly string[]).includes(v ?? '') ? (v as TripMechanism) : 'auto';
+    }
+
+    public setTripMechanism(m: TripMechanism): void {
+        localStorage.setItem(TRIP_MECHANISM_KEY, m);
+        window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: { tripMechanism: m } }));
     }
 
     /**
