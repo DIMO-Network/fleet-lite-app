@@ -10,15 +10,18 @@ export interface FleetOverviewData {
  * navigating away to vehicle details and back doesn't re-trigger the loading
  * state and network round trips. Cleared whenever the data could go stale —
  * e.g. a favorite toggle changes the vehicle ordering shown on the map.
+ *
+ * Keyed by tenant id so switching tenants doesn't serve the previous tenant's
+ * cached vehicles/locations.
  */
-let cached: FleetOverviewData | null = null;
+let cached: { tenantId: string; data: FleetOverviewData } | null = null;
 
 export const FleetCache = {
-    get(): FleetOverviewData | null {
-        return cached;
+    get(tenantId: string): FleetOverviewData | null {
+        return cached && cached.tenantId === tenantId ? cached.data : null;
     },
-    set(data: FleetOverviewData): void {
-        cached = data;
+    set(tenantId: string, data: FleetOverviewData): void {
+        cached = { tenantId, data };
     },
     invalidate(): void {
         cached = null;
