@@ -281,3 +281,48 @@ func (t *TelemetryController) GetTripRoute(c *fiber.Ctx) error {
 	}
 	return c.JSON(fiber.Map{"points": points})
 }
+
+// GetTripReplay — GET /telemetry/:tokenID/replay?from=...&to=...
+// Returns timestamped GPS waypoints and behavior events for a trip's window,
+// used to animate route playback in the replay modal. `from`/`to` are
+// required — replay always has an explicit window from the selected trip.
+func (t *TelemetryController) GetTripReplay(c *fiber.Ctx) error {
+	tenant, err := GetTenant(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	tokenID, err := ParseTokenIDParam(c, "tokenID")
+	if err != nil {
+		return err
+	}
+	if !t.vehicleInTenant(c.Context(), tenant.ID, tokenID) {
+		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
+	}
+
+	from := c.Query("from")
+	to := c.Query("to")
+	if from == "" || to == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "from, to query params are required")
+	}
+	if _, err := time.Parse(time.RFC3339, from); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "from must be an RFC3339 timestamp")
+	}
+	if _, err := time.Parse(time.RFC3339, to); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "to must be an RFC3339 timestamp")
+	}
+
+	waypoints, events, err := t.telemetry.TripReplay(tenant, tokenID, from, to)
+	if err != nil {
+		if isPermissionError(err) {
+			return c.JSON(fiber.Map{
+				"waypoints":           []service.TripWaypoint{},
+				"events":              []service.TripEvent{},
+				"permissionsRequired": true,
+				"devLicense":          tenant.ClientID,
+			})
+		}
+		t.logger.Err(err).Uint64("tokenID", tokenID).Msg("telemetry trip replay failed")
+		return fiber.NewError(fiber.StatusBadGateway, "telemetry trip replay failed: "+err.Error())
+	}
+	return c.JSON(fiber.Map{"waypoints": waypoints, "events": events})
+}
