@@ -38,6 +38,7 @@ export class VehicleTripsPanel extends LitElement {
 
     @state() private trips: Trip[] = [];
     @state() private tripsLoading = false;
+    @state() private tripsError = false;
     @state() private permissionsRequired = false;
     @state() private selectedTrip: Trip | null = null;
     @state() private routeLoading = false;
@@ -133,6 +134,7 @@ export class VehicleTripsPanel extends LitElement {
         if (!tokenId) return;
         const gen = ++this.loadGeneration;
         this.tripsLoading = true;
+        this.tripsError = false;
         this.trips = [];
         this.permissionsRequired = false;
         this.clearRoute();
@@ -143,8 +145,9 @@ export class VehicleTripsPanel extends LitElement {
             if (gen !== this.loadGeneration) return;
             this.trips = res.segments || [];
             this.permissionsRequired = !!res.permissionsRequired;
-        } catch {
-            // Empty state covers it.
+        } catch (e) {
+            console.error('trips load failed', e);
+            if (gen === this.loadGeneration) this.tripsError = true;
         } finally {
             if (gen === this.loadGeneration) this.tripsLoading = false;
         }
@@ -303,7 +306,7 @@ export class VehicleTripsPanel extends LitElement {
                 .body { grid-template-columns: 1fr; }
                 .map { height: 280px; }
             }
-            .map { min-height: 280px; background: #0d0f12; }
+            .map { min-height: 280px; background: #0d0f12; isolation: isolate; }
             .list {
                 border-left: 1px solid var(--outline-variant);
                 overflow-y: auto;
@@ -433,6 +436,7 @@ export class VehicleTripsPanel extends LitElement {
                     <span>${msg('Grant DIMO permissions to see live telemetry on this vehicle.')}</span>
                 </div>`;
         }
+        if (this.tripsError) return html`<div class="state-row">${msg('Failed to load trips — check console for details.')}</div>`;
         if (this.trips.length === 0) return html`<div class="state-row">${msg('No trips in this period.')}</div>`;
         return this.trips.map((t) => this.renderRow(t));
     }

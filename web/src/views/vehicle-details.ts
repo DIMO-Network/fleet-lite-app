@@ -321,7 +321,7 @@ export class VehicleDetailsView extends LitElement {
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
-                padding: 0 var(--margin-desktop);
+                padding: 0 var(--gutter);
                 border-bottom: 1px solid var(--outline-variant);
             }
             header.top-bar .left { display: flex; align-items: center; gap: 32px; }
@@ -354,6 +354,20 @@ export class VehicleDetailsView extends LitElement {
                 gap: 16px;
                 margin-bottom: 32px;
             }
+            .hero-status .favorite-btn {
+                margin-left: auto;
+                background: none;
+                border: none;
+                padding: 4px 8px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                color: var(--on-surface-variant);
+                font: var(--type-body-sm);
+            }
+            .hero-status .favorite-btn .material-symbols-outlined { font-size: 20px; }
+            .hero-status .favorite-btn .favorite-on { color: #ffb432; }
             .hero-status .chip {
                 background: var(--surface-container-high);
                 border: 1px solid var(--outline-variant);
@@ -648,37 +662,6 @@ export class VehicleDetailsView extends LitElement {
             }
             .distance-row .chart { flex: 1; margin-left: 16px; max-width: 60%; }
 
-            .quick-actions {
-                max-width: 480px;
-                background: var(--surface-container-low);
-                border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-lg);
-                overflow: hidden;
-                margin-bottom: 96px;
-            }
-            .quick-actions button {
-                width: 100%;
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                padding: 16px;
-                background: none;
-                border: none;
-                border-bottom: 1px solid var(--outline-variant);
-                text-align: left;
-                color: inherit;
-                transition: background 0.15s ease;
-            }
-            .quick-actions button:last-child { border-bottom: none; }
-            .quick-actions button:hover { background: var(--surface-container-high); }
-            .quick-actions button .left-group { display: flex; align-items: center; gap: 16px; }
-            .quick-actions button .label {
-                font: var(--type-body-md);
-                color: var(--primary);
-            }
-            .quick-actions button .material-symbols-outlined.muted { color: var(--on-surface-variant); }
-            .quick-actions button .material-symbols-outlined.favorite-on { color: #ffb432; }
-
             .err-engineering {
                 position: absolute;
                 bottom: 16px;
@@ -940,6 +923,13 @@ export class VehicleDetailsView extends LitElement {
                                 <span>${msg('No DIMO integration yet')}</span>
                             </div>`
                     }
+                    <button class="favorite-btn"
+                            ?disabled=${this.favoriteBusy} @click=${() => this.toggleFavorite()}>
+                        <span class="material-symbols-outlined ${this.vehicle?.isFavorite ? 'favorite-on' : ''}">
+                            ${this.vehicle?.isFavorite ? 'star' : 'star_border'}
+                        </span>
+                        ${this.vehicle?.isFavorite ? msg('Remove from Favorites') : msg('Make Favorite')}
+                    </button>
                 </div>
 
                 <div class="grid">
@@ -983,16 +973,6 @@ export class VehicleDetailsView extends LitElement {
                     ${this.renderAdBlueCard()}
                 </div>
 
-                <div class="quick-actions">
-                    <button ?disabled=${this.favoriteBusy} @click=${() => this.toggleFavorite()}>
-                        <div class="left-group">
-                            <span class="material-symbols-outlined ${this.vehicle?.isFavorite ? 'favorite-on' : 'muted'}">
-                                ${this.vehicle?.isFavorite ? 'star' : 'star_border'}
-                            </span>
-                            <span class="label">${this.vehicle?.isFavorite ? msg('Remove favorite') : msg('Make favorite')}</span>
-                        </div>
-                    </button>
-                </div>
             </div>
         `;
     }
