@@ -57,15 +57,19 @@ func (t *TelemetryController) vehicleInTenant(ctx context.Context, tenantID stri
 	return err == nil
 }
 
-// isPermissionError matches 403s coming back from token-exchange-api when the
-// dev license lacks SACDs on a vehicle. Same heuristic as the glovebox list
-// endpoint — keep them in sync.
+// isPermissionError matches authorization failures from either token-exchange-api
+// (403 / "lacks permissions" when the dev license lacks SACDs) or from the
+// telemetry-api GraphQL layer ("unauthorized: missing required privilege(s) ...")
+// when the vehicle JWT doesn't carry a required privilege (e.g. VEHICLE_ALL_TIME_LOCATION
+// for segments). Keep in sync with the glovebox list endpoint.
 func isPermissionError(err error) bool {
 	if err == nil {
 		return false
 	}
 	s := err.Error()
-	return strings.Contains(s, "lacks permissions") || strings.Contains(s, "status code 403")
+	return strings.Contains(s, "lacks permissions") ||
+		strings.Contains(s, "status code 403") ||
+		strings.Contains(s, "unauthorized")
 }
 
 // GetLatest — GET /telemetry/:tokenID/latest. Returns the curated signal set
