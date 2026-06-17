@@ -123,7 +123,7 @@ export class SideNav extends LitElement {
     render() {
         return html`
             <div class="brand">
-                <img src="/assets/dimo-logo-d.png" alt="${msg('DIMO')}" />
+                <img src="/assets/logo.png" alt="${msg('DIMO')}" />
                 <div>
                     <h1>${msg('DIMO Dashboard')}</h1>
                     <p>${msg('Precision Telemetry')}</p>

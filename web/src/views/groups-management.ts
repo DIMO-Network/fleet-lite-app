@@ -69,9 +69,9 @@ export class GroupsManagementView extends LitElement {
                 width: 100%; height: 100%; overflow-y: auto; background: var(--background);
             }
             header.top-bar {
-                position: sticky; top: 0; z-index: 40;
+                position: sticky; top: 0; z-index: 40; flex-shrink: 0;
                 display: flex; align-items: center; justify-content: space-between;
-                height: 80px; padding: 0 var(--gutter);
+                height: var(--top-bar-height); padding: 0 var(--gutter);
                 background: var(--background); border-bottom: 1px solid var(--outline-variant);
             }
             header.top-bar h2 { font: var(--type-headline-md); color: var(--primary); }

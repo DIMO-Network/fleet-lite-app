@@ -427,7 +427,7 @@ export class FleetOverviewView extends LitElement {
                 top: 0;
                 left: 0;
                 right: 0;
-                height: 80px;
+                height: var(--top-bar-height);
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
@@ -488,7 +488,7 @@ export class FleetOverviewView extends LitElement {
 
             .map-controls {
                 position: absolute;
-                top: 96px;
+                top: calc(var(--top-bar-height) + 16px);
                 left: 24px;
                 display: flex;
                 flex-direction: column;
@@ -562,7 +562,7 @@ export class FleetOverviewView extends LitElement {
             }
             @media (min-width: 768px) {
                 .vehicles-panel {
-                    top: 96px;
+                    top: calc(var(--top-bar-height) + 16px);
                     bottom: 24px;
                     right: 24px;
                     left: auto;

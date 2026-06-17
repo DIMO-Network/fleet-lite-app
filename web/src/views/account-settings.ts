@@ -88,8 +88,8 @@ export class AccountSettingsView extends LitElement {
                 position: sticky;
                 top: 0;
                 z-index: 40;
-                height: 80px;
-                width: 100%;
+                height: var(--top-bar-height, 80px);
+                flex-shrink: 0;
                 background: var(--background);
                 border-bottom: 1px solid var(--outline-variant);
                 display: flex;
