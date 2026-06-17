@@ -64,6 +64,7 @@ func main() {
 		subcommands.Register(subcommands.CommandsCommand(), "")
 		subcommands.Register(&migrateDBCmd{logger: logger, settings: settings}, "database")
 		subcommands.Register(&importGroupAttestationsCmd{logger: logger, settings: settings}, "attestations")
+		subcommands.Register(&pushPostmarkTemplatesCmd{logger: logger, settings: settings}, "email")
 		flag.Parse()
 		os.Exit(int(subcommands.Execute(ctx)))
 	}
@@ -83,13 +84,15 @@ func main() {
 	tenantSvc := service.NewTenantService(&logger, &pdb, &settings, identityService)
 	vehicleSvc := service.NewVehicleService(&logger, &pdb, identityService)
 	groupSvc := service.NewFleetGroupService(&logger, &pdb)
+	postmarkAPI := gateway.NewPostmarkAPI(logger, &settings)
+	invitationSvc := service.NewInvitationService(&logger, &pdb, &settings, tenantSvc, postmarkAPI)
 
 	monApp := createMonitoringServer()
 	group, gCtx := errgroup.WithContext(ctx)
 
 	webAPI := app.App(&settings, &logger, CommitHash, &pdb, identityService,
 		authProvider, extractAPI, attestSvc, fetchAPI, telemetryAPI,
-		tenantSvc, vehicleSvc, groupSvc,
+		tenantSvc, vehicleSvc, groupSvc, invitationSvc,
 	)
 
 	logger.Info().Int("port", settings.MonitoringPort).Msg("Starting monitoring server")
