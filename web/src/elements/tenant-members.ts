@@ -4,7 +4,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { getTokenClaims } from '../utils/token.ts';
 import { ApiError } from '../services/api-service.ts';
-import { TenantService, Member, ROLE_OWNER } from '../services/tenant-service.ts';
+import { TenantService, Member, Invitation, ROLE_OWNER, ROLE_MEMBER } from '../services/tenant-service.ts';
 
 /**
  * Members management for the current tenant, embedded in the settings view.
@@ -24,6 +24,14 @@ export class TenantMembers extends LitElement {
     @state() private adding = false;
     @state() private addError = '';
     @state() private busyWallet = ''; // wallet currently being removed
+
+    @state() private invites: Invitation[] = [];
+    @state() private newEmail = '';
+    @state() private newRole = ROLE_MEMBER;
+    @state() private inviting = false;
+    @state() private inviteError = '';
+    @state() private inviteNotice = '';
+    @state() private busyInviteId = ''; // invitation currently being revoked/resent
 
     static styles = [
         sharedStyles,
@@ -126,6 +134,69 @@ export class TenantMembers extends LitElement {
 
             .state { padding: 16px; font: var(--type-body-sm); color: var(--on-surface-variant); }
             .error { color: var(--error); font: var(--type-body-sm); margin-top: var(--stack-sm); }
+            .notice { color: var(--tertiary-fixed-dim, var(--on-surface-variant)); font: var(--type-body-sm); margin-top: var(--stack-sm); }
+
+            .section-label {
+                font: var(--type-label-caps);
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                color: var(--on-surface-variant);
+                margin: var(--stack-lg) 0 var(--stack-sm);
+            }
+            /* Invite-by-email form: email input grows, role select + button hug right. */
+            .invite-form { display: flex; gap: 12px; flex-wrap: wrap; }
+            .invite-form input[type='email'] {
+                flex: 1;
+                min-width: 0;
+                box-sizing: border-box;
+                background: var(--surface-container-high);
+                border: 1px solid var(--outline-variant);
+                border-radius: var(--radius-md);
+                padding: 12px 14px;
+                color: var(--on-surface);
+                font: var(--type-body-sm);
+            }
+            .invite-form input[type='email']:focus { outline: none; border-color: var(--secondary-container); }
+            .invite-form select {
+                background: var(--surface-container-high);
+                border: 1px solid var(--outline-variant);
+                border-radius: var(--radius-md);
+                padding: 0 12px;
+                color: var(--on-surface);
+                font: var(--type-body-sm);
+            }
+            .invite-form button {
+                background: var(--primary);
+                color: var(--on-primary);
+                border: none;
+                border-radius: var(--radius-full);
+                padding: 0 22px;
+                font: var(--type-label-caps);
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                cursor: pointer;
+                white-space: nowrap;
+            }
+            .invite-form button[disabled] { opacity: 0.6; cursor: default; }
+
+            /* Pending-invite rows reuse the .member layout but key off the email. */
+            .invite-row .email-id { font: var(--type-body-md); color: var(--on-surface); }
+            .invite-row .meta { font-size: 12px; color: var(--on-surface-variant); }
+            .text-btn {
+                background: none;
+                border: 1px solid var(--outline-variant);
+                color: var(--on-surface-variant);
+                padding: 6px 12px;
+                border-radius: var(--radius-full);
+                cursor: pointer;
+                font: var(--type-label-caps);
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                transition: background 0.15s ease, color 0.15s ease;
+            }
+            .text-btn:hover { background: var(--surface-container-high); color: var(--on-surface); }
+            .text-btn.danger:hover { color: var(--error); border-color: var(--error); }
+            .text-btn[disabled] { opacity: 0.5; cursor: default; }
         `,
     ];
 
@@ -154,11 +225,79 @@ export class TenantMembers extends LitElement {
         this.error = '';
         try {
             this.members = await TenantService.getInstance().fetchMembers(this.tenantId);
+            // Pending invites are only shown to owners (who manage them). Load
+            // them after members so isOwner is known; failure here is non-fatal.
+            if (this.isOwner) {
+                try {
+                    this.invites = await TenantService.getInstance().fetchInvitations(this.tenantId);
+                } catch {
+                    this.invites = [];
+                }
+            } else {
+                this.invites = [];
+            }
         } catch (err) {
             this.error = extractMessage(err) || msg('Could not load members.');
             this.members = [];
         } finally {
             this.loading = false;
+        }
+    }
+
+    /** Pending invites only — accepted ones already appear in the roster. */
+    private get pendingInvites(): Invitation[] {
+        return this.invites.filter(i => i.status === 'pending');
+    }
+
+    private async inviteMember(e: Event) {
+        e.preventDefault();
+        this.inviteError = '';
+        this.inviteNotice = '';
+        const email = this.newEmail.trim().toLowerCase();
+        // Light client-side check; the server is the source of truth.
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            this.inviteError = msg('Enter a valid email address.');
+            return;
+        }
+        this.inviting = true;
+        try {
+            await TenantService.getInstance().createInvitation(this.tenantId, email, this.newRole);
+            this.newEmail = '';
+            this.newRole = ROLE_MEMBER;
+            this.inviteNotice = msg(str`Invitation sent to ${email}.`);
+            await this.load();
+        } catch (err) {
+            this.inviteError = extractMessage(err) || msg('Could not send invitation.');
+        } finally {
+            this.inviting = false;
+        }
+    }
+
+    private async revokeInvite(id: string) {
+        this.inviteError = '';
+        this.inviteNotice = '';
+        this.busyInviteId = id;
+        try {
+            await TenantService.getInstance().revokeInvitation(this.tenantId, id);
+            await this.load();
+        } catch (err) {
+            this.inviteError = extractMessage(err) || msg('Could not revoke invitation.');
+        } finally {
+            this.busyInviteId = '';
+        }
+    }
+
+    private async resendInvite(id: string) {
+        this.inviteError = '';
+        this.inviteNotice = '';
+        this.busyInviteId = id;
+        try {
+            await TenantService.getInstance().resendInvitation(this.tenantId, id);
+            this.inviteNotice = msg('Invitation re-sent.');
+        } catch (err) {
+            this.inviteError = extractMessage(err) || msg('Could not resend invitation.');
+        } finally {
+            this.busyInviteId = '';
         }
     }
 
@@ -253,22 +392,85 @@ export class TenantMembers extends LitElement {
                     : this.members.map(m => this.renderMember(m))}
             </div>
             ${this.error && this.members.length > 0 ? html`<div class="error">${this.error}</div>` : ''}
-            ${this.isOwner
+            ${this.isOwner ? this.renderOwnerControls() : ''}
+        `;
+    }
+
+    private renderOwnerControls() {
+        const pending = this.pendingInvites;
+        return html`
+            <div class="section-label">${msg('Invite by email')}</div>
+            <form class="invite-form" @submit=${this.inviteMember}>
+                <input
+                    type="email"
+                    placeholder="${msg('teammate@company.com')}"
+                    autocomplete="off"
+                    .value=${this.newEmail}
+                    @input=${(e: Event) => (this.newEmail = (e.target as HTMLInputElement).value)}
+                />
+                <select
+                    .value=${this.newRole}
+                    @change=${(e: Event) => (this.newRole = (e.target as HTMLSelectElement).value)}
+                    title="${msg('Role')}"
+                >
+                    <option value=${ROLE_MEMBER}>${msg('Member')}</option>
+                    <option value=${ROLE_OWNER}>${msg('Owner')}</option>
+                </select>
+                <button type="submit" ?disabled=${this.inviting}>
+                    ${this.inviting ? msg('Sending…') : msg('Send invite')}
+                </button>
+            </form>
+            ${this.inviteError ? html`<div class="error">${this.inviteError}</div>` : ''}
+            ${this.inviteNotice ? html`<div class="notice">${this.inviteNotice}</div>` : ''}
+
+            ${pending.length > 0
                 ? html`
-                    <form class="add-form" @submit=${this.addMember}>
-                        <input
-                            placeholder="${msg('0x… wallet address')}"
-                            autocomplete="off"
-                            .value=${this.newWallet}
-                            @input=${(e: Event) => (this.newWallet = (e.target as HTMLInputElement).value)}
-                        />
-                        <button type="submit" ?disabled=${this.adding}>
-                            ${this.adding ? msg('Adding…') : msg('Add member')}
-                        </button>
-                    </form>
-                    ${this.addError ? html`<div class="error">${this.addError}</div>` : ''}
+                    <div class="section-label">${msg('Pending invitations')}</div>
+                    <div class="row-group">${pending.map(i => this.renderInvite(i))}</div>
                   `
                 : ''}
+
+            <div class="section-label">${msg('Add by wallet address')}</div>
+            <form class="add-form" @submit=${this.addMember}>
+                <input
+                    placeholder="${msg('0x… wallet address')}"
+                    autocomplete="off"
+                    .value=${this.newWallet}
+                    @input=${(e: Event) => (this.newWallet = (e.target as HTMLInputElement).value)}
+                />
+                <button type="submit" ?disabled=${this.adding}>
+                    ${this.adding ? msg('Adding…') : msg('Add member')}
+                </button>
+            </form>
+            ${this.addError ? html`<div class="error">${this.addError}</div>` : ''}
+        `;
+    }
+
+    private renderInvite(i: Invitation) {
+        const busy = this.busyInviteId === i.id;
+        const expires = new Date(i.expiresAt);
+        return html`
+            <div class="member invite-row">
+                <div class="left-group">
+                    <span class="material-symbols-outlined" style="color: var(--on-surface-variant);">mail</span>
+                    <div class="identity">
+                        <span class="email-id">${i.email}</span>
+                        <span class="meta">${msg(str`Invited as ${i.role} · expires ${expires.toLocaleDateString()}`)}</span>
+                    </div>
+                </div>
+                <div class="right-group">
+                    <button
+                        class="text-btn"
+                        ?disabled=${busy}
+                        @click=${() => this.resendInvite(i.id)}
+                    >${msg('Resend')}</button>
+                    <button
+                        class="text-btn danger"
+                        ?disabled=${busy}
+                        @click=${() => this.revokeInvite(i.id)}
+                    >${msg('Revoke')}</button>
+                </div>
+            </div>
         `;
     }
 }
