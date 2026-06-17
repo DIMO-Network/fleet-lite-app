@@ -23,6 +23,17 @@ const ITEMS: { key: NavKey; icon: string; label: () => string; suffix: string }[
 export class SideNav extends LitElement {
     @property({ type: String }) active: NavKey = 'vehicles';
     @property({ type: String }) tenantId = '';
+    @property({ type: Boolean, reflect: true }) collapsed = false;
+
+    connectedCallback() {
+        super.connectedCallback();
+        this.collapsed = localStorage.getItem('sidebar-collapsed') === 'true';
+    }
+
+    private toggle() {
+        this.collapsed = !this.collapsed;
+        localStorage.setItem('sidebar-collapsed', String(this.collapsed));
+    }
 
     static styles = [
         sharedStyles,
@@ -37,9 +48,44 @@ export class SideNav extends LitElement {
                 border-right: 1px solid var(--outline-variant);
                 flex-shrink: 0;
                 z-index: 50;
+                position: relative;
+                overflow: visible;
+                transition: width 0.2s ease, padding 0.2s ease;
+            }
+            :host([collapsed]) {
+                width: 56px;
+                padding: var(--stack-md) 0;
             }
             @media (max-width: 768px) {
                 :host { display: none; }
+            }
+
+            .collapse-toggle {
+                position: absolute;
+                right: -12px;
+                top: 50%;
+                transform: translateY(-50%);
+                width: 24px;
+                height: 48px;
+                background: var(--surface-container-high);
+                border: 1px solid var(--outline-variant);
+                border-left: none;
+                border-radius: 0 var(--radius-md) var(--radius-md) 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                z-index: 51;
+                color: var(--on-surface-variant);
+                transition: background 0.15s ease, color 0.15s ease;
+                padding: 0;
+            }
+            .collapse-toggle:hover {
+                background: var(--surface-container-highest);
+                color: var(--primary);
+            }
+            .collapse-toggle .material-symbols-outlined {
+                font-size: 18px;
             }
 
             .brand {
@@ -48,6 +94,15 @@ export class SideNav extends LitElement {
                 gap: 12px;
                 padding: var(--stack-md) 8px;
                 margin-bottom: 32px;
+            }
+            :host([collapsed]) .brand {
+                justify-content: center;
+                padding: var(--stack-md) 0;
+                gap: 0;
+            }
+            :host([collapsed]) .brand h1,
+            :host([collapsed]) .brand p {
+                display: none;
             }
             .brand img {
                 width: 40px;
@@ -92,6 +147,14 @@ export class SideNav extends LitElement {
             a.nav-item.active .material-symbols-outlined {
                 font-variation-settings: 'FILL' 1;
             }
+            :host([collapsed]) a.nav-item {
+                justify-content: center;
+                padding: 12px 0;
+                gap: 0;
+            }
+            :host([collapsed]) a.nav-item span.label {
+                display: none;
+            }
             a.nav-item span.label {
                 font: var(--type-label-caps);
                 letter-spacing: 0.05em;
@@ -113,7 +176,7 @@ export class SideNav extends LitElement {
         const cls = this.active === key ? 'nav-item active' : 'nav-item';
         const href = `#/${this.tenantId}${suffix}`;
         return html`
-            <a class=${cls} href=${href}>
+            <a class=${cls} href=${href} title=${this.collapsed ? label : ''}>
                 <span class="material-symbols-outlined">${icon}</span>
                 <span class="label">${label}</span>
             </a>
@@ -122,6 +185,12 @@ export class SideNav extends LitElement {
 
     render() {
         return html`
+            <button class="collapse-toggle" @click=${this.toggle}
+                title=${this.collapsed ? msg('Expand sidebar') : msg('Collapse sidebar')}>
+                <span class="material-symbols-outlined">
+                    ${this.collapsed ? 'chevron_right' : 'chevron_left'}
+                </span>
+            </button>
             <div class="brand">
                 <img src="/assets/logo.png" alt="${msg('DIMO')}" />
                 <div>
@@ -133,11 +202,14 @@ export class SideNav extends LitElement {
                 ${ITEMS.map(i => this.item(i.key, i.icon, i.label(), i.suffix))}
             </nav>
             <div class="footer">
-                <a class="nav-item" href="#/${this.tenantId}/settings">
+                <a class="nav-item" href="#/${this.tenantId}/settings"
+                   title=${this.collapsed ? msg('Support') : ''}>
                     <span class="material-symbols-outlined">help</span>
                     <span class="label">${msg('Support')}</span>
                 </a>
-                <a class="nav-item" href="#" @click=${(e: Event) => { e.preventDefault(); logout(); }}>
+                <a class="nav-item" href="#"
+                   title=${this.collapsed ? msg('Sign Out') : ''}
+                   @click=${(e: Event) => { e.preventDefault(); logout(); }}>
                     <span class="material-symbols-outlined">logout</span>
                     <span class="label">${msg('Sign Out')}</span>
                 </a>
