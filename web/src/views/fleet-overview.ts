@@ -55,6 +55,9 @@ export class FleetOverviewView extends LitElement {
     @state() private denseCards = false;
     @state() private searchOpen = false;
     @state() private refreshing = false;
+    @state() private autoRefresh = false;
+    @state() private countdown = 60;
+    private countdownTimer: number | null = null;
 
     private centerMap() {
         if (!this.leafletMap) return;
@@ -317,12 +320,33 @@ export class FleetOverviewView extends LitElement {
 
     private async refreshVehicles() {
         if (this.refreshing) return;
+        if (this.autoRefresh) this.countdown = 60;
         this.refreshing = true;
         this.errorMessage = null;
         try {
             await this.loadVehicleData(true);
         } finally {
             this.refreshing = false;
+        }
+    }
+
+    private toggleAutoRefresh() {
+        if (this.autoRefresh) {
+            this.autoRefresh = false;
+            if (this.countdownTimer !== null) {
+                clearInterval(this.countdownTimer);
+                this.countdownTimer = null;
+            }
+        } else {
+            this.autoRefresh = true;
+            this.countdown = 60;
+            this.countdownTimer = window.setInterval(() => {
+                this.countdown--;
+                if (this.countdown <= 0) {
+                    this.countdown = 60;
+                    this.refreshVehicles();
+                }
+            }, 1000);
         }
     }
 
@@ -373,6 +397,10 @@ export class FleetOverviewView extends LitElement {
 
     override disconnectedCallback() {
         super.disconnectedCallback();
+        if (this.countdownTimer !== null) {
+            clearInterval(this.countdownTimer);
+            this.countdownTimer = null;
+        }
         this.resizeObserver?.disconnect();
         this.resizeObserver = null;
         this.markers.clear();
@@ -511,6 +539,18 @@ export class FleetOverviewView extends LitElement {
                 transition: background 0.15s ease;
             }
             .map-controls button:hover { background: var(--surface-container-high); }
+            .map-controls button.active {
+                background: var(--primary-container);
+                color: var(--on-primary-container);
+                border-color: var(--primary);
+            }
+            .map-controls button.active:hover { background: var(--primary-container); }
+            .countdown-text {
+                font-size: 13px;
+                font-weight: 600;
+                font-variant-numeric: tabular-nums;
+                letter-spacing: 0;
+            }
 
             .map-legend {
                 position: absolute;
@@ -1147,6 +1187,15 @@ export class FleetOverviewView extends LitElement {
                     @click=${() => this.refreshVehicles()}
                 >
                     <span class="material-symbols-outlined">refresh</span>
+                </button>
+                <button
+                    class=${this.autoRefresh ? 'active' : ''}
+                    title=${this.autoRefresh ? msg('Stop auto-refresh') : msg('Start auto-refresh')}
+                    @click=${() => this.toggleAutoRefresh()}
+                >
+                    ${this.autoRefresh
+                        ? html`<span class="countdown-text">${this.countdown}</span>`
+                        : html`<span class="material-symbols-outlined">timer</span>`}
                 </button>
             </div>
 
