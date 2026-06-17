@@ -52,6 +52,8 @@ export class FleetOverviewView extends LitElement {
     private tripEndpointLayers: L.CircleMarker[] = [];
     @state() private panelCollapsed = false;
     @state() private panelExpanded = true;
+    @state() private denseCards = false;
+    @state() private searchOpen = false;
     @state() private refreshing = false;
 
     private centerMap() {
@@ -571,6 +573,7 @@ export class FleetOverviewView extends LitElement {
                 }
                 .vehicles-panel.narrow { width: 96px; }
                 .vehicles-panel.narrow .panel-header { display: none; }
+                .vehicles-panel.narrow .group-filter { display: none; }
                 .vehicles-panel.narrow .vehicle-list { padding: 8px; gap: 8px; }
             }
 
@@ -664,6 +667,7 @@ export class FleetOverviewView extends LitElement {
                 border-bottom: 1px solid var(--outline-variant);
             }
             .panel-header h3 { font: var(--type-headline-md); color: var(--primary); }
+            .panel-header-actions { display: flex; align-items: center; gap: 4px; }
             .panel-header button {
                 color: var(--primary);
                 background: none;
@@ -673,6 +677,69 @@ export class FleetOverviewView extends LitElement {
                 transition: background 0.15s ease;
             }
             .panel-header button:hover { background: var(--surface-container-high); }
+            .panel-header button.search-active { color: var(--secondary); }
+
+            .vehicle-card-dense {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 8px 12px;
+                border-radius: var(--radius-md);
+                border: 1px solid var(--outline-variant);
+                background: var(--surface-container-low);
+                text-decoration: none;
+                color: inherit;
+                position: relative;
+                cursor: pointer;
+                transition: border-color 0.15s ease;
+            }
+            .vehicle-card-dense:hover { border-color: rgba(255, 255, 255, 0.5); }
+            .vehicle-card-dense.offline { border-color: rgba(255, 180, 171, 0.2); }
+            .vehicle-card-dense.offline:hover { border-color: rgba(255, 180, 171, 0.5); }
+            .vehicle-card-dense .zoom-btn {
+                position: relative;
+                top: auto; right: auto;
+                margin-left: auto;
+                width: 24px; height: 24px;
+                flex-shrink: 0;
+            }
+            .vehicle-card-dense .zoom-btn .material-symbols-outlined { font-size: 14px; }
+            .dense-token {
+                position: relative;
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                flex-shrink: 0;
+                font-family: var(--font-mono);
+                font-size: 11px;
+                color: var(--on-surface-variant);
+                background: var(--surface-container-high);
+                border: 1px solid var(--outline-variant);
+                border-radius: var(--radius-sm);
+                padding: 3px 7px;
+            }
+            .dense-token .status-dot {
+                position: static;
+                width: 7px;
+                height: 7px;
+                border: none;
+                flex-shrink: 0;
+            }
+            .vehicle-card-dense.offline .dense-token { opacity: 0.5; }
+            .dense-title {
+                font: var(--type-body-sm);
+                font-weight: 500;
+                color: var(--primary);
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                flex: 1;
+                min-width: 0;
+                display: flex;
+                align-items: center;
+                gap: 4px;
+            }
+            .dense-title .favorite-star { font-size: 13px; flex-shrink: 0; }
 
             .search-filter {
                 display: flex;
@@ -1007,6 +1074,28 @@ export class FleetOverviewView extends LitElement {
         `;
     }
 
+    private renderDenseCard(v: VehicleCard) {
+        const cls = v.online ? 'vehicle-card-dense' : 'vehicle-card-dense offline';
+        return html`
+            <a class=${cls} href="#/${this.tenantId}/vehicles/${v.tokenId}" title=${v.title}
+               @click=${(e: MouseEvent) => { if (!e.metaKey && !e.ctrlKey) { e.preventDefault(); this.openQuickView(v); } }}>
+                <div class="dense-token">
+                    <span class="status-dot ${this.statusClass(v)}"></span>
+                    <span>#${v.tokenId}</span>
+                </div>
+                <span class="dense-title">
+                    ${v.isFavorite ? html`<span class="material-symbols-outlined favorite-star">star</span>` : ''}
+                    ${v.title}
+                </span>
+                ${this.markers.has(v.tokenId) ? html`
+                    <button class="zoom-btn" title="${msg('Zoom to vehicle')}" @click=${(e: Event) => this.zoomToVehicle(e, v.tokenId)}>
+                        <span class="material-symbols-outlined">my_location</span>
+                    </button>
+                ` : ''}
+            </a>
+        `;
+    }
+
     render() {
         return html`
             <header class="top-bar">
@@ -1072,9 +1161,26 @@ export class FleetOverviewView extends LitElement {
                 <div class="drag-handle" @click=${() => { this.panelCollapsed = false; }}><div></div></div>
                 <div class="panel-header">
                     <h3>${msg('Your cars')}</h3>
-                    <a href="#/${this.tenantId}/groups" title="${msg('Manage groups')}">
-                        <button><span class="material-symbols-outlined">workspaces</span></button>
-                    </a>
+                    <div class="panel-header-actions">
+                        <button
+                            class=${this.searchOpen || this.searchQuery ? 'search-active' : ''}
+                            title=${this.searchOpen ? msg('Close search') : msg('Search vehicles')}
+                            @click=${() => this.searchOpen ? this.closeSearch() : this.openSearch()}
+                        >
+                            <span class="material-symbols-outlined">search</span>
+                        </button>
+                        <button
+                            title=${this.denseCards ? msg('Comfortable view') : msg('Compact view')}
+                            @click=${() => { this.denseCards = !this.denseCards; }}
+                        >
+                            <span class="material-symbols-outlined">
+                                ${this.denseCards ? 'density_large' : 'density_small'}
+                            </span>
+                        </button>
+                        <a href="#/${this.tenantId}/groups" title="${msg('Manage groups')}">
+                            <button><span class="material-symbols-outlined">workspaces</span></button>
+                        </a>
+                    </div>
                 </div>
                 ${this.renderSearch()}
                 ${this.renderGroupFilter()}
@@ -1085,8 +1191,20 @@ export class FleetOverviewView extends LitElement {
         `;
     }
 
+    private async openSearch() {
+        this.searchOpen = true;
+        await this.updateComplete;
+        this.renderRoot.querySelector<HTMLInputElement>('.search-filter input')?.focus();
+    }
+
+    private closeSearch() {
+        this.searchOpen = false;
+        this.searchQuery = '';
+        this.placeMarkers();
+    }
+
     private renderSearch() {
-        if (this.vehicles.length === 0) return nothing;
+        if (!this.searchOpen) return nothing;
         return html`
             <div class="search-filter">
                 <span class="material-symbols-outlined">search</span>
@@ -1098,14 +1216,12 @@ export class FleetOverviewView extends LitElement {
                         this.searchQuery = (e.target as HTMLInputElement).value;
                         this.placeMarkers();
                     }}
+                    @keydown=${(e: KeyboardEvent) => { if (e.key === 'Escape') this.closeSearch(); }}
                 />
-                ${this.searchQuery
-                    ? html`
-                        <button class="clear" title="${msg('Clear search')}"
-                            @click=${() => { this.searchQuery = ''; this.placeMarkers(); }}>
-                            <span class="material-symbols-outlined">close</span>
-                        </button>`
-                    : nothing}
+                <button class="clear" title="${msg('Close search')}"
+                    @click=${() => this.closeSearch()}>
+                    <span class="material-symbols-outlined">close</span>
+                </button>
             </div>
         `;
     }
@@ -1137,7 +1253,9 @@ export class FleetOverviewView extends LitElement {
             }
             return html`<p class="empty-state">${this.selectedGroupId ? msg('No vehicles in this group.') : msg('No vehicles found on this account.')}</p>`;
         }
-        return cards.map((c) => this.panelExpanded ? this.renderCard(c) : this.renderCompactCard(c));
+        if (!this.panelExpanded) return cards.map((c) => this.renderCompactCard(c));
+        if (this.denseCards) return cards.map((c) => this.renderDenseCard(c));
+        return cards.map((c) => this.renderCard(c));
     }
 }
 
