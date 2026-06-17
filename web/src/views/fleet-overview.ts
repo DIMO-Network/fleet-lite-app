@@ -333,6 +333,7 @@ export class FleetOverviewView extends LitElement {
 
     private updateMinZoom() {
         if (!this.leafletMap) return;
+        this.leafletMap.invalidateSize();
         // Tiles are 256px at zoom 0; minZoom must ensure world width >= container width.
         const w = this.leafletMap.getContainer().clientWidth;
         const minZoom = Math.ceil(Math.log2(w / 256));
