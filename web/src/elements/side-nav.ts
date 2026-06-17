@@ -32,7 +32,7 @@ export class SideNav extends LitElement {
                 flex-direction: column;
                 width: var(--sidebar-width);
                 height: 100vh;
-                padding: var(--stack-md) var(--stack-sm);
+                padding: var(--stack-md);
                 background: var(--surface-container-low);
                 border-right: 1px solid var(--outline-variant);
                 flex-shrink: 0;
@@ -46,7 +46,7 @@ export class SideNav extends LitElement {
                 display: flex;
                 align-items: center;
                 gap: 12px;
-                padding: 0 16px;
+                padding: var(--stack-md) 8px;
                 margin-bottom: 32px;
             }
             .brand img {
@@ -123,7 +123,7 @@ export class SideNav extends LitElement {
     render() {
         return html`
             <div class="brand">
-                <img src="/assets/dimo-logo-d.png" alt="${msg('DIMO')}" />
+                <img src="/assets/logo.png" alt="${msg('DIMO')}" />
                 <div>
                     <h1>${msg('DIMO Dashboard')}</h1>
                     <p>${msg('Precision Telemetry')}</p>

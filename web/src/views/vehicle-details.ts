@@ -313,8 +313,8 @@ export class VehicleDetailsView extends LitElement {
                 position: sticky;
                 top: 0;
                 z-index: 10;
-                height: 80px;
-                width: 100%;
+                height: var(--top-bar-height, 80px);
+                flex-shrink: 0;
                 background: rgba(19, 19, 19, 0.8);
                 backdrop-filter: blur(12px);
                 -webkit-backdrop-filter: blur(12px);
@@ -329,9 +329,7 @@ export class VehicleDetailsView extends LitElement {
             header.top-bar nav { display: flex; gap: 24px; }
             header.top-bar nav a {
                 text-decoration: none;
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
+                font: var(--type-body-md);
                 color: var(--on-surface-variant);
                 padding-bottom: 4px;
             }

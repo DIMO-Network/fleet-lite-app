@@ -13,6 +13,7 @@ import '../views/glovebox.ts';
 import '../views/account-settings.ts';
 import '../views/onboard-tenant.ts';
 import '../views/groups-management.ts';
+import '../views/fleet-list-view.ts';
 
 type NavKey = 'vehicles' | 'stats' | 'groups' | 'glovebox' | 'settings';
 
@@ -66,7 +67,7 @@ export class AppRoot extends LitElement {
             { path: '/:tenantId/groups',              render: () => html`<groups-management-view .tenantId=${this.tenantId}></groups-management-view>` },
             { path: '/:tenantId/glovebox',            render: () => html`<glovebox-view .tenantId=${this.tenantId}></glovebox-view>` },
             { path: '/:tenantId/settings',            render: () => html`<account-settings-view .tenantId=${this.tenantId}></account-settings-view>` },
-            { path: '/:tenantId/stats',               render: () => html`<fleet-overview-view .tenantId=${this.tenantId}></fleet-overview-view>` },
+            { path: '/:tenantId/stats',               render: () => html`<fleet-list-view .tenantId=${this.tenantId}></fleet-list-view>` },
         ]);
     }
 

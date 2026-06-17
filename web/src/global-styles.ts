@@ -222,6 +222,9 @@ export const sharedStyles = css`
  * these apply to anything in light DOM (e.g. <body>, the <app-root> host).
  */
 const documentStyles = `
+    :root {
+        --top-bar-height: 80px;
+    }
     html, body {
         margin: 0;
         background: #131313;

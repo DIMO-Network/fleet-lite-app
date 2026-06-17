@@ -155,7 +155,9 @@ export class GloveboxView extends LitElement {
             @media (max-width: 768px)  { .list-panel { display: none; } }
 
             .list-header {
-                padding: var(--stack-lg) var(--margin-desktop);
+                height: var(--top-bar-height, 80px);
+                flex-shrink: 0;
+                padding: 0 var(--margin-desktop);
                 border-bottom: 1px solid var(--outline-variant);
                 background: rgba(19, 19, 19, 0.8);
                 backdrop-filter: blur(12px);
@@ -167,7 +169,7 @@ export class GloveboxView extends LitElement {
                 justify-content: space-between;
                 align-items: center;
             }
-            .list-header h1 { font: var(--type-headline-lg); color: var(--primary); letter-spacing: -0.01em; }
+            .list-header h1 { font: var(--type-headline-md); color: var(--primary); }
             .list-header button {
                 width: 40px; height: 40px;
                 border-radius: var(--radius-full);
