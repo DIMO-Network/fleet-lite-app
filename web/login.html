@@ -249,6 +249,13 @@
 <script type="module">
     import { isTokenExpired } from './src/utils/token.ts';
 
+    // After a successful login, an invitee with a stashed invite token returns
+    // to the accept page (which finishes binding their wallet); everyone else
+    // lands on the app root.
+    function postLoginDest() {
+        return localStorage.getItem('pendingInviteToken') ? '/accept-invite.html' : '/';
+    }
+
     const queryString = window.location.search;
 
     if (queryString === '') {
@@ -276,7 +283,7 @@
             if (noEmail && missing) {
                 missing.style.display = 'block';
             } else {
-                window.location.href = '/';
+                window.location.href = postLoginDest();
             }
             const input = document.getElementById('email');
             const btn = document.getElementById('submitEmail');
@@ -285,7 +292,7 @@
                     const v = input.value;
                     if (!v) { alert('Please enter a valid email address.'); return; }
                     localStorage.setItem('email', v);
-                    window.location.href = '/';
+                    window.location.href = postLoginDest();
                 });
             }
         });

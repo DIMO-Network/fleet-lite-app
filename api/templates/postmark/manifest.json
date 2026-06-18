@@ -1,0 +1,11 @@
+{
+  "templates": [
+    {
+      "alias": "fleet-invitation",
+      "name": "Fleet Lite — Member Invitation",
+      "subject": "You've been invited to {{tenant_name}} on DIMO Fleet",
+      "htmlFile": "invitation.html",
+      "textFile": "invitation.txt"
+    }
+  ]
+}

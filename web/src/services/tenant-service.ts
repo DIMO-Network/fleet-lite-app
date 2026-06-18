@@ -23,6 +23,28 @@ interface MembersResponse {
     members: Member[];
 }
 
+export interface Invitation {
+    id: string;
+    email: string;
+    role: string;
+    /** pending | accepted | revoked */
+    status: string;
+    /** Wallet of the owner who issued the invite. */
+    invitedBy?: string;
+    createdAt: string;
+    expiresAt: string;
+    acceptedAt?: string;
+}
+
+interface InvitationsResponse {
+    invitations: Invitation[];
+}
+
+interface AcceptInviteResponse {
+    ok: boolean;
+    tenantId: string;
+}
+
 export const ROLE_OWNER = 'owner';
 export const ROLE_MEMBER = 'member';
 
@@ -99,6 +121,50 @@ export class TenantService {
         await ApiService.getInstance().delete(
             `/tenants/${encodeURIComponent(tenantId)}/members/${encodeURIComponent(wallet)}`,
         );
+    }
+
+    /** GET /tenants/:id/invitations — every invitation for the tenant. */
+    public async fetchInvitations(tenantId: string): Promise<Invitation[]> {
+        const res = await ApiService.getInstance().get<InvitationsResponse>(
+            `/tenants/${encodeURIComponent(tenantId)}/invitations`,
+        );
+        return res.invitations ?? [];
+    }
+
+    /** POST /tenants/:id/invitations — owner-only; email an invite + accept link. */
+    public async createInvitation(tenantId: string, email: string, role: string = ROLE_MEMBER): Promise<void> {
+        await ApiService.getInstance().post(
+            `/tenants/${encodeURIComponent(tenantId)}/invitations`,
+            { email, role },
+        );
+    }
+
+    /** DELETE /tenants/:id/invitations/:invId — owner-only; revoke a pending invite. */
+    public async revokeInvitation(tenantId: string, invitationId: string): Promise<void> {
+        await ApiService.getInstance().delete(
+            `/tenants/${encodeURIComponent(tenantId)}/invitations/${encodeURIComponent(invitationId)}`,
+        );
+    }
+
+    /** POST /tenants/:id/invitations/:invId/resend — owner-only; re-send a pending invite. */
+    public async resendInvitation(tenantId: string, invitationId: string): Promise<void> {
+        await ApiService.getInstance().post(
+            `/tenants/${encodeURIComponent(tenantId)}/invitations/${encodeURIComponent(invitationId)}/resend`,
+            {},
+        );
+    }
+
+    /**
+     * POST /invitations/accept — bind the logged-in wallet to the tenant the
+     * token belongs to. JWT-authenticated (the invitee must be signed in); the
+     * token is the authorization and resolves the tenant. Returns the tenant id.
+     */
+    public async acceptInvitation(token: string): Promise<string> {
+        const res = await ApiService.getInstance().post<AcceptInviteResponse>(
+            '/invitations/accept',
+            { token },
+        );
+        return res.tenantId;
     }
 }
 

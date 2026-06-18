@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/x-icon" href="https://www.dimo.org/img/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FLEET_LITE_OS — Accept invitation</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+    <script type="module" src="./src/accept-invite.ts"></script>
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --surface:                #131313;
+            --surface-container-low:  #1c1b1b;
+            --on-surface:             #e5e2e1;
+            --on-surface-variant:     #c4c7c8;
+            --outline-variant:        #444748;
+            --secondary:              #ffb691;
+            --error:                  #ffb4ab;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--surface);
+            color: var(--on-surface);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+        .card {
+            width: 100%;
+            max-width: 420px;
+            text-align: center;
+            background: var(--surface-container-low);
+            border: 1px solid var(--outline-variant);
+            border-radius: 16px;
+            padding: 40px 32px;
+        }
+        .brand-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--secondary);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: 24px;
+        }
+        h1 { font-size: 22px; font-weight: 600; margin-bottom: 10px; }
+        p { font-size: 14px; color: var(--on-surface-variant); line-height: 1.6; }
+        .spacer { margin-top: 24px; }
+        .error-text { color: var(--error); }
+        .footer {
+            margin-top: 32px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--on-surface-variant);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+        .footer a { color: var(--secondary); text-decoration: none; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <div class="brand-label">FLEET_LITE_OS</div>
+
+    <div id="view-loading">
+        <h1>Joining…</h1>
+        <p>Accepting your invitation, one moment.</p>
+    </div>
+
+    <div id="view-login" style="display: none;">
+        <h1>You've been invited</h1>
+        <p>Sign in with your DIMO account to join this fleet.</p>
+        <div class="spacer">
+            <login-element></login-element>
+        </div>
+    </div>
+
+    <div id="view-success" style="display: none;">
+        <h1>You're in</h1>
+        <p>Invitation accepted — taking you to the fleet.</p>
+    </div>
+
+    <div id="view-error" style="display: none;">
+        <h1>Invitation problem</h1>
+        <p class="error-text" id="error-message">This invitation is invalid, already used, or expired.</p>
+        <p class="spacer"><a href="/" style="color: var(--secondary); text-decoration: none;">Go to FLEET_LITE_OS</a></p>
+    </div>
+
+    <div class="footer">
+        Powered by <a href="https://dimo.org" target="_blank" rel="noopener">DIMO</a>
+    </div>
+</div>
+</body>
+</html>
