@@ -1,6 +1,6 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, state, property } from 'lit/decorators.js';
-import { msg } from '@lit/localize';
+import { msg, str } from '@lit/localize';
 import { sharedStyles } from '../global-styles.ts';
 import { ApiService } from '../services/api-service.ts';
 import { TelemetryService } from '../services/telemetry-service.ts';
@@ -282,7 +282,7 @@ export class FleetListView extends LitElement {
                     </select>
                 ` : nothing}
                 <span class="vehicle-count">
-                    ${this.loading ? '' : msg(`${this.visibleCards().length} vehicles`)}
+                    ${this.loading ? '' : msg(str`${this.visibleCards().length} vehicles`)}
                 </span>
                 <button
                     class="refresh-btn ${this.refreshing ? 'spinning' : ''}"

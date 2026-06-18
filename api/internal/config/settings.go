@@ -49,6 +49,19 @@ type Settings struct {
 	// Chain
 	ChainID           int64          `yaml:"CHAIN_ID"`
 	VehicleNftAddress common.Address `yaml:"VEHICLE_NFT_ADDRESS"`
+
+	// Member invitations (Postmark transactional email).
+	// PostmarkServerToken authenticates against the Postmark API (server-scoped).
+	// InvitationFromEmail must be a verified Postmark sender signature/domain.
+	// InvitationTemplateAlias is the Postmark template alias the invite email uses
+	// (see api/templates/postmark, pushed via `make push-postmark-templates`).
+	// AppBaseURL is the public origin used to build the accept link.
+	// InviteExpiryHours bounds how long an invite token stays valid.
+	PostmarkServerToken     string  `yaml:"POSTMARK_SERVER_TOKEN"` // secret
+	InvitationFromEmail     string  `yaml:"INVITATION_FROM_EMAIL"`
+	InvitationTemplateAlias string  `yaml:"POSTMARK_INVITATION_TEMPLATE_ALIAS"`
+	AppBaseURL              url.URL `yaml:"APP_BASE_URL"`
+	InviteExpiryHours       int     `yaml:"INVITE_EXPIRY_HOURS"`
 }
 
 func (s *Settings) IsProduction() bool {

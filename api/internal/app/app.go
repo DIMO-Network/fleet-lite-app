@@ -37,6 +37,7 @@ func App(
 	tenantSvc *service.TenantService,
 	vehicleSvc *service.VehicleService,
 	groupSvc *service.FleetGroupService,
+	invitationSvc *service.InvitationService,
 ) *fiber.App {
 	appCommitHash = commitHash
 
@@ -76,6 +77,7 @@ func App(
 	fleetGroupsCtrl := controllers.NewFleetGroupsController(logger, groupSvc, groupSyncSvc, attestSvc)
 	settingsCtrl := controllers.NewSettingsController(settings, logger)
 	tenantsCtrl := controllers.NewTenantsController(logger, settings, tenantSvc, vehicleSvc, identity, authProvider)
+	invitationsCtrl := controllers.NewInvitationsController(logger, tenantSvc, invitationSvc)
 
 	// Public endpoints (no auth)
 	app.Get("/public/settings", settingsCtrl.GetPublicSettings)
@@ -101,6 +103,16 @@ func App(
 	authApp.Post("/tenants/:id/members", tenantsCtrl.AddMember)
 	authApp.Delete("/tenants/:id/members/:wallet", tenantsCtrl.RemoveMember)
 	authApp.Post("/tenants/:id/login", tenantsCtrl.LoginTouch)
+
+	// Member invitations. Create/list/revoke/resend authorize against the :id
+	// path tenant (owner-only except list). Accept is JWT-only and NOT
+	// membership-gated — the invitee isn't a member yet; the token authorizes it
+	// and resolves the tenant, so it carries no :id.
+	authApp.Post("/tenants/:id/invitations", invitationsCtrl.CreateInvitation)
+	authApp.Get("/tenants/:id/invitations", invitationsCtrl.ListInvitations)
+	authApp.Delete("/tenants/:id/invitations/:invID", invitationsCtrl.RevokeInvitation)
+	authApp.Post("/tenants/:id/invitations/:invID/resend", invitationsCtrl.ResendInvitation)
+	authApp.Post("/invitations/accept", invitationsCtrl.AcceptInvitation)
 
 	// Tenant-scoped data routes (JWT + Tenant-Id header membership check).
 	tenantApp := authApp.Group("", NewTenantMiddleware(tenantSvc, logger))

@@ -39,6 +39,7 @@ env:
   TELEMETRY_API_URL: http://telemetry-api-prod.prod.svc.cluster.local:8080/query
   CHAIN_ID: '137'
   VEHICLE_NFT_ADDRESS: '0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF'
+  INVITATION_FROM_EMAIL: 'no-reply@dimo.org'             # must be a verified Postmark sender
 service:
   type: ClusterIP
   ports:
