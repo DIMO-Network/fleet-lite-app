@@ -3,6 +3,8 @@ import { customElement, state, property } from 'lit/decorators.js';
 import { msg } from '@lit/localize';
 import L from 'leaflet';
 import leafletCss from 'leaflet/dist/leaflet.css?inline';
+import 'leaflet.markercluster';
+import markerClusterCss from 'leaflet.markercluster/dist/MarkerCluster.css?inline';
 import { sharedStyles } from '../global-styles.ts';
 import { ApiService } from '../services/api-service.ts';
 import { TelemetryService } from '../services/telemetry-service.ts';
@@ -27,6 +29,7 @@ export class FleetOverviewView extends LitElement {
     @state() private errorMessage: string | null = null;
 
     private leafletMap: L.Map | null = null;
+    private clusterGroup: L.MarkerClusterGroup | null = null;
     private markers = new Map<string, L.CircleMarker>();
     private lastLocations: Record<string, { lat: number; lon: number }> = {};
     private resizeObserver: ResizeObserver | null = null;
@@ -68,11 +71,13 @@ export class FleetOverviewView extends LitElement {
         e.preventDefault();
         e.stopPropagation();
         const marker = this.markers.get(tokenId);
-        if (!marker || !this.leafletMap) return;
-        this.leafletMap.flyTo(marker.getLatLng(), 14);
+        if (!marker || !this.leafletMap || !this.clusterGroup) return;
         if (window.innerWidth < 768) {
             this.panelCollapsed = true;
         }
+        this.clusterGroup.zoomToShowLayer(marker, () => {
+            this.leafletMap!.flyTo(marker.getLatLng(), Math.max(this.leafletMap!.getZoom(), 14));
+        });
     }
 
     /** Default and selected circle-marker styles for the quick-view highlight. */
@@ -205,7 +210,7 @@ export class FleetOverviewView extends LitElement {
                     marker.setStyle(FleetOverviewView.MARKER_STYLE);
                 }
             });
-            marker.addTo(this.leafletMap);
+            this.clusterGroup!.addLayer(marker);
             this.markers.set(tokenId, marker);
         }
     }
@@ -213,7 +218,7 @@ export class FleetOverviewView extends LitElement {
     /** (Re)place map markers from `this.vehicles` + `this.lastLocations`. No-op until the map exists. */
     private placeMarkers() {
         if (!this.leafletMap) return;
-        this.markers.forEach((m) => m.remove());
+        this.clusterGroup!.clearLayers();
         this.markers.clear();
         this.addMarkers(this.lastLocations);
 
@@ -340,6 +345,17 @@ export class FleetOverviewView extends LitElement {
         }
     }
 
+    private clusterIcon(count: number): L.DivIcon {
+        const size = count < 10 ? 32 : count < 50 ? 40 : 48;
+        const total = size + 12;
+        return L.divIcon({
+            html: `<div style="width:${size}px;height:${size}px;background:#69dbad;border:2px solid #1a2332;border-radius:50%;box-shadow:0 0 0 6px rgba(105,219,173,0.25);display:flex;align-items:center;justify-content:center;font-size:${size < 40 ? 11 : 13}px;font-weight:600;color:#1a2332;">${count}</div>`,
+            className: '',
+            iconSize: [total, total],
+            iconAnchor: [total / 2, total / 2],
+        });
+    }
+
     override firstUpdated() {
         const el = this.renderRoot.querySelector<HTMLElement>('.map');
         if (!el) return;
@@ -359,6 +375,16 @@ export class FleetOverviewView extends LitElement {
             maxZoom: 19,
         }).addTo(this.leafletMap);
 
+        this.clusterGroup = L.markerClusterGroup({
+            iconCreateFunction: (cluster) => this.clusterIcon(cluster.getChildCount()),
+            showCoverageOnHover: false,
+            zoomToBoundsOnClick: true,
+            spiderfyOnMaxZoom: true,
+            maxClusterRadius: 60,
+            animate: true,
+        });
+        this.clusterGroup.addTo(this.leafletMap);
+
         this.resizeObserver = new ResizeObserver(() => this.updateMinZoom());
         this.resizeObserver.observe(el);
         this.updateMinZoom();
@@ -375,6 +401,7 @@ export class FleetOverviewView extends LitElement {
         this.markers.clear();
         this.leafletMap?.remove();
         this.leafletMap = null;
+        this.clusterGroup = null;
     }
 
     /** Distinct groups across all vehicles, for the filter dropdown (by name). */
@@ -412,6 +439,7 @@ export class FleetOverviewView extends LitElement {
     static styles = [
         sharedStyles,
         unsafeCSS(leafletCss),
+        unsafeCSS(markerClusterCss),
         css`
             :host {
                 display: flex;
