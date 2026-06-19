@@ -1,81 +1,12 @@
 import { css } from 'lit';
 
-/**
- * Fleet-Lite design tokens — derived from
- *   stitch_fleet-lite-dimo/obsidian_telemetry/DESIGN.md
- *   stitch_fleet-lite-dimo/fleet_overview/code.html (embedded tailwind.config)
- *
- * The Stitch HTML uses Tailwind via CDN; we do not ship Tailwind at runtime.
- * Each Lit element pulls `sharedStyles` into its `static styles` and may add
- * scoped CSS on top.
- */
 export const sharedStyles = css`
     :host {
-        /* ---------------- Surface / Material 3 roles ---------------- */
-        --surface: #131313;
-        --surface-dim: #131313;
-        --surface-bright: #393939;
-        --surface-container-lowest: #0e0e0e;
-        --surface-container-low: #1c1b1b;
-        --surface-container: #201f1f;
-        --surface-container-high: #2a2a2a;
-        --surface-container-highest: #353534;
-        --surface-variant: #353534;
-        --surface-tint: #c6c6c7;
-        --background: #131313;
-        --on-background: #e5e2e1;
-        --on-surface: #e5e2e1;
-        --on-surface-variant: #c4c7c8;
-        --inverse-surface: #e5e2e1;
-        --inverse-on-surface: #313030;
-
-        /* ---------------- Outlines ---------------- */
-        --outline: #8e9192;
-        --outline-variant: #444748;
-
-        /* ---------------- Primary (mono white) ---------------- */
-        --primary: #ffffff;
-        --on-primary: #2f3131;
-        --primary-container: #e2e2e2;
-        --on-primary-container: #636565;
-        --inverse-primary: #5d5f5f;
-        --primary-fixed: #e2e2e2;
-        --primary-fixed-dim: #c6c6c7;
-        --on-primary-fixed: #1a1c1c;
-        --on-primary-fixed-variant: #454747;
-
-        /* ---------------- Secondary (kinetic orange) ---------------- */
-        --secondary: #ffb691;
-        --on-secondary: #552000;
-        --secondary-container: #ea6b18;
-        --on-secondary-container: #4a1b00;
-        --secondary-fixed: #ffdbcb;
-        --secondary-fixed-dim: #ffb691;
-        --on-secondary-fixed: #341100;
-        --on-secondary-fixed-variant: #793100;
-
-        /* ---------------- Tertiary (status green) ---------------- */
-        --tertiary: #ffffff;
-        --on-tertiary: #003827;
-        --tertiary-container: #86f8c8;
-        --on-tertiary-container: #007352;
-        --tertiary-fixed: #86f8c8;
-        --tertiary-fixed-dim: #69dbad;
-        --on-tertiary-fixed: #002115;
-        --on-tertiary-fixed-variant: #005139;
-
-        /* ---------------- Error ---------------- */
-        --error: #ffb4ab;
-        --on-error: #690005;
-        --error-container: #93000a;
-        --on-error-container: #ffdad6;
-
         /* ---------------- Typography ---------------- */
         --font-headline: 'Inter', sans-serif;
         --font-body: 'Inter', sans-serif;
         --font-mono: 'JetBrains Mono', monospace;
 
-        /* type scale: [size, line-height, letter-spacing, weight] */
         --type-headline-xl: 700 40px/48px var(--font-headline);
         --type-headline-lg: 600 32px/40px var(--font-headline);
         --type-headline-md: 600 24px/32px var(--font-headline);
@@ -203,7 +134,7 @@ export const sharedStyles = css`
 
     /* ---------------- Glass panel (used by the map overlay list) ---------------- */
     .glass-panel {
-        background: rgba(28, 27, 27, 0.85);
+        background: var(--glass-bg);
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
     }
@@ -224,11 +155,108 @@ export const sharedStyles = css`
 const documentStyles = `
     :root {
         --top-bar-height: 80px;
+
+        /* ---------------- Surface / Material 3 roles ---------------- */
+        --surface: #131313;
+        --surface-dim: #131313;
+        --surface-bright: #393939;
+        --surface-container-lowest: #0e0e0e;
+        --surface-container-low: #1c1b1b;
+        --surface-container: #201f1f;
+        --surface-container-high: #2a2a2a;
+        --surface-container-highest: #353534;
+        --surface-variant: #353534;
+        --surface-tint: #c6c6c7;
+        --background: #131313;
+        --on-background: #e5e2e1;
+        --on-surface: #e5e2e1;
+        --on-surface-variant: #c4c7c8;
+        --inverse-surface: #e5e2e1;
+        --inverse-on-surface: #313030;
+
+        /* ---------------- Outlines ---------------- */
+        --outline: #8e9192;
+        --outline-variant: #444748;
+
+        /* ---------------- Primary (mono white) ---------------- */
+        --primary: #ffffff;
+        --on-primary: #2f3131;
+        --primary-container: #e2e2e2;
+        --on-primary-container: #636565;
+        --inverse-primary: #5d5f5f;
+        --primary-fixed: #e2e2e2;
+        --primary-fixed-dim: #c6c6c7;
+        --on-primary-fixed: #1a1c1c;
+        --on-primary-fixed-variant: #454747;
+
+        /* ---------------- Secondary (kinetic orange) ---------------- */
+        --secondary: #ffb691;
+        --on-secondary: #552000;
+        --secondary-container: #ea6b18;
+        --on-secondary-container: #4a1b00;
+        --secondary-fixed: #ffdbcb;
+        --secondary-fixed-dim: #ffb691;
+        --on-secondary-fixed: #341100;
+        --on-secondary-fixed-variant: #793100;
+
+        /* ---------------- Tertiary (status green) ---------------- */
+        --tertiary: #ffffff;
+        --on-tertiary: #003827;
+        --tertiary-container: #86f8c8;
+        --on-tertiary-container: #007352;
+        --tertiary-fixed: #86f8c8;
+        --tertiary-fixed-dim: #69dbad;
+        --on-tertiary-fixed: #002115;
+        --on-tertiary-fixed-variant: #005139;
+
+        /* ---------------- Error ---------------- */
+        --error: #ffb4ab;
+        --on-error: #690005;
+        --error-container: #93000a;
+        --on-error-container: #ffdad6;
+
+        /* ---------------- Glass ---------------- */
+        --glass-bg: rgba(28, 27, 27, 0.85);
     }
+
+    :root[data-theme="light"] {
+        /* ---------------- Surface / Material 3 roles ---------------- */
+        --surface: #f8f8f8;
+        --surface-dim: #efefef;
+        --surface-bright: #ffffff;
+        --surface-container-lowest: #ffffff;
+        --surface-container-low: #f2f2f2;
+        --surface-container: #ebebeb;
+        --surface-container-high: #e2e2e2;
+        --surface-container-highest: #d9d9d9;
+        --surface-variant: #e0e0e0;
+        --surface-tint: #5d5f5f;
+        --background: #f8f8f8;
+        --on-background: #1a1a1a;
+        --on-surface: #1a1a1a;
+        --on-surface-variant: #444748;
+        --inverse-surface: #2f3131;
+        --inverse-on-surface: #f0f0f0;
+
+        /* ---------------- Outlines ---------------- */
+        --outline: #6e7172;
+        --outline-variant: #c4c7c8;
+
+        /* ---------------- Primary (mono black in light) ---------------- */
+        --primary: #1a1a1a;
+        --on-primary: #ffffff;
+        --primary-container: #2f3131;
+        --on-primary-container: #e0e0e0;
+        --inverse-primary: #c6c6c7;
+
+        /* ---------------- Glass ---------------- */
+        --glass-bg: rgba(248, 248, 248, 0.85);
+    }
+
     html, body {
         margin: 0;
-        background: #131313;
-        color: #e5e2e1;
+        background: var(--surface);
+        color: var(--on-surface);
         font-family: 'Inter', sans-serif;
         height: 100%;
     }
