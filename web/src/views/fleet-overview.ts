@@ -515,13 +515,36 @@ export class FleetOverviewView extends LitElement {
             }
             header.top-bar .right { display: flex; align-items: center; gap: 16px; }
             header.top-bar .live-tracking {
-                background: var(--primary);
-                color: var(--on-primary);
+                background: transparent;
+                color: var(--on-surface-variant);
+                border: 1px solid var(--outline-variant);
                 padding: 8px 16px;
                 border-radius: var(--radius-md);
                 font: var(--type-label-caps);
                 letter-spacing: 0.05em;
                 text-transform: uppercase;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                cursor: pointer;
+                transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+            }
+            header.top-bar .live-tracking.active {
+                background: var(--primary);
+                color: var(--on-primary);
+                border-color: var(--primary);
+            }
+            header.top-bar .live-dot {
+                width: 7px;
+                height: 7px;
+                border-radius: 50%;
+                background: currentColor;
+                animation: live-pulse 1.4s ease-in-out infinite;
+                flex-shrink: 0;
+            }
+            @keyframes live-pulse {
+                0%, 100% { opacity: 1; transform: scale(1); }
+                50% { opacity: 0.35; transform: scale(0.65); }
             }
             header.top-bar .icon-btn {
                 color: var(--on-surface-variant);
@@ -1177,7 +1200,14 @@ export class FleetOverviewView extends LitElement {
                 </div>
                 <div class="right">
                     <tenant-switcher .currentTenantId=${this.tenantId}></tenant-switcher>
-                    <button class="live-tracking">${msg('Live Tracking')}</button>
+                    <button
+                        class="live-tracking ${this.autoRefresh ? 'active' : ''}"
+                        title=${this.autoRefresh ? msg('Stop auto-refresh') : msg('Start auto-refresh')}
+                        @click=${() => this.toggleAutoRefresh()}
+                    >
+                        ${this.autoRefresh ? html`<span class="live-dot"></span>` : ''}
+                        ${msg('Live Tracking')}
+                    </button>
                     <button class="icon-btn"><span class="material-symbols-outlined">notifications</span></button>
                     <button class="icon-btn"><span class="material-symbols-outlined">account_circle</span></button>
                 </div>
