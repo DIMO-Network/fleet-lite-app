@@ -1,6 +1,7 @@
 import { LitElement, html, css } from 'lit';
 import { msg } from '@lit/localize';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
+import { themeService } from '../services/theme-service.ts';
 import { sharedStyles } from '../global-styles.ts';
 import { logout } from '../utils/token.ts';
 
@@ -24,10 +25,23 @@ export class SideNav extends LitElement {
     @property({ type: String }) active: NavKey = 'vehicles';
     @property({ type: String }) tenantId = '';
     @property({ type: Boolean, reflect: true }) collapsed = false;
+    @state() private theme: 'dark' | 'light' = 'dark';
+
+    private boundOnThemeChange = (e: Event) => {
+        this.theme = (e as CustomEvent<{ theme: 'dark' | 'light' }>).detail.theme;
+    };
 
     connectedCallback() {
         super.connectedCallback();
         this.collapsed = localStorage.getItem('sidebar-collapsed') === 'true';
+        themeService.init();
+        this.theme = themeService.current;
+        window.addEventListener('theme-change', this.boundOnThemeChange);
+    }
+
+    disconnectedCallback() {
+        window.removeEventListener('theme-change', this.boundOnThemeChange);
+        super.disconnectedCallback();
     }
 
     private toggle() {
@@ -169,6 +183,31 @@ export class SideNav extends LitElement {
                 flex-direction: column;
                 gap: 8px;
             }
+            button.theme-toggle {
+                width: 100%;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 12px 16px;
+                border-radius: var(--radius-md);
+                color: var(--on-surface-variant);
+                transition: background 0.15s ease, color 0.15s ease;
+                font: var(--type-label-caps);
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+            }
+            button.theme-toggle:hover {
+                background: var(--surface-container-high);
+                color: var(--primary);
+            }
+            :host([collapsed]) button.theme-toggle {
+                justify-content: center;
+                padding: 12px 0;
+                gap: 0;
+            }
+            :host([collapsed]) button.theme-toggle span.label {
+                display: none;
+            }
         `,
     ];
 
@@ -202,6 +241,18 @@ export class SideNav extends LitElement {
                 ${ITEMS.map(i => this.item(i.key, i.icon, i.label(), i.suffix))}
             </nav>
             <div class="footer">
+                <button
+                    class="theme-toggle"
+                    title=${this.theme === 'dark' ? msg('Switch to light mode') : msg('Switch to dark mode')}
+                    @click=${() => themeService.toggle()}
+                >
+                    <span class="material-symbols-outlined">
+                        ${this.theme === 'dark' ? 'light_mode' : 'dark_mode'}
+                    </span>
+                    <span class="label">
+                        ${this.theme === 'dark' ? msg('Light Mode') : msg('Dark Mode')}
+                    </span>
+                </button>
                 <a class="nav-item" href="#/${this.tenantId}/settings"
                    title=${this.collapsed ? msg('Support') : ''}>
                     <span class="material-symbols-outlined">help</span>
