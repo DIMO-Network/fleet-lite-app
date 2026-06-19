@@ -315,7 +315,7 @@ export class VehicleDetailsView extends LitElement {
                 z-index: 10;
                 height: var(--top-bar-height, 80px);
                 flex-shrink: 0;
-                background: rgba(19, 19, 19, 0.8);
+                background: var(--glass-bg);
                 backdrop-filter: blur(12px);
                 -webkit-backdrop-filter: blur(12px);
                 display: flex;

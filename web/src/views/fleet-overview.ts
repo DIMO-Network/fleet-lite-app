@@ -521,7 +521,7 @@ export class FleetOverviewView extends LitElement {
                 padding: 0 var(--gutter);
                 border-bottom: 1px solid var(--outline-variant);
                 z-index: 40;
-                background: rgba(28, 27, 27, 0.85);
+                background: var(--glass-bg);
                 backdrop-filter: blur(12px);
                 -webkit-backdrop-filter: blur(12px);
             }
@@ -668,7 +668,7 @@ export class FleetOverviewView extends LitElement {
                 left: 0;
                 right: 0;
                 z-index: 20;
-                background: rgba(28, 27, 27, 0.85);
+                background: var(--glass-bg);
                 backdrop-filter: blur(12px);
                 -webkit-backdrop-filter: blur(12px);
                 border: 1px solid var(--outline-variant);

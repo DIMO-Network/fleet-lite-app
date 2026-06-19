@@ -159,7 +159,7 @@ export class GloveboxView extends LitElement {
                 flex-shrink: 0;
                 padding: 0 var(--margin-desktop);
                 border-bottom: 1px solid var(--outline-variant);
-                background: rgba(19, 19, 19, 0.8);
+                background: var(--glass-bg);
                 backdrop-filter: blur(12px);
                 -webkit-backdrop-filter: blur(12px);
                 position: sticky;
