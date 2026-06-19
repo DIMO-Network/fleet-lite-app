@@ -4,6 +4,7 @@ import { msg } from '@lit/localize';
 import L from 'leaflet';
 import leafletCss from 'leaflet/dist/leaflet.css?inline';
 import { sharedStyles } from '../global-styles.ts';
+import { themeService } from '../services/theme-service.ts';
 import { TelemetryService } from '../services/telemetry-service.ts';
 import { PrefsService, TripMechanism } from '../services/prefs-service.ts';
 import { formatDistance, formatSpeed } from '../utils/units.ts';
@@ -47,6 +48,7 @@ export class VehicleTripsPanel extends LitElement {
     @state() private replayTrip: Trip | null = null;
 
     private map: L.Map | null = null;
+    private tileLayer: L.TileLayer | null = null;
     private liveMarker: L.CircleMarker | null = null;
     private routeLayer: L.Polyline | null = null;
     private endpointLayers: L.CircleMarker[] = [];
@@ -57,12 +59,33 @@ export class VehicleTripsPanel extends LitElement {
 
     private static readonly LIVE_STYLE: L.CircleMarkerOptions = { radius: 8, fillColor: '#69dbad', color: '#ffffff', weight: 2, opacity: 0.9, fillOpacity: 0.85 };
 
+    private boundOnThemeChange = (e: Event) => {
+        const { theme } = (e as CustomEvent<{ theme: 'dark' | 'light' }>).detail;
+        if (!this.map) return;
+        this.tileLayer?.remove();
+        this.tileLayer = this.buildTileLayer(theme);
+        this.tileLayer.addTo(this.map);
+    };
+
+    private buildTileLayer(theme: 'dark' | 'light'): L.TileLayer {
+        const url = theme === 'light'
+            ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+            : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+        return L.tileLayer(url, {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 19,
+        });
+    }
+
     connectedCallback() {
         super.connectedCallback();
         this.unsubscribePrefs = PrefsService.getInstance().subscribe(() => this.requestUpdate());
+        window.addEventListener('theme-change', this.boundOnThemeChange);
     }
 
     disconnectedCallback() {
+        window.removeEventListener('theme-change', this.boundOnThemeChange);
         this.resizeObserver?.disconnect();
         this.map?.remove();
         this.map = null;
@@ -83,11 +106,8 @@ export class VehicleTripsPanel extends LitElement {
         const el = this.renderRoot.querySelector<HTMLElement>('.map');
         if (!el) return;
         this.map = L.map(el, { zoomControl: true, attributionControl: true }).setView([39.5, -98.35], 4);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
-            subdomains: 'abcd',
-            maxZoom: 19,
-        }).addTo(this.map);
+        this.tileLayer = this.buildTileLayer(themeService.current);
+        this.tileLayer.addTo(this.map);
         // Shadow-DOM-hosted maps often initialize before layout settles.
         this.resizeObserver = new ResizeObserver(() => this.map?.invalidateSize());
         this.resizeObserver.observe(el);

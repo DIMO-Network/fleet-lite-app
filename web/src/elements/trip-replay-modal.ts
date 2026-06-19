@@ -5,6 +5,7 @@ import L from 'leaflet';
 import leafletCss from 'leaflet/dist/leaflet.css?inline';
 import dayjs from 'dayjs';
 import { sharedStyles } from '../global-styles.ts';
+import { themeService } from '../services/theme-service.ts';
 import { TelemetryService } from '../services/telemetry-service.ts';
 import { Trip, TripWaypoint } from '../types/telemetry.ts';
 import { tripDistanceKm, tripDurationMs, tripSignal } from '../utils/trips.ts';
@@ -16,7 +17,6 @@ interface EventFlag {
 }
 
 const MAX_WAYPOINTS = 500;
-const TILE_URL = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
 const TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>';
 
 const EVENT_COLORS: Readonly<Record<string, string>> = {
@@ -244,6 +244,23 @@ export class TripReplayModal extends LitElement {
 
     private currentStep = 0;
     private map?: L.Map;
+    private tileLayer: L.TileLayer | null = null;
+
+    private boundOnThemeChange = (e: Event) => {
+        const { theme } = (e as CustomEvent<{ theme: 'dark' | 'light' }>).detail;
+        if (!this.map) return;
+        this.tileLayer?.remove();
+        this.tileLayer = this.buildTileLayer(theme);
+        this.tileLayer.addTo(this.map);
+    };
+
+    private buildTileLayer(theme: 'dark' | 'light'): L.TileLayer {
+        const url = theme === 'light'
+            ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+            : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+        return L.tileLayer(url, { attribution: TILE_ATTRIBUTION, subdomains: 'abcd', maxZoom: 19 });
+    }
+
     private positionMarker?: L.CircleMarker;
     private drawnPolyline?: L.Polyline;
     private animationInterval?: number;
@@ -264,6 +281,7 @@ export class TripReplayModal extends LitElement {
         super.connectedCallback();
         this.connected = true;
         document.addEventListener('keydown', this.onKeydown);
+        window.addEventListener('theme-change', this.boundOnThemeChange);
         void this.fetchRoute();
     }
 
@@ -271,6 +289,7 @@ export class TripReplayModal extends LitElement {
         super.disconnectedCallback();
         this.connected = false;
         document.removeEventListener('keydown', this.onKeydown);
+        window.removeEventListener('theme-change', this.boundOnThemeChange);
         if (this.mapInitTimer !== undefined) { clearTimeout(this.mapInitTimer); this.mapInitTimer = undefined; }
         this.stopAnim();
         this.map?.remove();
@@ -335,7 +354,8 @@ export class TripReplayModal extends LitElement {
         const eLng = this.trip.end.value.longitude;
 
         this.map = L.map(el as HTMLElement);
-        L.tileLayer(TILE_URL, { attribution: TILE_ATTRIBUTION, subdomains: 'abcd', maxZoom: 19 }).addTo(this.map);
+        this.tileLayer = this.buildTileLayer(themeService.current);
+        this.tileLayer.addTo(this.map);
 
         L.circleMarker([sLat, sLng], { color: '#39FF14', fillColor: '#39FF14', fillOpacity: 0.9, radius: 8 })
             .bindPopup(msg('Start')).addTo(this.map);
@@ -357,7 +377,8 @@ export class TripReplayModal extends LitElement {
         const bounds = this.waypoints.map((w) => [w.lat, w.lng] as [number, number]);
 
         this.map = L.map(el as HTMLElement);
-        L.tileLayer(TILE_URL, { attribution: TILE_ATTRIBUTION, subdomains: 'abcd', maxZoom: 19 }).addTo(this.map);
+        this.tileLayer = this.buildTileLayer(themeService.current);
+        this.tileLayer.addTo(this.map);
 
         L.polyline(bounds, { color: '#3388ff', opacity: 0.2, weight: 2, dashArray: '4,3' }).addTo(this.map);
 

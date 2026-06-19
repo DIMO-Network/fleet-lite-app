@@ -6,6 +6,7 @@ import leafletCss from 'leaflet/dist/leaflet.css?inline';
 import 'leaflet.markercluster';
 import markerClusterCss from 'leaflet.markercluster/dist/MarkerCluster.css?inline';
 import { sharedStyles } from '../global-styles.ts';
+import { themeService } from '../services/theme-service.ts';
 import { ApiService } from '../services/api-service.ts';
 import { TelemetryService } from '../services/telemetry-service.ts';
 import { FleetCache } from '../services/fleet-cache.ts';
@@ -29,6 +30,7 @@ export class FleetOverviewView extends LitElement {
     @state() private errorMessage: string | null = null;
 
     private leafletMap: L.Map | null = null;
+    private tileLayer: L.TileLayer | null = null;
     private clusterGroup: L.MarkerClusterGroup | null = null;
     private markers = new Map<string, L.CircleMarker>();
     private lastLocations: Record<string, { lat: number; lon: number }> = {};
@@ -61,6 +63,31 @@ export class FleetOverviewView extends LitElement {
     @state() private autoRefresh = false;
     @state() private countdown = 60;
     private countdownTimer: number | null = null;
+
+    private boundOnThemeChange = (e: Event) => {
+        const { theme } = (e as CustomEvent<{ theme: 'dark' | 'light' }>).detail;
+        this.updateTileLayer(theme);
+    };
+
+    private buildTileLayer(theme: 'dark' | 'light'): L.TileLayer {
+        const url = theme === 'light'
+            ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+            : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+        return L.tileLayer(url, {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 19,
+        });
+    }
+
+    private updateTileLayer(theme: 'dark' | 'light'): void {
+        if (!this.leafletMap) return;
+        this.tileLayer?.remove();
+        this.tileLayer = this.buildTileLayer(theme);
+        this.tileLayer.addTo(this.leafletMap);
+        const mapEl = this.renderRoot.querySelector<HTMLElement>('.map');
+        if (mapEl) mapEl.classList.toggle('dark-tiles', theme === 'dark');
+    }
 
     private centerMap() {
         if (!this.leafletMap) return;
@@ -396,11 +423,11 @@ export class FleetOverviewView extends LitElement {
             maxBoundsViscosity: 1.0,
             worldCopyJump: true,
         }).setView([39.5, -98.35], 4);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
-            subdomains: 'abcd',
-            maxZoom: 19,
-        }).addTo(this.leafletMap);
+        this.tileLayer = this.buildTileLayer(themeService.current);
+        this.tileLayer.addTo(this.leafletMap);
+        const mapEl = this.renderRoot.querySelector<HTMLElement>('.map');
+        if (mapEl && themeService.current === 'dark') mapEl.classList.add('dark-tiles');
+        window.addEventListener('theme-change', this.boundOnThemeChange);
 
         this.clusterGroup = L.markerClusterGroup({
             iconCreateFunction: (cluster) => this.clusterIcon(cluster.getChildCount()),
@@ -422,6 +449,7 @@ export class FleetOverviewView extends LitElement {
     }
 
     override disconnectedCallback() {
+        window.removeEventListener('theme-change', this.boundOnThemeChange);
         super.disconnectedCallback();
         if (this.countdownTimer !== null) {
             clearInterval(this.countdownTimer);
@@ -558,8 +586,8 @@ export class FleetOverviewView extends LitElement {
                 inset: 0;
                 z-index: 0;
             }
-            /* Lift the very-dark CARTO tiles to a readable contrast level */
-            .map .leaflet-tile {
+            /* Brightness boost only for dark CARTO tiles */
+            .map.dark-tiles .leaflet-tile {
                 filter: brightness(1.8);
             }
             /* Push attribution below the vehicles panel on mobile */
