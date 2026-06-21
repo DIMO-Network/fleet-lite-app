@@ -2,7 +2,7 @@ replicaCount: 2
 image:
   repository: dimozone/fleet-lite-app
   pullPolicy: IfNotPresent
-  tag: a5b01a8
+  tag: 6124bbb
 imagePullSecrets: []
 nameOverride: ''
 fullnameOverride: ''
@@ -39,7 +39,7 @@ env:
   TELEMETRY_API_URL: http://telemetry-api-prod.prod.svc.cluster.local:8080/query
   CHAIN_ID: '137'
   VEHICLE_NFT_ADDRESS: '0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF'
-  INVITATION_FROM_EMAIL: 'no-reply@dimo.org'             # must be a verified Postmark sender
+  INVITATION_FROM_EMAIL: no-reply@dimo.org
 service:
   type: ClusterIP
   ports:
