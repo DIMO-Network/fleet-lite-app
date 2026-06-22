@@ -2,6 +2,7 @@ import { LitElement, html, css, nothing } from 'lit';
 import { customElement, state, property } from 'lit/decorators.js';
 import { msg, str } from '@lit/localize';
 import { sharedStyles } from '../global-styles.ts';
+import { hiddenVehiclesService } from '../services/hidden-vehicles-service.ts';
 import { ApiService } from '../services/api-service.ts';
 import { TelemetryService } from '../services/telemetry-service.ts';
 import { FleetCache } from '../services/fleet-cache.ts';
@@ -23,6 +24,9 @@ export class FleetListView extends LitElement {
     @state() private sortKey: SortKey = 'status';
     @state() private sortDir: SortDir = 'desc';
     @state() private refreshing = false;
+    @state() private hiddenVehicles = new Set<string>();
+    @state() private showHidden = false;
+    private unsubscribeHidden: (() => void) | null = null;
 
     private loadGeneration = 0;
     private static readonly LOCATIONS_CHUNK_SIZE = 1;
@@ -100,7 +104,12 @@ export class FleetListView extends LitElement {
                 || c.location.toLowerCase().includes(q)
             );
         }
-        return cards;
+        if (this.showHidden) {
+            const visible = cards.filter((c) => !this.hiddenVehicles.has(c.tokenId));
+            const hidden = cards.filter((c) => this.hiddenVehicles.has(c.tokenId));
+            return [...visible, ...hidden];
+        }
+        return cards.filter((c) => !this.hiddenVehicles.has(c.tokenId));
     }
 
     private async loadData(force = false) {
@@ -168,13 +177,24 @@ export class FleetListView extends LitElement {
         if (changed.has('tenantId') && this.tenantId && !this.loading) {
             this.loading = true;
             this.errorMessage = null;
+            this.hiddenVehicles = hiddenVehiclesService.getHidden(this.tenantId);
             void this.loadData();
         }
     }
 
     async connectedCallback() {
         super.connectedCallback();
+        this.hiddenVehicles = hiddenVehiclesService.getHidden(this.tenantId);
+        this.unsubscribeHidden = hiddenVehiclesService.subscribe(() => {
+            this.hiddenVehicles = hiddenVehiclesService.getHidden(this.tenantId);
+        });
         await this.loadData();
+    }
+
+    override disconnectedCallback() {
+        this.unsubscribeHidden?.();
+        this.unsubscribeHidden = null;
+        super.disconnectedCallback();
     }
 
     private statusClass(v: VehicleCard): string {
@@ -208,8 +228,10 @@ export class FleetListView extends LitElement {
     }
 
     private renderRow(v: VehicleCard) {
+        const isHidden = this.hiddenVehicles.has(v.tokenId);
         return html`
-            <tr @click=${() => { location.hash = `#/${this.tenantId}/vehicles/${v.tokenId}`; }}>
+            <tr class=${isHidden ? 'hidden-row' : ''}
+                @click=${() => { if (!isHidden) location.hash = `#/${this.tenantId}/vehicles/${v.tokenId}`; }}>
                 <td class="col-status">
                     <span class="status-dot ${this.statusClass(v)}"></span>
                 </td>
@@ -245,10 +267,23 @@ export class FleetListView extends LitElement {
                 </td>
                 <td class="col-token mono">#${v.tokenId}</td>
                 <td class="col-action">
-                    <a href="#/${this.tenantId}/vehicles/${v.tokenId}"
-                       @click=${(e: Event) => e.stopPropagation()}>
-                        <span class="material-symbols-outlined">chevron_right</span>
-                    </a>
+                    ${isHidden ? html`
+                        <button class="unhide-row-btn" title="${msg('Unhide vehicle')}"
+                            @click=${(e: Event) => { e.stopPropagation(); hiddenVehiclesService.unhide(this.tenantId, v.tokenId); }}>
+                            <span class="material-symbols-outlined">visibility</span>
+                        </button>
+                    ` : html`
+                        <div class="action-cell">
+                            <button class="hide-row-btn" title="${msg('Hide vehicle')}"
+                                @click=${(e: Event) => { e.stopPropagation(); hiddenVehiclesService.hide(this.tenantId, v.tokenId); }}>
+                                <span class="material-symbols-outlined">visibility_off</span>
+                            </button>
+                            <a href="#/${this.tenantId}/vehicles/${v.tokenId}"
+                               @click=${(e: Event) => e.stopPropagation()}>
+                                <span class="material-symbols-outlined">chevron_right</span>
+                            </a>
+                        </div>
+                    `}
                 </td>
             </tr>
         `;
@@ -280,6 +315,16 @@ export class FleetListView extends LitElement {
                             <option value=${g.id} ?selected=${g.id === this.selectedGroupId}>${g.name}</option>
                         `)}
                     </select>
+                ` : nothing}
+                ${this.hiddenVehicles.size > 0 ? html`
+                    <button
+                        class="show-hidden-btn ${this.showHidden ? 'active' : ''}"
+                        title=${this.showHidden ? msg('Hide hidden vehicles') : msg('Show hidden vehicles')}
+                        @click=${() => { this.showHidden = !this.showHidden; }}
+                    >
+                        <span class="material-symbols-outlined">visibility_off</span>
+                        <span class="hidden-count">${this.hiddenVehicles.size}</span>
+                    </button>
                 ` : nothing}
                 <span class="vehicle-count">
                     ${this.loading ? '' : msg(str`${this.visibleCards().length} vehicles`)}
@@ -592,7 +637,14 @@ export class FleetListView extends LitElement {
                 white-space: nowrap;
             }
 
-            /* ── Action link ──────────────────────────────────────── */
+            /* ── Action cell ──────────────────────────────────────── */
+            .col-action { width: 80px; }
+            .action-cell {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 4px;
+            }
             .col-action a {
                 color: var(--on-surface-variant);
                 display: flex;
@@ -601,6 +653,66 @@ export class FleetListView extends LitElement {
                 transition: color 0.15s;
             }
             tbody tr:hover .col-action a { color: var(--primary); }
+
+            .hide-row-btn {
+                background: none;
+                border: none;
+                padding: 4px;
+                color: var(--on-surface-variant);
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                border-radius: var(--radius-sm);
+                opacity: 0;
+                transition: opacity 0.15s, color 0.15s;
+            }
+            tbody tr:hover .hide-row-btn { opacity: 1; }
+            .hide-row-btn:hover { color: var(--error); }
+            .hide-row-btn .material-symbols-outlined { font-size: 18px; }
+
+            .unhide-row-btn {
+                background: none;
+                border: none;
+                padding: 4px;
+                color: var(--primary);
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: var(--radius-sm);
+                transition: color 0.15s;
+            }
+            .unhide-row-btn:hover { color: var(--secondary); }
+            .unhide-row-btn .material-symbols-outlined { font-size: 18px; }
+
+            tbody tr.hidden-row { opacity: 0.45; cursor: default; }
+            tbody tr.hidden-row:hover { opacity: 0.7; background: var(--surface-container); }
+
+            .show-hidden-btn {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                background: none;
+                border: 1px solid var(--outline-variant);
+                border-radius: var(--radius-md);
+                color: var(--on-surface-variant);
+                font: var(--type-body-sm);
+                padding: 8px 12px;
+                cursor: pointer;
+                transition: background 0.15s, color 0.15s, border-color 0.15s;
+                white-space: nowrap;
+            }
+            .show-hidden-btn:hover { color: var(--primary); border-color: var(--primary); }
+            .show-hidden-btn.active {
+                background: var(--primary-container);
+                color: var(--on-primary-container);
+                border-color: var(--primary);
+            }
+            .show-hidden-btn .material-symbols-outlined { font-size: 18px; }
+            .show-hidden-btn .hidden-count {
+                font-weight: 700;
+                font-size: 12px;
+            }
 
             /* ── Empty / loading state ────────────────────────────── */
             .state-msg {

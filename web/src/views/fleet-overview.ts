@@ -7,6 +7,7 @@ import 'leaflet.markercluster';
 import markerClusterCss from 'leaflet.markercluster/dist/MarkerCluster.css?inline';
 import { sharedStyles } from '../global-styles.ts';
 import { themeService } from '../services/theme-service.ts';
+import { hiddenVehiclesService } from '../services/hidden-vehicles-service.ts';
 import { ApiService } from '../services/api-service.ts';
 import { TelemetryService } from '../services/telemetry-service.ts';
 import { FleetCache } from '../services/fleet-cache.ts';
@@ -63,6 +64,9 @@ export class FleetOverviewView extends LitElement {
     @state() private autoRefresh = false;
     @state() private countdown = 60;
     private countdownTimer: number | null = null;
+    @state() private hiddenVehicles = new Set<string>();
+    @state() private showHidden = false;
+    private unsubscribeHidden: (() => void) | null = null;
 
     private boundOnThemeChange = (e: Event) => {
         const { theme } = (e as CustomEvent<{ theme: 'dark' | 'light' }>).detail;
@@ -119,6 +123,7 @@ export class FleetOverviewView extends LitElement {
     private static readonly MARKER_STYLE = { radius: 4, fillColor: '#69dbad', color: '#ffffff', weight: 1.5, opacity: 0.9, fillOpacity: 0.85 };
     private static readonly MARKER_STYLE_HOVER = { radius: 8, fillColor: '#69dbad', color: '#ffffff', weight: 2, opacity: 1, fillOpacity: 0.95 };
     private static readonly MARKER_STYLE_SELECTED = { radius: 9, fillColor: '#f5c84b', color: '#ffffff', weight: 2.5, opacity: 1, fillOpacity: 0.95 };
+    private static readonly MARKER_STYLE_HIDDEN = { radius: 4, fillColor: '#808080', color: '#ffffff', weight: 1, opacity: 0.35, fillOpacity: 0.35 };
 
     private openQuickView(v: VehicleCard) {
         // Restore the previously selected marker, highlight the new one. Any
@@ -211,7 +216,7 @@ export class FleetOverviewView extends LitElement {
 
     /**
      * Add markers for `locations` that aren't on the map yet, respecting the
-     * current group/search filter. Additive on purpose: the progressive loader
+     * current group/search/hidden filter. Additive on purpose: the progressive loader
      * calls this per batch so markers stream in without clearing the map.
      */
     private addMarkers(locations: Record<string, { lat: number; lon: number }>) {
@@ -220,26 +225,29 @@ export class FleetOverviewView extends LitElement {
         const allowed = (this.selectedGroupId || this.searchQuery.trim()) ? this.visibleTokenIds() : null;
         for (const [tokenId, coords] of Object.entries(locations)) {
             if (this.markers.has(tokenId)) continue;
+            const isHidden = this.hiddenVehicles.has(tokenId);
+            if (isHidden && !this.showHidden) continue;
             if (allowed && !allowed.has(tokenId)) continue;
             const selected = this.quickViewVehicle?.tokenId === tokenId;
+            const baseStyle = isHidden ? FleetOverviewView.MARKER_STYLE_HIDDEN : FleetOverviewView.MARKER_STYLE;
             const marker = L.circleMarker(
                 [coords.lat, coords.lon],
-                selected ? FleetOverviewView.MARKER_STYLE_SELECTED : FleetOverviewView.MARKER_STYLE,
+                selected ? FleetOverviewView.MARKER_STYLE_SELECTED : baseStyle,
             ).bindTooltip(titleMap.get(tokenId) ?? `Vehicle ${tokenId}`, { permanent: false, direction: 'top', offset: [0, -10] });
             marker.on('click', () => {
                 const v = this.vehicles.find((c) => c.tokenId === tokenId);
                 if (v) this.openQuickView(v);
             });
             // Grow on hover for an easier click target; never shrink the
-            // selected marker back down.
+            // selected marker back down. Hidden markers don't grow.
             marker.on('mouseover', () => {
-                if (this.quickViewVehicle?.tokenId !== tokenId) {
+                if (this.quickViewVehicle?.tokenId !== tokenId && !isHidden) {
                     marker.setStyle(FleetOverviewView.MARKER_STYLE_HOVER);
                 }
             });
             marker.on('mouseout', () => {
                 if (this.quickViewVehicle?.tokenId !== tokenId) {
-                    marker.setStyle(FleetOverviewView.MARKER_STYLE);
+                    marker.setStyle(isHidden ? FleetOverviewView.MARKER_STYLE_HIDDEN : FleetOverviewView.MARKER_STYLE);
                 }
             });
             this.clusterGroup!.addLayer(marker);
@@ -346,6 +354,7 @@ export class FleetOverviewView extends LitElement {
         if (changed.has('tenantId') && this.tenantId && !this.loading) {
             this.loading = true;
             this.errorMessage = null;
+            this.hiddenVehicles = hiddenVehiclesService.getHidden(this.tenantId);
             void this.loadVehicleData();
         }
     }
@@ -384,6 +393,11 @@ export class FleetOverviewView extends LitElement {
 
     async connectedCallback() {
         super.connectedCallback();
+        this.hiddenVehicles = hiddenVehiclesService.getHidden(this.tenantId);
+        this.unsubscribeHidden = hiddenVehiclesService.subscribe(() => {
+            this.hiddenVehicles = hiddenVehiclesService.getHidden(this.tenantId);
+            this.placeMarkers();
+        });
         await this.loadVehicleData();
     }
 
@@ -449,6 +463,8 @@ export class FleetOverviewView extends LitElement {
     }
 
     override disconnectedCallback() {
+        this.unsubscribeHidden?.();
+        this.unsubscribeHidden = null;
         window.removeEventListener('theme-change', this.boundOnThemeChange);
         super.disconnectedCallback();
         if (this.countdownTimer !== null) {
@@ -474,7 +490,7 @@ export class FleetOverviewView extends LitElement {
         return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
     }
 
-    /** Cards passing the group filter and the text search. */
+    /** Cards passing the group filter, text search, and hidden filter. */
     private visibleCards(): VehicleCard[] {
         let cards = this.vehicles;
         if (this.selectedGroupId) {
@@ -487,7 +503,12 @@ export class FleetOverviewView extends LitElement {
                 || c.tokenId.includes(q)
                 || c.location.toLowerCase().includes(q));
         }
-        return cards;
+        if (this.showHidden) {
+            const visible = cards.filter((c) => !this.hiddenVehicles.has(c.tokenId));
+            const hidden = cards.filter((c) => this.hiddenVehicles.has(c.tokenId));
+            return [...visible, ...hidden];
+        }
+        return cards.filter((c) => !this.hiddenVehicles.has(c.tokenId));
     }
 
     /** Token ids visible under the current filter — used to filter map markers. */
@@ -983,6 +1004,75 @@ export class FleetOverviewView extends LitElement {
             .vehicle-card:hover { border-color: rgba(255, 255, 255, 0.5); }
             .vehicle-card.offline { border-color: rgba(255, 180, 171, 0.2); }
             .vehicle-card.offline:hover { border-color: rgba(255, 180, 171, 0.5); }
+            .vehicle-card.hidden-card { opacity: 0.5; }
+            .vehicle-card.hidden-card:hover { opacity: 0.75; border-color: var(--outline-variant); }
+            .vehicle-card-dense.hidden-card { opacity: 0.5; }
+            .vehicle-card-dense.hidden-card:hover { opacity: 0.75; }
+
+            .hide-btn {
+                position: absolute;
+                top: 12px;
+                right: 52px;
+                width: 32px;
+                height: 32px;
+                background: var(--surface-container-high);
+                border: 1px solid var(--outline-variant);
+                border-radius: var(--radius-full);
+                color: var(--on-surface-variant);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                opacity: 0;
+                transition: opacity 0.15s, background 0.15s, color 0.15s;
+                z-index: 1;
+            }
+            .vehicle-card:hover .hide-btn { opacity: 1; }
+            .hide-btn:hover { background: var(--error); color: #fff; border-color: var(--error); }
+            .hide-btn .material-symbols-outlined { font-size: 16px; }
+
+            .unhide-btn {
+                position: absolute;
+                top: 12px;
+                right: 12px;
+                width: 32px;
+                height: 32px;
+                background: var(--surface-container-high);
+                border: 1px solid var(--outline-variant);
+                border-radius: var(--radius-full);
+                color: var(--primary);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: background 0.15s, color 0.15s;
+                z-index: 1;
+            }
+            .unhide-btn:hover { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+            .unhide-btn .material-symbols-outlined { font-size: 16px; }
+
+            .dense-hide-btn {
+                position: relative;
+                top: auto; right: auto;
+                width: 24px; height: 24px;
+                flex-shrink: 0;
+                opacity: 0;
+            }
+            .vehicle-card-dense:hover .dense-hide-btn { opacity: 1; }
+            .dense-hide-btn .material-symbols-outlined { font-size: 14px; }
+
+            .hidden-count-badge {
+                font-size: 10px;
+                font-weight: 700;
+                line-height: 1;
+                background: var(--secondary);
+                color: var(--on-secondary);
+                border-radius: var(--radius-full);
+                padding: 2px 5px;
+                margin-left: 2px;
+            }
+            .panel-header button.show-hidden-active .hidden-count-badge {
+                background: var(--on-secondary-container);
+                color: var(--secondary-container);
+            }
 
             .status-dot {
                 position: absolute;
@@ -1129,18 +1219,41 @@ export class FleetOverviewView extends LitElement {
         return html`<span class="material-symbols-outlined">directions_car</span>`;
     }
 
+    private hideVehicle(e: Event, tokenId: string) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (this.quickViewVehicle?.tokenId === tokenId) this.closeQuickView();
+        hiddenVehiclesService.hide(this.tenantId, tokenId);
+    }
+
+    private unhideVehicle(e: Event, tokenId: string) {
+        e.preventDefault();
+        e.stopPropagation();
+        hiddenVehiclesService.unhide(this.tenantId, tokenId);
+    }
+
     private renderCard(v: VehicleCard) {
-        const cls = v.online ? 'vehicle-card' : 'vehicle-card offline';
+        const isHidden = this.hiddenVehicles.has(v.tokenId);
+        const cls = [v.online ? 'vehicle-card' : 'vehicle-card offline', isHidden ? 'hidden-card' : ''].join(' ').trim();
         // Plain click opens the quick-view overlay (map context preserved);
         // the href stays so middle-click/cmd-click still opens full details.
         return html`
             <a class=${cls} href="#/${this.tenantId}/vehicles/${v.tokenId}"
-               @click=${(e: MouseEvent) => { if (!e.metaKey && !e.ctrlKey) { e.preventDefault(); this.openQuickView(v); } }}>
-                ${this.markers.has(v.tokenId) ? html`
-                    <button class="zoom-btn" title="${msg('Zoom to vehicle')}" @click=${(e: Event) => this.zoomToVehicle(e, v.tokenId)}>
-                        <span class="material-symbols-outlined">my_location</span>
+               @click=${(e: MouseEvent) => { if (!e.metaKey && !e.ctrlKey) { e.preventDefault(); if (!isHidden) this.openQuickView(v); } }}>
+                ${isHidden ? html`
+                    <button class="unhide-btn" title="${msg('Unhide vehicle')}" @click=${(e: Event) => this.unhideVehicle(e, v.tokenId)}>
+                        <span class="material-symbols-outlined">visibility</span>
                     </button>
-                ` : ''}
+                ` : html`
+                    ${this.markers.has(v.tokenId) ? html`
+                        <button class="zoom-btn" title="${msg('Zoom to vehicle')}" @click=${(e: Event) => this.zoomToVehicle(e, v.tokenId)}>
+                            <span class="material-symbols-outlined">my_location</span>
+                        </button>
+                    ` : ''}
+                    <button class="hide-btn" title="${msg('Hide vehicle')}" @click=${(e: Event) => this.hideVehicle(e, v.tokenId)}>
+                        <span class="material-symbols-outlined">visibility_off</span>
+                    </button>
+                `}
                 <div class="vehicle-row">
                     <div class="vehicle-icon" style=${this.iconBadgeStyle(v)}>
                         ${this.renderVehicleIcon(v)}
@@ -1195,10 +1308,11 @@ export class FleetOverviewView extends LitElement {
     }
 
     private renderDenseCard(v: VehicleCard) {
-        const cls = v.online ? 'vehicle-card-dense' : 'vehicle-card-dense offline';
+        const isHidden = this.hiddenVehicles.has(v.tokenId);
+        const cls = [v.online ? 'vehicle-card-dense' : 'vehicle-card-dense offline', isHidden ? 'hidden-card' : ''].join(' ').trim();
         return html`
             <a class=${cls} href="#/${this.tenantId}/vehicles/${v.tokenId}" title=${v.title}
-               @click=${(e: MouseEvent) => { if (!e.metaKey && !e.ctrlKey) { e.preventDefault(); this.openQuickView(v); } }}>
+               @click=${(e: MouseEvent) => { if (!e.metaKey && !e.ctrlKey) { e.preventDefault(); if (!isHidden) this.openQuickView(v); } }}>
                 <div class="dense-token">
                     <span class="status-dot ${this.statusClass(v)}"></span>
                     <span>#${v.tokenId}</span>
@@ -1207,11 +1321,20 @@ export class FleetOverviewView extends LitElement {
                     ${v.isFavorite ? html`<span class="material-symbols-outlined favorite-star">star</span>` : ''}
                     ${v.title}
                 </span>
-                ${this.markers.has(v.tokenId) ? html`
-                    <button class="zoom-btn" title="${msg('Zoom to vehicle')}" @click=${(e: Event) => this.zoomToVehicle(e, v.tokenId)}>
-                        <span class="material-symbols-outlined">my_location</span>
+                ${isHidden ? html`
+                    <button class="zoom-btn" title="${msg('Unhide vehicle')}" @click=${(e: Event) => this.unhideVehicle(e, v.tokenId)}>
+                        <span class="material-symbols-outlined">visibility</span>
                     </button>
-                ` : ''}
+                ` : html`
+                    ${this.markers.has(v.tokenId) ? html`
+                        <button class="zoom-btn" title="${msg('Zoom to vehicle')}" @click=${(e: Event) => this.zoomToVehicle(e, v.tokenId)}>
+                            <span class="material-symbols-outlined">my_location</span>
+                        </button>
+                    ` : ''}
+                    <button class="hide-btn dense-hide-btn" title="${msg('Hide vehicle')}" @click=${(e: Event) => this.hideVehicle(e, v.tokenId)}>
+                        <span class="material-symbols-outlined">visibility_off</span>
+                    </button>
+                `}
             </a>
         `;
     }
@@ -1298,6 +1421,16 @@ export class FleetOverviewView extends LitElement {
                 <div class="panel-header">
                     <h3>${msg('Your cars')}</h3>
                     <div class="panel-header-actions">
+                        ${this.hiddenVehicles.size > 0 ? html`
+                            <button
+                                class=${this.showHidden ? 'search-active show-hidden-active' : ''}
+                                title=${this.showHidden ? msg('Hide hidden vehicles') : msg('Show hidden vehicles')}
+                                @click=${() => { this.showHidden = !this.showHidden; this.placeMarkers(); }}
+                            >
+                                <span class="material-symbols-outlined">visibility_off</span>
+                                <span class="hidden-count-badge">${this.hiddenVehicles.size}</span>
+                            </button>
+                        ` : ''}
                         <button
                             class=${this.searchOpen || this.searchQuery ? 'search-active' : ''}
                             title=${this.searchOpen ? msg('Close search') : msg('Search vehicles')}
