@@ -298,6 +298,20 @@ export class FleetOverviewView extends LitElement {
         }
 
         this.lastLocations = {};
+        // Sync map markers to the updated vehicle list immediately: remove any
+        // marker for a vehicle that's no longer in the fleet (e.g. a shared
+        // vehicle that was revoked). New vehicles get markers as locations stream
+        // in below; existing vehicles keep their current markers until the final
+        // placeMarkers() call rebuilds everything at full fidelity.
+        if (force) {
+            const currentIds = new Set(this.vehicles.map((v) => v.tokenId));
+            for (const [tokenId, marker] of this.markers) {
+                if (!currentIds.has(tokenId)) {
+                    this.clusterGroup?.removeLayer(marker);
+                    this.markers.delete(tokenId);
+                }
+            }
+        }
         // Locations load progressively: the fleet is paged in chunks with a
         // few requests in flight, and markers drop onto the map as each chunk
         // resolves — a 100+ vehicle fleet paints in seconds instead of waiting
