@@ -1268,6 +1268,10 @@
   <source>Activity</source>
   <target>Actividad</target>
 </trans-unit>
+<trans-unit id="s60728a6d33bbfba2">
+  <source>Focus on map</source>
+  <target>Centrar en el mapa</target>
+</trans-unit>
 </body>
 </file>
 </xliff>

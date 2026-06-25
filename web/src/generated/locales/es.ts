@@ -128,6 +128,7 @@
 's5eb07d8976d63fb7': `Error al eliminar grupo`,
 's5ed32a914a02fb92': str`${0} grupo(s)`,
 's5f5f916669344f2d': `Nueva geocerca`,
+'s60728a6d33bbfba2': `Centrar en el mapa`,
 's617f1e646d2d81cd': `Aún no hay geocercas. Haz clic en «Nueva geocerca» y dibuja un área en el mapa.`,
 's64e5fde46831987a': `Editar grupo`,
 's64ef2a6c2dd1d3d1': `Editar`,
