@@ -45,12 +45,14 @@ type PassSummary struct {
 }
 
 // GeofenceCrossing is one geofence a trip/window touched, with its passes.
+// Geometry is included so the trip view can overlay the polygon on the map.
 type GeofenceCrossing struct {
-	GeofenceID    string        `json:"geofenceId"`
-	Name          string        `json:"name"`
-	Color         string        `json:"color"`
-	SpeedLimitKph *int          `json:"speedLimitKph,omitempty"`
-	Passes        []PassSummary `json:"passes"`
+	GeofenceID    string          `json:"geofenceId"`
+	Name          string          `json:"name"`
+	Color         string          `json:"color"`
+	Geometry      json.RawMessage `json:"geometry"`
+	SpeedLimitKph *int            `json:"speedLimitKph,omitempty"`
+	Passes        []PassSummary   `json:"passes"`
 }
 
 // detectedPass is the internal result of the polygon sweep before persistence.
@@ -278,6 +280,7 @@ func (s *GeofenceDetectionService) readCrossings(ctx context.Context, tokenID in
 			GeofenceID:    g.ID,
 			Name:          g.Name,
 			Color:         g.Color,
+			Geometry:      json.RawMessage(g.Geometry),
 			SpeedLimitKph: limit,
 			Passes:        ps,
 		})

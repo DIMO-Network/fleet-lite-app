@@ -57,6 +57,9 @@ export class VehicleTripsPanel extends LitElement {
     private routeLayer: L.Polyline | null = null;
     private endpointLayers: L.CircleMarker[] = [];
     private geofenceMarkers: L.CircleMarker[] = [];
+    private geofencePolygons: L.Polygon[] = [];
+    // geofence id → its polygon layer, so a list row can focus the map on it.
+    private geofencePolygonById = new Map<string, L.Polygon>();
     private resizeObserver: ResizeObserver | null = null;
     private unsubscribePrefs: (() => void) | null = null;
     // Guards stale async results after period/vehicle switches.
@@ -248,11 +251,24 @@ export class VehicleTripsPanel extends LitElement {
         }
     }
 
-    /** Drop a small marker at each pass's entry point, colored per geofence. */
+    /**
+     * Overlay each crossed geofence on the trip map: its polygon (filled, in the
+     * geofence color) plus a marker at each pass's entry point.
+     */
     private drawGeofenceMarkers() {
         if (!this.map) return;
         this.removeGeofenceMarkers();
         for (const g of this.tripGeofences) {
+            const rings = g.geometry?.coordinates ?? [];
+            if (rings.length > 0) {
+                // GeoJSON rings are [lng, lat]; Leaflet wants [lat, lng].
+                const latlngs = rings.map((ring) => ring.map(([lng, lat]) => [lat, lng] as [number, number]));
+                const poly = L.polygon(latlngs, {
+                    color: g.color, weight: 2, opacity: 0.9, fillColor: g.color, fillOpacity: 0.12,
+                }).addTo(this.map);
+                this.geofencePolygons.push(poly);
+                this.geofencePolygonById.set(g.geofenceId, poly);
+            }
             for (const p of g.passes) {
                 const m = L.circleMarker([p.entryLat, p.entryLng], {
                     radius: 6, fillColor: g.color, color: '#ffffff', weight: 2, fillOpacity: 0.95,
@@ -265,6 +281,15 @@ export class VehicleTripsPanel extends LitElement {
     private removeGeofenceMarkers() {
         this.geofenceMarkers.forEach((m) => m.remove());
         this.geofenceMarkers = [];
+        this.geofencePolygons.forEach((p) => p.remove());
+        this.geofencePolygons = [];
+        this.geofencePolygonById.clear();
+    }
+
+    /** Pan/zoom the map to a crossed geofence's polygon (clicked in the list). */
+    private focusGeofence(geofenceId: string) {
+        const poly = this.geofencePolygonById.get(geofenceId);
+        if (poly && this.map) this.map.fitBounds(poly.getBounds(), { padding: [40, 40], maxZoom: 15 });
     }
 
     private drawRoute(points: Array<[number, number]>) {
@@ -427,7 +452,13 @@ export class VehicleTripsPanel extends LitElement {
                 font: var(--type-body-sm);
                 font-weight: 600;
                 color: var(--on-surface);
+                background: none;
+                border: none;
+                padding: 0;
+                cursor: pointer;
+                text-align: left;
             }
+            .gf-name:hover { color: var(--primary); }
             .gf-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
             .gf-pass {
                 display: flex;
@@ -563,9 +594,9 @@ export class VehicleTripsPanel extends LitElement {
                 </div>
                 ${this.tripGeofences.map((g) => html`
                     <div class="gf-item">
-                        <div class="gf-name">
+                        <button class="gf-name" title=${msg('Focus on map')} @click=${() => this.focusGeofence(g.geofenceId)}>
                             <span class="gf-dot" style="background:${g.color}"></span>${g.name}
-                        </div>
+                        </button>
                         ${g.passes.map((p) => {
                             const max = p.maxSpeedKph != null ? formatSpeed(p.maxSpeedKph) : null;
                             return html`

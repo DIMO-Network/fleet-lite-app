@@ -60,6 +60,8 @@ export interface GeofenceCrossing {
     geofenceId: string;
     name: string;
     color: string;
+    /** The geofence polygon, so the trip view can overlay it on the map. */
+    geometry: GeoJSONPolygon;
     speedLimitKph?: number | null;
     passes: GeofencePass[];
 }
