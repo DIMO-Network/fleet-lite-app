@@ -76,7 +76,8 @@ func App(
 	groupSyncSvc := service.NewGroupSyncService(logger, pdb, fetchAPI, authProvider)
 	fleetGroupsCtrl := controllers.NewFleetGroupsController(logger, groupSvc, groupSyncSvc, attestSvc)
 	geofenceSvc := service.NewGeofenceService(logger, pdb)
-	geofencesCtrl := controllers.NewGeofencesController(logger, geofenceSvc, attestSvc)
+	geofenceDetectionSvc := service.NewGeofenceDetectionService(logger, pdb, telemetryAPI, geofenceSvc)
+	geofencesCtrl := controllers.NewGeofencesController(logger, geofenceSvc, attestSvc, geofenceDetectionSvc)
 	settingsCtrl := controllers.NewSettingsController(settings, logger)
 	tenantsCtrl := controllers.NewTenantsController(logger, settings, tenantSvc, vehicleSvc, identity, authProvider)
 	invitationsCtrl := controllers.NewInvitationsController(logger, tenantSvc, invitationSvc)
@@ -144,6 +145,9 @@ func App(
 	tenantApp.Delete("/fleet/geofences/:id", geofencesCtrl.DeleteGeofence)
 	tenantApp.Post("/fleet/vehicles/:tokenID/geofence/:geofenceID", geofencesCtrl.AddVehicleToGeofence)
 	tenantApp.Delete("/fleet/vehicles/:tokenID/geofence/:geofenceID", geofencesCtrl.RemoveVehicleFromGeofence)
+	// Geofence event detection (Phase 2). Entry point 1: which geofences a
+	// vehicle's telemetry crossed in a trip window — on-demand, cached.
+	tenantApp.Get("/telemetry/:tokenID/trip-geofences", geofencesCtrl.GetTripGeofences)
 
 	// Telemetry (vehicle-details charts)
 	telemetryCtrl := controllers.NewTelemetryController(logger, settings, vehicleSvc, telemetryAPI)

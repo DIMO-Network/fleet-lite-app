@@ -121,35 +121,6 @@ func (w whereHelpertypes_JSON) GTE(x types.JSON) qm.QueryMod {
 	return qmhelper.Where(w.field, qmhelper.GTE, x)
 }
 
-type whereHelperfloat64 struct{ field string }
-
-func (w whereHelperfloat64) EQ(x float64) qm.QueryMod { return qmhelper.Where(w.field, qmhelper.EQ, x) }
-func (w whereHelperfloat64) NEQ(x float64) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.NEQ, x)
-}
-func (w whereHelperfloat64) LT(x float64) qm.QueryMod { return qmhelper.Where(w.field, qmhelper.LT, x) }
-func (w whereHelperfloat64) LTE(x float64) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.LTE, x)
-}
-func (w whereHelperfloat64) GT(x float64) qm.QueryMod { return qmhelper.Where(w.field, qmhelper.GT, x) }
-func (w whereHelperfloat64) GTE(x float64) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.GTE, x)
-}
-func (w whereHelperfloat64) IN(slice []float64) qm.QueryMod {
-	values := make([]any, 0, len(slice))
-	for _, value := range slice {
-		values = append(values, value)
-	}
-	return qm.WhereIn(fmt.Sprintf("%s IN ?", w.field), values...)
-}
-func (w whereHelperfloat64) NIN(slice []float64) qm.QueryMod {
-	values := make([]any, 0, len(slice))
-	for _, value := range slice {
-		values = append(values, value)
-	}
-	return qm.WhereNotIn(fmt.Sprintf("%s NOT IN ?", w.field), values...)
-}
-
 type whereHelpernull_Int struct{ field string }
 
 func (w whereHelpernull_Int) EQ(x null.Int) qm.QueryMod {
@@ -239,17 +210,23 @@ var GeofenceWhere = struct {
 
 // GeofenceRels is where relationship names are stored.
 var GeofenceRels = struct {
-	Tenant           string
-	VehicleGeofences string
+	Tenant                string
+	GeofencePasses        string
+	GeofenceScanCoverages string
+	VehicleGeofences      string
 }{
-	Tenant:           "Tenant",
-	VehicleGeofences: "VehicleGeofences",
+	Tenant:                "Tenant",
+	GeofencePasses:        "GeofencePasses",
+	GeofenceScanCoverages: "GeofenceScanCoverages",
+	VehicleGeofences:      "VehicleGeofences",
 }
 
 // geofenceR is where relationships are stored.
 type geofenceR struct {
-	Tenant           *Tenant              `boil:"Tenant" json:"Tenant" toml:"Tenant" yaml:"Tenant"`
-	VehicleGeofences VehicleGeofenceSlice `boil:"VehicleGeofences" json:"VehicleGeofences" toml:"VehicleGeofences" yaml:"VehicleGeofences"`
+	Tenant                *Tenant                   `boil:"Tenant" json:"Tenant" toml:"Tenant" yaml:"Tenant"`
+	GeofencePasses        GeofencePassSlice         `boil:"GeofencePasses" json:"GeofencePasses" toml:"GeofencePasses" yaml:"GeofencePasses"`
+	GeofenceScanCoverages GeofenceScanCoverageSlice `boil:"GeofenceScanCoverages" json:"GeofenceScanCoverages" toml:"GeofenceScanCoverages" yaml:"GeofenceScanCoverages"`
+	VehicleGeofences      VehicleGeofenceSlice      `boil:"VehicleGeofences" json:"VehicleGeofences" toml:"VehicleGeofences" yaml:"VehicleGeofences"`
 }
 
 // NewStruct creates a new relationship struct
@@ -271,6 +248,38 @@ func (r *geofenceR) GetTenant() *Tenant {
 	}
 
 	return r.Tenant
+}
+
+func (o *Geofence) GetGeofencePasses() GeofencePassSlice {
+	if o == nil {
+		return nil
+	}
+
+	return o.R.GetGeofencePasses()
+}
+
+func (r *geofenceR) GetGeofencePasses() GeofencePassSlice {
+	if r == nil {
+		return nil
+	}
+
+	return r.GeofencePasses
+}
+
+func (o *Geofence) GetGeofenceScanCoverages() GeofenceScanCoverageSlice {
+	if o == nil {
+		return nil
+	}
+
+	return o.R.GetGeofenceScanCoverages()
+}
+
+func (r *geofenceR) GetGeofenceScanCoverages() GeofenceScanCoverageSlice {
+	if r == nil {
+		return nil
+	}
+
+	return r.GeofenceScanCoverages
 }
 
 func (o *Geofence) GetVehicleGeofences() VehicleGeofenceSlice {
@@ -616,6 +625,34 @@ func (o *Geofence) Tenant(mods ...qm.QueryMod) tenantQuery {
 	return Tenants(queryMods...)
 }
 
+// GeofencePasses retrieves all the geofence_pass's GeofencePasses with an executor.
+func (o *Geofence) GeofencePasses(mods ...qm.QueryMod) geofencePassQuery {
+	var queryMods []qm.QueryMod
+	if len(mods) != 0 {
+		queryMods = append(queryMods, mods...)
+	}
+
+	queryMods = append(queryMods,
+		qm.Where("\"geofence_passes\".\"geofence_id\"=?", o.ID),
+	)
+
+	return GeofencePasses(queryMods...)
+}
+
+// GeofenceScanCoverages retrieves all the geofence_scan_coverage's GeofenceScanCoverages with an executor.
+func (o *Geofence) GeofenceScanCoverages(mods ...qm.QueryMod) geofenceScanCoverageQuery {
+	var queryMods []qm.QueryMod
+	if len(mods) != 0 {
+		queryMods = append(queryMods, mods...)
+	}
+
+	queryMods = append(queryMods,
+		qm.Where("\"geofence_scan_coverage\".\"geofence_id\"=?", o.ID),
+	)
+
+	return GeofenceScanCoverages(queryMods...)
+}
+
 // VehicleGeofences retrieves all the vehicle_geofence's VehicleGeofences with an executor.
 func (o *Geofence) VehicleGeofences(mods ...qm.QueryMod) vehicleGeofenceQuery {
 	var queryMods []qm.QueryMod
@@ -742,6 +779,232 @@ func (geofenceL) LoadTenant(ctx context.Context, e boil.ContextExecutor, singula
 					foreign.R = &tenantR{}
 				}
 				foreign.R.Geofences = append(foreign.R.Geofences, local)
+				break
+			}
+		}
+	}
+
+	return nil
+}
+
+// LoadGeofencePasses allows an eager lookup of values, cached into the
+// loaded structs of the objects. This is for a 1-M or N-M relationship.
+func (geofenceL) LoadGeofencePasses(ctx context.Context, e boil.ContextExecutor, singular bool, maybeGeofence any, mods queries.Applicator) error {
+	var slice []*Geofence
+	var object *Geofence
+
+	if singular {
+		var ok bool
+		object, ok = maybeGeofence.(*Geofence)
+		if !ok {
+			object = new(Geofence)
+			ok = queries.SetFromEmbeddedStruct(&object, &maybeGeofence)
+			if !ok {
+				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", object, maybeGeofence))
+			}
+		}
+	} else {
+		s, ok := maybeGeofence.(*[]*Geofence)
+		if ok {
+			slice = *s
+		} else {
+			ok = queries.SetFromEmbeddedStruct(&slice, maybeGeofence)
+			if !ok {
+				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", slice, maybeGeofence))
+			}
+		}
+	}
+
+	args := make(map[any]struct{})
+	if singular {
+		if object.R == nil {
+			object.R = &geofenceR{}
+		}
+		args[object.ID] = struct{}{}
+	} else {
+		for _, obj := range slice {
+			if obj.R == nil {
+				obj.R = &geofenceR{}
+			}
+			args[obj.ID] = struct{}{}
+		}
+	}
+
+	if len(args) == 0 {
+		return nil
+	}
+
+	argsSlice := make([]any, len(args))
+	i := 0
+	for arg := range args {
+		argsSlice[i] = arg
+		i++
+	}
+
+	query := NewQuery(
+		qm.From(`geofence_passes`),
+		qm.WhereIn(`geofence_passes.geofence_id in ?`, argsSlice...),
+	)
+	if mods != nil {
+		mods.Apply(query)
+	}
+
+	results, err := query.QueryContext(ctx, e)
+	if err != nil {
+		return errors.Wrap(err, "failed to eager load geofence_passes")
+	}
+
+	var resultSlice []*GeofencePass
+	if err = queries.Bind(results, &resultSlice); err != nil {
+		return errors.Wrap(err, "failed to bind eager loaded slice geofence_passes")
+	}
+
+	if err = results.Close(); err != nil {
+		return errors.Wrap(err, "failed to close results in eager load on geofence_passes")
+	}
+	if err = results.Err(); err != nil {
+		return errors.Wrap(err, "error occurred during iteration of eager loaded relations for geofence_passes")
+	}
+
+	if len(geofencePassAfterSelectHooks) != 0 {
+		for _, obj := range resultSlice {
+			if err := obj.doAfterSelectHooks(ctx, e); err != nil {
+				return err
+			}
+		}
+	}
+	if singular {
+		object.R.GeofencePasses = resultSlice
+		for _, foreign := range resultSlice {
+			if foreign.R == nil {
+				foreign.R = &geofencePassR{}
+			}
+			foreign.R.Geofence = object
+		}
+		return nil
+	}
+
+	for _, foreign := range resultSlice {
+		for _, local := range slice {
+			if local.ID == foreign.GeofenceID {
+				local.R.GeofencePasses = append(local.R.GeofencePasses, foreign)
+				if foreign.R == nil {
+					foreign.R = &geofencePassR{}
+				}
+				foreign.R.Geofence = local
+				break
+			}
+		}
+	}
+
+	return nil
+}
+
+// LoadGeofenceScanCoverages allows an eager lookup of values, cached into the
+// loaded structs of the objects. This is for a 1-M or N-M relationship.
+func (geofenceL) LoadGeofenceScanCoverages(ctx context.Context, e boil.ContextExecutor, singular bool, maybeGeofence any, mods queries.Applicator) error {
+	var slice []*Geofence
+	var object *Geofence
+
+	if singular {
+		var ok bool
+		object, ok = maybeGeofence.(*Geofence)
+		if !ok {
+			object = new(Geofence)
+			ok = queries.SetFromEmbeddedStruct(&object, &maybeGeofence)
+			if !ok {
+				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", object, maybeGeofence))
+			}
+		}
+	} else {
+		s, ok := maybeGeofence.(*[]*Geofence)
+		if ok {
+			slice = *s
+		} else {
+			ok = queries.SetFromEmbeddedStruct(&slice, maybeGeofence)
+			if !ok {
+				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", slice, maybeGeofence))
+			}
+		}
+	}
+
+	args := make(map[any]struct{})
+	if singular {
+		if object.R == nil {
+			object.R = &geofenceR{}
+		}
+		args[object.ID] = struct{}{}
+	} else {
+		for _, obj := range slice {
+			if obj.R == nil {
+				obj.R = &geofenceR{}
+			}
+			args[obj.ID] = struct{}{}
+		}
+	}
+
+	if len(args) == 0 {
+		return nil
+	}
+
+	argsSlice := make([]any, len(args))
+	i := 0
+	for arg := range args {
+		argsSlice[i] = arg
+		i++
+	}
+
+	query := NewQuery(
+		qm.From(`geofence_scan_coverage`),
+		qm.WhereIn(`geofence_scan_coverage.geofence_id in ?`, argsSlice...),
+	)
+	if mods != nil {
+		mods.Apply(query)
+	}
+
+	results, err := query.QueryContext(ctx, e)
+	if err != nil {
+		return errors.Wrap(err, "failed to eager load geofence_scan_coverage")
+	}
+
+	var resultSlice []*GeofenceScanCoverage
+	if err = queries.Bind(results, &resultSlice); err != nil {
+		return errors.Wrap(err, "failed to bind eager loaded slice geofence_scan_coverage")
+	}
+
+	if err = results.Close(); err != nil {
+		return errors.Wrap(err, "failed to close results in eager load on geofence_scan_coverage")
+	}
+	if err = results.Err(); err != nil {
+		return errors.Wrap(err, "error occurred during iteration of eager loaded relations for geofence_scan_coverage")
+	}
+
+	if len(geofenceScanCoverageAfterSelectHooks) != 0 {
+		for _, obj := range resultSlice {
+			if err := obj.doAfterSelectHooks(ctx, e); err != nil {
+				return err
+			}
+		}
+	}
+	if singular {
+		object.R.GeofenceScanCoverages = resultSlice
+		for _, foreign := range resultSlice {
+			if foreign.R == nil {
+				foreign.R = &geofenceScanCoverageR{}
+			}
+			foreign.R.Geofence = object
+		}
+		return nil
+	}
+
+	for _, foreign := range resultSlice {
+		for _, local := range slice {
+			if local.ID == foreign.GeofenceID {
+				local.R.GeofenceScanCoverages = append(local.R.GeofenceScanCoverages, foreign)
+				if foreign.R == nil {
+					foreign.R = &geofenceScanCoverageR{}
+				}
+				foreign.R.Geofence = local
 				break
 			}
 		}
@@ -907,6 +1170,112 @@ func (o *Geofence) SetTenant(ctx context.Context, exec boil.ContextExecutor, ins
 		related.R.Geofences = append(related.R.Geofences, o)
 	}
 
+	return nil
+}
+
+// AddGeofencePasses adds the given related objects to the existing relationships
+// of the geofence, optionally inserting them as new records.
+// Appends related to o.R.GeofencePasses.
+// Sets related.R.Geofence appropriately.
+func (o *Geofence) AddGeofencePasses(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*GeofencePass) error {
+	var err error
+	for _, rel := range related {
+		if insert {
+			rel.GeofenceID = o.ID
+			if err = rel.Insert(ctx, exec, boil.Infer()); err != nil {
+				return errors.Wrap(err, "failed to insert into foreign table")
+			}
+		} else {
+			updateQuery := fmt.Sprintf(
+				"UPDATE \"geofence_passes\" SET %s WHERE %s",
+				strmangle.SetParamNames("\"", "\"", 1, []string{"geofence_id"}),
+				strmangle.WhereClause("\"", "\"", 2, geofencePassPrimaryKeyColumns),
+			)
+			values := []any{o.ID, rel.GeofenceID, rel.TokenID, rel.EnteredAt}
+
+			if boil.IsDebug(ctx) {
+				writer := boil.DebugWriterFrom(ctx)
+				fmt.Fprintln(writer, updateQuery)
+				fmt.Fprintln(writer, values)
+			}
+			if _, err = exec.ExecContext(ctx, updateQuery, values...); err != nil {
+				return errors.Wrap(err, "failed to update foreign table")
+			}
+
+			rel.GeofenceID = o.ID
+		}
+	}
+
+	if o.R == nil {
+		o.R = &geofenceR{
+			GeofencePasses: related,
+		}
+	} else {
+		o.R.GeofencePasses = append(o.R.GeofencePasses, related...)
+	}
+
+	for _, rel := range related {
+		if rel.R == nil {
+			rel.R = &geofencePassR{
+				Geofence: o,
+			}
+		} else {
+			rel.R.Geofence = o
+		}
+	}
+	return nil
+}
+
+// AddGeofenceScanCoverages adds the given related objects to the existing relationships
+// of the geofence, optionally inserting them as new records.
+// Appends related to o.R.GeofenceScanCoverages.
+// Sets related.R.Geofence appropriately.
+func (o *Geofence) AddGeofenceScanCoverages(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*GeofenceScanCoverage) error {
+	var err error
+	for _, rel := range related {
+		if insert {
+			rel.GeofenceID = o.ID
+			if err = rel.Insert(ctx, exec, boil.Infer()); err != nil {
+				return errors.Wrap(err, "failed to insert into foreign table")
+			}
+		} else {
+			updateQuery := fmt.Sprintf(
+				"UPDATE \"geofence_scan_coverage\" SET %s WHERE %s",
+				strmangle.SetParamNames("\"", "\"", 1, []string{"geofence_id"}),
+				strmangle.WhereClause("\"", "\"", 2, geofenceScanCoveragePrimaryKeyColumns),
+			)
+			values := []any{o.ID, rel.GeofenceID, rel.TokenID, rel.ScannedFrom}
+
+			if boil.IsDebug(ctx) {
+				writer := boil.DebugWriterFrom(ctx)
+				fmt.Fprintln(writer, updateQuery)
+				fmt.Fprintln(writer, values)
+			}
+			if _, err = exec.ExecContext(ctx, updateQuery, values...); err != nil {
+				return errors.Wrap(err, "failed to update foreign table")
+			}
+
+			rel.GeofenceID = o.ID
+		}
+	}
+
+	if o.R == nil {
+		o.R = &geofenceR{
+			GeofenceScanCoverages: related,
+		}
+	} else {
+		o.R.GeofenceScanCoverages = append(o.R.GeofenceScanCoverages, related...)
+	}
+
+	for _, rel := range related {
+		if rel.R == nil {
+			rel.R = &geofenceScanCoverageR{
+				Geofence: o,
+			}
+		} else {
+			rel.R.Geofence = o
+		}
+	}
 	return nil
 }
 

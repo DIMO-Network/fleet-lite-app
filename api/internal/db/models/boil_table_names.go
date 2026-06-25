@@ -4,23 +4,27 @@
 package models
 
 var TableNames = struct {
-	FleetGroups        string
-	Geofences          string
-	Invitations        string
-	TenantUsers        string
-	Tenants            string
-	VehicleFavorites   string
-	VehicleFleetGroups string
-	VehicleGeofences   string
-	Vehicles           string
+	FleetGroups          string
+	GeofencePasses       string
+	GeofenceScanCoverage string
+	Geofences            string
+	Invitations          string
+	TenantUsers          string
+	Tenants              string
+	VehicleFavorites     string
+	VehicleFleetGroups   string
+	VehicleGeofences     string
+	Vehicles             string
 }{
-	FleetGroups:        "fleet_groups",
-	Geofences:          "geofences",
-	Invitations:        "invitations",
-	TenantUsers:        "tenant_users",
-	Tenants:            "tenants",
-	VehicleFavorites:   "vehicle_favorites",
-	VehicleFleetGroups: "vehicle_fleet_groups",
-	VehicleGeofences:   "vehicle_geofences",
-	Vehicles:           "vehicles",
+	FleetGroups:          "fleet_groups",
+	GeofencePasses:       "geofence_passes",
+	GeofenceScanCoverage: "geofence_scan_coverage",
+	Geofences:            "geofences",
+	Invitations:          "invitations",
+	TenantUsers:          "tenant_users",
+	Tenants:              "tenants",
+	VehicleFavorites:     "vehicle_favorites",
+	VehicleFleetGroups:   "vehicle_fleet_groups",
+	VehicleGeofences:     "vehicle_geofences",
+	Vehicles:             "vehicles",
 }
