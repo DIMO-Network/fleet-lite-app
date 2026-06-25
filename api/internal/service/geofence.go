@@ -72,6 +72,42 @@ type GeofenceWithCount struct {
 	VehicleCount int
 }
 
+// GeofenceDef is the slim catalog entry published in the tenant-level geofence
+// attestation (subject = tenant client-id DID). The data payload is
+// { "geofences": [GeofenceDef, ...] }. See docs/GEOFENCES_PLAN.md.
+type GeofenceDef struct {
+	ID            string          `json:"id"`
+	Name          string          `json:"name"`
+	Color         string          `json:"color"`
+	Geometry      json.RawMessage `json:"geometry"`
+	AreaM2        float64         `json:"areaM2"`
+	SpeedLimitKph *int            `json:"speedLimitKph,omitempty"`
+	Scope         string          `json:"scope"`
+	GroupIDs      []string        `json:"groupIds"`
+}
+
+func toGeofenceDef(g *dbmodels.Geofence) GeofenceDef {
+	var sp *int
+	if g.SpeedLimitKPH.Valid {
+		v := g.SpeedLimitKPH.Int
+		sp = &v
+	}
+	ids := []string(g.GroupIds)
+	if ids == nil {
+		ids = []string{}
+	}
+	return GeofenceDef{
+		ID:            g.ID,
+		Name:          g.Name,
+		Color:         g.Color,
+		Geometry:      json.RawMessage(g.Geometry),
+		AreaM2:        g.AreaM2,
+		SpeedLimitKph: sp,
+		Scope:         g.Scope,
+		GroupIDs:      ids,
+	}
+}
+
 // GeofenceService owns tenant-scoped CRUD over geofences and their manual
 // vehicle assignments, plus scope resolution (all|group|manual → token ids).
 // Pure data access — write-path attestation is a later phase (see the plan).
@@ -179,10 +215,13 @@ func (s *GeofenceService) CreateGeofence(ctx context.Context, tenantID, createdB
 // UpdateGeofence applies a partial update. Recomputes area when geometry
 // changes; re-validates groups when scope/groups change; drops stale manual
 // assignments when scope moves away from manual.
-func (s *GeofenceService) UpdateGeofence(ctx context.Context, tenantID, id string, p GeofencePatch) (*dbmodels.Geofence, error) {
+// The returned token-id slice is the set of vehicles whose manual assignment
+// was dropped because the scope moved away from manual — the caller republishes
+// their per-vehicle attestation (which no longer includes this geofence).
+func (s *GeofenceService) UpdateGeofence(ctx context.Context, tenantID, id string, p GeofencePatch) (*dbmodels.Geofence, []int64, error) {
 	g, err := s.GetGeofence(ctx, tenantID, id)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	cols := []string{"updated_at"}
 
@@ -197,7 +236,7 @@ func (s *GeofenceService) UpdateGeofence(ctx context.Context, tenantID, id strin
 	if p.Geometry != nil {
 		area, aerr := polygonAreaM2(p.Geometry)
 		if aerr != nil {
-			return nil, aerr
+			return nil, nil, aerr
 		}
 		g.Geometry = types.JSON(p.Geometry)
 		g.AreaM2 = area
@@ -214,7 +253,7 @@ func (s *GeofenceService) UpdateGeofence(ctx context.Context, tenantID, id strin
 	if p.Scope != nil && *p.Scope != "" {
 		newScope = *p.Scope
 		if !validScope(newScope) {
-			return nil, ErrInvalidScope
+			return nil, nil, ErrInvalidScope
 		}
 	}
 	newGroups := []string(g.GroupIds)
@@ -223,7 +262,7 @@ func (s *GeofenceService) UpdateGeofence(ctx context.Context, tenantID, id strin
 	}
 	normGroups, err := s.normalizeGroups(ctx, tenantID, newScope, newGroups)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if newScope != g.Scope {
 		g.Scope = newScope
@@ -234,14 +273,17 @@ func (s *GeofenceService) UpdateGeofence(ctx context.Context, tenantID, id strin
 
 	if _, err := g.Update(ctx, s.pdb.DBS().Writer, boil.Whitelist(cols...)); err != nil {
 		if isUniqueViolation(err) {
-			return nil, ErrGeofenceNameExists
+			return nil, nil, ErrGeofenceNameExists
 		}
-		return nil, fmt.Errorf("update geofence: %w", err)
+		return nil, nil, fmt.Errorf("update geofence: %w", err)
 	}
 
 	// Manual assignments only matter while scope is manual; clean them up
-	// otherwise so EffectiveTokenIDs and counts stay unambiguous.
+	// otherwise so EffectiveTokenIDs and counts stay unambiguous. Capture the
+	// affected vehicles first so the caller can republish their per-vehicle CE.
+	var dropped []int64
 	if g.Scope != GeofenceScopeManual {
+		dropped, _ = s.manualMemberTokenIDs(ctx, tenantID, g.ID)
 		if _, derr := dbmodels.VehicleGeofences(
 			dbmodels.VehicleGeofenceWhere.TenantID.EQ(tenantID),
 			dbmodels.VehicleGeofenceWhere.GeofenceID.EQ(g.ID),
@@ -249,19 +291,41 @@ func (s *GeofenceService) UpdateGeofence(ctx context.Context, tenantID, id strin
 			s.logger.Warn().Err(derr).Str("geofence", g.ID).Msg("drop stale manual assignments")
 		}
 	}
-	return g, nil
+	return g, dropped, nil
 }
 
-// DeleteGeofence deletes a geofence (cascading its manual assignments).
-func (s *GeofenceService) DeleteGeofence(ctx context.Context, tenantID, id string) error {
+// DeleteGeofence deletes a geofence (cascading its manual assignments). It
+// returns the token ids that were manually assigned (captured before the
+// cascade) so the caller can republish their per-vehicle attestation.
+func (s *GeofenceService) DeleteGeofence(ctx context.Context, tenantID, id string) ([]int64, error) {
 	g, err := s.GetGeofence(ctx, tenantID, id)
 	if err != nil {
-		return err
+		return nil, err
+	}
+	var members []int64
+	if g.Scope == GeofenceScopeManual {
+		members, _ = s.manualMemberTokenIDs(ctx, tenantID, id)
 	}
 	if _, err := g.Delete(ctx, s.pdb.DBS().Writer); err != nil {
-		return fmt.Errorf("delete geofence: %w", err)
+		return nil, fmt.Errorf("delete geofence: %w", err)
 	}
-	return nil
+	return members, nil
+}
+
+// manualMemberTokenIDs returns the token ids manually assigned to a geofence.
+func (s *GeofenceService) manualMemberTokenIDs(ctx context.Context, tenantID, geofenceID string) ([]int64, error) {
+	rows, err := dbmodels.VehicleGeofences(
+		dbmodels.VehicleGeofenceWhere.TenantID.EQ(tenantID),
+		dbmodels.VehicleGeofenceWhere.GeofenceID.EQ(geofenceID),
+	).All(ctx, s.pdb.DBS().Reader)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]int64, len(rows))
+	for i, r := range rows {
+		ids[i] = r.TokenID
+	}
+	return ids, nil
 }
 
 // AddVehicle assigns a vehicle to a manual-scope geofence, idempotently. Returns
@@ -352,6 +416,42 @@ func (s *GeofenceService) EffectiveTokenIDs(ctx context.Context, tenantID string
 	ids := make([]int64, len(rows))
 	for i, r := range rows {
 		ids[i] = r.TokenID
+	}
+	return ids, nil
+}
+
+// TenantGeofenceDefs returns all of the tenant's geofences as catalog defs for
+// the tenant-level attestation, ordered by name.
+func (s *GeofenceService) TenantGeofenceDefs(ctx context.Context, tenantID string) ([]GeofenceDef, error) {
+	rows, err := dbmodels.Geofences(
+		dbmodels.GeofenceWhere.TenantID.EQ(tenantID),
+		qm.OrderBy("name"),
+	).All(ctx, s.pdb.DBS().Reader)
+	if err != nil {
+		return nil, fmt.Errorf("tenant geofence defs: %w", err)
+	}
+	defs := make([]GeofenceDef, len(rows))
+	for i, g := range rows {
+		defs[i] = toGeofenceDef(g)
+	}
+	return defs, nil
+}
+
+// VehicleManualGeofenceIDs returns the geofence ids a vehicle is manually
+// assigned to — the per-vehicle attestation payload. all/group-scope membership
+// is derived from the tenant catalog and isn't materialised per vehicle.
+func (s *GeofenceService) VehicleManualGeofenceIDs(ctx context.Context, tenantID string, tokenID int64) ([]string, error) {
+	rows, err := dbmodels.VehicleGeofences(
+		dbmodels.VehicleGeofenceWhere.TenantID.EQ(tenantID),
+		dbmodels.VehicleGeofenceWhere.TokenID.EQ(tokenID),
+		qm.OrderBy("geofence_id"),
+	).All(ctx, s.pdb.DBS().Reader)
+	if err != nil {
+		return nil, fmt.Errorf("vehicle manual geofence ids: %w", err)
+	}
+	ids := make([]string, len(rows))
+	for i, r := range rows {
+		ids[i] = r.GeofenceID
 	}
 	return ids, nil
 }

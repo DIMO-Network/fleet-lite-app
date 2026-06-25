@@ -76,7 +76,7 @@ func App(
 	groupSyncSvc := service.NewGroupSyncService(logger, pdb, fetchAPI, authProvider)
 	fleetGroupsCtrl := controllers.NewFleetGroupsController(logger, groupSvc, groupSyncSvc, attestSvc)
 	geofenceSvc := service.NewGeofenceService(logger, pdb)
-	geofencesCtrl := controllers.NewGeofencesController(logger, geofenceSvc)
+	geofencesCtrl := controllers.NewGeofencesController(logger, geofenceSvc, attestSvc)
 	settingsCtrl := controllers.NewSettingsController(settings, logger)
 	tenantsCtrl := controllers.NewTenantsController(logger, settings, tenantSvc, vehicleSvc, identity, authProvider)
 	invitationsCtrl := controllers.NewInvitationsController(logger, tenantSvc, invitationSvc)

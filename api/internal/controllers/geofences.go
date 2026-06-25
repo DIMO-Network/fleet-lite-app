@@ -1,10 +1,13 @@
 package controllers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"time"
 
 	dbmodels "github.com/DIMO-Network/fleet-lite-app/internal/db/models"
+	"github.com/DIMO-Network/fleet-lite-app/internal/models"
 	"github.com/DIMO-Network/fleet-lite-app/internal/service"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
@@ -12,15 +15,21 @@ import (
 
 // GeofencesController exposes tenant-scoped CRUD over geofences and manual
 // vehicle assignments. All handlers run behind the tenant middleware (JWT +
-// Tenant-Id). Phase 1 is data only — write-path attestation lands in a later
-// phase (see docs/GEOFENCES_PLAN.md).
+// Tenant-Id).
+//
+// After a successful mutation the affected attestations are (re)published
+// best-effort in a detached goroutine: the tenant geofence catalog (subject =
+// client-id DID) on any geofence change, and a vehicle's manual-membership CE
+// (subject = vehicle DID) on assignment changes. The DB is the source of truth;
+// a publish failure never fails the request (mirrors fleet groups).
 type GeofencesController struct {
 	logger    *zerolog.Logger
 	geofences *service.GeofenceService
+	attest    service.AttestService
 }
 
-func NewGeofencesController(logger *zerolog.Logger, geofences *service.GeofenceService) *GeofencesController {
-	return &GeofencesController{logger: logger, geofences: geofences}
+func NewGeofencesController(logger *zerolog.Logger, geofences *service.GeofenceService, attest service.AttestService) *GeofencesController {
+	return &GeofencesController{logger: logger, geofences: geofences, attest: attest}
 }
 
 type createGeofenceRequest struct {
@@ -177,6 +186,7 @@ func (gc *GeofencesController) CreateGeofence(c *fiber.Ctx) error {
 	if err != nil {
 		return gc.mapServiceError(err, "create geofence")
 	}
+	gc.republishCatalog(tenant)
 	return c.Status(fiber.StatusCreated).JSON(toGeofenceResponse(g, 0))
 }
 
@@ -193,7 +203,7 @@ func (gc *GeofencesController) UpdateGeofence(c *fiber.Ctx) error {
 	if req.Color != nil && *req.Color != "" && !hexColorRe.MatchString(*req.Color) {
 		return fiber.NewError(fiber.StatusBadRequest, "color must be a #RRGGBB hex value")
 	}
-	g, err := gc.geofences.UpdateGeofence(c.Context(), tenant.ID, c.Params("id"), service.GeofencePatch{
+	g, dropped, err := gc.geofences.UpdateGeofence(c.Context(), tenant.ID, c.Params("id"), service.GeofencePatch{
 		Name:          req.Name,
 		Color:         req.Color,
 		Geometry:      req.Geometry,
@@ -204,6 +214,10 @@ func (gc *GeofencesController) UpdateGeofence(c *fiber.Ctx) error {
 	if err != nil {
 		return gc.mapServiceError(err, "update geofence")
 	}
+	// Catalog changed; republish it. Vehicles whose manual assignment was
+	// dropped (scope moved off manual) get their per-vehicle CE republished too.
+	gc.republishCatalog(tenant)
+	gc.republishVehicles(tenant, dropped)
 	ids, _ := gc.geofences.EffectiveTokenIDs(c.Context(), tenant.ID, g)
 	return c.JSON(toGeofenceResponse(g, len(ids)))
 }
@@ -214,9 +228,12 @@ func (gc *GeofencesController) DeleteGeofence(c *fiber.Ctx) error {
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	if err := gc.geofences.DeleteGeofence(c.Context(), tenant.ID, c.Params("id")); err != nil {
+	members, err := gc.geofences.DeleteGeofence(c.Context(), tenant.ID, c.Params("id"))
+	if err != nil {
 		return gc.mapServiceError(err, "delete geofence")
 	}
+	gc.republishCatalog(tenant)
+	gc.republishVehicles(tenant, members)
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
@@ -234,6 +251,7 @@ func (gc *GeofencesController) AddVehicleToGeofence(c *fiber.Ctx) error {
 	if _, err := gc.geofences.AddVehicle(c.Context(), tenant.ID, int64(tokenID), geofenceID); err != nil {
 		return gc.mapServiceError(err, "assign vehicle to geofence")
 	}
+	gc.republishVehicle(tenant, int64(tokenID))
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"tokenId": tokenID, "geofenceId": geofenceID})
 }
 
@@ -251,7 +269,81 @@ func (gc *GeofencesController) RemoveVehicleFromGeofence(c *fiber.Ctx) error {
 	if _, err := gc.geofences.RemoveVehicle(c.Context(), tenant.ID, int64(tokenID), geofenceID); err != nil {
 		return gc.mapServiceError(err, "unassign vehicle from geofence")
 	}
+	gc.republishVehicle(tenant, int64(tokenID))
 	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// republishCatalog (re)publishes the tenant's geofence catalog attestation
+// (subject = client-id DID) in a detached goroutine. Best-effort.
+func (gc *GeofencesController) republishCatalog(tenant models.Tenant) {
+	if gc.attest == nil {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		defs, err := gc.geofences.TenantGeofenceDefs(ctx, tenant.ID)
+		if err != nil {
+			gc.logger.Err(err).Str("tenant", tenant.ID).Msg("load geofence catalog for attestation")
+			return
+		}
+		gc.attestWithRetry(ctx, "catalog tenant="+tenant.ID, func() (string, error) {
+			return gc.attest.AttestTenantGeofences(tenant, defs)
+		})
+	}()
+}
+
+// republishVehicles (re)publishes each vehicle's manual geofence-membership
+// attestation (subject = vehicle DID) in one detached goroutine. Best-effort.
+func (gc *GeofencesController) republishVehicles(tenant models.Tenant, tokenIDs []int64) {
+	if gc.attest == nil || len(tokenIDs) == 0 {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		for _, tid := range tokenIDs {
+			ids, err := gc.geofences.VehicleManualGeofenceIDs(ctx, tenant.ID, tid)
+			if err != nil {
+				gc.logger.Err(err).Str("tenant", tenant.ID).Int64("token_id", tid).
+					Msg("load vehicle geofences for attestation")
+				continue
+			}
+			tidCopy := tid
+			gc.attestWithRetry(ctx, "vehicle "+tenant.ID, func() (string, error) {
+				return gc.attest.AttestVehicleGeofences(tenant, uint64(tidCopy), ids)
+			})
+		}
+	}()
+}
+
+// republishVehicle is the single-vehicle convenience over republishVehicles.
+func (gc *GeofencesController) republishVehicle(tenant models.Tenant, tokenID int64) {
+	gc.republishVehicles(tenant, []int64{tokenID})
+}
+
+// attestWithRetry runs a publish func with up to 3 attempts and exponential
+// backoff. Best-effort — the final failure is logged at error level.
+func (gc *GeofencesController) attestWithRetry(ctx context.Context, label string, fn func() (string, error)) {
+	const maxAttempts = 3
+	backoff := time.Second
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		eventID, err := fn()
+		if err == nil {
+			gc.logger.Info().Str("what", label).Str("event_id", eventID).Msg("published geofence attestation")
+			return
+		}
+		gc.logger.Warn().Err(err).Str("what", label).Int("attempt", attempt).Msg("publish geofence attestation failed")
+		if attempt < maxAttempts {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(backoff):
+			}
+			backoff *= 2
+		}
+	}
+	gc.logger.Error().Str("what", label).Msg("gave up publishing geofence attestation after retries")
 }
 
 // mapServiceError translates geofence service sentinel errors into HTTP errors.
