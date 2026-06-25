@@ -8,8 +8,9 @@ import { themeService } from '../services/theme-service.ts';
 import { TelemetryService } from '../services/telemetry-service.ts';
 import { PrefsService, TripMechanism } from '../services/prefs-service.ts';
 import { formatDistance, formatSpeed } from '../utils/units.ts';
-import { tripSignal, tripDistanceKm, tripTimeShort } from '../utils/trips.ts';
+import { tripSignal, tripDistanceKm, tripTimeShort, formatDwell } from '../utils/trips.ts';
 import { Trip } from '../types/telemetry.ts';
+import { GeofenceCrossing } from '../types/geofence.ts';
 import './trip-replay-modal.ts';
 
 /** One selectable trips window. */
@@ -44,6 +45,9 @@ export class VehicleTripsPanel extends LitElement {
     @state() private selectedTrip: Trip | null = null;
     @state() private routeLoading = false;
     @state() private periodIndex = 0;
+    // Geofences the selected trip crossed (Phase 2 detection, entry 1).
+    @state() private tripGeofences: GeofenceCrossing[] = [];
+    @state() private geofencesLoading = false;
     // Trip open in the full-screen replay modal (null = closed).
     @state() private replayTrip: Trip | null = null;
 
@@ -52,6 +56,7 @@ export class VehicleTripsPanel extends LitElement {
     private liveMarker: L.CircleMarker | null = null;
     private routeLayer: L.Polyline | null = null;
     private endpointLayers: L.CircleMarker[] = [];
+    private geofenceMarkers: L.CircleMarker[] = [];
     private resizeObserver: ResizeObserver | null = null;
     private unsubscribePrefs: (() => void) | null = null;
     // Guards stale async results after period/vehicle switches.
@@ -205,6 +210,10 @@ export class VehicleTripsPanel extends LitElement {
         const tokenId = this.tokenId;
         this.selectedTrip = trip;
         this.routeLoading = true;
+        this.tripGeofences = [];
+        // Geofence crossings load independently of the route so neither blocks the
+        // other; the route is the primary view, crossings enrich it.
+        void this.loadTripGeofences(trip, tokenId);
         try {
             const res = await TelemetryService.getInstance().tripRoute(
                 Number(tokenId), trip.start.timestamp, trip.end.timestamp);
@@ -222,6 +231,40 @@ export class VehicleTripsPanel extends LitElement {
         } finally {
             if (this.selectedTrip === trip) this.routeLoading = false;
         }
+    }
+
+    private async loadTripGeofences(trip: Trip, tokenId: string) {
+        this.geofencesLoading = true;
+        try {
+            const res = await TelemetryService.getInstance().tripGeofences(
+                Number(tokenId), trip.start.timestamp, trip.end.timestamp);
+            if (this.selectedTrip !== trip || this.tokenId !== tokenId) return;
+            this.tripGeofences = res.geofences || [];
+            this.drawGeofenceMarkers();
+        } catch {
+            if (this.selectedTrip === trip) this.tripGeofences = [];
+        } finally {
+            if (this.selectedTrip === trip && this.tokenId === tokenId) this.geofencesLoading = false;
+        }
+    }
+
+    /** Drop a small marker at each pass's entry point, colored per geofence. */
+    private drawGeofenceMarkers() {
+        if (!this.map) return;
+        this.removeGeofenceMarkers();
+        for (const g of this.tripGeofences) {
+            for (const p of g.passes) {
+                const m = L.circleMarker([p.entryLat, p.entryLng], {
+                    radius: 6, fillColor: g.color, color: '#ffffff', weight: 2, fillOpacity: 0.95,
+                }).addTo(this.map);
+                this.geofenceMarkers.push(m);
+            }
+        }
+    }
+
+    private removeGeofenceMarkers() {
+        this.geofenceMarkers.forEach((m) => m.remove());
+        this.geofenceMarkers = [];
     }
 
     private drawRoute(points: Array<[number, number]>) {
@@ -244,8 +287,11 @@ export class VehicleTripsPanel extends LitElement {
 
     private clearRoute() {
         this.removeRouteLayers();
+        this.removeGeofenceMarkers();
         this.selectedTrip = null;
         this.routeLoading = false;
+        this.tripGeofences = [];
+        this.geofencesLoading = false;
     }
 
     private backToLive() {
@@ -336,17 +382,73 @@ export class VehicleTripsPanel extends LitElement {
                 .list { border-left: none; border-top: 1px solid var(--outline-variant); }
             }
 
-            .trip-row-wrap {
-                display: flex;
-                align-items: stretch;
-                border-bottom: 1px solid var(--outline-variant);
-                transition: background 0.15s ease;
-            }
-            .trip-row-wrap:hover { background: var(--surface-container-high); }
-            .trip-row-wrap.selected {
+            .trip-entry { border-bottom: 1px solid var(--outline-variant); }
+            .trip-entry.selected {
                 background: var(--surface-container-high);
                 box-shadow: inset 3px 0 0 #f5c84b;
             }
+            .trip-row-wrap {
+                display: flex;
+                align-items: stretch;
+                transition: background 0.15s ease;
+            }
+            .trip-entry:not(.selected) .trip-row-wrap:hover { background: var(--surface-container-high); }
+
+            .gf-detail {
+                padding: 10px 16px 14px;
+                border-top: 1px dashed var(--outline-variant);
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+            .gf-detail.loading {
+                flex-direction: row;
+                align-items: center;
+                gap: 8px;
+                font: var(--type-body-sm);
+                color: var(--on-surface-variant);
+            }
+            .gf-head {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                font: var(--type-label-caps);
+                font-size: 10px;
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                color: var(--on-surface-variant);
+            }
+            .gf-head .material-symbols-outlined { font-size: 14px; }
+            .gf-item { display: flex; flex-direction: column; gap: 4px; }
+            .gf-name {
+                display: flex;
+                align-items: center;
+                gap: 7px;
+                font: var(--type-body-sm);
+                font-weight: 600;
+                color: var(--on-surface);
+            }
+            .gf-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+            .gf-pass {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 10px;
+                padding-left: 17px;
+                font: var(--type-body-sm);
+                color: var(--on-surface-variant);
+            }
+            .gf-times { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+            .gf-times .material-symbols-outlined { font-size: 12px; }
+            .gf-meta { display: inline-flex; align-items: center; gap: 10px; white-space: nowrap; }
+            .gf-speed { display: inline-flex; align-items: center; gap: 3px; }
+            .gf-speed.over {
+                color: var(--error);
+                font-weight: 600;
+            }
+            .gf-speed .material-symbols-outlined { font-size: 13px; }
+            .spin { animation: gf-spin 1s linear infinite; }
+            @keyframes gf-spin { to { transform: rotate(360deg); } }
             .trip-row {
                 flex: 1;
                 min-width: 0;
@@ -417,28 +519,72 @@ export class VehicleTripsPanel extends LitElement {
         const avgFv = avg != null ? formatSpeed(avg) : null;
         const maxFv = max != null ? formatSpeed(max) : null;
         return html`
-            <div class="trip-row-wrap ${selected ? 'selected' : ''}">
-                <button class="trip-row" @click=${() => this.selectTrip(trip)}>
-                    <span class="when">
-                        <span class="times">
-                            ${tripTimeShort(trip.start.timestamp)}
-                            <span class="material-symbols-outlined">arrow_forward</span>
-                            ${trip.isOngoing ? '' : tripTimeShort(trip.end.timestamp)}
+            <div class="trip-entry ${selected ? 'selected' : ''}">
+                <div class="trip-row-wrap">
+                    <button class="trip-row" @click=${() => this.selectTrip(trip)}>
+                        <span class="when">
+                            <span class="times">
+                                ${tripTimeShort(trip.start.timestamp)}
+                                <span class="material-symbols-outlined">arrow_forward</span>
+                                ${trip.isOngoing ? '' : tripTimeShort(trip.end.timestamp)}
+                            </span>
+                            ${trip.isOngoing ? html`<span class="ongoing">${msg('Ongoing')}</span>` : ''}
                         </span>
-                        ${trip.isOngoing ? html`<span class="ongoing">${msg('Ongoing')}</span>` : ''}
-                    </span>
-                    <span class="stats">
-                        ${selected && this.routeLoading
-                            ? html`<span class="material-symbols-outlined" style="font-size:14px;">progress_activity</span>`
-                            : html`
-                                ${distFv ? html`<span class="dist">${distFv.value} ${distFv.unit}</span>` : ''}
-                                ${avgFv && maxFv ? html`<br />${avgFv.value}/${maxFv.value} ${maxFv.unit}` : ''}
-                            `}
-                    </span>
-                </button>
-                <button class="replay-btn" title=${msg('Replay trip')} @click=${() => this.openReplay(trip)}>
-                    <span class="material-symbols-outlined">smart_display</span>
-                </button>
+                        <span class="stats">
+                            ${selected && this.routeLoading
+                                ? html`<span class="material-symbols-outlined" style="font-size:14px;">progress_activity</span>`
+                                : html`
+                                    ${distFv ? html`<span class="dist">${distFv.value} ${distFv.unit}</span>` : ''}
+                                    ${avgFv && maxFv ? html`<br />${avgFv.value}/${maxFv.value} ${maxFv.unit}` : ''}
+                                `}
+                        </span>
+                    </button>
+                    <button class="replay-btn" title=${msg('Replay trip')} @click=${() => this.openReplay(trip)}>
+                        <span class="material-symbols-outlined">smart_display</span>
+                    </button>
+                </div>
+                ${selected ? this.renderTripGeofences() : nothing}
+            </div>
+        `;
+    }
+
+    /** The "geofences crossed" detail shown under the selected trip. */
+    private renderTripGeofences() {
+        if (this.geofencesLoading && this.tripGeofences.length === 0) {
+            return html`<div class="gf-detail loading">
+                <span class="material-symbols-outlined spin">progress_activity</span>${msg('Checking geofences…')}
+            </div>`;
+        }
+        if (this.tripGeofences.length === 0) return nothing;
+        return html`
+            <div class="gf-detail">
+                <div class="gf-head">
+                    <span class="material-symbols-outlined">fence</span>${msg('Geofences crossed')}
+                </div>
+                ${this.tripGeofences.map((g) => html`
+                    <div class="gf-item">
+                        <div class="gf-name">
+                            <span class="gf-dot" style="background:${g.color}"></span>${g.name}
+                        </div>
+                        ${g.passes.map((p) => {
+                            const max = p.maxSpeedKph != null ? formatSpeed(p.maxSpeedKph) : null;
+                            return html`
+                                <div class="gf-pass">
+                                    <span class="gf-times">
+                                        ${tripTimeShort(p.enteredAt)}
+                                        <span class="material-symbols-outlined">arrow_forward</span>
+                                        ${tripTimeShort(p.exitedAt)}
+                                    </span>
+                                    <span class="gf-meta">
+                                        <span class="gf-dwell">${formatDwell(p.dwellS)}</span>
+                                        ${max ? html`<span class="gf-speed ${p.speedExceeded ? 'over' : ''}">
+                                            ${p.speedExceeded ? html`<span class="material-symbols-outlined">speed</span>` : nothing}${max.value} ${max.unit}
+                                        </span>` : nothing}
+                                    </span>
+                                </div>`;
+                        })}
+                    </div>
+                `)}
             </div>
         `;
     }

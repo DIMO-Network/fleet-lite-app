@@ -1228,6 +1228,14 @@
   <source>Finish</source>
         <target>Terminar</target>
 </trans-unit>
+<trans-unit id="s3793c3cba760e854">
+  <source>Checking geofences…</source>
+  <target>Comprobando geocercas…</target>
+</trans-unit>
+<trans-unit id="s123f0fcd0ebdeb39">
+  <source>Geofences crossed</source>
+  <target>Geocercas atravesadas</target>
+</trans-unit>
 </body>
 </file>
 </xliff>
