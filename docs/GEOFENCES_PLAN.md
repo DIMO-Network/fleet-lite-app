@@ -272,14 +272,88 @@ converges). Same freshness-gate concerns as groups. Not required to ship the UI.
    modals, polygon draw + render, nav/route, localization.
 4. **(Phase 1.5, optional)** Pull-back sync (cron + lazy), mirroring groups.
 
-### Later milestones (out of scope for this plan — sketched only)
-- **Phase 2 — event detection:** enter/exit timestamps, dwell duration, speed-exceeded
-  (timestamps + coords). Mechanism deliberately undecided (Decision deferred): DIMO **webhooks**
-  vs **backend telemetry computation** (pull location/speed history and compute crossings). Decide
-  at Phase 2 kickoff; the user leans webhooks for the alerts angle.
-- **Phase 3 — trips + alerts:** surface geofence info inside trips (enter/exit/dwell overlaid on a
-  trip) **and** a dedicated geofence section; generic Alerts surface with **geofence-specific
-  alert config via webhooks**.
+### Phase 1.5 — pull-back sync — **PENDING TODO (deferred, 2026-06-25).** Not building now;
+recorded as a pending item. Clone of `GroupSyncService` + `import-group-attestations`: read the
+tenant root CE + per-vehicle CEs back from Fetch API and additively reconcile the local cache so a
+sibling app / re-install converges. No user-facing payoff until there's a second consumer — revisit
+then.
+
+### Phase 2 — event detection — **PLANNED (decisions locked 2026-06-25). On-demand telemetry compute, NO cron.**
+
+Mechanism = **backend telemetry computation** (not webhooks), computed **just-in-time** on view, with
+**summary results cached in the DB** (past trips/fixes are immutable → a computed result never changes).
+Locked decisions (2026-06-25): **speed included from the start**; **both entry points**; entry-point-2
+fan-out is **capped + bounded-concurrency + progressive/streaming results** (not restricted to assigned).
+
+**Data source — verified (telemetry_api.go `TripReplay`).** telemetry-api's `signals` query is
+interval-bucketed and multi-signal, so one call returns coordinates **and** speed:
+```graphql
+route: signals(tokenId: %d, from: %q, to: %q, interval: "30s") {
+  timestamp
+  currentLocationCoordinates(agg: LAST) { latitude longitude }
+  speed(agg: MAX)
+}
+```
+→ a new `TelemetryAPIService.GeofenceSamples(tenant, tokenID, from, to) []GeoSample{ts, lat, lng, speedKph}`.
+Speed is MAX-per-bucket, so speed-exceeded resolves to the bucket granularity (30s default; tighten if
+needed). Per-vehicle asset JWT required (developer JWT rejected) — reuse the per-vehicle exchange +
+`permissionsRequired` skip already used by `FleetLocations`/`Latest`.
+
+**Two entry points, one compute path:**
+1. **Trip panel** — clicking a trip computes (or reads cache for) which geofences that trip's route
+   crossed: enter/exit timestamps, dwell, max speed + exceeded. Cheap: one vehicle, one trip window,
+   the same route data replay already fetches.
+2. **Geofence window query** — clicking a geofence + a window (**≤ 3 days**, enforced server-side)
+   computes which effective vehicles passed through it, same per-pass calcs. Fan-out over effective
+   vehicles with **bounded concurrency** (reuse `FleetLocations`' worker pool), **skip
+   no-permission vehicles**, **stream results progressively** (per-vehicle as each completes) with an
+   "N of M vehicles" progress signal. Cap the vehicle count (config) and `log()` if truncated.
+
+**Cache atom = a "pass"** (contiguous inside-polygon interval), summary form, NOT raw telemetry:
+```sql
+geofence_passes(
+  geofence_id TEXT, token_id BIGINT, tenant_id UUID,
+  entered_at TIMESTAMPTZ, exited_at TIMESTAMPTZ, dwell_s INTEGER,
+  max_speed_kph DOUBLE PRECISION, entry_lat/lng, exit_lat/lng,
+  max_speed_lat/lng,                       -- coords of the speeding bucket
+  num_samples INTEGER,
+  PRIMARY KEY (geofence_id, token_id, entered_at))
+geofence_scan_coverage(                     -- which ranges are already computed
+  geofence_id TEXT, token_id BIGINT, tenant_id UUID,
+  scanned_from TIMESTAMPTZ, scanned_to TIMESTAMPTZ)
+```
+Both entry points = "passes overlapping interval X". Before computing, subtract covered ranges from the
+requested window and only fetch the **gaps**; then merge coverage. A pass fully in the past + inside
+covered range never recomputes. Geometry is **immutable per geofence id** (edit = delete+redraw), so
+cached passes stay valid. `speed_limit_kph` **can** change on edit → store raw `max_speed_kph`, evaluate
+"exceeded?" against the *current* limit at **read** time (never bake the verdict into the cache).
+
+**Pass-detection algorithm** (`service/geofence_detection.go`): fetch `GeoSample`s for the gap window →
+ray-cast point-in-polygon (new `geo` helper, outer ring) over the ordered samples → each maximal run of
+inside-samples = one pass; `entered_at`/`exited_at` from the run's edge timestamps (optionally midpoint
+to the prior/next outside sample), `dwell_s` = exited−entered, `max_speed_kph` + its coords = max over
+the run. Sampling-interval error is inherent (a vehicle can clip a small fence between 30s buckets) —
+documented limitation; tighten interval per-query if a fence is small.
+
+**Endpoints (under `tenantApp`):**
+```
+GET /telemetry/:tokenID/trip-geofences?from&to   → entry 1: passes for this trip vs all tenant geofences
+GET /fleet/geofences/:id/passes?from&to           → entry 2: passes in window; streams (SSE/chunked) or
+                                                     client-paginates token-id batches like the map does
+```
+**Frontend:** trip-details panel section (geofences this trip crossed, with timing/speed badges);
+geofence-view detail with a duration picker (≤3d) + a progressively-filling vehicle/pass list. Reuse
+units toggle + `msg()` localization.
+
+**Suggested build order:** (A) samples fetch + `geo` point-in-polygon + passes/coverage cache + entry 1
+(single-vehicle, proves the machinery at ~zero scale risk); (B) entry 2 progressive fan-out reusing the
+same compute path. Ship as two PRs.
+
+### Phase 3 — trips + alerts (still later)
+- Surface geofence info inside trips (enter/exit/dwell overlaid on a trip) **and** a dedicated geofence
+  section (builds directly on Phase 2's passes).
+- Generic Alerts surface with **geofence-specific alert config** — alerting/notification mechanism
+  (webhooks vs in-app) to be decided at Phase 3 kickoff.
 
 ---
 
