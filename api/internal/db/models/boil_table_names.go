@@ -5,18 +5,22 @@ package models
 
 var TableNames = struct {
 	FleetGroups        string
+	Geofences          string
 	Invitations        string
 	TenantUsers        string
 	Tenants            string
 	VehicleFavorites   string
 	VehicleFleetGroups string
+	VehicleGeofences   string
 	Vehicles           string
 }{
 	FleetGroups:        "fleet_groups",
+	Geofences:          "geofences",
 	Invitations:        "invitations",
 	TenantUsers:        "tenant_users",
 	Tenants:            "tenants",
 	VehicleFavorites:   "vehicle_favorites",
 	VehicleFleetGroups: "vehicle_fleet_groups",
+	VehicleGeofences:   "vehicle_geofences",
 	Vehicles:           "vehicles",
 }

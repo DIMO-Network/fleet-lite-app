@@ -144,6 +144,16 @@ func (p *DimoAuthProvider) BuildVehicleDID(tokenID uint64) string {
 	return fmt.Sprintf("did:erc721:%d:%s:%d", p.settings.ChainID, p.settings.VehicleNftAddress.Hex(), tokenID)
 }
 
+// BuildTenantDID returns the ethr DID for a tenant's dev-license client id. It
+// is the subject of tenant-level (client-id-scoped) attestations such as the
+// geofence catalog. Verified against the live Attest/Fetch APIs: a bare 0x
+// address is rejected ("invalid DID"), but the ethr DID form is accepted and is
+// queryable via an asset JWT minted for this same DID (the dev license can
+// self-grant). See docs/GEOFENCES_PLAN.md.
+func (p *DimoAuthProvider) BuildTenantDID(clientID string) string {
+	return fmt.Sprintf("did:ethr:%d:%s", p.settings.ChainID, clientID)
+}
+
 // ParseTokenIDFromDID extracts the numeric token ID from a DID string.
 func ParseTokenIDFromDID(tokenDID string) (uint64, error) {
 	parts := strings.Split(tokenDID, ":")
