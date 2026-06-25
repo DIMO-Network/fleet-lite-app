@@ -88,12 +88,14 @@ var TenantWhere = struct {
 // TenantRels is where relationship names are stored.
 var TenantRels = struct {
 	FleetGroups      string
+	Geofences        string
 	Invitations      string
 	TenantUsers      string
 	VehicleFavorites string
 	Vehicles         string
 }{
 	FleetGroups:      "FleetGroups",
+	Geofences:        "Geofences",
 	Invitations:      "Invitations",
 	TenantUsers:      "TenantUsers",
 	VehicleFavorites: "VehicleFavorites",
@@ -103,6 +105,7 @@ var TenantRels = struct {
 // tenantR is where relationships are stored.
 type tenantR struct {
 	FleetGroups      FleetGroupSlice      `boil:"FleetGroups" json:"FleetGroups" toml:"FleetGroups" yaml:"FleetGroups"`
+	Geofences        GeofenceSlice        `boil:"Geofences" json:"Geofences" toml:"Geofences" yaml:"Geofences"`
 	Invitations      InvitationSlice      `boil:"Invitations" json:"Invitations" toml:"Invitations" yaml:"Invitations"`
 	TenantUsers      TenantUserSlice      `boil:"TenantUsers" json:"TenantUsers" toml:"TenantUsers" yaml:"TenantUsers"`
 	VehicleFavorites VehicleFavoriteSlice `boil:"VehicleFavorites" json:"VehicleFavorites" toml:"VehicleFavorites" yaml:"VehicleFavorites"`
@@ -128,6 +131,22 @@ func (r *tenantR) GetFleetGroups() FleetGroupSlice {
 	}
 
 	return r.FleetGroups
+}
+
+func (o *Tenant) GetGeofences() GeofenceSlice {
+	if o == nil {
+		return nil
+	}
+
+	return o.R.GetGeofences()
+}
+
+func (r *tenantR) GetGeofences() GeofenceSlice {
+	if r == nil {
+		return nil
+	}
+
+	return r.Geofences
 }
 
 func (o *Tenant) GetInvitations() InvitationSlice {
@@ -524,6 +543,20 @@ func (o *Tenant) FleetGroups(mods ...qm.QueryMod) fleetGroupQuery {
 	return FleetGroups(queryMods...)
 }
 
+// Geofences retrieves all the geofence's Geofences with an executor.
+func (o *Tenant) Geofences(mods ...qm.QueryMod) geofenceQuery {
+	var queryMods []qm.QueryMod
+	if len(mods) != 0 {
+		queryMods = append(queryMods, mods...)
+	}
+
+	queryMods = append(queryMods,
+		qm.Where("\"geofences\".\"tenant_id\"=?", o.ID),
+	)
+
+	return Geofences(queryMods...)
+}
+
 // Invitations retrieves all the invitation's Invitations with an executor.
 func (o *Tenant) Invitations(mods ...qm.QueryMod) invitationQuery {
 	var queryMods []qm.QueryMod
@@ -683,6 +716,119 @@ func (tenantL) LoadFleetGroups(ctx context.Context, e boil.ContextExecutor, sing
 				local.R.FleetGroups = append(local.R.FleetGroups, foreign)
 				if foreign.R == nil {
 					foreign.R = &fleetGroupR{}
+				}
+				foreign.R.Tenant = local
+				break
+			}
+		}
+	}
+
+	return nil
+}
+
+// LoadGeofences allows an eager lookup of values, cached into the
+// loaded structs of the objects. This is for a 1-M or N-M relationship.
+func (tenantL) LoadGeofences(ctx context.Context, e boil.ContextExecutor, singular bool, maybeTenant any, mods queries.Applicator) error {
+	var slice []*Tenant
+	var object *Tenant
+
+	if singular {
+		var ok bool
+		object, ok = maybeTenant.(*Tenant)
+		if !ok {
+			object = new(Tenant)
+			ok = queries.SetFromEmbeddedStruct(&object, &maybeTenant)
+			if !ok {
+				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", object, maybeTenant))
+			}
+		}
+	} else {
+		s, ok := maybeTenant.(*[]*Tenant)
+		if ok {
+			slice = *s
+		} else {
+			ok = queries.SetFromEmbeddedStruct(&slice, maybeTenant)
+			if !ok {
+				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", slice, maybeTenant))
+			}
+		}
+	}
+
+	args := make(map[any]struct{})
+	if singular {
+		if object.R == nil {
+			object.R = &tenantR{}
+		}
+		args[object.ID] = struct{}{}
+	} else {
+		for _, obj := range slice {
+			if obj.R == nil {
+				obj.R = &tenantR{}
+			}
+			args[obj.ID] = struct{}{}
+		}
+	}
+
+	if len(args) == 0 {
+		return nil
+	}
+
+	argsSlice := make([]any, len(args))
+	i := 0
+	for arg := range args {
+		argsSlice[i] = arg
+		i++
+	}
+
+	query := NewQuery(
+		qm.From(`geofences`),
+		qm.WhereIn(`geofences.tenant_id in ?`, argsSlice...),
+	)
+	if mods != nil {
+		mods.Apply(query)
+	}
+
+	results, err := query.QueryContext(ctx, e)
+	if err != nil {
+		return errors.Wrap(err, "failed to eager load geofences")
+	}
+
+	var resultSlice []*Geofence
+	if err = queries.Bind(results, &resultSlice); err != nil {
+		return errors.Wrap(err, "failed to bind eager loaded slice geofences")
+	}
+
+	if err = results.Close(); err != nil {
+		return errors.Wrap(err, "failed to close results in eager load on geofences")
+	}
+	if err = results.Err(); err != nil {
+		return errors.Wrap(err, "error occurred during iteration of eager loaded relations for geofences")
+	}
+
+	if len(geofenceAfterSelectHooks) != 0 {
+		for _, obj := range resultSlice {
+			if err := obj.doAfterSelectHooks(ctx, e); err != nil {
+				return err
+			}
+		}
+	}
+	if singular {
+		object.R.Geofences = resultSlice
+		for _, foreign := range resultSlice {
+			if foreign.R == nil {
+				foreign.R = &geofenceR{}
+			}
+			foreign.R.Tenant = object
+		}
+		return nil
+	}
+
+	for _, foreign := range resultSlice {
+		for _, local := range slice {
+			if local.ID == foreign.TenantID {
+				local.R.Geofences = append(local.R.Geofences, foreign)
+				if foreign.R == nil {
+					foreign.R = &geofenceR{}
 				}
 				foreign.R.Tenant = local
 				break
@@ -1189,6 +1335,59 @@ func (o *Tenant) AddFleetGroups(ctx context.Context, exec boil.ContextExecutor, 
 	for _, rel := range related {
 		if rel.R == nil {
 			rel.R = &fleetGroupR{
+				Tenant: o,
+			}
+		} else {
+			rel.R.Tenant = o
+		}
+	}
+	return nil
+}
+
+// AddGeofences adds the given related objects to the existing relationships
+// of the tenant, optionally inserting them as new records.
+// Appends related to o.R.Geofences.
+// Sets related.R.Tenant appropriately.
+func (o *Tenant) AddGeofences(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*Geofence) error {
+	var err error
+	for _, rel := range related {
+		if insert {
+			rel.TenantID = o.ID
+			if err = rel.Insert(ctx, exec, boil.Infer()); err != nil {
+				return errors.Wrap(err, "failed to insert into foreign table")
+			}
+		} else {
+			updateQuery := fmt.Sprintf(
+				"UPDATE \"geofences\" SET %s WHERE %s",
+				strmangle.SetParamNames("\"", "\"", 1, []string{"tenant_id"}),
+				strmangle.WhereClause("\"", "\"", 2, geofencePrimaryKeyColumns),
+			)
+			values := []any{o.ID, rel.ID}
+
+			if boil.IsDebug(ctx) {
+				writer := boil.DebugWriterFrom(ctx)
+				fmt.Fprintln(writer, updateQuery)
+				fmt.Fprintln(writer, values)
+			}
+			if _, err = exec.ExecContext(ctx, updateQuery, values...); err != nil {
+				return errors.Wrap(err, "failed to update foreign table")
+			}
+
+			rel.TenantID = o.ID
+		}
+	}
+
+	if o.R == nil {
+		o.R = &tenantR{
+			Geofences: related,
+		}
+	} else {
+		o.R.Geofences = append(o.R.Geofences, related...)
+	}
+
+	for _, rel := range related {
+		if rel.R == nil {
+			rel.R = &geofenceR{
 				Tenant: o,
 			}
 		} else {

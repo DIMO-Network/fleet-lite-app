@@ -31,11 +31,26 @@ type AttestService interface {
 	AttestDocumentPair(tenant models.Tenant, input AttestInput) (*AttestResult, error)
 	Tombstone(tenant models.Tenant, parsedID, rawID, tokenDID string) (*AttestResult, error)
 	AttestVehicleGroups(tenant models.Tenant, tokenID uint64, groups []GroupRef) (string, error)
+	// AttestTenantGeofences publishes the tenant's geofence catalog as a single
+	// CE whose subject is the tenant client-id DID (see docs/GEOFENCES_PLAN.md).
+	AttestTenantGeofences(tenant models.Tenant, geofences []GeofenceDef) (string, error)
+	// AttestVehicleGeofences publishes a vehicle's manual geofence ids as a
+	// single CE whose subject is the vehicle DID.
+	AttestVehicleGeofences(tenant models.Tenant, tokenID uint64, geofenceIDs []string) (string, error)
 }
 
 // VehicleGroupsCloudEventType is the CE type for a vehicle's group-membership
 // document. fetch-api admits it via its dimo.document.* prefix filter.
 const VehicleGroupsCloudEventType = "dimo.document.vehicle.groups"
+
+// Geofence CE types + producer. The tenant catalog is attested at the client-id
+// DID; per-vehicle manual membership at the vehicle DID. Both stamped with the
+// same producer as groups so sync can attribute our app's assertions.
+const (
+	TenantGeofencesCloudEventType  = "dimo.document.fleet.geofence"
+	VehicleGeofencesCloudEventType = "dimo.document.vehicle.geofence"
+	GeofenceAttestationProducer    = "fleet-lite-app"
+)
 
 type AttestInput struct {
 	TokenID       string // numeric tokenID as string, for logging
@@ -345,6 +360,86 @@ func (s *attestService) AttestVehicleGroups(tenant models.Tenant, tokenID uint64
 	s.logger.Info().Uint64("tokenID", tokenID).Int("groups", len(groups)).Msg("Submitting vehicle groups cloud event")
 	if err := s.submitCloudEvent(ev, developerJWT); err != nil {
 		return "", fmt.Errorf("submit vehicle groups cloud event: %w", err)
+	}
+	return ev.ID, nil
+}
+
+// AttestTenantGeofences publishes the tenant's full geofence catalog as a single
+// parsed CloudEvent. The subject is the tenant client-id DID
+// (BuildTenantDID); data is {"geofences":[{id,name,color,geometry,…},…]}. An
+// empty slice is valid ("no geofences"). Mirrors AttestVehicleGroups' signing.
+func (s *attestService) AttestTenantGeofences(tenant models.Tenant, geofences []GeofenceDef) (string, error) {
+	if geofences == nil {
+		geofences = []GeofenceDef{}
+	}
+	developerJWT, err := s.authProvider.GetDeveloperJWT(tenant)
+	if err != nil {
+		return "", fmt.Errorf("developer JWT: %w", err)
+	}
+	dataMap := map[string]interface{}{"geofences": geofences}
+	dataBytes, err := json.Marshal(dataMap)
+	if err != nil {
+		return "", fmt.Errorf("marshal geofences data: %w", err)
+	}
+	sig, err := signDataSecp256k1(dataBytes, tenant.DIMOPrivateKey)
+	if err != nil {
+		return "", fmt.Errorf("sign geofences data: %w", err)
+	}
+	ev := signedCloudEvent{
+		SpecVersion:     "1.0",
+		ID:              uuid.New().String(),
+		Source:          tenant.ClientID,
+		Producer:        GeofenceAttestationProducer,
+		Type:            TenantGeofencesCloudEventType,
+		Subject:         s.authProvider.BuildTenantDID(tenant.ClientID),
+		Time:            time.Now().UTC().Format(time.RFC3339),
+		DataContentType: "application/json",
+		Data:            dataMap,
+		Signature:       sig,
+	}
+	s.logger.Info().Str("tenant", tenant.ID).Int("geofences", len(geofences)).Msg("Submitting tenant geofences cloud event")
+	if err := s.submitCloudEvent(ev, developerJWT); err != nil {
+		return "", fmt.Errorf("submit tenant geofences cloud event: %w", err)
+	}
+	return ev.ID, nil
+}
+
+// AttestVehicleGeofences publishes a vehicle's manual geofence membership as a
+// single parsed CloudEvent. Subject is the vehicle DID; data is
+// {"geofences":[id,…]}. all/group-scope membership is derived from the tenant
+// catalog and is not part of this document. An empty slice is valid.
+func (s *attestService) AttestVehicleGeofences(tenant models.Tenant, tokenID uint64, geofenceIDs []string) (string, error) {
+	if geofenceIDs == nil {
+		geofenceIDs = []string{}
+	}
+	developerJWT, err := s.authProvider.GetDeveloperJWT(tenant)
+	if err != nil {
+		return "", fmt.Errorf("developer JWT: %w", err)
+	}
+	dataMap := map[string]interface{}{"geofences": geofenceIDs}
+	dataBytes, err := json.Marshal(dataMap)
+	if err != nil {
+		return "", fmt.Errorf("marshal vehicle geofences data: %w", err)
+	}
+	sig, err := signDataSecp256k1(dataBytes, tenant.DIMOPrivateKey)
+	if err != nil {
+		return "", fmt.Errorf("sign vehicle geofences data: %w", err)
+	}
+	ev := signedCloudEvent{
+		SpecVersion:     "1.0",
+		ID:              uuid.New().String(),
+		Source:          tenant.ClientID,
+		Producer:        GeofenceAttestationProducer,
+		Type:            VehicleGeofencesCloudEventType,
+		Subject:         s.authProvider.BuildVehicleDID(tokenID),
+		Time:            time.Now().UTC().Format(time.RFC3339),
+		DataContentType: "application/json",
+		Data:            dataMap,
+		Signature:       sig,
+	}
+	s.logger.Info().Uint64("tokenID", tokenID).Int("geofences", len(geofenceIDs)).Msg("Submitting vehicle geofences cloud event")
+	if err := s.submitCloudEvent(ev, developerJWT); err != nil {
+		return "", fmt.Errorf("submit vehicle geofences cloud event: %w", err)
 	}
 	return ev.ID, nil
 }

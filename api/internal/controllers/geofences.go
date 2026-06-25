@@ -1,0 +1,370 @@
+package controllers
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"time"
+
+	dbmodels "github.com/DIMO-Network/fleet-lite-app/internal/db/models"
+	"github.com/DIMO-Network/fleet-lite-app/internal/models"
+	"github.com/DIMO-Network/fleet-lite-app/internal/service"
+	"github.com/gofiber/fiber/v2"
+	"github.com/rs/zerolog"
+)
+
+// GeofencesController exposes tenant-scoped CRUD over geofences and manual
+// vehicle assignments. All handlers run behind the tenant middleware (JWT +
+// Tenant-Id).
+//
+// After a successful mutation the affected attestations are (re)published
+// best-effort in a detached goroutine: the tenant geofence catalog (subject =
+// client-id DID) on any geofence change, and a vehicle's manual-membership CE
+// (subject = vehicle DID) on assignment changes. The DB is the source of truth;
+// a publish failure never fails the request (mirrors fleet groups).
+type GeofencesController struct {
+	logger    *zerolog.Logger
+	geofences *service.GeofenceService
+	attest    service.AttestService
+}
+
+func NewGeofencesController(logger *zerolog.Logger, geofences *service.GeofenceService, attest service.AttestService) *GeofencesController {
+	return &GeofencesController{logger: logger, geofences: geofences, attest: attest}
+}
+
+type createGeofenceRequest struct {
+	Name          string          `json:"name"`
+	Color         string          `json:"color"`
+	Geometry      json.RawMessage `json:"geometry"`
+	SpeedLimitKph *int            `json:"speedLimitKph"`
+	Scope         string          `json:"scope"`
+	GroupIDs      []string        `json:"groupIds"`
+}
+
+type updateGeofenceRequest struct {
+	Name          *string         `json:"name"`
+	Color         *string         `json:"color"`
+	Geometry      json.RawMessage `json:"geometry"`
+	SpeedLimitKph *int            `json:"speedLimitKph"`
+	Scope         *string         `json:"scope"`
+	GroupIDs      []string        `json:"groupIds"`
+}
+
+// GeofenceResponse is the JSON shape the frontend consumes (camelCase).
+type GeofenceResponse struct {
+	ID            string          `json:"id"`
+	Name          string          `json:"name"`
+	Color         string          `json:"color"`
+	Geometry      json.RawMessage `json:"geometry"`
+	AreaM2        float64         `json:"areaM2"`
+	SpeedLimitKph *int            `json:"speedLimitKph"`
+	Scope         string          `json:"scope"`
+	GroupIDs      []string        `json:"groupIds"`
+	VehicleCount  int             `json:"vehicleCount"`
+	CreatedBy     string          `json:"createdBy"`
+	CreatedAt     string          `json:"createdAt"`
+	UpdatedAt     string          `json:"updatedAt"`
+}
+
+func toGeofenceResponse(g *dbmodels.Geofence, count int) GeofenceResponse {
+	var speed *int
+	if g.SpeedLimitKPH.Valid {
+		v := g.SpeedLimitKPH.Int
+		speed = &v
+	}
+	groupIDs := []string(g.GroupIds)
+	if groupIDs == nil {
+		groupIDs = []string{}
+	}
+	return GeofenceResponse{
+		ID:            g.ID,
+		Name:          g.Name,
+		Color:         g.Color,
+		Geometry:      json.RawMessage(g.Geometry),
+		AreaM2:        g.AreaM2,
+		SpeedLimitKph: speed,
+		Scope:         g.Scope,
+		GroupIDs:      groupIDs,
+		VehicleCount:  count,
+		CreatedBy:     g.CreatedBy,
+		CreatedAt:     g.CreatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:     g.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
+	}
+}
+
+// GetGeofences — GET /fleet/geofences
+func (gc *GeofencesController) GetGeofences(c *fiber.Ctx) error {
+	tenant, err := GetTenant(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	rows, err := gc.geofences.ListGeofences(c.Context(), tenant.ID)
+	if err != nil {
+		gc.logger.Err(err).Str("tenant", tenant.ID).Msg("list geofences")
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to list geofences")
+	}
+	out := make([]GeofenceResponse, len(rows))
+	for i, g := range rows {
+		out[i] = toGeofenceResponse(g.Geofence, g.VehicleCount)
+	}
+	return c.JSON(fiber.Map{"geofences": out})
+}
+
+// GetGeofence — GET /fleet/geofences/:id
+func (gc *GeofencesController) GetGeofence(c *fiber.Ctx) error {
+	tenant, err := GetTenant(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	g, err := gc.geofences.GetGeofence(c.Context(), tenant.ID, c.Params("id"))
+	if err != nil {
+		return gc.mapServiceError(err, "get geofence")
+	}
+	ids, err := gc.geofences.EffectiveTokenIDs(c.Context(), tenant.ID, g)
+	if err != nil {
+		gc.logger.Err(err).Str("geofence", g.ID).Msg("count geofence vehicles")
+	}
+	return c.JSON(toGeofenceResponse(g, len(ids)))
+}
+
+// GetGeofenceVehicles — GET /fleet/geofences/:id/vehicles
+//
+// Returns the token ids the geofence currently resolves to across its scope
+// (all = tenant fleet, group = members of its groups, manual = explicit
+// assignments). The manage-vehicles UI uses it to seed the assigned set.
+func (gc *GeofencesController) GetGeofenceVehicles(c *fiber.Ctx) error {
+	tenant, err := GetTenant(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	g, err := gc.geofences.GetGeofence(c.Context(), tenant.ID, c.Params("id"))
+	if err != nil {
+		return gc.mapServiceError(err, "get geofence")
+	}
+	ids, err := gc.geofences.EffectiveTokenIDs(c.Context(), tenant.ID, g)
+	if err != nil {
+		gc.logger.Err(err).Str("geofence", g.ID).Msg("geofence vehicles")
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to load geofence vehicles")
+	}
+	if ids == nil {
+		ids = []int64{}
+	}
+	return c.JSON(fiber.Map{"tokenIds": ids})
+}
+
+// CreateGeofence — POST /fleet/geofences
+func (gc *GeofencesController) CreateGeofence(c *fiber.Ctx) error {
+	tenant, err := GetTenant(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	createdBy, err := GetWalletAddressFromJWT(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "could not resolve caller wallet")
+	}
+	var req createGeofenceRequest
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+	if req.Name == "" || req.Color == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "name and color are required")
+	}
+	if !hexColorRe.MatchString(req.Color) {
+		return fiber.NewError(fiber.StatusBadRequest, "color must be a #RRGGBB hex value")
+	}
+	if len(req.Geometry) == 0 {
+		return fiber.NewError(fiber.StatusBadRequest, "geometry is required")
+	}
+	g, err := gc.geofences.CreateGeofence(c.Context(), tenant.ID, createdBy.Hex(), service.GeofenceInput{
+		Name:          req.Name,
+		Color:         req.Color,
+		Geometry:      req.Geometry,
+		SpeedLimitKPH: req.SpeedLimitKph,
+		Scope:         req.Scope,
+		GroupIDs:      req.GroupIDs,
+	})
+	if err != nil {
+		return gc.mapServiceError(err, "create geofence")
+	}
+	gc.republishCatalog(tenant)
+	return c.Status(fiber.StatusCreated).JSON(toGeofenceResponse(g, 0))
+}
+
+// UpdateGeofence — PATCH /fleet/geofences/:id
+func (gc *GeofencesController) UpdateGeofence(c *fiber.Ctx) error {
+	tenant, err := GetTenant(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	var req updateGeofenceRequest
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+	if req.Color != nil && *req.Color != "" && !hexColorRe.MatchString(*req.Color) {
+		return fiber.NewError(fiber.StatusBadRequest, "color must be a #RRGGBB hex value")
+	}
+	g, dropped, err := gc.geofences.UpdateGeofence(c.Context(), tenant.ID, c.Params("id"), service.GeofencePatch{
+		Name:          req.Name,
+		Color:         req.Color,
+		Geometry:      req.Geometry,
+		SpeedLimitKPH: req.SpeedLimitKph,
+		Scope:         req.Scope,
+		GroupIDs:      req.GroupIDs,
+	})
+	if err != nil {
+		return gc.mapServiceError(err, "update geofence")
+	}
+	// Catalog changed; republish it. Vehicles whose manual assignment was
+	// dropped (scope moved off manual) get their per-vehicle CE republished too.
+	gc.republishCatalog(tenant)
+	gc.republishVehicles(tenant, dropped)
+	ids, _ := gc.geofences.EffectiveTokenIDs(c.Context(), tenant.ID, g)
+	return c.JSON(toGeofenceResponse(g, len(ids)))
+}
+
+// DeleteGeofence — DELETE /fleet/geofences/:id
+func (gc *GeofencesController) DeleteGeofence(c *fiber.Ctx) error {
+	tenant, err := GetTenant(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	members, err := gc.geofences.DeleteGeofence(c.Context(), tenant.ID, c.Params("id"))
+	if err != nil {
+		return gc.mapServiceError(err, "delete geofence")
+	}
+	gc.republishCatalog(tenant)
+	gc.republishVehicles(tenant, members)
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// AddVehicleToGeofence — POST /fleet/vehicles/:tokenID/geofence/:geofenceID
+func (gc *GeofencesController) AddVehicleToGeofence(c *fiber.Ctx) error {
+	tenant, err := GetTenant(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	tokenID, err := ParseTokenIDParam(c, "tokenID")
+	if err != nil {
+		return err
+	}
+	geofenceID := c.Params("geofenceID")
+	if _, err := gc.geofences.AddVehicle(c.Context(), tenant.ID, int64(tokenID), geofenceID); err != nil {
+		return gc.mapServiceError(err, "assign vehicle to geofence")
+	}
+	gc.republishVehicle(tenant, int64(tokenID))
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"tokenId": tokenID, "geofenceId": geofenceID})
+}
+
+// RemoveVehicleFromGeofence — DELETE /fleet/vehicles/:tokenID/geofence/:geofenceID
+func (gc *GeofencesController) RemoveVehicleFromGeofence(c *fiber.Ctx) error {
+	tenant, err := GetTenant(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	tokenID, err := ParseTokenIDParam(c, "tokenID")
+	if err != nil {
+		return err
+	}
+	geofenceID := c.Params("geofenceID")
+	if _, err := gc.geofences.RemoveVehicle(c.Context(), tenant.ID, int64(tokenID), geofenceID); err != nil {
+		return gc.mapServiceError(err, "unassign vehicle from geofence")
+	}
+	gc.republishVehicle(tenant, int64(tokenID))
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// republishCatalog (re)publishes the tenant's geofence catalog attestation
+// (subject = client-id DID) in a detached goroutine. Best-effort.
+func (gc *GeofencesController) republishCatalog(tenant models.Tenant) {
+	if gc.attest == nil {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		defs, err := gc.geofences.TenantGeofenceDefs(ctx, tenant.ID)
+		if err != nil {
+			gc.logger.Err(err).Str("tenant", tenant.ID).Msg("load geofence catalog for attestation")
+			return
+		}
+		gc.attestWithRetry(ctx, "catalog tenant="+tenant.ID, func() (string, error) {
+			return gc.attest.AttestTenantGeofences(tenant, defs)
+		})
+	}()
+}
+
+// republishVehicles (re)publishes each vehicle's manual geofence-membership
+// attestation (subject = vehicle DID) in one detached goroutine. Best-effort.
+func (gc *GeofencesController) republishVehicles(tenant models.Tenant, tokenIDs []int64) {
+	if gc.attest == nil || len(tokenIDs) == 0 {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		for _, tid := range tokenIDs {
+			ids, err := gc.geofences.VehicleManualGeofenceIDs(ctx, tenant.ID, tid)
+			if err != nil {
+				gc.logger.Err(err).Str("tenant", tenant.ID).Int64("token_id", tid).
+					Msg("load vehicle geofences for attestation")
+				continue
+			}
+			tidCopy := tid
+			gc.attestWithRetry(ctx, "vehicle "+tenant.ID, func() (string, error) {
+				return gc.attest.AttestVehicleGeofences(tenant, uint64(tidCopy), ids)
+			})
+		}
+	}()
+}
+
+// republishVehicle is the single-vehicle convenience over republishVehicles.
+func (gc *GeofencesController) republishVehicle(tenant models.Tenant, tokenID int64) {
+	gc.republishVehicles(tenant, []int64{tokenID})
+}
+
+// attestWithRetry runs a publish func with up to 3 attempts and exponential
+// backoff. Best-effort — the final failure is logged at error level.
+func (gc *GeofencesController) attestWithRetry(ctx context.Context, label string, fn func() (string, error)) {
+	const maxAttempts = 3
+	backoff := time.Second
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		eventID, err := fn()
+		if err == nil {
+			gc.logger.Info().Str("what", label).Str("event_id", eventID).Msg("published geofence attestation")
+			return
+		}
+		gc.logger.Warn().Err(err).Str("what", label).Int("attempt", attempt).Msg("publish geofence attestation failed")
+		if attempt < maxAttempts {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(backoff):
+			}
+			backoff *= 2
+		}
+	}
+	gc.logger.Error().Str("what", label).Msg("gave up publishing geofence attestation after retries")
+}
+
+// mapServiceError translates geofence service sentinel errors into HTTP errors.
+func (gc *GeofencesController) mapServiceError(err error, msg string) error {
+	switch {
+	case errors.Is(err, service.ErrGeofenceNotFound):
+		return fiber.NewError(fiber.StatusNotFound, "geofence not found")
+	case errors.Is(err, service.ErrVehicleNotFound):
+		return fiber.NewError(fiber.StatusNotFound, "vehicle not found")
+	case errors.Is(err, service.ErrGeofenceNameExists):
+		return fiber.NewError(fiber.StatusConflict, "a geofence with this name already exists")
+	case errors.Is(err, service.ErrInvalidScope):
+		return fiber.NewError(fiber.StatusBadRequest, "scope must be one of all, group, or manual (and assignment requires a manual-scope geofence)")
+	case errors.Is(err, service.ErrInvalidGeometry):
+		return fiber.NewError(fiber.StatusBadRequest, "geometry must be a valid GeoJSON Polygon")
+	case errors.Is(err, service.ErrUnknownGroup):
+		return fiber.NewError(fiber.StatusBadRequest, "one or more group ids do not exist for this tenant")
+	case errors.Is(err, service.ErrGroupScopeNeedsGroups):
+		return fiber.NewError(fiber.StatusBadRequest, "a group-scoped geofence requires at least one group id")
+	default:
+		gc.logger.Err(err).Msg(msg)
+		return fiber.NewError(fiber.StatusInternalServerError, msg)
+	}
+}

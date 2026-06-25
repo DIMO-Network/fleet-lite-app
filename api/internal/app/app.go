@@ -75,6 +75,8 @@ func App(
 	vehiclesCtrl := controllers.NewVehiclesController(settings, logger, vehicleSvc, groupSvc)
 	groupSyncSvc := service.NewGroupSyncService(logger, pdb, fetchAPI, authProvider)
 	fleetGroupsCtrl := controllers.NewFleetGroupsController(logger, groupSvc, groupSyncSvc, attestSvc)
+	geofenceSvc := service.NewGeofenceService(logger, pdb)
+	geofencesCtrl := controllers.NewGeofencesController(logger, geofenceSvc, attestSvc)
 	settingsCtrl := controllers.NewSettingsController(settings, logger)
 	tenantsCtrl := controllers.NewTenantsController(logger, settings, tenantSvc, vehicleSvc, identity, authProvider)
 	invitationsCtrl := controllers.NewInvitationsController(logger, tenantSvc, invitationSvc)
@@ -131,6 +133,17 @@ func App(
 	tenantApp.Post("/fleet/vehicles/:tokenID/group/:groupID", fleetGroupsCtrl.AddVehicleToGroup)
 	tenantApp.Delete("/fleet/vehicles/:tokenID/group/:groupID", fleetGroupsCtrl.RemoveVehicleFromGroup)
 	tenantApp.Post("/fleet/vehicles/:tokenID/groups/sync", fleetGroupsCtrl.SyncVehicleGroups)
+
+	// Geofences (tenant-scoped CRUD + manual vehicle assignment). Definitions are
+	// attested at the tenant client-id level in a later phase; see GEOFENCES_PLAN.md.
+	tenantApp.Get("/fleet/geofences", geofencesCtrl.GetGeofences)
+	tenantApp.Post("/fleet/geofences", geofencesCtrl.CreateGeofence)
+	tenantApp.Get("/fleet/geofences/:id", geofencesCtrl.GetGeofence)
+	tenantApp.Get("/fleet/geofences/:id/vehicles", geofencesCtrl.GetGeofenceVehicles)
+	tenantApp.Patch("/fleet/geofences/:id", geofencesCtrl.UpdateGeofence)
+	tenantApp.Delete("/fleet/geofences/:id", geofencesCtrl.DeleteGeofence)
+	tenantApp.Post("/fleet/vehicles/:tokenID/geofence/:geofenceID", geofencesCtrl.AddVehicleToGeofence)
+	tenantApp.Delete("/fleet/vehicles/:tokenID/geofence/:geofenceID", geofencesCtrl.RemoveVehicleFromGeofence)
 
 	// Telemetry (vehicle-details charts)
 	telemetryCtrl := controllers.NewTelemetryController(logger, settings, vehicleSvc, telemetryAPI)
