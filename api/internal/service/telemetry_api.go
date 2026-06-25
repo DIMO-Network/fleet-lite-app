@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -72,6 +73,17 @@ type TripEvent struct {
 	DurationNs int64  `json:"durationNs"`
 }
 
+// GeoSample is one interval-bucketed telemetry fix used for geofence detection:
+// a timestamped coordinate plus the bucket's max speed (nil when the vehicle
+// reported no speed in that bucket). Coarser than RoutePoints but timestamped,
+// and carries speed in the same query — see GeofenceSamples.
+type GeoSample struct {
+	Time     time.Time
+	Lat      float64
+	Lng      float64
+	SpeedKph *float64
+}
+
 // FleetLocationsResult separates vehicles with accessible location data from
 // those where the developer license lacks SACD permissions.
 type FleetLocationsResult struct {
@@ -93,6 +105,11 @@ type TelemetryAPIService interface {
 	// TripReplay samples timestamped GPS waypoints (coarser than RoutePoints)
 	// plus discrete behavior events over a trip's window, for animated replay.
 	TripReplay(tenant models.Tenant, tokenID uint64, from, to string) ([]TripWaypoint, []TripEvent, error)
+	// GeofenceSamples returns interval-bucketed {timestamp, coordinate, max
+	// speed} fixes over a window, ordered by time — the input to geofence pass
+	// detection. interval is a telemetry-api duration (e.g. "30s"); coordinates
+	// and speed come from one bucketed `signals` query.
+	GeofenceSamples(tenant models.Tenant, tokenID uint64, from, to, interval string) ([]GeoSample, error)
 	// FleetLocations checks per-vehicle JWT availability to determine which
 	// vehicles the tenant's dev license has SACD permissions for, then fetches
 	// each permitted vehicle's coordinates with its own JWT (telemetry-api
@@ -459,6 +476,70 @@ func (t *telemetryAPIService) TripReplay(tenant models.Tenant, tokenID uint64, f
 		Int("waypoints", len(waypoints)).Int("events", len(events)).Msg("telemetry trip replay fetched")
 
 	return waypoints, events, nil
+}
+
+// GeofenceSamples fetches interval-bucketed coordinate + max-speed fixes over a
+// window for geofence pass detection. Coordinates use LAST (the bucket's final
+// position) and speed uses MAX (the worst-case for speed-limit checks) — both
+// in one `signals` query, so adding speed costs a field, not a round-trip.
+// Buckets without a coordinate are dropped; speed is nil when absent.
+func (t *telemetryAPIService) GeofenceSamples(tenant models.Tenant, tokenID uint64, from, to, interval string) ([]GeoSample, error) {
+	if interval == "" {
+		interval = "30s"
+	}
+	q := fmt.Sprintf(`query {
+		samples: signals(tokenId: %d, from: %q, to: %q, interval: %q) {
+			timestamp
+			currentLocationCoordinates(agg: LAST) { latitude longitude }
+			speed(agg: MAX)
+		}
+	}`, tokenID, from, to, interval)
+
+	raw, err := t.query(tenant, tokenID, q)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp struct {
+		Data struct {
+			Samples []struct {
+				Timestamp                  string `json:"timestamp"`
+				CurrentLocationCoordinates *struct {
+					Latitude  float64 `json:"latitude"`
+					Longitude float64 `json:"longitude"`
+				} `json:"currentLocationCoordinates"`
+				Speed *float64 `json:"speed"`
+			} `json:"samples"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, fmt.Errorf("parse geofence samples: %w", err)
+	}
+
+	out := make([]GeoSample, 0, len(resp.Data.Samples))
+	for _, s := range resp.Data.Samples {
+		if s.CurrentLocationCoordinates == nil {
+			continue
+		}
+		ts, perr := time.Parse(time.RFC3339, s.Timestamp)
+		if perr != nil {
+			continue
+		}
+		out = append(out, GeoSample{
+			Time:     ts,
+			Lat:      s.CurrentLocationCoordinates.Latitude,
+			Lng:      s.CurrentLocationCoordinates.Longitude,
+			SpeedKph: s.Speed,
+		})
+	}
+	// signals returns buckets in ascending time, but detection relies on order —
+	// sort defensively in case the API ever changes.
+	sort.Slice(out, func(i, j int) bool { return out[i].Time.Before(out[j].Time) })
+
+	t.logger.Info().Uint64("tokenID", tokenID).Str("from", from).Str("to", to).
+		Int("samples", len(out)).Msg("telemetry geofence samples fetched")
+
+	return out, nil
 }
 
 // FleetLocations checks per-vehicle JWT availability (definitive SACD check),

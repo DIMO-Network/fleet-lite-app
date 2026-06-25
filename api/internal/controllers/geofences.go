@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
+	"strings"
 	"time"
 
 	dbmodels "github.com/DIMO-Network/fleet-lite-app/internal/db/models"
@@ -26,10 +28,11 @@ type GeofencesController struct {
 	logger    *zerolog.Logger
 	geofences *service.GeofenceService
 	attest    service.AttestService
+	detection *service.GeofenceDetectionService
 }
 
-func NewGeofencesController(logger *zerolog.Logger, geofences *service.GeofenceService, attest service.AttestService) *GeofencesController {
-	return &GeofencesController{logger: logger, geofences: geofences, attest: attest}
+func NewGeofencesController(logger *zerolog.Logger, geofences *service.GeofenceService, attest service.AttestService, detection *service.GeofenceDetectionService) *GeofencesController {
+	return &GeofencesController{logger: logger, geofences: geofences, attest: attest, detection: detection}
 }
 
 type createGeofenceRequest struct {
@@ -344,6 +347,112 @@ func (gc *GeofencesController) attestWithRetry(ctx context.Context, label string
 		}
 	}
 	gc.logger.Error().Str("what", label).Msg("gave up publishing geofence attestation after retries")
+}
+
+// GetTripGeofences — GET /telemetry/:tokenID/trip-geofences?from=...&to=...
+// Entry point 1: returns the geofences the vehicle's telemetry crossed within
+// [from, to] (a trip window), with per-pass enter/exit/dwell + speed. Passes are
+// computed on demand and cached; a repeat call for a covered window is a pure
+// cache read. Graceful 200 + permissionsRequired when the dev license lacks
+// SACD permissions on the vehicle (mirrors the other telemetry endpoints).
+func (gc *GeofencesController) GetTripGeofences(c *fiber.Ctx) error {
+	tenant, err := GetTenant(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	tokenID, err := ParseTokenIDParam(c, "tokenID")
+	if err != nil {
+		return err
+	}
+	fromStr, toStr := c.Query("from"), c.Query("to")
+	if fromStr == "" || toStr == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "from, to query params are required")
+	}
+	from, err := time.Parse(time.RFC3339, fromStr)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "from must be an RFC3339 timestamp")
+	}
+	to, err := time.Parse(time.RFC3339, toStr)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "to must be an RFC3339 timestamp")
+	}
+	if !to.After(from) {
+		return fiber.NewError(fiber.StatusBadRequest, "to must be after from")
+	}
+
+	crossings, err := gc.detection.TripGeofences(c.Context(), tenant, int64(tokenID), from, to)
+	if err != nil {
+		if isPermissionError(err) {
+			return c.JSON(fiber.Map{
+				"geofences":           []service.GeofenceCrossing{},
+				"permissionsRequired": true,
+				"devLicense":          tenant.ClientID,
+			})
+		}
+		return gc.mapServiceError(err, "trip geofences")
+	}
+	return c.JSON(fiber.Map{"geofences": crossings})
+}
+
+// GetGeofenceScanTargets — GET /fleet/geofences/:id/scan-targets
+// Entry point 2, step 1: the effective vehicles to scan for this geofence,
+// capped. The client pages these token ids through GetGeofencePasses in batches
+// (progressive results). `capped` is true when the effective set was truncated.
+func (gc *GeofencesController) GetGeofenceScanTargets(c *fiber.Ctx) error {
+	tenant, err := GetTenant(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	ids, total, capped, err := gc.detection.ScanTargets(c.Context(), tenant, c.Params("id"))
+	if err != nil {
+		return gc.mapServiceError(err, "geofence scan targets")
+	}
+	return c.JSON(fiber.Map{"tokenIds": ids, "total": total, "capped": capped})
+}
+
+// GetGeofencePasses — GET /fleet/geofences/:id/passes?from=...&to=...&tokenIds=a,b,c
+// Entry point 2, step 2: the passes through this geofence in [from, to] for a
+// batch of vehicles. Window is capped server-side at 3 days. `tokenIds` is
+// required — the client pages the scan-targets through here so results stream in.
+func (gc *GeofencesController) GetGeofencePasses(c *fiber.Ctx) error {
+	tenant, err := GetTenant(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	fromStr, toStr := c.Query("from"), c.Query("to")
+	if fromStr == "" || toStr == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "from, to query params are required")
+	}
+	from, err := time.Parse(time.RFC3339, fromStr)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "from must be an RFC3339 timestamp")
+	}
+	to, err := time.Parse(time.RFC3339, toStr)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "to must be an RFC3339 timestamp")
+	}
+	if !to.After(from) {
+		return fiber.NewError(fiber.StatusBadRequest, "to must be after from")
+	}
+	raw := c.Query("tokenIds")
+	if raw == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "tokenIds query param is required")
+	}
+	var ids []int64
+	for _, part := range strings.Split(raw, ",") {
+		if id, perr := strconv.ParseInt(strings.TrimSpace(part), 10, 64); perr == nil {
+			ids = append(ids, id)
+		}
+	}
+
+	results, err := gc.detection.WindowScan(c.Context(), tenant, c.Params("id"), ids, from, to)
+	if err != nil {
+		if errors.Is(err, service.ErrScanWindowTooLarge) {
+			return fiber.NewError(fiber.StatusBadRequest, "scan window exceeds the maximum of 3 days")
+		}
+		return gc.mapServiceError(err, "geofence passes")
+	}
+	return c.JSON(fiber.Map{"results": results})
 }
 
 // mapServiceError translates geofence service sentinel errors into HTTP errors.

@@ -1,5 +1,6 @@
 import { ApiService } from './api-service.ts';
 import { FleetLocationsResponse, LatestSignalsResponse, SegmentsResponse, TimeSeriesResponse, TripRouteResponse, TripReplayResponse } from '../types/telemetry.ts';
+import { TripGeofencesResponse } from '../types/geofence.ts';
 import { TripMechanism } from './prefs-service.ts';
 
 export class TelemetryService {
@@ -62,5 +63,15 @@ export class TelemetryService {
     tripReplay(tokenId: number, from: string, to: string): Promise<TripReplayResponse> {
         const q = new URLSearchParams({ from, to });
         return ApiService.getInstance().get<TripReplayResponse>(`/telemetry/${tokenId}/replay?${q.toString()}`);
+    }
+
+    /**
+     * GET /telemetry/:tokenId/trip-geofences — the geofences a vehicle's
+     * telemetry crossed in [from, to], with per-pass enter/exit/dwell + speed.
+     * Computed on demand and cached server-side (Phase 2 detection, entry 1).
+     */
+    tripGeofences(tokenId: number, from: string, to: string): Promise<TripGeofencesResponse> {
+        const q = new URLSearchParams({ from, to });
+        return ApiService.getInstance().get<TripGeofencesResponse>(`/telemetry/${tokenId}/trip-geofences?${q.toString()}`);
     }
 }

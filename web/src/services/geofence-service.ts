@@ -5,6 +5,9 @@ import {
     GeofenceVehiclesResponse,
     GeoJSONPolygon,
     GeofenceScope,
+    GeofenceScanTargetsResponse,
+    GeofencePassesResponse,
+    VehiclePasses,
 } from '../types/geofence.ts';
 
 /** Fields accepted when creating a geofence. */
@@ -84,5 +87,28 @@ export class GeofenceService {
         return ApiService.getInstance().delete<void>(
             `/fleet/vehicles/${tokenId}/geofence/${encodeURIComponent(geofenceId)}`,
         );
+    }
+
+    /**
+     * GET /fleet/geofences/:id/scan-targets — the effective vehicles to scan for
+     * an activity (window) query, capped. The caller pages these through passes().
+     */
+    public scanTargets(id: string): Promise<GeofenceScanTargetsResponse> {
+        return ApiService.getInstance().get<GeofenceScanTargetsResponse>(
+            `/fleet/geofences/${encodeURIComponent(id)}/scan-targets`,
+        );
+    }
+
+    /**
+     * GET /fleet/geofences/:id/passes — passes through the geofence in [from,to]
+     * for a batch of vehicles. Window must be ≤ 3 days. Call once per batch of
+     * tokenIds so results accumulate progressively.
+     */
+    public async passes(id: string, from: string, to: string, tokenIds: number[]): Promise<VehiclePasses[]> {
+        const q = new URLSearchParams({ from, to, tokenIds: tokenIds.join(',') });
+        const res = await ApiService.getInstance().get<GeofencePassesResponse>(
+            `/fleet/geofences/${encodeURIComponent(id)}/passes?${q.toString()}`,
+        );
+        return res.results || [];
     }
 }
