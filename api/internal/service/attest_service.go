@@ -47,8 +47,8 @@ const VehicleGroupsCloudEventType = "dimo.document.vehicle.groups"
 // DID; per-vehicle manual membership at the vehicle DID. Both stamped with the
 // same producer as groups so sync can attribute our app's assertions.
 const (
-	TenantGeofencesCloudEventType  = "dimo.document.fleet.geofences"
-	VehicleGeofencesCloudEventType = "dimo.document.vehicle.geofences"
+	TenantGeofencesCloudEventType  = "dimo.document.fleet.geofence"
+	VehicleGeofencesCloudEventType = "dimo.document.vehicle.geofence"
 	GeofenceAttestationProducer    = "fleet-lite-app"
 )
 
