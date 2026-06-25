@@ -1022,159 +1022,211 @@
 </trans-unit>
 <trans-unit id="s879ecc0cdb12e5e3">
   <source>Please enter a geofence name.</source>
+        <target>Introduce un nombre para la geocerca.</target>
 </trans-unit>
 <trans-unit id="sbfba5dd3a37e4d91">
   <source>Pick at least one group, or choose a different scope.</source>
+        <target>Elige al menos un grupo o selecciona otro alcance.</target>
 </trans-unit>
 <trans-unit id="s382c29e4d4153b57">
   <source>Draw the geofence area on the map first.</source>
+        <target>Primero dibuja el área de la geocerca en el mapa.</target>
 </trans-unit>
 <trans-unit id="sf66afe3d5ccf3fd8">
   <source>Failed to save geofence</source>
+        <target>No se pudo guardar la geocerca</target>
 </trans-unit>
 <trans-unit id="sd376dd777095c7ed">
   <source>Edit geofence</source>
+        <target>Editar geocerca</target>
 </trans-unit>
 <trans-unit id="s5f5f916669344f2d">
   <source>New geofence</source>
+        <target>Nueva geocerca</target>
 </trans-unit>
 <trans-unit id="s388d4a378e796b21">
   <source>Update the geofence details. Redraw the area by deleting and recreating it.</source>
+        <target>Actualiza los detalles de la geocerca. Para cambiar el área, elimínala y vuelve a crearla.</target>
 </trans-unit>
 <trans-unit id="s4cdf4e50ebbee02d">
   <source>Name the area you drew, then choose which vehicles it applies to.</source>
+        <target>Nombra el área que dibujaste y elige a qué vehículos aplica.</target>
 </trans-unit>
 <trans-unit id="s06fd2f8b555158a4">
   <source>Area</source>
+        <target>Área</target>
 </trans-unit>
 <trans-unit id="sa1691fab227b1e7b">
   <source>e.g. Downtown Depot</source>
+        <target>p. ej. Depósito Centro</target>
 </trans-unit>
 <trans-unit id="s5211d1267cc7f7ae">
   <source>Speed limit (optional)</source>
+        <target>Límite de velocidad (opcional)</target>
 </trans-unit>
 <trans-unit id="sa3e3377ea42cdd04">
   <source>e.g. 50</source>
+        <target>p. ej. 50</target>
 </trans-unit>
 <trans-unit id="s125a48d7351b5c42">
   <source>km/h</source>
+        <target>km/h</target>
 </trans-unit>
 <trans-unit id="s2e081dcaddba4560">
   <source>Applies to</source>
+        <target>Aplica a</target>
 </trans-unit>
 <trans-unit id="s0ae75ba7b2bf0745">
   <source>All vehicles</source>
+        <target>Todos los vehículos</target>
 </trans-unit>
 <trans-unit id="s114b2ed0dad128cf">
   <source>By group</source>
+        <target>Por grupo</target>
 </trans-unit>
 <trans-unit id="s38ae715766d186d9">
   <source>Specific</source>
+        <target>Específicos</target>
 </trans-unit>
 <trans-unit id="sc00e18e5207ae9a3">
   <source>No fleet groups yet — create groups first, or pick another scope.</source>
+        <target>Aún no hay grupos de flota: crea grupos primero o elige otro alcance.</target>
 </trans-unit>
 <trans-unit id="s791ab754e4927fa6">
   <source>Use the “Vehicles” button on the geofence to assign specific vehicles.</source>
+        <target>Usa el botón «Vehículos» de la geocerca para asignar vehículos específicos.</target>
 </trans-unit>
 <trans-unit id="sc550eccb17bdbd40">
   <source>Save first, then assign specific vehicles with the “Vehicles” button.</source>
+        <target>Guarda primero y luego asigna vehículos específicos con el botón «Vehículos».</target>
 </trans-unit>
 <trans-unit id="s37e66fcfe9b18388">
   <source>Applies to every vehicle in this fleet.</source>
+        <target>Aplica a todos los vehículos de esta flota.</target>
 </trans-unit>
 <trans-unit id="sd31e770995499709">
   <source>Create geofence</source>
+        <target>Crear geocerca</target>
 </trans-unit>
 <trans-unit id="s49b99bd09dbcc27a">
   <source>Failed to load assigned vehicles</source>
+        <target>No se pudieron cargar los vehículos asignados</target>
 </trans-unit>
 <trans-unit id="se814442621d42e47">
   <source>Failed to update assignment</source>
+        <target>No se pudo actualizar la asignación</target>
 </trans-unit>
 <trans-unit id="sb82063ff4133ae44">
   <source>Loading assigned vehicles…</source>
+        <target>Cargando vehículos asignados…</target>
 </trans-unit>
 <trans-unit id="s18d3e67298c3efeb">
   <source><x id="0" equiv-text="${this.memberIds.size}"/> of <x id="1" equiv-text="${this.vehicles.length}"/> vehicles assigned.</source>
+        <target><x id="0" equiv-text="${this.memberIds.size}"/> de <x id="1" equiv-text="${this.vehicles.length}"/> vehículos asignados.</target>
 </trans-unit>
 <trans-unit id="s83f3b9e92ba665c7">
   <source>Remove from geofence</source>
+        <target>Quitar de la geocerca</target>
 </trans-unit>
 <trans-unit id="s91efe1656eddd2b1">
   <source>Add to geofence</source>
+        <target>Añadir a la geocerca</target>
 </trans-unit>
 <trans-unit id="s73205a59ad4c37d0">
   <source>Geofences</source>
+        <target>Geocercas</target>
 </trans-unit>
 <trans-unit id="s7293d04c5979a8ad">
   <source>Expand sidebar</source>
+        <target>Expandir barra lateral</target>
 </trans-unit>
 <trans-unit id="s8f10b4e57121e256">
   <source>Collapse sidebar</source>
+        <target>Contraer barra lateral</target>
 </trans-unit>
 <trans-unit id="see4417f44c48bef1">
   <source>Switch to light mode</source>
+        <target>Cambiar a modo claro</target>
 </trans-unit>
 <trans-unit id="s293e16fbf997f389">
   <source>Switch to dark mode</source>
+        <target>Cambiar a modo oscuro</target>
 </trans-unit>
 <trans-unit id="sa09ceb160ce673ca">
   <source>Light Mode</source>
+        <target>Modo Claro</target>
 </trans-unit>
 <trans-unit id="s2d604c0203cd8238">
   <source>Dark Mode</source>
+        <target>Modo Oscuro</target>
 </trans-unit>
 <trans-unit id="sc876b69c2e31e0a2">
   <source>Unhide vehicle</source>
+        <target>Mostrar vehículo</target>
 </trans-unit>
 <trans-unit id="s34444d528d6c041d">
   <source>Hide vehicle</source>
+        <target>Ocultar vehículo</target>
 </trans-unit>
 <trans-unit id="s8652720463582db6">
   <source>Stop auto-refresh</source>
+        <target>Detener actualización automática</target>
 </trans-unit>
 <trans-unit id="sd11b62914720d468">
   <source>Start auto-refresh</source>
+        <target>Iniciar actualización automática</target>
 </trans-unit>
 <trans-unit id="sa7758cec045bda64">
   <source>Hide hidden vehicles</source>
+        <target>Ocultar vehículos ocultos</target>
 </trans-unit>
 <trans-unit id="sfe30cca1ef185151">
   <source>Show hidden vehicles</source>
+        <target>Mostrar vehículos ocultos</target>
 </trans-unit>
 <trans-unit id="s2b7931014dfeddf0">
   <source>Failed to load geofences</source>
+        <target>No se pudieron cargar las geocercas</target>
 </trans-unit>
 <trans-unit id="s40484ec22729d753">
   <source>Click to finish</source>
+        <target>Haz clic para terminar</target>
 </trans-unit>
 <trans-unit id="s55573ea6c71af551">
   <source>Add at least 3 points to make an area.</source>
+        <target>Añade al menos 3 puntos para crear un área.</target>
 </trans-unit>
 <trans-unit id="sefac9fea31d5ef2a">
   <source>Failed to delete geofence</source>
+        <target>No se pudo eliminar la geocerca</target>
 </trans-unit>
 <trans-unit id="s5ed32a914a02fb92">
   <source><x id="0" equiv-text="${g.groupIds.length}"/> group(s)</source>
+        <target><x id="0" equiv-text="${g.groupIds.length}"/> grupo(s)</target>
 </trans-unit>
 <trans-unit id="sc149e82259ebf46e">
   <source>Specific vehicles</source>
+        <target>Vehículos específicos</target>
 </trans-unit>
 <trans-unit id="s64ef2a6c2dd1d3d1">
   <source>Edit</source>
+        <target>Editar</target>
 </trans-unit>
 <trans-unit id="s71905b5086d80632">
   <source>Loading geofences…</source>
+        <target>Cargando geocercas…</target>
 </trans-unit>
 <trans-unit id="s617f1e646d2d81cd">
   <source>No geofences yet. Click “New geofence” and draw an area on the map.</source>
+        <target>Aún no hay geocercas. Haz clic en «Nueva geocerca» y dibuja un área en el mapa.</target>
 </trans-unit>
 <trans-unit id="s55a6ca816108f719">
   <source><x id="0" equiv-text="${this.drawCount}"/> point(s) — click the map to add, the first point to finish.</source>
+        <target><x id="0" equiv-text="${this.drawCount}"/> punto(s): haz clic en el mapa para añadir y en el primer punto para terminar.</target>
 </trans-unit>
 <trans-unit id="sad59707375956ad2">
   <source>Finish</source>
+        <target>Terminar</target>
 </trans-unit>
 </body>
 </file>
