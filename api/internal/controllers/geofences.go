@@ -118,6 +118,31 @@ func (gc *GeofencesController) GetGeofence(c *fiber.Ctx) error {
 	return c.JSON(toGeofenceResponse(g, len(ids)))
 }
 
+// GetGeofenceVehicles — GET /fleet/geofences/:id/vehicles
+//
+// Returns the token ids the geofence currently resolves to across its scope
+// (all = tenant fleet, group = members of its groups, manual = explicit
+// assignments). The manage-vehicles UI uses it to seed the assigned set.
+func (gc *GeofencesController) GetGeofenceVehicles(c *fiber.Ctx) error {
+	tenant, err := GetTenant(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	g, err := gc.geofences.GetGeofence(c.Context(), tenant.ID, c.Params("id"))
+	if err != nil {
+		return gc.mapServiceError(err, "get geofence")
+	}
+	ids, err := gc.geofences.EffectiveTokenIDs(c.Context(), tenant.ID, g)
+	if err != nil {
+		gc.logger.Err(err).Str("geofence", g.ID).Msg("geofence vehicles")
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to load geofence vehicles")
+	}
+	if ids == nil {
+		ids = []int64{}
+	}
+	return c.JSON(fiber.Map{"tokenIds": ids})
+}
+
 // CreateGeofence — POST /fleet/geofences
 func (gc *GeofencesController) CreateGeofence(c *fiber.Ctx) error {
 	tenant, err := GetTenant(c)

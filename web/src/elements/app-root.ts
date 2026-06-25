@@ -13,9 +13,10 @@ import '../views/glovebox.ts';
 import '../views/account-settings.ts';
 import '../views/onboard-tenant.ts';
 import '../views/groups-management.ts';
+import '../views/geofences-management.ts';
 import '../views/fleet-list-view.ts';
 
-type NavKey = 'vehicles' | 'stats' | 'groups' | 'glovebox' | 'settings';
+type NavKey = 'vehicles' | 'stats' | 'groups' | 'geofences' | 'glovebox' | 'settings';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -65,6 +66,7 @@ export class AppRoot extends LitElement {
             { path: '/:tenantId/',                    render: () => html`<fleet-overview-view .tenantId=${this.tenantId}></fleet-overview-view>` },
             { path: '/:tenantId/vehicles/:tokenId',   render: ({ tokenId }) => html`<vehicle-details-view .tenantId=${this.tenantId} .tokenId=${tokenId}></vehicle-details-view>` },
             { path: '/:tenantId/groups',              render: () => html`<groups-management-view .tenantId=${this.tenantId}></groups-management-view>` },
+            { path: '/:tenantId/geofences',           render: () => html`<geofences-management-view .tenantId=${this.tenantId}></geofences-management-view>` },
             { path: '/:tenantId/glovebox',            render: () => html`<glovebox-view .tenantId=${this.tenantId}></glovebox-view>` },
             { path: '/:tenantId/settings',            render: () => html`<account-settings-view .tenantId=${this.tenantId}></account-settings-view>` },
             { path: '/:tenantId/stats',               render: () => html`<fleet-list-view .tenantId=${this.tenantId}></fleet-list-view>` },
@@ -141,6 +143,7 @@ export class AppRoot extends LitElement {
         if (path === '/' || path.startsWith('/vehicles')) return 'vehicles';
         if (path.startsWith('/stats')) return 'stats';
         if (path.startsWith('/groups')) return 'groups';
+        if (path.startsWith('/geofences')) return 'geofences';
         if (path.startsWith('/glovebox')) return 'glovebox';
         if (path.startsWith('/settings')) return 'settings';
         return 'vehicles';

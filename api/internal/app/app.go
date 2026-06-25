@@ -139,6 +139,7 @@ func App(
 	tenantApp.Get("/fleet/geofences", geofencesCtrl.GetGeofences)
 	tenantApp.Post("/fleet/geofences", geofencesCtrl.CreateGeofence)
 	tenantApp.Get("/fleet/geofences/:id", geofencesCtrl.GetGeofence)
+	tenantApp.Get("/fleet/geofences/:id/vehicles", geofencesCtrl.GetGeofenceVehicles)
 	tenantApp.Patch("/fleet/geofences/:id", geofencesCtrl.UpdateGeofence)
 	tenantApp.Delete("/fleet/geofences/:id", geofencesCtrl.DeleteGeofence)
 	tenantApp.Post("/fleet/vehicles/:tokenID/geofence/:geofenceID", geofencesCtrl.AddVehicleToGeofence)

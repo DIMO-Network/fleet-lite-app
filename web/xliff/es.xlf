@@ -1020,6 +1020,162 @@
 <trans-unit id="se15c9243be269005">
   <source>Make Favorite</source>
 </trans-unit>
+<trans-unit id="s879ecc0cdb12e5e3">
+  <source>Please enter a geofence name.</source>
+</trans-unit>
+<trans-unit id="sbfba5dd3a37e4d91">
+  <source>Pick at least one group, or choose a different scope.</source>
+</trans-unit>
+<trans-unit id="s382c29e4d4153b57">
+  <source>Draw the geofence area on the map first.</source>
+</trans-unit>
+<trans-unit id="sf66afe3d5ccf3fd8">
+  <source>Failed to save geofence</source>
+</trans-unit>
+<trans-unit id="sd376dd777095c7ed">
+  <source>Edit geofence</source>
+</trans-unit>
+<trans-unit id="s5f5f916669344f2d">
+  <source>New geofence</source>
+</trans-unit>
+<trans-unit id="s388d4a378e796b21">
+  <source>Update the geofence details. Redraw the area by deleting and recreating it.</source>
+</trans-unit>
+<trans-unit id="s4cdf4e50ebbee02d">
+  <source>Name the area you drew, then choose which vehicles it applies to.</source>
+</trans-unit>
+<trans-unit id="s06fd2f8b555158a4">
+  <source>Area</source>
+</trans-unit>
+<trans-unit id="sa1691fab227b1e7b">
+  <source>e.g. Downtown Depot</source>
+</trans-unit>
+<trans-unit id="s5211d1267cc7f7ae">
+  <source>Speed limit (optional)</source>
+</trans-unit>
+<trans-unit id="sa3e3377ea42cdd04">
+  <source>e.g. 50</source>
+</trans-unit>
+<trans-unit id="s125a48d7351b5c42">
+  <source>km/h</source>
+</trans-unit>
+<trans-unit id="s2e081dcaddba4560">
+  <source>Applies to</source>
+</trans-unit>
+<trans-unit id="s0ae75ba7b2bf0745">
+  <source>All vehicles</source>
+</trans-unit>
+<trans-unit id="s114b2ed0dad128cf">
+  <source>By group</source>
+</trans-unit>
+<trans-unit id="s38ae715766d186d9">
+  <source>Specific</source>
+</trans-unit>
+<trans-unit id="sc00e18e5207ae9a3">
+  <source>No fleet groups yet — create groups first, or pick another scope.</source>
+</trans-unit>
+<trans-unit id="s791ab754e4927fa6">
+  <source>Use the “Vehicles” button on the geofence to assign specific vehicles.</source>
+</trans-unit>
+<trans-unit id="sc550eccb17bdbd40">
+  <source>Save first, then assign specific vehicles with the “Vehicles” button.</source>
+</trans-unit>
+<trans-unit id="s37e66fcfe9b18388">
+  <source>Applies to every vehicle in this fleet.</source>
+</trans-unit>
+<trans-unit id="sd31e770995499709">
+  <source>Create geofence</source>
+</trans-unit>
+<trans-unit id="s49b99bd09dbcc27a">
+  <source>Failed to load assigned vehicles</source>
+</trans-unit>
+<trans-unit id="se814442621d42e47">
+  <source>Failed to update assignment</source>
+</trans-unit>
+<trans-unit id="sb82063ff4133ae44">
+  <source>Loading assigned vehicles…</source>
+</trans-unit>
+<trans-unit id="s18d3e67298c3efeb">
+  <source><x id="0" equiv-text="${this.memberIds.size}"/> of <x id="1" equiv-text="${this.vehicles.length}"/> vehicles assigned.</source>
+</trans-unit>
+<trans-unit id="s83f3b9e92ba665c7">
+  <source>Remove from geofence</source>
+</trans-unit>
+<trans-unit id="s91efe1656eddd2b1">
+  <source>Add to geofence</source>
+</trans-unit>
+<trans-unit id="s73205a59ad4c37d0">
+  <source>Geofences</source>
+</trans-unit>
+<trans-unit id="s7293d04c5979a8ad">
+  <source>Expand sidebar</source>
+</trans-unit>
+<trans-unit id="s8f10b4e57121e256">
+  <source>Collapse sidebar</source>
+</trans-unit>
+<trans-unit id="see4417f44c48bef1">
+  <source>Switch to light mode</source>
+</trans-unit>
+<trans-unit id="s293e16fbf997f389">
+  <source>Switch to dark mode</source>
+</trans-unit>
+<trans-unit id="sa09ceb160ce673ca">
+  <source>Light Mode</source>
+</trans-unit>
+<trans-unit id="s2d604c0203cd8238">
+  <source>Dark Mode</source>
+</trans-unit>
+<trans-unit id="sc876b69c2e31e0a2">
+  <source>Unhide vehicle</source>
+</trans-unit>
+<trans-unit id="s34444d528d6c041d">
+  <source>Hide vehicle</source>
+</trans-unit>
+<trans-unit id="s8652720463582db6">
+  <source>Stop auto-refresh</source>
+</trans-unit>
+<trans-unit id="sd11b62914720d468">
+  <source>Start auto-refresh</source>
+</trans-unit>
+<trans-unit id="sa7758cec045bda64">
+  <source>Hide hidden vehicles</source>
+</trans-unit>
+<trans-unit id="sfe30cca1ef185151">
+  <source>Show hidden vehicles</source>
+</trans-unit>
+<trans-unit id="s2b7931014dfeddf0">
+  <source>Failed to load geofences</source>
+</trans-unit>
+<trans-unit id="s40484ec22729d753">
+  <source>Click to finish</source>
+</trans-unit>
+<trans-unit id="s55573ea6c71af551">
+  <source>Add at least 3 points to make an area.</source>
+</trans-unit>
+<trans-unit id="sefac9fea31d5ef2a">
+  <source>Failed to delete geofence</source>
+</trans-unit>
+<trans-unit id="s5ed32a914a02fb92">
+  <source><x id="0" equiv-text="${g.groupIds.length}"/> group(s)</source>
+</trans-unit>
+<trans-unit id="sc149e82259ebf46e">
+  <source>Specific vehicles</source>
+</trans-unit>
+<trans-unit id="s64ef2a6c2dd1d3d1">
+  <source>Edit</source>
+</trans-unit>
+<trans-unit id="s71905b5086d80632">
+  <source>Loading geofences…</source>
+</trans-unit>
+<trans-unit id="s617f1e646d2d81cd">
+  <source>No geofences yet. Click “New geofence” and draw an area on the map.</source>
+</trans-unit>
+<trans-unit id="s55a6ca816108f719">
+  <source><x id="0" equiv-text="${this.drawCount}"/> point(s) — click the map to add, the first point to finish.</source>
+</trans-unit>
+<trans-unit id="sad59707375956ad2">
+  <source>Finish</source>
+</trans-unit>
 </body>
 </file>
 </xliff>
