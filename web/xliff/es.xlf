@@ -1236,6 +1236,38 @@
   <source>Geofences crossed</source>
   <target>Geocercas atravesadas</target>
 </trans-unit>
+<trans-unit id="s115763f2236ae9b6">
+  <source>Last 24 hours</source>
+  <target>Últimas 24 horas</target>
+</trans-unit>
+<trans-unit id="sc6b717aff19ce673">
+  <source>Last 3 days</source>
+  <target>Últimos 3 días</target>
+</trans-unit>
+<trans-unit id="sbe12e8d5959891b1">
+  <source>Failed to scan geofence activity</source>
+  <target>Error al escanear la actividad de la geocerca</target>
+</trans-unit>
+<trans-unit id="s5246bbe920ca986a">
+  <source>Scanning <x id="0" equiv-text="${this.scanned}"/> of <x id="1" equiv-text="${this.total}"/> vehicles…</source>
+  <target>Escaneando <x id="0" equiv-text="${this.scanned}"/> de <x id="1" equiv-text="${this.total}"/> vehículos…</target>
+</trans-unit>
+<trans-unit id="sd01aa11617062a46">
+  <source><x id="0" equiv-text="${this.results.length}"/> of <x id="1" equiv-text="${this.total}"/> vehicles passed through · <x id="2" equiv-text="${passCount}"/> passes</source>
+  <target><x id="0" equiv-text="${this.results.length}"/> de <x id="1" equiv-text="${this.total}"/> vehículos atravesaron · <x id="2" equiv-text="${passCount}"/> pasos</target>
+</trans-unit>
+<trans-unit id="s769c440ed2364da4">
+  <source>This geofence applies to many vehicles — scanning the first <x id="0" equiv-text="${this.total}"/>.</source>
+  <target>Esta geocerca aplica a muchos vehículos — escaneando los primeros <x id="0" equiv-text="${this.total}"/>.</target>
+</trans-unit>
+<trans-unit id="s043ffe59951ed213">
+  <source>No vehicles passed through in this window.</source>
+  <target>Ningún vehículo pasó por aquí en este período.</target>
+</trans-unit>
+<trans-unit id="s6c76b294d740446c">
+  <source>Activity</source>
+  <target>Actividad</target>
+</trans-unit>
 </body>
 </file>
 </xliff>

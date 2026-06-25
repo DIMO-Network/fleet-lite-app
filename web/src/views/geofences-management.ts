@@ -14,6 +14,7 @@ import { Vehicle, VehiclesResponse } from '../types/vehicle.ts';
 import { formatArea } from '../utils/geo.ts';
 import '../elements/create-geofence-modal.ts';
 import '../elements/manage-geofence-vehicles-modal.ts';
+import '../elements/geofence-activity-modal.ts';
 
 /**
  * geofences-management-view — define, draw, list, and assign polygon geofences.
@@ -37,6 +38,7 @@ export class GeofencesManagementView extends LitElement {
     @state() private creating = false;
     @state() private editing: Geofence | null = null;
     @state() private managing: Geofence | null = null;
+    @state() private activity: Geofence | null = null;
     @state() private confirmingDeleteId: string | null = null;
     @state() private selectedId: string | null = null;
 
@@ -396,6 +398,9 @@ export class GeofencesManagementView extends LitElement {
                         <button class="no" @click=${() => { this.confirmingDeleteId = null; }}>${msg('Cancel')}</button>
                     </div>`
                     : html`<div class="card-actions" @click=${(e: Event) => e.stopPropagation()}>
+                        <button @click=${() => { this.activity = g; }}>
+                            <span class="material-symbols-outlined">history</span> ${msg('Activity')}
+                        </button>
                         ${g.scope === 'manual'
                             ? html`<button @click=${() => { this.managing = g; }}>
                                 <span class="material-symbols-outlined">directions_car</span> ${msg('Vehicles')}
@@ -471,6 +476,14 @@ export class GeofencesManagementView extends LitElement {
                     @close=${() => { this.managing = null; }}
                     @changed=${() => { void this.load(); }}
                   ></manage-geofence-vehicles-modal>`
+                : nothing}
+
+            ${this.activity
+                ? html`<geofence-activity-modal
+                    .geofence=${this.activity}
+                    .vehicles=${this.vehicles}
+                    @close=${() => { this.activity = null; }}
+                  ></geofence-activity-modal>`
                 : nothing}
         `;
     }

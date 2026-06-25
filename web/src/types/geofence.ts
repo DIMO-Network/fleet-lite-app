@@ -73,3 +73,25 @@ export interface TripGeofencesResponse {
     permissionsRequired?: boolean;
     devLicense?: string;
 }
+
+/** One vehicle's passes through a geofence in a window (entry point 2). */
+export interface VehiclePasses {
+    tokenId: number;
+    passes: GeofencePass[];
+}
+
+/**
+ * Response of GET /fleet/geofences/:id/scan-targets — the effective vehicles to
+ * scan, capped. `capped` is true when `total` exceeded the cap and tokenIds was
+ * truncated (the client pages these through the passes endpoint).
+ */
+export interface GeofenceScanTargetsResponse {
+    tokenIds: number[];
+    total: number;
+    capped: boolean;
+}
+
+/** Response of GET /fleet/geofences/:id/passes — passes for a batch of vehicles. */
+export interface GeofencePassesResponse {
+    results: VehiclePasses[];
+}

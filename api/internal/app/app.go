@@ -148,6 +148,11 @@ func App(
 	// Geofence event detection (Phase 2). Entry point 1: which geofences a
 	// vehicle's telemetry crossed in a trip window — on-demand, cached.
 	tenantApp.Get("/telemetry/:tokenID/trip-geofences", geofencesCtrl.GetTripGeofences)
+	// Entry point 2: which vehicles passed through a geofence in a window. The
+	// client first reads scan-targets (effective vehicles, capped), then pages
+	// them through /passes in batches so results stream in progressively.
+	tenantApp.Get("/fleet/geofences/:id/scan-targets", geofencesCtrl.GetGeofenceScanTargets)
+	tenantApp.Get("/fleet/geofences/:id/passes", geofencesCtrl.GetGeofencePasses)
 
 	// Telemetry (vehicle-details charts)
 	telemetryCtrl := controllers.NewTelemetryController(logger, settings, vehicleSvc, telemetryAPI)
