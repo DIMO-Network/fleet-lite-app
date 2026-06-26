@@ -64,6 +64,7 @@ func main() {
 		subcommands.Register(subcommands.CommandsCommand(), "")
 		subcommands.Register(&migrateDBCmd{logger: logger, settings: settings}, "database")
 		subcommands.Register(&importGroupAttestationsCmd{logger: logger, settings: settings}, "attestations")
+		subcommands.Register(&pruneUnsharedVehiclesCmd{logger: logger, settings: settings}, "vehicles")
 		subcommands.Register(&pushPostmarkTemplatesCmd{logger: logger, settings: settings}, "email")
 		flag.Parse()
 		os.Exit(int(subcommands.Execute(ctx)))
