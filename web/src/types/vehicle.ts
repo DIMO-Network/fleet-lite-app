@@ -33,6 +33,8 @@ export interface Vehicle {
     syntheticDevice: SyntheticDevice;
     aftermarketDevice?: AftermarketDevice | null;
     isFavorite?: boolean;
+    /** License plate, cached from the vehicle's registration attestation. Absent when unknown. */
+    licensePlate?: string;
     /** Groups this vehicle belongs to (always present, [] when none). */
     groups: VehicleGroupRef[];
 }
@@ -53,6 +55,8 @@ export interface VehicleCard {
     errorMessage?: string;
     noPermissions?: boolean;
     isFavorite?: boolean;
+    /** License plate, cached from the vehicle's registration attestation. Absent when unknown. */
+    licensePlate?: string;
     /** Groups this vehicle belongs to, for the map/list group filter. */
     groups?: VehicleGroupRef[];
 }

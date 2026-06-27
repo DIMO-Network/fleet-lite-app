@@ -34,6 +34,11 @@ type Vehicle struct {
 	// Populated by VehicleService when assembling responses — it isn't part of
 	// the identity-api shape and is never present in the stored `raw` JSON.
 	IsFavorite bool `json:"isFavorite"`
+	// LicensePlate is cached from the vehicle's latest registration attestation
+	// (see LicensePlateSyncService). Like IsFavorite it isn't part of the
+	// identity-api shape, so VehicleService sets it from the DB column after
+	// reconstructing the vehicle from `raw`. Empty when no plate is known.
+	LicensePlate string `json:"licensePlate,omitempty"`
 	// Groups the vehicle belongs to, for the fleet-overview map/list filter.
 	// Always a (possibly empty) slice in the /vehicles response.
 	Groups []GroupRef `json:"groups"`

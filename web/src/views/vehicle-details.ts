@@ -379,6 +379,18 @@ export class VehicleDetailsView extends LitElement {
                 gap: 8px;
             }
             .hero-status .chip .material-symbols-outlined { font-size: 16px; }
+            /* License-plate chip: same shape as the token chip, accented to read
+               as the plate (primary-tinted icon + monospace plate value). */
+            .hero-status .plate-chip {
+                background: var(--surface-container-low);
+                cursor: default;
+            }
+            .hero-status .plate-chip .material-symbols-outlined { color: var(--primary); }
+            .hero-status .plate-chip .plate {
+                font-family: var(--font-mono);
+                color: var(--primary);
+                letter-spacing: 0.08em;
+            }
             .hero-status .meta {
                 font: var(--type-body-md);
                 color: var(--on-surface-variant);
@@ -906,6 +918,12 @@ export class VehicleDetailsView extends LitElement {
                         <span class="material-symbols-outlined">tag</span>
                         <span>${msg(str`Token #${this.tokenId}`)}</span>
                     </div>
+                    ${this.vehicle?.licensePlate
+                        ? html`<div class="chip plate-chip" title=${msg('License plate')}>
+                            <span class="material-symbols-outlined">directions_car</span>
+                            <span class="plate">${this.vehicle.licensePlate}</span>
+                        </div>`
+                        : ''}
                     ${this.vehicle?.aftermarketDevice
                         ? html`<div class="meta">
                             <span class="dot"></span>

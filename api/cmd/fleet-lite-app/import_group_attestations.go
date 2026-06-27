@@ -70,6 +70,7 @@ func (p *importGroupAttestationsCmd) Execute(ctx context.Context, _ *flag.FlagSe
 	authProvider := gateway.NewDimoAuthProvider(p.logger, &p.settings)
 	fetchAPI := gateway.NewFetchAPI(p.logger, &p.settings, authProvider)
 	groupSync := service.NewGroupSyncService(&p.logger, &p.pdb, fetchAPI, authProvider)
+	plateSync := service.NewLicensePlateSyncService(&p.logger, &p.pdb, fetchAPI, authProvider)
 
 	// Resolve tenants to process.
 	var dbTenants dbmodels.TenantSlice
@@ -85,7 +86,7 @@ func (p *importGroupAttestationsCmd) Execute(ctx context.Context, _ *flag.FlagSe
 
 	warmWindow := time.Duration(p.warmDays) * 24 * time.Hour
 
-	var checked, changed, skippedTenants int
+	var checked, changed, platesChanged, skippedTenants int
 	for _, dt := range dbTenants {
 		// Activity tiering: skip cold tenants on the warm pass.
 		if p.warmOnly {
@@ -138,10 +139,23 @@ func (p *importGroupAttestationsCmd) Execute(ctx context.Context, _ *flag.FlagSe
 					Int("added", res.Added).Int("removed", res.Removed).
 					Bool("dry_run", p.dryRun).Msg("reconciled group attestations")
 			}
+
+			// License plate: cache the latest registration-document plate for this
+			// vehicle on the same per-vehicle pull. Best-effort — a plate failure
+			// must never derail the group sync.
+			pres, perr := plateSync.SyncVehicle(ctx, *tenant, v.TokenID, service.SyncOpts{DryRun: p.dryRun})
+			if perr != nil {
+				p.logger.Debug().Err(perr).Int64("token_id", v.TokenID).Msg("sync license plate, skipping")
+			} else if pres.Changed {
+				platesChanged++
+				p.logger.Info().Str("tenant_id", dt.ID).Int64("token_id", v.TokenID).
+					Str("license_plate", pres.Plate).Bool("dry_run", p.dryRun).Msg("cached license plate")
+			}
 		}
 	}
 
 	p.logger.Info().Int("checked", checked).Int("changed", changed).
+		Int("plates_changed", platesChanged).
 		Int("skipped_tenants", skippedTenants).Bool("warm_only", p.warmOnly).
 		Bool("dry_run", p.dryRun).Msg("import-group-attestations complete")
 	return subcommands.ExitSuccess
