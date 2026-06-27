@@ -248,6 +248,7 @@
 'scbf200db3881b4b7': `Se almacena cifrada; se usa para leer los vehículos y la telemetría de su flota.`,
 'scd1dd6ff53d0d01a': `Intentar de nuevo`,
 'scd8f37f5e5868b87': `El nombre queda bloqueado después de la creación.`,
+'scdfba8f1ff966d98': `Patente`,
 'sd01aa11617062a46': str`${0} de ${1} vehículos atravesaron · ${2} pasos`,
 'sd11b62914720d468': `Iniciar actualización automática`,
 'sd12e9358e7e366cd': `Aún no hay integración con DIMO`,

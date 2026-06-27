@@ -1272,6 +1272,10 @@
   <source>Focus on map</source>
   <target>Centrar en el mapa</target>
 </trans-unit>
+<trans-unit id="scdfba8f1ff966d98">
+  <source>License plate</source>
+  <target>Patente</target>
+</trans-unit>
 </body>
 </file>
 </xliff>

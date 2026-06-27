@@ -1,0 +1,79 @@
+package service
+
+import (
+	"testing"
+	"time"
+
+	"github.com/DIMO-Network/fleet-lite-app/internal/gateway"
+)
+
+func TestLatestPlate(t *testing.T) {
+	base := time.Date(2026, 6, 26, 12, 0, 0, 0, time.UTC)
+	rfc := func(tm time.Time) string { return tm.Format(time.RFC3339) }
+
+	reg := func(tm time.Time, data string) gateway.AttestationEntry {
+		return gateway.AttestationEntry{Type: VehicleRegistrationCloudEventType, Time: rfc(tm), Data: []byte(data)}
+	}
+
+	cases := []struct {
+		name      string
+		entries   []gateway.AttestationEntry
+		wantPlate string
+		wantFound bool
+	}{
+		{
+			name:      "no entries",
+			entries:   nil,
+			wantFound: false,
+		},
+		{
+			name:      "single plate",
+			entries:   []gateway.AttestationEntry{reg(base, `{"license_plate":"ABC123"}`)},
+			wantPlate: "ABC123",
+			wantFound: true,
+		},
+		{
+			name: "latest by time wins",
+			entries: []gateway.AttestationEntry{
+				reg(base, `{"license_plate":"OLD111"}`),
+				reg(base.Add(time.Hour), `{"license_plate":"NEW222"}`),
+				reg(base.Add(-time.Hour), `{"license_plate":"OLDER0"}`),
+			},
+			wantPlate: "NEW222",
+			wantFound: true,
+		},
+		{
+			name: "plateless and wrong-type entries ignored",
+			entries: []gateway.AttestationEntry{
+				{Type: "dimo.document.vehicle.groups", Time: rfc(base.Add(2 * time.Hour)), Data: []byte(`{"groups":[]}`)},
+				reg(base.Add(time.Hour), `{"vin":"1ABC"}`), // registration doc, no plate field
+				reg(base, `{"license_plate":"PLT123"}`),
+			},
+			wantPlate: "PLT123",
+			wantFound: true,
+		},
+		{
+			name:      "empty/whitespace plate ignored",
+			entries:   []gateway.AttestationEntry{reg(base, `{"license_plate":"  "}`)},
+			wantFound: false,
+		},
+		{
+			name: "newer doc without plate does not override older plate",
+			entries: []gateway.AttestationEntry{
+				reg(base.Add(time.Hour), `{"vin":"only-vin"}`),
+				reg(base, `{"license_plate":"KEEPME"}`),
+			},
+			wantPlate: "KEEPME",
+			wantFound: true,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			plate, found := latestPlate(c.entries)
+			if found != c.wantFound || plate != c.wantPlate {
+				t.Fatalf("latestPlate = (%q, %v), want (%q, %v)", plate, found, c.wantPlate, c.wantFound)
+			}
+		})
+	}
+}

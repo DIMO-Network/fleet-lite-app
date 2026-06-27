@@ -92,6 +92,7 @@ func (s *VehicleService) ListVehicles(ctx context.Context, tenantID string) ([]m
 	for _, r := range rows {
 		v := rowToVehicle(r)
 		v.IsFavorite = favorites[v.TokenID]
+		v.LicensePlate = r.LicensePlate.String
 		out = append(out, v)
 	}
 	return out, nil
@@ -111,6 +112,7 @@ func (s *VehicleService) GetVehicle(ctx context.Context, tenantID string, tokenI
 	if err != nil {
 		return nil, err
 	}
+	v.LicensePlate = r.LicensePlate.String
 	return &v, nil
 }
 

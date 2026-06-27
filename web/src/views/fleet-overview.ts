@@ -205,6 +205,7 @@ export class FleetOverviewView extends LitElement {
             online: integrated,
             errorMessage: integrated ? undefined : msg('No DIMO integration — pair a device to stream telemetry'),
             isFavorite: v.isFavorite ?? false,
+            licensePlate: v.licensePlate,
             groups: v.groups ?? [],
         };
     }
@@ -1156,6 +1157,25 @@ export class FleetOverviewView extends LitElement {
                 overflow: hidden;
                 text-overflow: ellipsis;
             }
+            /* License-plate pill: monospace plate value with a primary-tinted
+               accent, sized to sit under the title in the list card. */
+            .vehicle-meta .plate-pill {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                margin-top: 6px;
+                padding: 2px 8px;
+                border-radius: var(--radius-full);
+                background: var(--surface-container-low);
+                border: 1px solid var(--outline-variant);
+                font-family: var(--font-mono);
+                font-size: 12px;
+                line-height: 16px;
+                letter-spacing: 0.06em;
+                color: var(--primary);
+                cursor: default;
+            }
+            .vehicle-meta .plate-pill .material-symbols-outlined { font-size: 14px; }
             .vehicle-meta .seen {
                 font: var(--type-label-caps);
                 letter-spacing: 0.05em;
@@ -1278,6 +1298,11 @@ export class FleetOverviewView extends LitElement {
                             ${v.isFavorite ? html`<span class="material-symbols-outlined favorite-star" title="${msg('Favorite')}">star</span>` : ''}
                             ${v.title}
                         </h4>
+                        ${v.licensePlate ? html`
+                            <span class="plate-pill" title=${msg('License plate')}>
+                                <span class="material-symbols-outlined">directions_car</span>${v.licensePlate}
+                            </span>
+                        ` : ''}
                         ${v.online ? html`
                             <p class="location">${v.location}</p>
                             ${v.notification
@@ -1307,7 +1332,8 @@ export class FleetOverviewView extends LitElement {
 
     private renderCompactCard(v: VehicleCard) {
         return html`
-            <a class="vehicle-card-compact" href="#/${this.tenantId}/vehicles/${v.tokenId}" title=${v.title}
+            <a class="vehicle-card-compact" href="#/${this.tenantId}/vehicles/${v.tokenId}"
+               title=${v.licensePlate ? `${v.title} — ${msg('License plate')}: ${v.licensePlate}` : v.title}
                @click=${(e: MouseEvent) => { if (!e.metaKey && !e.ctrlKey) { e.preventDefault(); this.openQuickView(v); } }}>
                 <span class="status-dot ${this.statusClass(v)}"></span>
                 ${v.isFavorite ? html`<span class="material-symbols-outlined favorite-star-compact" title="${msg('Favorite')}">star</span>` : ''}
@@ -1325,7 +1351,8 @@ export class FleetOverviewView extends LitElement {
         const isHidden = this.hiddenVehicles.has(v.tokenId);
         const cls = [v.online ? 'vehicle-card-dense' : 'vehicle-card-dense offline', isHidden ? 'hidden-card' : ''].join(' ').trim();
         return html`
-            <a class=${cls} href="#/${this.tenantId}/vehicles/${v.tokenId}" title=${v.title}
+            <a class=${cls} href="#/${this.tenantId}/vehicles/${v.tokenId}"
+               title=${v.licensePlate ? `${v.title} — ${msg('License plate')}: ${v.licensePlate}` : v.title}
                @click=${(e: MouseEvent) => { if (!e.metaKey && !e.ctrlKey) { e.preventDefault(); if (!isHidden) this.openQuickView(v); } }}>
                 <div class="dense-token">
                     <span class="status-dot ${this.statusClass(v)}"></span>
