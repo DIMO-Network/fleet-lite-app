@@ -196,11 +196,13 @@ export class FleetOverviewView extends LitElement {
             : hasSynthetic
                 ? `Synthetic #${v.syntheticDevice.tokenId}`
                 : '';
+        // Prefer the VIN when we have it; fall back to the device-integration label.
+        const subtitle = v.vin ? `VIN ${v.vin}` : integration;
         return {
             tokenId: String(v.tokenId),
             make: v.definition.make,
             title: this.formatTitle(v),
-            location: integration,
+            location: subtitle,
             seenAt: `Token #${v.tokenId}`,
             online: integrated,
             errorMessage: integrated ? undefined : msg('No DIMO integration — pair a device to stream telemetry'),

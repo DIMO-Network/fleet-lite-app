@@ -93,6 +93,7 @@ func (s *VehicleService) ListVehicles(ctx context.Context, tenantID string) ([]m
 		v := rowToVehicle(r)
 		v.IsFavorite = favorites[v.TokenID]
 		v.LicensePlate = r.LicensePlate.String
+		v.VIN = r.Vin.String
 		out = append(out, v)
 	}
 	return out, nil
@@ -113,6 +114,7 @@ func (s *VehicleService) GetVehicle(ctx context.Context, tenantID string, tokenI
 		return nil, err
 	}
 	v.LicensePlate = r.LicensePlate.String
+	v.VIN = r.Vin.String
 	return &v, nil
 }
 

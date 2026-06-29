@@ -70,9 +70,59 @@ func TestLatestPlate(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			plate, found := latestPlate(c.entries)
+			plate, found := latestRegistrationField(c.entries, licensePlateField)
 			if found != c.wantFound || plate != c.wantPlate {
-				t.Fatalf("latestPlate = (%q, %v), want (%q, %v)", plate, found, c.wantPlate, c.wantFound)
+				t.Fatalf("latestRegistrationField(license_plate) = (%q, %v), want (%q, %v)", plate, found, c.wantPlate, c.wantFound)
+			}
+		})
+	}
+}
+
+func TestLatestRegistrationFieldVIN(t *testing.T) {
+	base := time.Date(2026, 6, 26, 12, 0, 0, 0, time.UTC)
+	rfc := func(tm time.Time) string { return tm.Format(time.RFC3339) }
+	reg := func(tm time.Time, data string) gateway.AttestationEntry {
+		return gateway.AttestationEntry{Type: VehicleRegistrationCloudEventType, Time: rfc(tm), Data: []byte(data)}
+	}
+
+	cases := []struct {
+		name      string
+		entries   []gateway.AttestationEntry
+		wantVIN   string
+		wantFound bool
+	}{
+		{name: "no entries", entries: nil, wantFound: false},
+		{
+			name:      "single vin",
+			entries:   []gateway.AttestationEntry{reg(base, `{"vin":"1ABC"}`)},
+			wantVIN:   "1ABC",
+			wantFound: true,
+		},
+		{
+			name: "latest by time wins",
+			entries: []gateway.AttestationEntry{
+				reg(base, `{"vin":"OLDVIN"}`),
+				reg(base.Add(time.Hour), `{"vin":"NEWVIN"}`),
+			},
+			wantVIN:   "NEWVIN",
+			wantFound: true,
+		},
+		{
+			name: "vin read independently of plate-only docs",
+			entries: []gateway.AttestationEntry{
+				reg(base.Add(time.Hour), `{"license_plate":"PLT123"}`), // newer, no vin
+				reg(base, `{"vin":"KEEPVIN"}`),
+			},
+			wantVIN:   "KEEPVIN",
+			wantFound: true,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			vin, found := latestRegistrationField(c.entries, vinField)
+			if found != c.wantFound || vin != c.wantVIN {
+				t.Fatalf("latestRegistrationField(vin) = (%q, %v), want (%q, %v)", vin, found, c.wantVIN, c.wantFound)
 			}
 		})
 	}
