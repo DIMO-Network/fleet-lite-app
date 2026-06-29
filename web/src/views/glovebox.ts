@@ -34,6 +34,7 @@ const MISSING_BLURBS: Record<string, () => string> = {
 @customElement('glovebox-view')
 export class GloveboxView extends LitElement {
     @property({ type: String }) tenantId = '';
+    @property({ type: String }) initialTokenId = '';
     @state() private vehicles: Vehicle[] = [];
     @state() private selected: Vehicle | null = null;
     @state() private loadingVehicles = true;
@@ -51,7 +52,10 @@ export class GloveboxView extends LitElement {
         try {
             const res = await ApiService.getInstance().get<VehiclesResponse>('/vehicles');
             this.vehicles = res.vehicles || [];
-            this.selected = this.vehicles[0] ?? null;
+            const initial = this.initialTokenId
+                ? this.vehicles.find(v => String(v.tokenId) === this.initialTokenId)
+                : null;
+            this.selected = initial ?? this.vehicles[0] ?? null;
             if (this.selected) {
                 await this.loadDocs(this.selected.tokenId);
             }
