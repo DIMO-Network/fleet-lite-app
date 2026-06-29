@@ -58,6 +58,9 @@ type invitationJSON struct {
 	CreatedAt  string  `json:"createdAt"`
 	ExpiresAt  string  `json:"expiresAt"`
 	AcceptedAt *string `json:"acceptedAt,omitempty"`
+	// EmailSent is set only on create/resend responses (true = the email
+	// dispatched, false = saved but delivery failed). Omitted when listing.
+	EmailSent *bool `json:"emailSent,omitempty"`
 }
 
 type createInvitationRequest struct {
@@ -79,15 +82,18 @@ func (ic *InvitationsController) CreateInvitation(c *fiber.Ctx) error {
 	}
 	inv, err := ic.invitationSvc.Create(c.Context(), c.Params("id"), inviter, req.Email, req.Role, req.Locale)
 	if err != nil {
-		// A nil invite means it never persisted; a non-nil invite with an error
-		// means it saved but the email failed — report that distinctly.
-		if inv == nil {
-			ic.logger.Err(err).Str("tenant", c.Params("id")).Msg("create invitation")
-			return fiber.NewError(fiber.StatusInternalServerError, "failed to create invitation")
+		// Saved-but-email-failed is a partial success: the invite row exists and is
+		// usable, so return it (201) with emailSent=false instead of a 5xx that would
+		// break the UI flow. The owner can resend once email delivery is fixed.
+		if inv != nil && errors.Is(err, service.ErrEmailNotSent) {
+			ic.logger.Warn().Err(err).Str("tenant", c.Params("id")).Msg("invitation created but email not sent")
+			return c.Status(fiber.StatusCreated).JSON(toInvitationJSONWithEmail(inv, false))
 		}
-		return fiber.NewError(fiber.StatusBadGateway, err.Error())
+		// Nothing persisted — a real failure.
+		ic.logger.Err(err).Str("tenant", c.Params("id")).Msg("create invitation")
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to create invitation")
 	}
-	return c.Status(fiber.StatusCreated).JSON(toInvitationJSON(inv))
+	return c.Status(fiber.StatusCreated).JSON(toInvitationJSONWithEmail(inv, true))
 }
 
 // ListInvitations — GET /tenants/:id/invitations. Any member can list.
@@ -143,10 +149,15 @@ func (ic *InvitationsController) ResendInvitation(c *fiber.Ctx) error {
 		if errors.Is(err, service.ErrInviteInvalid) {
 			return fiber.NewError(fiber.StatusNotFound, "no pending invitation to resend")
 		}
+		// Token refreshed but email failed — partial success, warn instead of erroring.
+		if errors.Is(err, service.ErrEmailNotSent) {
+			ic.logger.Warn().Err(err).Str("tenant", c.Params("id")).Msg("invitation token refreshed but email not sent")
+			return c.JSON(fiber.Map{"ok": true, "emailSent": false})
+		}
 		ic.logger.Err(err).Str("tenant", c.Params("id")).Msg("resend invitation")
-		return fiber.NewError(fiber.StatusBadGateway, "failed to resend invitation")
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to resend invitation")
 	}
-	return c.JSON(fiber.Map{"ok": true})
+	return c.JSON(fiber.Map{"ok": true, "emailSent": true})
 }
 
 type acceptInvitationRequest struct {
@@ -190,5 +201,13 @@ func toInvitationJSON(r *dbmodels.Invitation) invitationJSON {
 		s := r.AcceptedAt.Time.UTC().Format(time.RFC3339)
 		out.AcceptedAt = &s
 	}
+	return out
+}
+
+// toInvitationJSONWithEmail is toInvitationJSON plus the email-delivery flag, for
+// create/resend responses where the caller needs to know if the email dispatched.
+func toInvitationJSONWithEmail(r *dbmodels.Invitation, emailSent bool) invitationJSON {
+	out := toInvitationJSON(r)
+	out.EmailSent = &emailSent
 	return out
 }

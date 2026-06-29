@@ -261,10 +261,13 @@ export class TenantMembers extends LitElement {
         }
         this.inviting = true;
         try {
-            await TenantService.getInstance().createInvitation(this.tenantId, email, this.newRole);
+            const res = await TenantService.getInstance().createInvitation(this.tenantId, email, this.newRole);
             this.newEmail = '';
             this.newRole = ROLE_MEMBER;
-            this.inviteNotice = msg(str`Invitation sent to ${email}.`);
+            // The invite is saved either way; distinguish whether the email went out.
+            this.inviteNotice = res.emailSent === false
+                ? msg(str`Invitation created for ${email}, but the email could not be sent. Use Resend once email delivery is configured.`)
+                : msg(str`Invitation sent to ${email}.`);
             await this.load();
         } catch (err) {
             this.inviteError = extractMessage(err) || msg('Could not send invitation.');
@@ -292,8 +295,10 @@ export class TenantMembers extends LitElement {
         this.inviteNotice = '';
         this.busyInviteId = id;
         try {
-            await TenantService.getInstance().resendInvitation(this.tenantId, id);
-            this.inviteNotice = msg('Invitation re-sent.');
+            const res = await TenantService.getInstance().resendInvitation(this.tenantId, id);
+            this.inviteNotice = res.emailSent === false
+                ? msg('Invitation refreshed, but the email could not be sent. Check email delivery configuration.')
+                : msg('Invitation re-sent.');
         } catch (err) {
             this.inviteError = extractMessage(err) || msg('Could not resend invitation.');
         } finally {
