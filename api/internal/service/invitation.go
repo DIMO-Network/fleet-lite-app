@@ -27,6 +27,9 @@ const (
 	InviteStatusAccepted = "accepted"
 	InviteStatusRevoked  = "revoked"
 
+	localeEN = "en"
+	localeES = "es"
+
 	defaultInviteExpiryHours = 168 // 7 days
 )
 
@@ -38,7 +41,7 @@ var ErrInviteInvalid = errors.New("invitation is invalid, already used, or expir
 // postmarkSender is the slice of the Postmark gateway the service needs. Kept as
 // an interface so the service is testable without a live Postmark.
 type postmarkSender interface {
-	SendInvitation(toEmail string, model gateway.InvitationModel) error
+	SendInvitation(toEmail, templateAlias string, model gateway.InvitationModel) error
 }
 
 // InvitationService owns the email-invitation lifecycle: issue (with a hashed
@@ -66,7 +69,7 @@ func NewInvitationService(logger *zerolog.Logger, pdb *db.Store, settings *confi
 // same (tenant, email), generates a single-use token (storing only its hash),
 // persists the row, and sends the accept-link email via Postmark. Returns the
 // stored invitation.
-func (s *InvitationService) Create(ctx context.Context, tenantID, inviterWallet, email, role string) (*dbmodels.Invitation, error) {
+func (s *InvitationService) Create(ctx context.Context, tenantID, inviterWallet, email, role, locale string) (*dbmodels.Invitation, error) {
 	email = strings.TrimSpace(strings.ToLower(email))
 	if email == "" {
 		return nil, fmt.Errorf("email is required")
@@ -105,7 +108,7 @@ func (s *InvitationService) Create(ctx context.Context, tenantID, inviterWallet,
 		return nil, fmt.Errorf("insert invitation: %w", err)
 	}
 
-	if err := s.sendEmail(ctx, tenantID, inviterWallet, email, token); err != nil {
+	if err := s.sendEmail(ctx, tenantID, inviterWallet, email, token, locale); err != nil {
 		// The invite exists; surface the email failure so the owner can retry.
 		s.logger.Err(err).Str("tenant", tenantID).Str("email", email).Msg("send invitation email")
 		return inv, fmt.Errorf("invitation saved but email failed to send: %w", err)
@@ -169,7 +172,7 @@ func (s *InvitationService) Revoke(ctx context.Context, tenantID, invitationID s
 
 // Resend re-sends the email for a pending invitation by minting a fresh token
 // (the old token is invalidated). Returns ErrInviteInvalid if not pending.
-func (s *InvitationService) Resend(ctx context.Context, tenantID, invitationID, inviterWallet string) error {
+func (s *InvitationService) Resend(ctx context.Context, tenantID, invitationID, inviterWallet, locale string) error {
 	inv, err := dbmodels.Invitations(
 		dbmodels.InvitationWhere.ID.EQ(invitationID),
 		dbmodels.InvitationWhere.TenantID.EQ(tenantID),
@@ -189,11 +192,12 @@ func (s *InvitationService) Resend(ctx context.Context, tenantID, invitationID, 
 		boil.Whitelist("token_hash", "expires_at", "updated_at")); err != nil {
 		return fmt.Errorf("refresh invitation token: %w", err)
 	}
-	return s.sendEmail(ctx, tenantID, inviterWallet, inv.Email, token)
+	return s.sendEmail(ctx, tenantID, inviterWallet, inv.Email, token, locale)
 }
 
-// sendEmail builds the accept link + template model and dispatches via Postmark.
-func (s *InvitationService) sendEmail(ctx context.Context, tenantID, inviterWallet, email, token string) error {
+// sendEmail builds the accept link + template model and dispatches via Postmark,
+// picking the template whose language matches the inviter's locale.
+func (s *InvitationService) sendEmail(ctx context.Context, tenantID, inviterWallet, email, token, locale string) error {
 	tenant, err := s.tenantSvc.GetTenantByID(ctx, tenantID)
 	tenantName := tenantID
 	if err == nil && tenant.Name != "" {
@@ -203,9 +207,30 @@ func (s *InvitationService) sendEmail(ctx context.Context, tenantID, inviterWall
 		TenantName: tenantName,
 		AcceptURL:  s.acceptURL(token),
 		Inviter:    inviterWallet,
-		ExpiresIn:  s.expiryLabel(),
+		ExpiresIn:  s.expiryLabel(locale),
 	}
-	return s.postmark.SendInvitation(email, model)
+	return s.postmark.SendInvitation(email, s.templateAlias(locale), model)
+}
+
+// templateAlias maps an inviter locale to the Postmark template alias. English
+// (the default) uses the configured base alias; Spanish appends "-es". Any
+// unknown/empty locale falls back to English. See docs/MEMBER_INVITATIONS_PLAN.md.
+func (s *InvitationService) templateAlias(locale string) string {
+	base := s.settings.InvitationTemplateAlias
+	if normalizeLocale(locale) == localeES {
+		return base + "-es"
+	}
+	return base
+}
+
+// normalizeLocale collapses a locale tag to one of the app's shipped locales
+// ("en" or "es"). Anything not Spanish (incl. empty/"en"/region tags like
+// "en-US") resolves to English.
+func normalizeLocale(locale string) string {
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(locale)), "es") {
+		return localeES
+	}
+	return localeEN
 }
 
 func (s *InvitationService) expiry() time.Duration {
@@ -216,17 +241,29 @@ func (s *InvitationService) expiry() time.Duration {
 	return time.Duration(h) * time.Hour
 }
 
-func (s *InvitationService) expiryLabel() string {
+// expiryLabel renders the token lifetime as human copy in the inviter's locale,
+// e.g. "7 days" / "7 días". Used for the {{expires_in}} template variable.
+func (s *InvitationService) expiryLabel(locale string) string {
 	h := s.settings.InviteExpiryHours
 	if h <= 0 {
 		h = defaultInviteExpiryHours
 	}
+	es := normalizeLocale(locale) == localeES
 	if h%24 == 0 {
 		days := h / 24
-		if days == 1 {
+		switch {
+		case days == 1 && es:
+			return "1 día"
+		case days == 1:
 			return "1 day"
+		case es:
+			return fmt.Sprintf("%d días", days)
+		default:
+			return fmt.Sprintf("%d days", days)
 		}
-		return fmt.Sprintf("%d days", days)
+	}
+	if es {
+		return fmt.Sprintf("%d horas", h)
 	}
 	return fmt.Sprintf("%d hours", h)
 }

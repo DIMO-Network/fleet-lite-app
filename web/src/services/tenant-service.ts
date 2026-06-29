@@ -1,4 +1,5 @@
 import { ApiService } from './api-service.ts';
+import { getLocale } from '../localization.ts';
 
 export interface Tenant {
     id: string;
@@ -131,11 +132,19 @@ export class TenantService {
         return res.invitations ?? [];
     }
 
-    /** POST /tenants/:id/invitations — owner-only; email an invite + accept link. */
-    public async createInvitation(tenantId: string, email: string, role: string = ROLE_MEMBER): Promise<void> {
+    /**
+     * POST /tenants/:id/invitations — owner-only; email an invite + accept link.
+     * Sends the active UI locale so the email goes out in the inviter's language.
+     */
+    public async createInvitation(
+        tenantId: string,
+        email: string,
+        role: string = ROLE_MEMBER,
+        locale: string = getLocale(),
+    ): Promise<void> {
         await ApiService.getInstance().post(
             `/tenants/${encodeURIComponent(tenantId)}/invitations`,
-            { email, role },
+            { email, role, locale },
         );
     }
 
@@ -146,11 +155,18 @@ export class TenantService {
         );
     }
 
-    /** POST /tenants/:id/invitations/:invId/resend — owner-only; re-send a pending invite. */
-    public async resendInvitation(tenantId: string, invitationId: string): Promise<void> {
+    /**
+     * POST /tenants/:id/invitations/:invId/resend — owner-only; re-send a pending
+     * invite. Re-sends in the inviter's current UI locale.
+     */
+    public async resendInvitation(
+        tenantId: string,
+        invitationId: string,
+        locale: string = getLocale(),
+    ): Promise<void> {
         await ApiService.getInstance().post(
             `/tenants/${encodeURIComponent(tenantId)}/invitations/${encodeURIComponent(invitationId)}/resend`,
-            {},
+            { locale },
         );
     }
 

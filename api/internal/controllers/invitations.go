@@ -61,8 +61,9 @@ type invitationJSON struct {
 }
 
 type createInvitationRequest struct {
-	Email string `json:"email"`
-	Role  string `json:"role"`
+	Email  string `json:"email"`
+	Role   string `json:"role"`
+	Locale string `json:"locale"`
 }
 
 // CreateInvitation — POST /tenants/:id/invitations. Owner-only. Issues an
@@ -76,7 +77,7 @@ func (ic *InvitationsController) CreateInvitation(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil || req.Email == "" {
 		return fiber.NewError(fiber.StatusBadRequest, "email is required")
 	}
-	inv, err := ic.invitationSvc.Create(c.Context(), c.Params("id"), inviter, req.Email, req.Role)
+	inv, err := ic.invitationSvc.Create(c.Context(), c.Params("id"), inviter, req.Email, req.Role, req.Locale)
 	if err != nil {
 		// A nil invite means it never persisted; a non-nil invite with an error
 		// means it saved but the email failed — report that distinctly.
@@ -124,14 +125,21 @@ func (ic *InvitationsController) RevokeInvitation(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"ok": true})
 }
 
+type resendInvitationRequest struct {
+	Locale string `json:"locale"`
+}
+
 // ResendInvitation — POST /tenants/:id/invitations/:invID/resend. Owner-only.
-// Mints a fresh token and re-sends the email.
+// Mints a fresh token and re-sends the email in the inviter's current locale.
 func (ic *InvitationsController) ResendInvitation(c *fiber.Ctx) error {
 	inviter, err := ic.requireOwner(c)
 	if err != nil {
 		return err
 	}
-	if err := ic.invitationSvc.Resend(c.Context(), c.Params("id"), c.Params("invID"), inviter); err != nil {
+	// Body is optional; an unparseable/empty body just falls back to English.
+	var req resendInvitationRequest
+	_ = c.BodyParser(&req)
+	if err := ic.invitationSvc.Resend(c.Context(), c.Params("id"), c.Params("invID"), inviter, req.Locale); err != nil {
 		if errors.Is(err, service.ErrInviteInvalid) {
 			return fiber.NewError(fiber.StatusNotFound, "no pending invitation to resend")
 		}

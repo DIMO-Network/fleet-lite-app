@@ -189,7 +189,7 @@ round, both wiring the frontend to real DIMO services (no more mock data):
 
 Deploy plumbing also landed: `.github/workflows/` (buildpushdev / buildpushprod /
 lint / web-lint, mirrored from rental-fleets-app) and a prod-clean
-`charts/fleet-lite-app/values-prod.yaml` (host `fleet-lite.dimo.co`, env trimmed
+`charts/fleet-lite-app/values-prod.yaml` (host `fleets.dimo.co`, env trimmed
 to exactly what `internal/config/settings.go` reads, ports 8084/8085).
 
 ### Conventions chosen for fleet-lite api

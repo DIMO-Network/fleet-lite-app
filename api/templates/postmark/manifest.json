@@ -6,6 +6,13 @@
       "subject": "You've been invited to {{tenant_name}} on DIMO Fleet",
       "htmlFile": "invitation.html",
       "textFile": "invitation.txt"
+    },
+    {
+      "alias": "fleet-invitation-es",
+      "name": "Fleet Lite — Member Invitation (Spanish)",
+      "subject": "Te han invitado a {{tenant_name}} en DIMO Fleet",
+      "htmlFile": "invitation.es.html",
+      "textFile": "invitation.es.txt"
     }
   ]
 }

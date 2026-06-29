@@ -1,0 +1,8 @@
+Te han invitado a {{tenant_name}}
+
+{{inviter}} te ha invitado a unirte a la flota {{tenant_name}} en DIMO.
+
+Acepta tu invitación (iniciarás sesión con tu cuenta de DIMO para completar tu incorporación):
+{{accept_url}}
+
+Esta invitación caduca en {{expires_in}}. Si no la esperabas, puedes ignorar este correo.
