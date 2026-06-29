@@ -48,14 +48,17 @@ type InvitationModel struct {
 }
 
 // SendInvitation sends the invitation email via Postmark's templated-email
-// endpoint (POST /email/withTemplate) using the configured template alias.
-func (p *PostmarkAPI) SendInvitation(toEmail string, model InvitationModel) error {
+// endpoint (POST /email/withTemplate) using the given template alias. The alias
+// is chosen by the caller from the inviter's locale (e.g. fleet-invitation /
+// fleet-invitation-es) — see InvitationService.templateAlias.
+func (p *PostmarkAPI) SendInvitation(toEmail, templateAlias string, model InvitationModel) error {
 	if !p.Enabled() {
 		// Local-dev sink: with no Postmark token we can't send, so log the accept
 		// link at info level — copy it from the logs to exercise the accept flow
 		// without any email infrastructure. See docs/MEMBER_INVITATIONS_PLAN.md.
 		p.logger.Info().
 			Str("to", toEmail).
+			Str("template", templateAlias).
 			Str("accept_url", model.AcceptURL).
 			Msg("postmark not configured; invitation email skipped — use this accept link locally")
 		return nil
@@ -63,7 +66,7 @@ func (p *PostmarkAPI) SendInvitation(toEmail string, model InvitationModel) erro
 	payload := map[string]any{
 		"From":          p.settings.InvitationFromEmail,
 		"To":            toEmail,
-		"TemplateAlias": p.settings.InvitationTemplateAlias,
+		"TemplateAlias": templateAlias,
 		"TemplateModel": model,
 		"MessageStream": "outbound",
 	}

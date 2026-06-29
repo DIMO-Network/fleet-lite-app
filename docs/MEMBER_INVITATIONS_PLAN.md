@@ -81,6 +81,21 @@ The token is the bearer credential; the wallet is discovered from the invitee's 
 7. **Bare (non-schema-qualified) table names** in the migration — match existing migrations; the
    schema is resolved at runtime via `search_path` (DB_NAME). `make sqlboiler` strips the prefix.
 
+### Decision (added 2026-06-28) — locale-aware invitation emails
+
+8. **The invite email is sent in the inviter's active UI language** (English or Spanish — the two
+   locales the app ships, see [LOCALIZATION.md](LOCALIZATION.md)). One Postmark template per locale:
+   - **English** → alias `fleet-invitation` (the base alias in `POSTMARK_INVITATION_TEMPLATE_ALIAS`).
+   - **Spanish** → alias `fleet-invitation-es` (base alias **+ `-es`**, derived in code — no extra
+     config value).
+   Bodies live in the repo as `invitation.html`/`.txt` (en) and `invitation.es.html`/`.es.txt` (es)
+   and are pushed by `make push-postmark-templates` (manifest lists both).
+   - **Locale is passed per request, not persisted.** The frontend sends the active locale
+     (`getLocale()` from `localization.ts`) on **create** and on **resend**; both are always
+     UI-initiated, so there's no code path that sends without a caller-supplied locale and **no DB
+     column is needed**. Resend therefore uses the owner's *current* language (intended).
+   - Unknown/empty locale falls back to English.
+
 ---
 
 ## Data model
@@ -118,9 +133,9 @@ Then `make sqlboiler` → `internal/db/models/invitations.go`.
 |---|---|---|---|
 | 1 | Migration | `internal/db/migrations/…_invitations.sql` | table above (no schema prefix) |
 | 2 | Model | `internal/db/models/invitations.go` | `make sqlboiler` (generated) |
-| 3 | Postmark gateway | `internal/gateway/postmark_api.go` (new) | mirror `fetch_api.go`; `SendInvitation(toEmail, model)` → `POST /email/withTemplate` w/ `X-Postmark-Server-Token`; `UpsertTemplate(...)` for the push command |
-| 4 | Invitation service | `internal/service/invitation.go` (new) | `Create` (gen token, store hash, send email), `Accept` (validate, `AddMember`, mark accepted), `List`, `Revoke`; injects `*TenantService` + Postmark gateway |
-| 5 | Controller | `internal/controllers/invitations.go` (new) | Create/List/Revoke use `requireMember` + owner check (mirror `AddMember`); `Accept` uses only `GetWalletAddressFromJWT` |
+| 3 | Postmark gateway | `internal/gateway/postmark_api.go` (new) | mirror `fetch_api.go`; `SendInvitation(toEmail, templateAlias, model)` → `POST /email/withTemplate` w/ `X-Postmark-Server-Token` (alias is a **param**, chosen by the caller's locale); `UpsertTemplate(...)` for the push command |
+| 4 | Invitation service | `internal/service/invitation.go` (new) | `Create`/`Resend` take a `locale`; resolve alias (`fleet-invitation` / `…-es`) and send; `Accept` (validate, `AddMember`, mark accepted), `List`, `Revoke`; injects `*TenantService` + Postmark gateway |
+| 5 | Controller | `internal/controllers/invitations.go` (new) | Create/List/Revoke use `requireMember` + owner check (mirror `AddMember`); Create/Resend read `locale` from the request body; `Accept` uses only `GetWalletAddressFromJWT` |
 | 6 | Routes | `internal/app/app.go` | `tenantApp`: `POST/GET /tenants/:id/invitations`, `DELETE /tenants/:id/invitations/:invID`. `authApp`: `POST /invitations/accept` |
 | 7 | Config | `internal/config/settings.go`, `settings.sample.yaml` | `POSTMARK_SERVER_TOKEN` (secret), `INVITATION_FROM_EMAIL`, `POSTMARK_INVITATION_TEMPLATE_ALIAS` (default `fleet-invitation`), `APP_BASE_URL`, `INVITE_EXPIRY_HOURS` (default 168) |
 | 8 | Wiring | `cmd/fleet-lite-app/main.go` / `app.go` | construct Postmark gateway + invitation service/controller |
@@ -140,16 +155,22 @@ Then `make sqlboiler` → `internal/db/models/invitations.go`.
 
 ```
 api/templates/postmark/
-  manifest.json          # [{ alias, subject, htmlFile, textFile }]
-  invitation.html        # uses {{tenant_name}}, {{accept_url}}, {{inviter}}, {{expires_in}}
+  manifest.json          # [{ alias, subject, htmlFile, textFile }] — one entry per locale
+  invitation.html        # en — uses {{tenant_name}}, {{accept_url}}, {{inviter}}, {{expires_in}}
   invitation.txt
+  invitation.es.html     # es — same {{mustache}} variables, Spanish copy
+  invitation.es.txt
 ```
+
+The two locales map to two aliases: `fleet-invitation` (en) and `fleet-invitation-es` (es). Both
+use the **same `TemplateModel` variables**, so only the copy differs.
 
 - **Push:** `make push-postmark-templates` → small Go subcommand in `cmd/fleet-lite-app`
   that upserts each template by **alias** via Postmark's Templates API (`POST/PUT /templates`).
-  Rerunnable per environment (uses the same `POSTMARK_SERVER_TOKEN`).
-- **Send:** gateway calls `POST /email/withTemplate` with `TemplateAlias` +
-  `TemplateModel { tenant_name, accept_url, inviter, expires_in }`. No HTML in Go.
+  Rerunnable per environment (uses the same `POSTMARK_SERVER_TOKEN`). Pushes **both** aliases.
+- **Send:** the service resolves the alias from the request locale (en → base alias, es → base
+  `+ -es`) and passes it to the gateway, which calls `POST /email/withTemplate` with that
+  `TemplateAlias` + `TemplateModel { tenant_name, accept_url, inviter, expires_in }`. No HTML in Go.
 
 ---
 
@@ -158,7 +179,7 @@ api/templates/postmark/
 | # | File | Work |
 |---|---|---|
 | 1 | `src/elements/tenant-members.ts` | add "Invite by email" form (email + role select) beside the wallet input; add a **Pending invitations** list with resend/revoke (owner-only) |
-| 2 | `src/services/tenant-service.ts` | `createInvitation(tenantId, email, role)`, `listInvitations(tenantId)`, `revokeInvitation(tenantId, invId)`, `acceptInvitation(token)` |
+| 2 | `src/services/tenant-service.ts` | `createInvitation(tenantId, email, role, locale)`, `listInvitations(tenantId)`, `revokeInvitation(tenantId, invId)`, `resendInvitation(tenantId, invId, locale)`, `acceptInvitation(token)`. `create`/`resend` send the active `getLocale()` in the body |
 | 3 | `accept-invite.html` (new, pre-login) | standalone page like `login.html`: if no JWT, bounce to DIMO login carrying the token through the redirect; after login, `POST /invitations/accept {token}`, then redirect into the tenant. Wire route if a hash route is needed. |
 | 4 | Localization | wrap new copy in `msg()` / `str`; regenerate locale bundles |
 

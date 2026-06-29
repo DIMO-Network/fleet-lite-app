@@ -14,7 +14,7 @@ Stitch design source in `../stitch_fleet-lite-dimo`.
   `/telemetry/*`, `/documents/*` (glovebox), and DIMO identity-api proxies.
   Serves the built `web/dist` SPA in production.
 - **charts/** — Helm chart in `charts/fleet-lite-app/` (dev `values.yaml` +
-  prod `values-prod.yaml`, host `fleet-lite.dimo.co`).
+  prod `values-prod.yaml`, host `fleets.dimo.co`).
 
 ## Local dev
 

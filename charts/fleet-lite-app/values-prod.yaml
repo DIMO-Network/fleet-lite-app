@@ -40,6 +40,8 @@ env:
   CHAIN_ID: '137'
   VEHICLE_NFT_ADDRESS: '0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF'
   INVITATION_FROM_EMAIL: no-reply@dimo.org
+  POSTMARK_INVITATION_TEMPLATE_ALIAS: fleet-invitation
+  APP_BASE_URL: https://fleets.dimo.co
 service:
   type: ClusterIP
   ports:
