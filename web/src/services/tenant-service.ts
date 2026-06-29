@@ -41,6 +41,16 @@ interface InvitationsResponse {
     invitations: Invitation[];
 }
 
+/** Create/resend responses carry whether the email actually dispatched. */
+export interface InvitationResult extends Invitation {
+    emailSent?: boolean;
+}
+
+interface ResendResult {
+    ok: boolean;
+    emailSent?: boolean;
+}
+
 interface AcceptInviteResponse {
     ok: boolean;
     tenantId: string;
@@ -141,8 +151,8 @@ export class TenantService {
         email: string,
         role: string = ROLE_MEMBER,
         locale: string = getLocale(),
-    ): Promise<void> {
-        await ApiService.getInstance().post(
+    ): Promise<InvitationResult> {
+        return ApiService.getInstance().post<InvitationResult>(
             `/tenants/${encodeURIComponent(tenantId)}/invitations`,
             { email, role, locale },
         );
@@ -163,8 +173,8 @@ export class TenantService {
         tenantId: string,
         invitationId: string,
         locale: string = getLocale(),
-    ): Promise<void> {
-        await ApiService.getInstance().post(
+    ): Promise<ResendResult> {
+        return ApiService.getInstance().post<ResendResult>(
             `/tenants/${encodeURIComponent(tenantId)}/invitations/${encodeURIComponent(invitationId)}/resend`,
             { locale },
         );

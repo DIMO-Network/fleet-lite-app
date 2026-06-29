@@ -38,6 +38,12 @@ const (
 // it to a single user-facing message without leaking which check failed.
 var ErrInviteInvalid = errors.New("invitation is invalid, already used, or expired")
 
+// ErrEmailNotSent signals a partial success: the invitation row was persisted
+// (create) or its token refreshed (resend), but the email failed to dispatch.
+// Callers should treat this as success-with-warning, not a hard failure — the
+// invite is usable and can be resent. Wrapped around the underlying send error.
+var ErrEmailNotSent = errors.New("invitation saved but the email could not be sent")
+
 // postmarkSender is the slice of the Postmark gateway the service needs. Kept as
 // an interface so the service is testable without a live Postmark.
 type postmarkSender interface {
@@ -109,9 +115,10 @@ func (s *InvitationService) Create(ctx context.Context, tenantID, inviterWallet,
 	}
 
 	if err := s.sendEmail(ctx, tenantID, inviterWallet, email, token, locale); err != nil {
-		// The invite exists; surface the email failure so the owner can retry.
+		// The invite is persisted and usable; report the email failure as a partial
+		// success (ErrEmailNotSent) so the caller returns the invite + a warning.
 		s.logger.Err(err).Str("tenant", tenantID).Str("email", email).Msg("send invitation email")
-		return inv, fmt.Errorf("invitation saved but email failed to send: %w", err)
+		return inv, fmt.Errorf("%w: %v", ErrEmailNotSent, err)
 	}
 	return inv, nil
 }
@@ -192,7 +199,13 @@ func (s *InvitationService) Resend(ctx context.Context, tenantID, invitationID, 
 		boil.Whitelist("token_hash", "expires_at", "updated_at")); err != nil {
 		return fmt.Errorf("refresh invitation token: %w", err)
 	}
-	return s.sendEmail(ctx, tenantID, inviterWallet, inv.Email, token, locale)
+	if err := s.sendEmail(ctx, tenantID, inviterWallet, inv.Email, token, locale); err != nil {
+		// Token was refreshed but the email didn't go out — partial success, the
+		// invite stays pending and can be resent again once email is fixed.
+		s.logger.Err(err).Str("tenant", tenantID).Str("email", inv.Email).Msg("resend invitation email")
+		return fmt.Errorf("%w: %v", ErrEmailNotSent, err)
+	}
+	return nil
 }
 
 // sendEmail builds the accept link + template model and dispatches via Postmark,
