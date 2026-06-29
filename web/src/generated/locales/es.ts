@@ -5,8 +5,8 @@
     import {html} from 'lit';
     import {str} from '@lit/localize';
 
-    /* eslint-disable no-irregular-whitespace */
-    /* eslint-disable @typescript-eslint/no-explicit-any */
+     
+     
 
     export const templates = {
       'h3da2e750affa6331': html`VIN detectado <span class="vin">${0}</span>`,
@@ -105,6 +105,7 @@
 's46dd424bdc97f7b9': `Tiempo de conducción`,
 's47f4637aaa012055': `Grupos de Flota`,
 's49b99bd09dbcc27a': `No se pudieron cargar los vehículos asignados`,
+'s4c29d02f3da350f3': `Copiar patente`,
 's4ccb84efe836feac': `Ajustar todos los vehículos`,
 's4cdf4e50ebbee02d': `Nombra el área que dibujaste y elige a qué vehículos aplica.`,
 's51ba5321a04109cd': `Favorito`,
@@ -158,6 +159,7 @@
 's791ab754e4927fa6': `Usa el botón «Vehículos» de la geocerca para asignar vehículos específicos.`,
 's79fa1c508e20f3b2': `Cargando miembros…`,
 's7b1c2ef6fc719af8': `Quitar del grupo`,
+'s7bf84419e9ebac2a': `VIN`,
 's7c5774fad9d050ce': `Crear grupo`,
 's8188c86759436652': `PDF, JPG o PNG. Leeremos el VIN y cualquier campo estructurado, luego certificaremos un par de CloudEvents en su nombre.`,
 's83f3b9e92ba665c7': `Quitar de la geocerca`,
@@ -296,6 +298,7 @@
 'sf8a96a87d2b00338': `Miembros de la Flota`,
 'sf98b5ad2ae1420e1': `Error al guardar grupo`,
 'sf993bb199fefbe04': `Todos`,
+'sf9de3ded9625c0d1': `Copiar VIN`,
 'sfad9715041e583af': `vehículo`,
 'sfc73e619cc0f1e56': `Últimas 2 semanas`,
 'sfd6d1a6564abd0e8': `Voltaje de la batería`,
