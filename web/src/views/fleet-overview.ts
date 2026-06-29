@@ -1230,6 +1230,19 @@ export class FleetOverviewView extends LitElement {
                 text-overflow: ellipsis;
                 white-space: nowrap;
             }
+            .vehicle-meta .upload-id-link {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                margin-top: 4px;
+                font: var(--type-body-sm);
+                color: var(--on-surface-variant);
+                opacity: 0.5;
+                text-decoration: none;
+                transition: opacity 0.15s, color 0.15s;
+            }
+            .vehicle-meta .upload-id-link:hover { opacity: 1; color: var(--primary); }
+            .vehicle-meta .upload-id-link .material-symbols-outlined { font-size: 16px; }
             /* Inline copy button shared by the plate pill and VIN line. */
             .vehicle-meta .copy-btn {
                 display: inline-flex;
@@ -1384,6 +1397,13 @@ export class FleetOverviewView extends LitElement {
                                     <span class="material-symbols-outlined">${this.copiedKey === `${v.tokenId}:vin` ? 'check' : 'content_copy'}</span>
                                 </button>
                             </p>
+                        ` : ''}
+                        ${!v.licensePlate && !v.vin ? html`
+                            <a class="upload-id-link" href="#/${this.tenantId}/glovebox/${v.tokenId}"
+                               title=${msg('Upload vehicle documents to identify this vehicle')}>
+                                <span class="material-symbols-outlined">inventory_2</span>
+                                <span>${msg('Add vehicle ID')}</span>
+                            </a>
                         ` : ''}
                         ${v.online ? html`
                             ${v.notification
