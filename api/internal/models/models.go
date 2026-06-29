@@ -39,6 +39,10 @@ type Vehicle struct {
 	// identity-api shape, so VehicleService sets it from the DB column after
 	// reconstructing the vehicle from `raw`. Empty when no plate is known.
 	LicensePlate string `json:"licensePlate,omitempty"`
+	// VIN is cached from the same registration attestation as LicensePlate (see
+	// LicensePlateSyncService). Not part of the identity-api shape; VehicleService
+	// sets it from the DB column. Empty when no VIN is known.
+	VIN string `json:"vin,omitempty"`
 	// Groups the vehicle belongs to, for the fleet-overview map/list filter.
 	// Always a (possibly empty) slice in the /vehicles response.
 	Groups []GroupRef `json:"groups"`

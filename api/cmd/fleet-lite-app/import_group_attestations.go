@@ -86,7 +86,7 @@ func (p *importGroupAttestationsCmd) Execute(ctx context.Context, _ *flag.FlagSe
 
 	warmWindow := time.Duration(p.warmDays) * 24 * time.Hour
 
-	var checked, changed, platesChanged, skippedTenants int
+	var checked, changed, platesChanged, vinsChanged, skippedTenants int
 	for _, dt := range dbTenants {
 		// Activity tiering: skip cold tenants on the warm pass.
 		if p.warmOnly {
@@ -140,22 +140,30 @@ func (p *importGroupAttestationsCmd) Execute(ctx context.Context, _ *flag.FlagSe
 					Bool("dry_run", p.dryRun).Msg("reconciled group attestations")
 			}
 
-			// License plate: cache the latest registration-document plate for this
-			// vehicle on the same per-vehicle pull. Best-effort — a plate failure
+			// Registration fields: cache the latest license_plate + vin for this
+			// vehicle from the same per-vehicle pull. Best-effort — a failure here
 			// must never derail the group sync.
 			pres, perr := plateSync.SyncVehicle(ctx, *tenant, v.TokenID, service.SyncOpts{DryRun: p.dryRun})
 			if perr != nil {
-				p.logger.Debug().Err(perr).Int64("token_id", v.TokenID).Msg("sync license plate, skipping")
-			} else if pres.Changed {
-				platesChanged++
-				p.logger.Info().Str("tenant_id", dt.ID).Int64("token_id", v.TokenID).
-					Str("license_plate", pres.Plate).Bool("dry_run", p.dryRun).Msg("cached license plate")
+				p.logger.Debug().Err(perr).Int64("token_id", v.TokenID).Msg("sync registration fields, skipping")
+			} else {
+				if pres.Changed {
+					platesChanged++
+					p.logger.Info().Str("tenant_id", dt.ID).Int64("token_id", v.TokenID).
+						Str("license_plate", pres.Plate).Bool("dry_run", p.dryRun).Msg("cached license plate")
+				}
+				if pres.VINChanged {
+					vinsChanged++
+					p.logger.Info().Str("tenant_id", dt.ID).Int64("token_id", v.TokenID).
+						Str("vin", pres.VIN).Bool("dry_run", p.dryRun).Msg("cached vin")
+				}
 			}
 		}
 	}
 
 	p.logger.Info().Int("checked", checked).Int("changed", changed).
 		Int("plates_changed", platesChanged).
+		Int("vins_changed", vinsChanged).
 		Int("skipped_tenants", skippedTenants).Bool("warm_only", p.warmOnly).
 		Bool("dry_run", p.dryRun).Msg("import-group-attestations complete")
 	return subcommands.ExitSuccess

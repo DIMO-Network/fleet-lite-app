@@ -23,15 +23,20 @@ import (
 // one that carries a license_plate and cache it locally.
 const VehicleRegistrationCloudEventType = "dimo.document.vehicle.registration"
 
-// licensePlateField is the key the plate lives under in the registration
-// document's parsed data.
-const licensePlateField = "license_plate"
+// licensePlateField and vinField are the keys the plate and VIN live under in
+// the registration document's parsed data. Both are read from the same
+// dimo.document.vehicle.registration attestation in one pass.
+const (
+	licensePlateField = "license_plate"
+	vinField          = "vin"
+)
 
-// LicensePlateSyncService is the read/cache half of the license-plate feature:
-// it reads a vehicle's latest dimo.document.vehicle.registration attestation that
-// carries a license_plate and caches it into vehicles.license_plate. It is a pure
-// consumer — there is no publish path here (mirrors GroupSyncService's pull, but
-// the plate is a single scalar so there is no membership reconcile). The
+// LicensePlateSyncService is the read/cache half of the vehicle-registration
+// feature: it reads a vehicle's latest dimo.document.vehicle.registration
+// attestation and caches the registration fields we surface — license_plate and
+// vin — into vehicles.license_plate / vehicles.vin. It is a pure consumer —
+// there is no publish path here (mirrors GroupSyncService's pull, but these are
+// single scalars so there is no membership reconcile). The
 // import-group-attestations cron drives it per vehicle alongside the group sync.
 type LicensePlateSyncService struct {
 	logger       *zerolog.Logger
@@ -44,10 +49,13 @@ func NewLicensePlateSyncService(logger *zerolog.Logger, pdb *db.Store, fetchAPI 
 	return &LicensePlateSyncService{logger: logger, pdb: pdb, fetchAPI: fetchAPI, authProvider: authProvider}
 }
 
-// PlateSyncResult reports what a SyncVehicle call did.
+// PlateSyncResult reports what a SyncVehicle call did across the registration
+// fields it caches (license_plate and vin).
 type PlateSyncResult struct {
-	Changed bool   // the cached license_plate was updated
-	Plate   string // the resolved plate (empty when none found)
+	Changed    bool   // the cached license_plate was updated
+	Plate      string // the resolved plate (empty when none found)
+	VINChanged bool   // the cached vin was updated
+	VIN        string // the resolved vin (empty when none found)
 }
 
 // SyncVehicle pulls one vehicle's registration attestations and caches the latest
@@ -79,34 +87,47 @@ func (s *LicensePlateSyncService) SyncVehicle(ctx context.Context, tenant models
 		return PlateSyncResult{}, fmt.Errorf("fetch registration attestations: %w", err)
 	}
 
-	plate, found := latestPlate(entries)
-	// A read that returned no plate-bearing document never clears an existing
-	// cached value — the document set is eventually consistent and a missing plate
-	// is "unknown", not "removed".
-	if !found || plate == v.LicensePlate.String {
-		return PlateSyncResult{Plate: v.LicensePlate.String}, nil
+	// A read that returned no value-bearing document for a field never clears an
+	// existing cached value — the document set is eventually consistent and a
+	// missing field is "unknown", not "removed". So we only ever write changes.
+	res := PlateSyncResult{Plate: v.LicensePlate.String, VIN: v.Vin.String}
+	updates := dbmodels.M{}
+	if plate, found := latestRegistrationField(entries, licensePlateField); found && plate != v.LicensePlate.String {
+		updates["license_plate"] = null.StringFrom(plate)
+		res.Changed = true
+		res.Plate = plate
+	}
+	if vin, found := latestRegistrationField(entries, vinField); found && vin != v.Vin.String {
+		updates["vin"] = null.StringFrom(vin)
+		res.VINChanged = true
+		res.VIN = vin
+	}
+
+	if len(updates) == 0 {
+		return res, nil
 	}
 
 	if opts.DryRun {
 		s.logger.Info().Str("tenant_id", tenant.ID).Int64("token_id", tokenID).
-			Str("from", v.LicensePlate.String).Str("to", plate).Msg("would update license plate")
-		return PlateSyncResult{Changed: true, Plate: plate}, nil
+			Str("plate", res.Plate).Str("vin", res.VIN).Msg("would update registration fields")
+		return res, nil
 	}
 
+	updates["updated_at"] = time.Now()
 	if _, err := dbmodels.Vehicles(
 		dbmodels.VehicleWhere.TenantID.EQ(tenant.ID),
 		dbmodels.VehicleWhere.TokenID.EQ(tokenID),
-	).UpdateAll(ctx, s.pdb.DBS().Writer, dbmodels.M{"license_plate": null.StringFrom(plate), "updated_at": time.Now()}); err != nil {
-		return PlateSyncResult{}, fmt.Errorf("update license plate: %w", err)
+	).UpdateAll(ctx, s.pdb.DBS().Writer, updates); err != nil {
+		return PlateSyncResult{}, fmt.Errorf("update registration fields: %w", err)
 	}
-	return PlateSyncResult{Changed: true, Plate: plate}, nil
+	return res, nil
 }
 
-// latestPlate returns the license_plate from the most-recent (by CE time)
-// registration document that carries a non-empty one, and whether such a
-// document was found.
-func latestPlate(entries []gateway.AttestationEntry) (string, bool) {
-	var plate string
+// latestRegistrationField returns the value of the given string field from the
+// most-recent (by CE time) registration document that carries a non-empty one,
+// and whether such a document was found. Used for both license_plate and vin.
+func latestRegistrationField(entries []gateway.AttestationEntry, field string) (string, bool) {
+	var val string
 	var found bool
 	var latest time.Time
 	for i := range entries {
@@ -118,7 +139,7 @@ func latestPlate(entries []gateway.AttestationEntry) (string, bool) {
 		if err := json.Unmarshal(e.Data, &doc); err != nil {
 			continue
 		}
-		raw, ok := doc[licensePlateField]
+		raw, ok := doc[field]
 		if !ok {
 			continue
 		}
@@ -132,10 +153,10 @@ func latestPlate(entries []gateway.AttestationEntry) (string, bool) {
 		}
 		t, _ := time.Parse(time.RFC3339, e.Time)
 		if !found || t.After(latest) {
-			plate = p
+			val = p
 			latest = t
 			found = true
 		}
 	}
-	return plate, found
+	return val, found
 }

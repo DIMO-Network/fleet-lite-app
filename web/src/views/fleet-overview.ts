@@ -67,6 +67,9 @@ export class FleetOverviewView extends LitElement {
     @state() private hiddenVehicles = new Set<string>();
     @state() private showHidden = false;
     private unsubscribeHidden: (() => void) | null = null;
+    // Key of the most recently copied value (`<tokenId>:plate|vin`), used to
+    // flash a "copied" checkmark on that one button. Cleared after a moment.
+    @state() private copiedKey = '';
 
     private boundOnThemeChange = (e: Event) => {
         const { theme } = (e as CustomEvent<{ theme: 'dark' | 'light' }>).detail;
@@ -115,6 +118,24 @@ export class FleetOverviewView extends LitElement {
             this.leafletMap!.flyTo(marker.getLatLng(), Math.max(this.leafletMap!.getZoom(), 14));
         });
     }
+
+    /**
+     * Copy a card value (license plate or VIN) to the clipboard. Stops the click
+     * from bubbling to the card (which would open the quick-view) and briefly
+     * flashes a checkmark on the originating button via copiedKey.
+     */
+    private copyValue = async (e: Event, value: string, key: string) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!value || !navigator.clipboard) return;
+        try {
+            await navigator.clipboard.writeText(value);
+            this.copiedKey = key;
+            window.setTimeout(() => {
+                if (this.copiedKey === key) this.copiedKey = '';
+            }, 1200);
+        } catch { /* clipboard blocked — noop */ }
+    };
 
     /** Default and selected circle-marker styles for the quick-view highlight. */
     // Small dots by default — fleets can run to thousands of vehicles, so the
@@ -200,7 +221,10 @@ export class FleetOverviewView extends LitElement {
             tokenId: String(v.tokenId),
             make: v.definition.make,
             title: this.formatTitle(v),
+            // The VIN (when known) is shown on its own line; this is the
+            // device-integration fallback for when we don't have a VIN.
             location: integration,
+            vin: v.vin || undefined,
             seenAt: `Token #${v.tokenId}`,
             online: integrated,
             errorMessage: integrated ? undefined : msg('No DIMO integration — pair a device to stream telemetry'),
@@ -516,7 +540,9 @@ export class FleetOverviewView extends LitElement {
             cards = cards.filter((c) =>
                 c.title.toLowerCase().includes(q)
                 || c.tokenId.includes(q)
-                || c.location.toLowerCase().includes(q));
+                || c.location.toLowerCase().includes(q)
+                || (c.vin?.toLowerCase().includes(q) ?? false)
+                || (c.licensePlate?.toLowerCase().includes(q) ?? false));
         }
         if (this.showHidden) {
             const visible = cards.filter((c) => !this.hiddenVehicles.has(c.tokenId));
@@ -1176,6 +1202,42 @@ export class FleetOverviewView extends LitElement {
                 cursor: default;
             }
             .vehicle-meta .plate-pill .material-symbols-outlined { font-size: 14px; }
+            /* VIN line: caps label + monospace value with a copy affordance,
+               sitting under the title like the plate pill. */
+            .vehicle-meta .vin-line {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                margin-top: 6px;
+                font: var(--type-body-sm);
+                color: var(--on-surface-variant);
+            }
+            .vehicle-meta .vin-line .vin-label {
+                font: var(--type-label-caps);
+                letter-spacing: 0.05em;
+                opacity: 0.75;
+            }
+            .vehicle-meta .vin-line .vin-value {
+                font-family: var(--font-mono);
+                color: var(--primary);
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            /* Inline copy button shared by the plate pill and VIN line. */
+            .vehicle-meta .copy-btn {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                flex: none;
+                padding: 0;
+                background: none;
+                border: none;
+                color: var(--on-surface-variant);
+                cursor: pointer;
+            }
+            .vehicle-meta .copy-btn:hover { color: var(--primary); }
+            .vehicle-meta .copy-btn .material-symbols-outlined { font-size: 14px; }
             .vehicle-meta .seen {
                 font: var(--type-label-caps);
                 letter-spacing: 0.05em;
@@ -1301,10 +1363,24 @@ export class FleetOverviewView extends LitElement {
                         ${v.licensePlate ? html`
                             <span class="plate-pill" title=${msg('License plate')}>
                                 <span class="material-symbols-outlined">directions_car</span>${v.licensePlate}
+                                <button class="copy-btn" title=${msg('Copy license plate')}
+                                    @click=${(e: Event) => this.copyValue(e, v.licensePlate!, `${v.tokenId}:plate`)}>
+                                    <span class="material-symbols-outlined">${this.copiedKey === `${v.tokenId}:plate` ? 'check' : 'content_copy'}</span>
+                                </button>
                             </span>
                         ` : ''}
+                        ${v.vin ? html`
+                            <p class="vin-line" title=${msg('VIN')}>
+                                <span class="vin-label">VIN</span>
+                                <span class="vin-value">${v.vin}</span>
+                                <button class="copy-btn" title=${msg('Copy VIN')}
+                                    @click=${(e: Event) => this.copyValue(e, v.vin!, `${v.tokenId}:vin`)}>
+                                    <span class="material-symbols-outlined">${this.copiedKey === `${v.tokenId}:vin` ? 'check' : 'content_copy'}</span>
+                                </button>
+                            </p>
+                        ` : ''}
                         ${v.online ? html`
-                            <p class="location">${v.location}</p>
+                            ${!v.vin && v.location ? html`<p class="location">${v.location}</p>` : ''}
                             ${v.notification
                                 ? html`<div class="row-flex">
                                         <p class="seen">${v.seenAt}</p>

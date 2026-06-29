@@ -35,6 +35,8 @@ export interface Vehicle {
     isFavorite?: boolean;
     /** License plate, cached from the vehicle's registration attestation. Absent when unknown. */
     licensePlate?: string;
+    /** VIN, cached from the same registration attestation as the plate. Absent when unknown. */
+    vin?: string;
     /** Groups this vehicle belongs to (always present, [] when none). */
     groups: VehicleGroupRef[];
 }
@@ -57,6 +59,8 @@ export interface VehicleCard {
     isFavorite?: boolean;
     /** License plate, cached from the vehicle's registration attestation. Absent when unknown. */
     licensePlate?: string;
+    /** VIN, cached from the same registration attestation as the plate. Absent when unknown. */
+    vin?: string;
     /** Groups this vehicle belongs to, for the map/list group filter. */
     groups?: VehicleGroupRef[];
 }

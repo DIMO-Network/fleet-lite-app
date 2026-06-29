@@ -1276,6 +1276,18 @@
   <source>License plate</source>
   <target>Patente</target>
 </trans-unit>
+<trans-unit id="s4c29d02f3da350f3">
+  <source>Copy license plate</source>
+  <target>Copiar patente</target>
+</trans-unit>
+<trans-unit id="s7bf84419e9ebac2a">
+  <source>VIN</source>
+  <target>VIN</target>
+</trans-unit>
+<trans-unit id="sf9de3ded9625c0d1">
+  <source>Copy VIN</source>
+  <target>Copiar VIN</target>
+</trans-unit>
 <trans-unit id="sae30ab7e78f2cf7f">
   <source>Invitation created for <x id="0" equiv-text="${email}"/>, but the email could not be sent. Use Resend once email delivery is configured.</source>
   <target>Invitación creada para <x id="0" equiv-text="${email}"/>, pero no se pudo enviar el correo. Usa Reenviar cuando se configure el envío de correos.</target>
