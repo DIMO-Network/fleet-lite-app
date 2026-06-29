@@ -5,8 +5,8 @@
     import {html} from 'lit';
     import {str} from '@lit/localize';
 
-     
-     
+    /* eslint-disable no-irregular-whitespace */
+    /* eslint-disable @typescript-eslint/no-explicit-any */
 
     export const templates = {
       'h3da2e750affa6331': html`VIN detectado <span class="vin">${0}</span>`,
@@ -116,6 +116,7 @@
 's55573ea6c71af551': `Añade al menos 3 puntos para crear un área.`,
 's55787a5a881a16e8': `No se pudo enviar la invitación.`,
 's558c3d600c58d654': str`${0} Registro${1}`,
+'s55a3299919bc4cd5': `Invitación actualizada, pero no se pudo enviar el correo. Revisa la configuración de envío de correos.`,
 's55a6ca816108f719': str`${0} punto(s): haz clic en el mapa para añadir y en el primer punto para terminar.`,
 's55c22b612968d7d8': `Enviar invitación`,
 's56df31a121d65bd7': `Diagnósticos`,
@@ -211,6 +212,7 @@
 'sad59707375956ad2': `Terminar`,
 'sae0d84bbaa95a2e0': `No se pudieron cargar los miembros.`,
 'sae238413b7c6ebac': `Estadísticas`,
+'sae30ab7e78f2cf7f': str`Invitación creada para ${0}, pero no se pudo enviar el correo. Usa Reenviar cuando se configure el envío de correos.`,
 'saf7b6785c8312e71': `Eliminando…`,
 'saf975462813691c8': `Buscar vehículos…`,
 'saf9a16cf6a762b42': `Cargando telemetría…`,

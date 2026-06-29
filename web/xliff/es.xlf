@@ -1288,6 +1288,14 @@
   <source>Copy VIN</source>
   <target>Copiar VIN</target>
 </trans-unit>
+<trans-unit id="sae30ab7e78f2cf7f">
+  <source>Invitation created for <x id="0" equiv-text="${email}"/>, but the email could not be sent. Use Resend once email delivery is configured.</source>
+  <target>Invitación creada para <x id="0" equiv-text="${email}"/>, pero no se pudo enviar el correo. Usa Reenviar cuando se configure el envío de correos.</target>
+</trans-unit>
+<trans-unit id="s55a3299919bc4cd5">
+  <source>Invitation refreshed, but the email could not be sent. Check email delivery configuration.</source>
+  <target>Invitación actualizada, pero no se pudo enviar el correo. Revisa la configuración de envío de correos.</target>
+</trans-unit>
 </body>
 </file>
 </xliff>
