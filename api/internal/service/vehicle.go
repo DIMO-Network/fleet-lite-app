@@ -139,6 +139,10 @@ func applyLastLocation(v *models.Vehicle, r *dbmodels.Vehicle) {
 		ts := r.LastSeen.Time
 		v.LastSeen = &ts
 	}
+	if r.LocationPulledAt.Valid {
+		ts := r.LocationPulledAt.Time
+		v.LocationPulledAt = &ts
+	}
 }
 
 // UpsertLastLocations writes through the latest GPS fix for each vehicle into
@@ -164,6 +168,32 @@ func (s *VehicleService) UpsertLastLocations(ctx context.Context, tenantID strin
 			boil.Whitelist("last_lat", "last_lon", "last_seen", "updated_at")); err != nil {
 			s.logger.Warn().Uint64("tokenId", id).Err(err).Msg("write-through last location")
 		}
+	}
+}
+
+// StampLocationPulled records that we just fetched these vehicles' locations
+// from telemetry-api (location_pulled_at = now) so the freshness window can
+// suppress re-pulls. Call with FleetLocationsResult.Fetched — the vehicles
+// actually queried this call, regardless of outcome (coords / no-data /
+// no-permission) — NOT cache hits, whose pulled_at must keep its earlier value.
+// Best-effort: one batched UPDATE, logged-and-swallowed on failure.
+func (s *VehicleService) StampLocationPulled(ctx context.Context, tenantID string, tokenIDs []uint64) {
+	if len(tokenIDs) == 0 {
+		return
+	}
+	ids := make([]int64, len(tokenIDs))
+	for i, id := range tokenIDs {
+		ids[i] = int64(id)
+	}
+	now := time.Now()
+	if _, err := dbmodels.Vehicles(
+		dbmodels.VehicleWhere.TenantID.EQ(tenantID),
+		dbmodels.VehicleWhere.TokenID.IN(ids),
+	).UpdateAll(ctx, s.pdb.DBS().Writer, dbmodels.M{
+		"location_pulled_at": now,
+		"updated_at":         now,
+	}); err != nil {
+		s.logger.Warn().Err(err).Str("tenant_id", tenantID).Msg("stamp location_pulled_at")
 	}
 }
 

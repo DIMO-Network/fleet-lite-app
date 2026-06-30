@@ -92,6 +92,13 @@ type GeoSample struct {
 type FleetLocationsResult struct {
 	Locations     map[uint64]LocationCoords
 	NoPermissions []uint64
+	// Fetched lists the token IDs this call actually queried telemetry-api for
+	// (cache misses that ran the fan-out), regardless of outcome — coords,
+	// no-data, or per-vehicle no-permission. Cache hits are excluded. The caller
+	// stamps location_pulled_at for these so the freshness window can suppress
+	// re-pulls. Empty when everything was served from cache (or the whole call
+	// failed before per-vehicle work, e.g. dev-JWT unavailable).
+	Fetched []uint64
 }
 
 type TelemetryAPIService interface {
@@ -666,7 +673,10 @@ func (t *telemetryAPIService) FleetLocations(ctx context.Context, tenant models.
 		return FleetLocationsResult{}, err
 	}
 
-	return FleetLocationsResult{Locations: locs, NoPermissions: noPerms}, nil
+	// `remaining` is exactly the set the fan-out attempted this call (cache
+	// misses, or all tokenIDs when force) — that's what got a real telemetry
+	// query, so it's the fetched set the caller stamps location_pulled_at for.
+	return FleetLocationsResult{Locations: locs, NoPermissions: noPerms, Fetched: remaining}, nil
 }
 
 func (t *telemetryAPIService) query(tenant models.Tenant, tokenID uint64, gql string) ([]byte, error) {

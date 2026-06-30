@@ -52,6 +52,11 @@ type Vehicle struct {
 	LastLat  *float64   `json:"lastLat,omitempty"`
 	LastLon  *float64   `json:"lastLon,omitempty"`
 	LastSeen *time.Time `json:"lastSeen,omitempty"`
+	// LocationPulledAt is when we last fetched this vehicle's location from
+	// telemetry-api (a real fan-out query, not a cache serve) — distinct from
+	// LastSeen (the GPS fix time). The frontend uses it to skip re-pulling a
+	// vehicle fetched within the freshness window. nil = never pulled.
+	LocationPulledAt *time.Time `json:"locationPulledAt,omitempty"`
 	// Groups the vehicle belongs to, for the fleet-overview map/list filter.
 	// Always a (possibly empty) slice in the /vehicles response.
 	Groups []GroupRef `json:"groups"`

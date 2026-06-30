@@ -147,17 +147,23 @@ func (t *TelemetryController) GetFleetLocations(c *fiber.Ctx) error {
 		t.logger.Err(err).Msg("fleet locations failed")
 		return fiber.NewError(fiber.StatusBadGateway, "fleet locations failed: "+err.Error())
 	}
-	// Write the fresh fixes through to the vehicles table so the next first
-	// paint can render markers and "last seen" instantly from Postgres before
-	// this fan-out completes. Best-effort and detached: it must never block or
-	// fail the response, and the result above is already authoritative for now.
-	if len(result.Locations) > 0 {
+	// Write fresh fixes + the pull timestamp through to the vehicles table:
+	//  - last_lat/last_lon/last_seen for vehicles that returned coords, so the
+	//    next first paint renders markers + "last seen" instantly from Postgres;
+	//  - location_pulled_at for every vehicle actually queried this call
+	//    (result.Fetched — coords, no-data, or no-permission alike, but NOT
+	//    cache hits), so the freshness window can suppress re-pulls.
+	// Best-effort and detached: never blocks or fails the response; the result
+	// above is already authoritative for this call.
+	if len(result.Locations) > 0 || len(result.Fetched) > 0 {
 		locs := result.Locations
+		fetched := result.Fetched
 		tenantID := tenant.ID
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			t.vehicleSvc.UpsertLastLocations(ctx, tenantID, locs)
+			t.vehicleSvc.StampLocationPulled(ctx, tenantID, fetched)
 		}()
 	}
 	// Rekey as strings for JSON (JS can't safely represent uint64 as number).

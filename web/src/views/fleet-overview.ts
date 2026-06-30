@@ -47,6 +47,10 @@ export class FleetOverviewView extends LitElement {
     // slower neighbor.
     private static readonly LOCATIONS_CHUNK_SIZE = 1;
     private static readonly LOCATIONS_PARALLEL = 3;
+    // Don't re-pull a vehicle's location from telemetry-api if we fetched it
+    // within this window — render it from the DB cache instead. The backend
+    // stamps location_pulled_at on real fetches. See docs/LOCATION_REFRESH_PLAN.md.
+    private static readonly LOCATION_FRESH_WINDOW_MS = 5 * 60 * 1000;
     // Incremented per load; lets stale in-flight chunk results from a
     // superseded load (tenant switch, manual refresh) be discarded.
     private loadGeneration = 0;
@@ -389,7 +393,15 @@ export class FleetOverviewView extends LitElement {
         // for one monolithic call. Per-vehicle JWT checks on the backend
         // determine which vehicles the dev license has SACD access to.
         const gen = ++this.loadGeneration;
-        const ids = this.vehicles.map((v) => v.tokenId);
+        // Partial refresh: only fan out for vehicles whose cached location is
+        // stale (older than the window, or never pulled). Fresh vehicles are
+        // already painted from the DB seed above, so a fully-fresh fleet makes
+        // zero telemetry calls. A manual refresh (force) re-pulls everything.
+        const now = Date.now();
+        const isStale = (v: Vehicle) =>
+            force || !v.locationPulledAt ||
+            now - new Date(v.locationPulledAt).getTime() >= FleetOverviewView.LOCATION_FRESH_WINDOW_MS;
+        const ids = rawVehicles.filter(isStale).map((v) => String(v.tokenId));
         const chunks: string[][] = [];
         for (let i = 0; i < ids.length; i += FleetOverviewView.LOCATIONS_CHUNK_SIZE) {
             chunks.push(ids.slice(i, i + FleetOverviewView.LOCATIONS_CHUNK_SIZE));
