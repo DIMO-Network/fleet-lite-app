@@ -2,7 +2,7 @@ replicaCount: 1
 image:
   repository: dimozone/fleet-lite-app
   pullPolicy: IfNotPresent
-  tag: 33cbff0
+  tag: d787d93
 imagePullSecrets: []
 nameOverride: ''
 fullnameOverride: ''
