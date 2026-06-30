@@ -44,6 +44,11 @@ export interface Vehicle {
     lastLon?: number;
     /** ISO timestamp of that latest GPS fix — shown in the list as "last seen". */
     lastSeen?: string;
+    /** ISO timestamp of when we last fetched this vehicle's location from
+     * telemetry-api (distinct from lastSeen, the fix time). Drives the refresh
+     * window: a vehicle pulled within the window is rendered from the cache
+     * instead of re-pulled. Absent until first pulled. */
+    locationPulledAt?: string;
     /** Groups this vehicle belongs to (always present, [] when none). */
     groups: VehicleGroupRef[];
 }
