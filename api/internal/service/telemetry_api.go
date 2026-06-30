@@ -52,9 +52,12 @@ func locCacheKey(tenantID string, tokenID uint64) string {
 // VINCredential, RawData).  Same SACD-grant constraint as glovebox: the dev
 // license must have permissions on the vehicle.
 // LocationCoords is the decoded value of a currentLocationCoordinates signal.
+// Timestamp is the fix time (RFC3339), set by FleetLocations so the caller can
+// persist it as the vehicle's "last seen"; empty where not requested.
 type LocationCoords struct {
-	Lat float64 `json:"lat"`
-	Lon float64 `json:"lon"`
+	Lat       float64 `json:"lat"`
+	Lon       float64 `json:"lon"`
+	Timestamp string  `json:"timestamp,omitempty"`
 }
 
 // TripWaypoint is one GPS fix sampled at a fixed interval across a trip's
@@ -614,7 +617,7 @@ func (t *telemetryAPIService) FleetLocations(ctx context.Context, tenant models.
 				return nil
 			}
 
-			q := fmt.Sprintf(`query { signalsLatest(tokenId: %d) { currentLocationCoordinates { value { latitude longitude } } } }`, id)
+			q := fmt.Sprintf(`query { signalsLatest(tokenId: %d) { currentLocationCoordinates { value { latitude longitude } timestamp } } }`, id)
 			raw, err := t.doQuery(gctx, jwt, q)
 			if err != nil {
 				// JWT worked but query failed (e.g. telemetry API hiccup) — skip silently.
@@ -630,6 +633,7 @@ func (t *telemetryAPIService) FleetLocations(ctx context.Context, tenant models.
 								Latitude  float64 `json:"latitude"`
 								Longitude float64 `json:"longitude"`
 							} `json:"value"`
+							Timestamp string `json:"timestamp"`
 						} `json:"currentLocationCoordinates"`
 					} `json:"signalsLatest"`
 				} `json:"data"`
@@ -644,7 +648,7 @@ func (t *telemetryAPIService) FleetLocations(ctx context.Context, tenant models.
 				t.locCache.Set(locCacheKey(tenant.ID, id), locCacheEntry{}, fleetLocationsCacheTTL)
 				return nil
 			}
-			c := LocationCoords{Lat: coords.Value.Latitude, Lon: coords.Value.Longitude}
+			c := LocationCoords{Lat: coords.Value.Latitude, Lon: coords.Value.Longitude, Timestamp: coords.Timestamp}
 			t.locCache.Set(locCacheKey(tenant.ID, id), locCacheEntry{coords: &c}, fleetLocationsCacheTTL)
 			mu.Lock()
 			locs[id] = c

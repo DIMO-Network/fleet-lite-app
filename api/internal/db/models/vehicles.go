@@ -24,25 +24,28 @@ import (
 
 // Vehicle is an object representing the database table.
 type Vehicle struct {
-	TenantID        string      `boil:"tenant_id" json:"tenant_id" toml:"tenant_id" yaml:"tenant_id"`
-	TokenID         int64       `boil:"token_id" json:"token_id" toml:"token_id" yaml:"token_id"`
-	OwnerAddress    null.String `boil:"owner_address" json:"owner_address,omitempty" toml:"owner_address" yaml:"owner_address,omitempty"`
-	Make            null.String `boil:"make" json:"make,omitempty" toml:"make" yaml:"make,omitempty"`
-	Model           null.String `boil:"model" json:"model,omitempty" toml:"model" yaml:"model,omitempty"`
-	Year            null.Int    `boil:"year" json:"year,omitempty" toml:"year" yaml:"year,omitempty"`
-	DefinitionID    null.String `boil:"definition_id" json:"definition_id,omitempty" toml:"definition_id" yaml:"definition_id,omitempty"`
-	DeviceType      null.String `boil:"device_type" json:"device_type,omitempty" toml:"device_type" yaml:"device_type,omitempty"`
-	Imei            null.String `boil:"imei" json:"imei,omitempty" toml:"imei" yaml:"imei,omitempty"`
-	Serial          null.String `boil:"serial" json:"serial,omitempty" toml:"serial" yaml:"serial,omitempty"`
-	MintedAt        null.Time   `boil:"minted_at" json:"minted_at,omitempty" toml:"minted_at" yaml:"minted_at,omitempty"`
-	Raw             null.JSON   `boil:"raw" json:"raw,omitempty" toml:"raw" yaml:"raw,omitempty"`
-	SyncedAt        time.Time   `boil:"synced_at" json:"synced_at" toml:"synced_at" yaml:"synced_at"`
-	CreatedAt       time.Time   `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
-	UpdatedAt       time.Time   `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
-	GroupsUpdatedAt null.Time   `boil:"groups_updated_at" json:"groups_updated_at,omitempty" toml:"groups_updated_at" yaml:"groups_updated_at,omitempty"`
-	LastGroupSyncAt null.Time   `boil:"last_group_sync_at" json:"last_group_sync_at,omitempty" toml:"last_group_sync_at" yaml:"last_group_sync_at,omitempty"`
-	LicensePlate    null.String `boil:"license_plate" json:"license_plate,omitempty" toml:"license_plate" yaml:"license_plate,omitempty"`
-	Vin             null.String `boil:"vin" json:"vin,omitempty" toml:"vin" yaml:"vin,omitempty"`
+	TenantID        string       `boil:"tenant_id" json:"tenant_id" toml:"tenant_id" yaml:"tenant_id"`
+	TokenID         int64        `boil:"token_id" json:"token_id" toml:"token_id" yaml:"token_id"`
+	OwnerAddress    null.String  `boil:"owner_address" json:"owner_address,omitempty" toml:"owner_address" yaml:"owner_address,omitempty"`
+	Make            null.String  `boil:"make" json:"make,omitempty" toml:"make" yaml:"make,omitempty"`
+	Model           null.String  `boil:"model" json:"model,omitempty" toml:"model" yaml:"model,omitempty"`
+	Year            null.Int     `boil:"year" json:"year,omitempty" toml:"year" yaml:"year,omitempty"`
+	DefinitionID    null.String  `boil:"definition_id" json:"definition_id,omitempty" toml:"definition_id" yaml:"definition_id,omitempty"`
+	DeviceType      null.String  `boil:"device_type" json:"device_type,omitempty" toml:"device_type" yaml:"device_type,omitempty"`
+	Imei            null.String  `boil:"imei" json:"imei,omitempty" toml:"imei" yaml:"imei,omitempty"`
+	Serial          null.String  `boil:"serial" json:"serial,omitempty" toml:"serial" yaml:"serial,omitempty"`
+	MintedAt        null.Time    `boil:"minted_at" json:"minted_at,omitempty" toml:"minted_at" yaml:"minted_at,omitempty"`
+	Raw             null.JSON    `boil:"raw" json:"raw,omitempty" toml:"raw" yaml:"raw,omitempty"`
+	SyncedAt        time.Time    `boil:"synced_at" json:"synced_at" toml:"synced_at" yaml:"synced_at"`
+	CreatedAt       time.Time    `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
+	UpdatedAt       time.Time    `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
+	GroupsUpdatedAt null.Time    `boil:"groups_updated_at" json:"groups_updated_at,omitempty" toml:"groups_updated_at" yaml:"groups_updated_at,omitempty"`
+	LastGroupSyncAt null.Time    `boil:"last_group_sync_at" json:"last_group_sync_at,omitempty" toml:"last_group_sync_at" yaml:"last_group_sync_at,omitempty"`
+	LicensePlate    null.String  `boil:"license_plate" json:"license_plate,omitempty" toml:"license_plate" yaml:"license_plate,omitempty"`
+	Vin             null.String  `boil:"vin" json:"vin,omitempty" toml:"vin" yaml:"vin,omitempty"`
+	LastLat         null.Float64 `boil:"last_lat" json:"last_lat,omitempty" toml:"last_lat" yaml:"last_lat,omitempty"`
+	LastLon         null.Float64 `boil:"last_lon" json:"last_lon,omitempty" toml:"last_lon" yaml:"last_lon,omitempty"`
+	LastSeen        null.Time    `boil:"last_seen" json:"last_seen,omitempty" toml:"last_seen" yaml:"last_seen,omitempty"`
 
 	R *vehicleR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L vehicleL  `boil:"-" json:"-" toml:"-" yaml:"-"`
@@ -68,6 +71,9 @@ var VehicleColumns = struct {
 	LastGroupSyncAt string
 	LicensePlate    string
 	Vin             string
+	LastLat         string
+	LastLon         string
+	LastSeen        string
 }{
 	TenantID:        "tenant_id",
 	TokenID:         "token_id",
@@ -88,6 +94,9 @@ var VehicleColumns = struct {
 	LastGroupSyncAt: "last_group_sync_at",
 	LicensePlate:    "license_plate",
 	Vin:             "vin",
+	LastLat:         "last_lat",
+	LastLon:         "last_lon",
+	LastSeen:        "last_seen",
 }
 
 var VehicleTableColumns = struct {
@@ -110,6 +119,9 @@ var VehicleTableColumns = struct {
 	LastGroupSyncAt string
 	LicensePlate    string
 	Vin             string
+	LastLat         string
+	LastLon         string
+	LastSeen        string
 }{
 	TenantID:        "vehicles.tenant_id",
 	TokenID:         "vehicles.token_id",
@@ -130,6 +142,9 @@ var VehicleTableColumns = struct {
 	LastGroupSyncAt: "vehicles.last_group_sync_at",
 	LicensePlate:    "vehicles.license_plate",
 	Vin:             "vehicles.vin",
+	LastLat:         "vehicles.last_lat",
+	LastLon:         "vehicles.last_lon",
+	LastSeen:        "vehicles.last_seen",
 }
 
 // Generated where
@@ -178,6 +193,9 @@ var VehicleWhere = struct {
 	LastGroupSyncAt whereHelpernull_Time
 	LicensePlate    whereHelpernull_String
 	Vin             whereHelpernull_String
+	LastLat         whereHelpernull_Float64
+	LastLon         whereHelpernull_Float64
+	LastSeen        whereHelpernull_Time
 }{
 	TenantID:        whereHelperstring{field: "\"vehicles\".\"tenant_id\""},
 	TokenID:         whereHelperint64{field: "\"vehicles\".\"token_id\""},
@@ -198,6 +216,9 @@ var VehicleWhere = struct {
 	LastGroupSyncAt: whereHelpernull_Time{field: "\"vehicles\".\"last_group_sync_at\""},
 	LicensePlate:    whereHelpernull_String{field: "\"vehicles\".\"license_plate\""},
 	Vin:             whereHelpernull_String{field: "\"vehicles\".\"vin\""},
+	LastLat:         whereHelpernull_Float64{field: "\"vehicles\".\"last_lat\""},
+	LastLon:         whereHelpernull_Float64{field: "\"vehicles\".\"last_lon\""},
+	LastSeen:        whereHelpernull_Time{field: "\"vehicles\".\"last_seen\""},
 }
 
 // VehicleRels is where relationship names are stored.
@@ -237,9 +258,9 @@ func (r *vehicleR) GetTenant() *Tenant {
 type vehicleL struct{}
 
 var (
-	vehicleAllColumns            = []string{"tenant_id", "token_id", "owner_address", "make", "model", "year", "definition_id", "device_type", "imei", "serial", "minted_at", "raw", "synced_at", "created_at", "updated_at", "groups_updated_at", "last_group_sync_at", "license_plate", "vin"}
+	vehicleAllColumns            = []string{"tenant_id", "token_id", "owner_address", "make", "model", "year", "definition_id", "device_type", "imei", "serial", "minted_at", "raw", "synced_at", "created_at", "updated_at", "groups_updated_at", "last_group_sync_at", "license_plate", "vin", "last_lat", "last_lon", "last_seen"}
 	vehicleColumnsWithoutDefault = []string{"tenant_id", "token_id"}
-	vehicleColumnsWithDefault    = []string{"owner_address", "make", "model", "year", "definition_id", "device_type", "imei", "serial", "minted_at", "raw", "synced_at", "created_at", "updated_at", "groups_updated_at", "last_group_sync_at", "license_plate", "vin"}
+	vehicleColumnsWithDefault    = []string{"owner_address", "make", "model", "year", "definition_id", "device_type", "imei", "serial", "minted_at", "raw", "synced_at", "created_at", "updated_at", "groups_updated_at", "last_group_sync_at", "license_plate", "vin", "last_lat", "last_lon", "last_seen"}
 	vehiclePrimaryKeyColumns     = []string{"tenant_id", "token_id"}
 	vehicleGeneratedColumns      = []string{}
 )

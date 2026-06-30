@@ -43,6 +43,15 @@ type Vehicle struct {
 	// LicensePlateSyncService). Not part of the identity-api shape; VehicleService
 	// sets it from the DB column. Empty when no VIN is known.
 	VIN string `json:"vin,omitempty"`
+	// LastLat/LastLon/LastSeen are the display cache of the vehicle's most recent
+	// GPS fix, written through by the telemetry fan-out (see
+	// TelemetryAPIService.FleetLocations + VehicleService.UpsertLastLocations).
+	// They let the map paint markers instantly from the DB on first load and the
+	// list show a "last seen" relative time; the live fan-out then reconciles
+	// them. nil when no fix has ever been fetched (no permission / no data yet).
+	LastLat  *float64   `json:"lastLat,omitempty"`
+	LastLon  *float64   `json:"lastLon,omitempty"`
+	LastSeen *time.Time `json:"lastSeen,omitempty"`
 	// Groups the vehicle belongs to, for the fleet-overview map/list filter.
 	// Always a (possibly empty) slice in the /vehicles response.
 	Groups []GroupRef `json:"groups"`
