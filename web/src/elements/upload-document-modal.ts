@@ -52,6 +52,8 @@ export class UploadDocumentModal extends LitElement {
             .card {
                 width: 100%;
                 max-width: 520px;
+                max-height: 90vh;
+                overflow-y: auto;
                 background: var(--surface-container);
                 border: 1px solid var(--outline-variant);
                 border-radius: var(--radius-lg);
@@ -75,6 +77,7 @@ export class UploadDocumentModal extends LitElement {
             .close:hover { color: var(--primary); }
 
             .drop {
+                display: block;
                 border: 1px dashed var(--outline-variant);
                 border-radius: var(--radius-md);
                 padding: 32px;
