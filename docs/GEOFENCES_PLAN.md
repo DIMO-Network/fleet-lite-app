@@ -19,7 +19,8 @@ Status (updated 2026-06-29):
 - **Phase 1** (CRUD + map + assignment) — **SHIPPED** (PR #51, prod).
 - **Phase 2** (on-demand pass detection, both entry points, speed) — **SHIPPED** (PR #52, prod).
 - **Phase 3 part 1** (trip + geofence surfacing) — **DONE**, PR #53 (draft, not merged).
-- **Phase 3 part 2 (alerts)** — mechanism **RESOLVED via DIMO-webhook spike** (2026-06-29); not built.
+- **Phase 3 part 2 (alerts)** — DIMO-webhook spike (2026-06-29): register/subscribe lifecycle proven,
+  **but end-to-end firing NOT observed** (open risk — likely device batch-upload). Not built.
 - **Phase 1.5** (pull-back sync) — deferred (no second consumer yet).
 
 The original Phase-1-only design text is preserved below for history; per-phase status is called out
@@ -362,11 +363,31 @@ Surface geofence info inside trips: each crossed geofence's polygon overlaid on 
 click-a-crossing-row to focus; backend includes `geometry` in the crossing response. Builds directly
 on Phase 2's passes. (Trips↔alerts UI and a dedicated geofence-activity section build on the same data.)
 
-### Phase 3 (part 2) — ALERTS — **mechanism RESOLVED via webhook spike (2026-06-29). FEASIBLE ✅**
+### Phase 3 (part 2) — ALERTS — **lifecycle proven; end-to-end FIRING UNCONFIRMED (webhook spike 2026-06-29)**
 
 The blocker for alerts was always the **event-time-trigger vs. our on-demand/no-cron model** tension
-(Phase 2 computes passes only when a user looks). **DIMO Webhooks dissolve it**: DIMO pushes at
-event-time, so we run **no cron**.
+(Phase 2 computes passes only when a user looks). **DIMO Webhooks** (Vehicle Triggers API) are the
+candidate that would dissolve it — DIMO pushes at event-time, so we'd run **no cron**. The spike proved
+the *registration/subscription* path works, but **never observed a single fire**, even for a vehicle
+that demonstrably drove. That firing gap is the open risk — see "⚠️ Firing not observed" below.
+
+> **⚠️ FIRING NOT OBSERVED — open risk, blocks committing to webhooks.** During the spike a real
+> vehicle (token 192413) drove and its data reached DIMO — `telemetry-api signalsLatest` showed
+> speed + `currentLocationCoordinates` at ts 21:50:59Z (only ~25 min old; now parked, speed 0). Yet
+> **both** webhooks fired **zero** times: the always-true geo webhook **and** the speed webhook
+> (`value > 5`, which had an obvious rising edge during the drive). Both `enabled`, `failureCount:0`
+> (DIMO never even attempted a delivery), all 4 vehicles confirmed subscribed, receiver still at 2
+> (handshakes only). So the gap is **not** "no data" — `telemetry-api` has it, but the **triggers
+> pipeline did not fire**. Leading hypothesis: **these devices batch-upload on trip-end**, so DIMO's
+> realtime trigger stream only ever sees the final parked state (speed 0, stationary) and never the
+> in-drive `speed>5` / movement — `telemetry-api`'s store gets the batch write (so we can read it) but
+> the realtime trigger path missed it. Weaker: triggers are edge- not level-triggered (wouldn't explain
+> speed staying silent); or the location `value.latitude` runtime shape doesn't match (creation only
+> validates CEL syntax). **Implication:** if a meaningful share of the fleet batch-uploads, webhook
+> alerts won't be reliably realtime — confirm before building. **To resolve:** watch a vehicle that
+> streams *live* mid-drive (start watching at ignition-on, not after), and/or ask the DIMO team whether
+> Triggers evaluate the realtime stream vs stored signals, edge vs level, and which device types fire
+> reliably. Diagnostic: `webhook-spike -mode telem -tokenid N` shows a vehicle's latest signal ts.
 
 **Platform = DIMO Vehicle Triggers API** (`vehicle-triggers-api.dimo.zone`, repo
 `DIMO-Network/vehicle-events-api`; service was renamed events→triggers). Auth = the tenant **developer
