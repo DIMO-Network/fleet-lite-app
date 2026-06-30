@@ -104,6 +104,8 @@ export class FleetListView extends LitElement {
                 c.title.toLowerCase().includes(q)
                 || c.tokenId.includes(q)
                 || c.location.toLowerCase().includes(q)
+                || (c.licensePlate?.toLowerCase().includes(q) ?? false)
+                || (c.vin?.toLowerCase().includes(q) ?? false)
             );
         }
         if (this.showHidden) {
@@ -265,7 +267,8 @@ export class FleetListView extends LitElement {
                     ${!v.licensePlate && !v.vin ? html`
                         <a class="upload-id-btn"
                            href="#/${this.tenantId}/glovebox/${v.tokenId}"
-                           title=${msg('Upload vehicle documents to identify this vehicle')}>
+                           title=${msg('Upload vehicle documents to identify this vehicle')}
+                           aria-label=${msg('Upload vehicle documents to identify this vehicle')}>
                             <span class="material-symbols-outlined">inventory_2</span>
                         </a>
                     ` : nothing}
@@ -627,13 +630,14 @@ export class FleetListView extends LitElement {
                 white-space: nowrap;
             }
             .identifier-plate .material-symbols-outlined { font-size: 14px; }
+            .identifier-plate + .identifier-vin { margin-top: 4px; }
 
             .identifier-vin {
                 display: block;
                 font-family: var(--font-mono);
                 font-size: 11px;
                 color: var(--on-surface-variant);
-                margin-top: 4px;
+                margin-top: 0;
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
