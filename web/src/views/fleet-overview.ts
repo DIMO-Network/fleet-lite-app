@@ -176,6 +176,34 @@ export class FleetOverviewView extends LitElement {
         this.quickViewVehicle = null;
     }
 
+    /**
+     * Real-time tick from the quick-view for the selected vehicle: re-pull its
+     * location (force, bypassing the freshness window + backend cache) and move
+     * its marker in place. The quick-view refreshes its own signals separately.
+     */
+    private async onRealtimeTick(e: CustomEvent<{ tokenId: string }>) {
+        const tokenId = e.detail?.tokenId ?? this.quickViewVehicle?.tokenId;
+        if (!tokenId) return;
+        try {
+            const res = await TelemetryService.getInstance().fleetLocations(true, [tokenId]);
+            // Ignore if the user closed/switched the panel while in flight.
+            if (this.quickViewVehicle?.tokenId !== tokenId) return;
+            const loc = res.locations?.[tokenId];
+            if (!loc) return;
+            this.lastLocations = { ...this.lastLocations, [tokenId]: { lat: loc.lat, lon: loc.lon } };
+            const marker = this.markers.get(tokenId);
+            if (marker) marker.setLatLng([loc.lat, loc.lon]);
+            else this.addMarkers({ [tokenId]: { lat: loc.lat, lon: loc.lon } });
+            // Refresh the card's "last seen" so the list reflects the live fix.
+            if (loc.timestamp) {
+                this.vehicles = this.vehicles.map((c) =>
+                    c.tokenId === tokenId ? { ...c, lastSeen: loc.timestamp } : c);
+            }
+        } catch {
+            // Transient — the next tick retries.
+        }
+    }
+
     /** Draw (or clear, when points is null) the selected trip's route. */
     private onTripRoute(e: CustomEvent<{ points: Array<[number, number]> | null }>) {
         this.clearTripRoute();
@@ -1546,6 +1574,7 @@ export class FleetOverviewView extends LitElement {
                 .vehicle=${this.quickViewVehicle}
                 @close=${this.closeQuickView}
                 @trip-route=${this.onTripRoute}
+                @rt-tick=${this.onRealtimeTick}
             ></vehicle-quick-view>
 
             <div class="map-controls">

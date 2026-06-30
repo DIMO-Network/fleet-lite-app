@@ -30,6 +30,12 @@ export class VehicleQuickView extends LitElement {
     @state() private selectedTrip: Trip | null = null;
     @state() private routeLoading = false;
 
+    /** Real-time: when on, re-poll this vehicle's signals + location on an
+     * interval. Off by default, reset whenever the selected vehicle changes. */
+    @state() private realtimeOn = false;
+    private rtTimer: number | null = null;
+    private static readonly REALTIME_INTERVAL_MS = 20 * 1000;
+
     /** How far back the trips list looks. */
     private static readonly TRIPS_WINDOW_DAYS = 14;
 
@@ -48,15 +54,20 @@ export class VehicleQuickView extends LitElement {
     disconnectedCallback() {
         window.removeEventListener('keydown', this.boundOnKeyDown);
         this.unsubscribePrefs?.();
+        this.stopRealtime();
         super.disconnectedCallback();
     }
 
     willUpdate(changed: Map<string, unknown>) {
-        if (changed.has('vehicle') && this.vehicle) {
-            // Switching vehicles invalidates any selected trip route.
-            this.clearTripSelection();
-            void this.loadSignals();
-            void this.loadTrips();
+        if (changed.has('vehicle')) {
+            // Switching (or closing) the vehicle resets real-time and any
+            // selected trip route — the toggle is opt-in per vehicle.
+            this.stopRealtime();
+            if (this.vehicle) {
+                this.clearTripSelection();
+                void this.loadSignals();
+                void this.loadTrips();
+            }
         }
     }
 
@@ -65,11 +76,15 @@ export class VehicleQuickView extends LitElement {
         this.dispatchEvent(new CustomEvent('close', { bubbles: true, composed: true }));
     }
 
-    private async loadSignals() {
+    // quiet = a real-time refresh: update the grid in place without flashing the
+    // loading state or clearing the existing values first.
+    private async loadSignals(quiet = false) {
         const tokenId = this.vehicle?.tokenId;
         if (!tokenId) return;
-        this.loading = true;
-        this.signals = {};
+        if (!quiet) {
+            this.loading = true;
+            this.signals = {};
+        }
         this.permissionsRequired = false;
         try {
             const res = await TelemetryService.getInstance().latest(Number(tokenId));
@@ -78,10 +93,40 @@ export class VehicleQuickView extends LitElement {
             this.signals = res.signals || {};
             this.permissionsRequired = !!res.permissionsRequired;
         } catch {
-            // Leave the grid empty — identity info is still useful.
+            // Leave the grid as-is — identity info is still useful.
         } finally {
-            if (this.vehicle?.tokenId === tokenId) this.loading = false;
+            if (!quiet && this.vehicle?.tokenId === tokenId) this.loading = false;
         }
+    }
+
+    /** Toggle real-time updates for this vehicle (off by default). */
+    private toggleRealtime() {
+        if (this.realtimeOn) {
+            this.stopRealtime();
+            return;
+        }
+        this.realtimeOn = true;
+        this.realtimeTick(); // refresh immediately, then on the interval
+        this.rtTimer = window.setInterval(() => this.realtimeTick(), VehicleQuickView.REALTIME_INTERVAL_MS);
+    }
+
+    private stopRealtime() {
+        if (this.rtTimer !== null) {
+            clearInterval(this.rtTimer);
+            this.rtTimer = null;
+        }
+        this.realtimeOn = false;
+    }
+
+    // One real-time tick: quietly reload this vehicle's signal grid, and ask the
+    // parent (which owns the map) to re-pull + reposition its marker.
+    private realtimeTick() {
+        const tokenId = this.vehicle?.tokenId;
+        if (!tokenId) return;
+        void this.loadSignals(true);
+        this.dispatchEvent(new CustomEvent('rt-tick', {
+            detail: { tokenId }, bubbles: true, composed: true,
+        }));
     }
 
     private async loadTrips() {
@@ -265,6 +310,47 @@ export class VehicleQuickView extends LitElement {
                 transition: background 0.15s ease, color 0.15s ease;
             }
             .close-btn:hover { background: var(--surface-container-high); color: var(--primary); }
+
+            .header-actions {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                flex-shrink: 0;
+            }
+            .rt-btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 5px 10px;
+                border: 1px solid var(--outline-variant);
+                border-radius: var(--radius-full);
+                background: none;
+                color: var(--on-surface-variant);
+                font-size: 12px;
+                font-weight: 500;
+                cursor: pointer;
+                white-space: nowrap;
+                transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+            }
+            .rt-btn:hover { background: var(--surface-container-high); color: var(--primary); }
+            .rt-btn .material-symbols-outlined { font-size: 16px; }
+            .rt-btn.active {
+                color: var(--primary);
+                border-color: var(--primary);
+                background: color-mix(in srgb, var(--primary) 10%, transparent);
+            }
+            .rt-dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                background: var(--primary);
+                box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 60%, transparent);
+                animation: rt-pulse 1.6s ease-out infinite;
+            }
+            @keyframes rt-pulse {
+                0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 50%, transparent); }
+                100% { box-shadow: 0 0 0 7px transparent; }
+            }
 
             .groups {
                 display: flex;
@@ -494,9 +580,21 @@ export class VehicleQuickView extends LitElement {
                         </h3>
                         <div class="sub">${v.location ? html`${v.location} · ` : ''}${v.seenAt}</div>
                     </div>
-                    <button class="close-btn" title="${msg('Close')}" @click=${this.close}>
-                        <span class="material-symbols-outlined">close</span>
-                    </button>
+                    <div class="header-actions">
+                        <button
+                            class="rt-btn ${this.realtimeOn ? 'active' : ''}"
+                            title=${this.realtimeOn ? msg('Stop real-time updates') : msg('Start real-time updates')}
+                            aria-pressed=${this.realtimeOn}
+                            @click=${this.toggleRealtime}>
+                            ${this.realtimeOn
+                                ? html`<span class="rt-dot"></span>`
+                                : html`<span class="material-symbols-outlined">sync</span>`}
+                            <span class="rt-label">${msg('Real-time')} · 20s</span>
+                        </button>
+                        <button class="close-btn" title="${msg('Close')}" @click=${this.close}>
+                            <span class="material-symbols-outlined">close</span>
+                        </button>
+                    </div>
                 </header>
 
                 ${(v.groups?.length ?? 0) > 0 ? html`
