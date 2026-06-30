@@ -79,7 +79,10 @@ func (s *VehicleService) SyncVehicles(ctx context.Context, tenant *models.Tenant
 func (s *VehicleService) ListVehicles(ctx context.Context, tenantID string) ([]models.Vehicle, error) {
 	rows, err := dbmodels.Vehicles(
 		qm.Where("tenant_id = ?", tenantID),
-		qm.OrderBy("token_id"),
+		// Most-recently-seen first (the composite idx_vehicles_tenant_last_seen
+		// serves this filter+sort); never-seen vehicles sort last, token_id as a
+		// stable tiebreaker. Favourites are pinned to the top client-side.
+		qm.OrderBy("last_seen DESC NULLS LAST, token_id"),
 	).All(ctx, s.pdb.DBS().Reader)
 	if err != nil {
 		return nil, err
@@ -94,6 +97,7 @@ func (s *VehicleService) ListVehicles(ctx context.Context, tenantID string) ([]m
 		v.IsFavorite = favorites[v.TokenID]
 		v.LicensePlate = r.LicensePlate.String
 		v.VIN = r.Vin.String
+		applyLastLocation(&v, r)
 		out = append(out, v)
 	}
 	return out, nil
@@ -115,7 +119,52 @@ func (s *VehicleService) GetVehicle(ctx context.Context, tenantID string, tokenI
 	}
 	v.LicensePlate = r.LicensePlate.String
 	v.VIN = r.Vin.String
+	applyLastLocation(&v, r)
 	return &v, nil
+}
+
+// applyLastLocation copies the cached last-GPS-fix columns onto the assembled
+// Vehicle. Kept off rowToVehicle because those columns aren't part of the
+// identity `raw` shape — same reasoning as IsFavorite/LicensePlate/VIN.
+func applyLastLocation(v *models.Vehicle, r *dbmodels.Vehicle) {
+	if r.LastLat.Valid {
+		lat := r.LastLat.Float64
+		v.LastLat = &lat
+	}
+	if r.LastLon.Valid {
+		lon := r.LastLon.Float64
+		v.LastLon = &lon
+	}
+	if r.LastSeen.Valid {
+		ts := r.LastSeen.Time
+		v.LastSeen = &ts
+	}
+}
+
+// UpsertLastLocations writes through the latest GPS fix for each vehicle into
+// its row (the last_lat/last_lon/last_seen display cache). Best-effort: a fix
+// with no/unparseable timestamp is skipped so we never stamp last_seen with a
+// zero time, and a per-row failure is logged but never fails the batch. Only
+// the three location columns (plus updated_at) are touched; a vehicle missing
+// from the table simply updates zero rows.
+func (s *VehicleService) UpsertLastLocations(ctx context.Context, tenantID string, locs map[uint64]LocationCoords) {
+	for id, c := range locs {
+		ts, err := time.Parse(time.RFC3339, c.Timestamp)
+		if err != nil {
+			continue
+		}
+		row := &dbmodels.Vehicle{
+			TenantID: tenantID,
+			TokenID:  int64(id),
+			LastLat:  null.Float64From(c.Lat),
+			LastLon:  null.Float64From(c.Lon),
+			LastSeen: null.TimeFrom(ts),
+		}
+		if _, err := row.Update(ctx, s.pdb.DBS().Writer,
+			boil.Whitelist("last_lat", "last_lon", "last_seen", "updated_at")); err != nil {
+			s.logger.Warn().Uint64("tokenId", id).Err(err).Msg("write-through last location")
+		}
+	}
 }
 
 // favoriteSet returns the tenant's favorited token IDs as a lookup set.

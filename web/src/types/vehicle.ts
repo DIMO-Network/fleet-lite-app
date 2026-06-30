@@ -37,6 +37,13 @@ export interface Vehicle {
     licensePlate?: string;
     /** VIN, cached from the same registration attestation as the plate. Absent when unknown. */
     vin?: string;
+    /** Cached latest GPS fix (display cache, written through by the telemetry
+     * fan-out). Absent until a fix has been fetched. Lets the map paint markers
+     * from the DB before live locations stream in. */
+    lastLat?: number;
+    lastLon?: number;
+    /** ISO timestamp of that latest GPS fix — shown in the list as "last seen". */
+    lastSeen?: string;
     /** Groups this vehicle belongs to (always present, [] when none). */
     groups: VehicleGroupRef[];
 }
@@ -51,7 +58,10 @@ export interface VehicleCard {
     make: string;
     title: string;
     location: string;
+    /** Fallback line shown when no GPS fix is known (device-integration label). */
     seenAt: string;
+    /** ISO timestamp of the latest GPS fix; rendered as a relative "last seen" time. */
+    lastSeen?: string;
     online: boolean;
     notification?: number;
     errorMessage?: string;

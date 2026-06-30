@@ -1296,6 +1296,28 @@
   <source>Invitation refreshed, but the email could not be sent. Check email delivery configuration.</source>
   <target>Invitación actualizada, pero no se pudo enviar el correo. Revisa la configuración de envío de correos.</target>
 </trans-unit>
+<trans-unit id="last-seen-prefix">
+  <source>Last seen</source>
+  <target>Visto por última vez</target>
+</trans-unit>
+<trans-unit id="s80b97d0375031960">
+  <source>Could not load DIMO settings. Please enter credentials manually.</source>
+</trans-unit>
+<trans-unit id="s6a47adf8f680d9fc">
+  <source>Opening DIMO…</source>
+</trans-unit>
+<trans-unit id="sc9b959bf636dd8ca">
+  <source>Get credentials from DIMO</source>
+</trans-unit>
+<trans-unit id="s3220e57d36c47737">
+  <source>or enter manually</source>
+</trans-unit>
+<trans-unit id="s4280e090367d36bb">
+  <source>Copy API key</source>
+</trans-unit>
+<trans-unit id="s65d89f28a70694dd">
+  <source>Save your API key now — it cannot be retrieved after this step.</source>
+</trans-unit>
 </body>
 </file>
 </xliff>

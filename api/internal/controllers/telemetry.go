@@ -147,6 +147,19 @@ func (t *TelemetryController) GetFleetLocations(c *fiber.Ctx) error {
 		t.logger.Err(err).Msg("fleet locations failed")
 		return fiber.NewError(fiber.StatusBadGateway, "fleet locations failed: "+err.Error())
 	}
+	// Write the fresh fixes through to the vehicles table so the next first
+	// paint can render markers and "last seen" instantly from Postgres before
+	// this fan-out completes. Best-effort and detached: it must never block or
+	// fail the response, and the result above is already authoritative for now.
+	if len(result.Locations) > 0 {
+		locs := result.Locations
+		tenantID := tenant.ID
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			t.vehicleSvc.UpsertLastLocations(ctx, tenantID, locs)
+		}()
+	}
 	// Rekey as strings for JSON (JS can't safely represent uint64 as number).
 	out := make(map[string]interface{}, len(result.Locations))
 	for id, coords := range result.Locations {

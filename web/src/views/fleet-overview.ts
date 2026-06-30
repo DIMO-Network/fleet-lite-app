@@ -1,6 +1,7 @@
 import { LitElement, html, css, unsafeCSS, nothing } from 'lit';
 import { customElement, state, property } from 'lit/decorators.js';
 import { msg } from '@lit/localize';
+import { getLocale } from '../localization.ts';
 import L from 'leaflet';
 import leafletCss from 'leaflet/dist/leaflet.css?inline';
 import 'leaflet.markercluster';
@@ -226,6 +227,7 @@ export class FleetOverviewView extends LitElement {
             location: integration,
             vin: v.vin || undefined,
             seenAt: `Token #${v.tokenId}`,
+            lastSeen: v.lastSeen,
             online: integrated,
             errorMessage: integrated ? undefined : msg('No DIMO integration — pair a device to stream telemetry'),
             isFavorite: v.isFavorite ?? false,
@@ -234,9 +236,44 @@ export class FleetOverviewView extends LitElement {
         };
     }
 
-    /** Stable sort that pins favorites to the top, preserving relative order otherwise. */
+    /** Stable sort that pins favorites to the top. The server already returns
+     * vehicles most-recently-seen first, so within each group (favorite /
+     * non-favorite) the last-seen ordering is preserved. */
     private sortByFavorite(cards: VehicleCard[]): VehicleCard[] {
         return [...cards].sort((a, b) => Number(!!b.isFavorite) - Number(!!a.isFavorite));
+    }
+
+    /** Seed map coordinates from the DB's cached last-GPS-fix so markers paint
+     * instantly on first load, before the live telemetry fan-out reconciles them. */
+    private seedLocationsFromDb(vehicles: Vehicle[]): Record<string, { lat: number; lon: number }> {
+        const seed: Record<string, { lat: number; lon: number }> = {};
+        for (const v of vehicles) {
+            if (typeof v.lastLat === 'number' && typeof v.lastLon === 'number') {
+                seed[String(v.tokenId)] = { lat: v.lastLat, lon: v.lastLon };
+            }
+        }
+        return seed;
+    }
+
+    /** Render an ISO timestamp as a localized "last seen 5 min ago" string,
+     * picking the largest sensible unit. Empty for an unparseable/future time. */
+    private formatLastSeen(iso?: string): string {
+        if (!iso) return '';
+        const then = new Date(iso).getTime();
+        if (Number.isNaN(then)) return '';
+        const diffMs = then - Date.now();
+        const sec = Math.round(diffMs / 1000);
+        const rtf = new Intl.RelativeTimeFormat(getLocale(), { numeric: 'auto', style: 'long' });
+        const abs = Math.abs(sec);
+        let value: number;
+        let unit: Intl.RelativeTimeFormatUnit;
+        if (abs < 60) { value = sec; unit = 'second'; }
+        else if (abs < 3600) { value = Math.round(sec / 60); unit = 'minute'; }
+        else if (abs < 86400) { value = Math.round(sec / 3600); unit = 'hour'; }
+        else if (abs < 2592000) { value = Math.round(sec / 86400); unit = 'day'; }
+        else if (abs < 31536000) { value = Math.round(sec / 2592000); unit = 'month'; }
+        else { value = Math.round(sec / 31536000); unit = 'year'; }
+        return msg('Last seen', { id: 'last-seen-prefix' }) + ' ' + rtf.format(value, unit);
     }
 
     /**
@@ -310,9 +347,11 @@ export class FleetOverviewView extends LitElement {
             }
         }
 
+        let rawVehicles: Vehicle[] = [];
         try {
             const res = await ApiService.getInstance().get<VehiclesResponse>('/vehicles');
-            this.vehicles = this.sortByFavorite((res.vehicles || []).map((v) => this.toCard(v)));
+            rawVehicles = res.vehicles || [];
+            this.vehicles = this.sortByFavorite(rawVehicles.map((v) => this.toCard(v)));
             this.loading = false;
         } catch (e) {
             // ApiService already redirected to /login.html on 401/400.
@@ -322,7 +361,14 @@ export class FleetOverviewView extends LitElement {
             return;
         }
 
-        this.lastLocations = {};
+        // Paint markers immediately from the DB's cached last-GPS-fix so the map
+        // isn't blank while the live per-vehicle fan-out (below) streams in; the
+        // fan-out then overwrites these with fresh coordinates.
+        this.lastLocations = this.seedLocationsFromDb(rawVehicles);
+        if (Object.keys(this.lastLocations).length > 0) {
+            this.placeMarkers();
+            this.centerMap();
+        }
         // Sync map markers to the updated vehicle list immediately: remove any
         // marker for a vehicle that's no longer in the fleet (e.g. a shared
         // vehicle that was revoked). New vehicles get markers as locations stream
@@ -1383,10 +1429,10 @@ export class FleetOverviewView extends LitElement {
                             ${!v.vin && v.location ? html`<p class="location">${v.location}</p>` : ''}
                             ${v.notification
                                 ? html`<div class="row-flex">
-                                        <p class="seen">${v.seenAt}</p>
+                                        <p class="seen">${v.lastSeen ? this.formatLastSeen(v.lastSeen) : v.seenAt}</p>
                                         <span class="notif-badge">${v.notification}</span>
                                     </div>`
-                                : html`<p class="seen">${v.seenAt}</p>`
+                                : html`<p class="seen">${v.lastSeen ? this.formatLastSeen(v.lastSeen) : v.seenAt}</p>`
                             }
                             ${v.noPermissions ? html`
                                 <div class="no-permissions-badge">
