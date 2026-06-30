@@ -18,7 +18,9 @@ export interface TimeSeriesBucket {
 }
 
 export interface FleetLocationsResponse {
-    locations: Record<string, { lat: number; lon: number }>;
+    /** Per-vehicle latest GPS fix; `timestamp` is the fix time (used to refresh
+     * "last seen" on real-time polls). */
+    locations: Record<string, { lat: number; lon: number; timestamp?: string }>;
     noPermissions: string[];
 }
 

@@ -1318,6 +1318,18 @@
 <trans-unit id="s65d89f28a70694dd">
   <source>Save your API key now — it cannot be retrieved after this step.</source>
 </trans-unit>
+<trans-unit id="sc15b37bfacfecb31">
+  <source>Stop real-time updates</source>
+  <target>Detener actualizaciones en tiempo real</target>
+</trans-unit>
+<trans-unit id="scb0e472d678dab53">
+  <source>Start real-time updates</source>
+  <target>Iniciar actualizaciones en tiempo real</target>
+</trans-unit>
+<trans-unit id="sbca88f204f03e049">
+  <source>Real-time</source>
+  <target>Tiempo real</target>
+</trans-unit>
 </body>
 </file>
 </xliff>
