@@ -81,6 +81,56 @@ func TestDetectPasses_SinglePass(t *testing.T) {
 	}
 }
 
+// sampleObd is sample() plus an obdRunTime reading (nil = not reported).
+func sampleObd(sec int, lat, lng float64, obd *float64) GeoSample {
+	s := sample(sec, lat, lng, nil)
+	s.ObdRunTimeS = obd
+	return s
+}
+
+func TestDetectPasses_EngineRuntime(t *testing.T) {
+	// obdRunTime climbs 100 -> 175 across the three in-geofence samples: the
+	// pass accrues 75s of engine-on time (distinct from the 60s dwell).
+	passes := detectPasses([]GeoSample{
+		sampleObd(0, 5, 5, fptr(50)),        // outside — ignored
+		sampleObd(60, 0.5, 0.5, fptr(100)),  // inside: first
+		sampleObd(90, 0.6, 0.5, fptr(140)),  // inside
+		sampleObd(120, 0.7, 0.6, fptr(175)), // inside: last
+		sampleObd(150, 9, 9, fptr(999)),     // outside — ignored
+	}, squareRings)
+	if len(passes) != 1 {
+		t.Fatalf("want 1 pass, got %d", len(passes))
+	}
+	rt := passes[0].engineRuntimeS()
+	if rt == nil || *rt != 75 {
+		t.Errorf("engineRuntimeS = %v, want 75", rt)
+	}
+}
+
+func TestDetectPasses_EngineRuntimeUnavailable(t *testing.T) {
+	cases := map[string][]*float64{
+		"none reported":  {nil, nil, nil},
+		"single reading": {fptr(100), nil, nil},
+		"counter reset":  {fptr(900), fptr(20), fptr(45)}, // engine restarted mid-pass
+	}
+	for name, obds := range cases {
+		t.Run(name, func(t *testing.T) {
+			samples := []GeoSample{
+				sampleObd(60, 0.5, 0.5, obds[0]),
+				sampleObd(90, 0.6, 0.5, obds[1]),
+				sampleObd(120, 0.7, 0.6, obds[2]),
+			}
+			passes := detectPasses(samples, squareRings)
+			if len(passes) != 1 {
+				t.Fatalf("want 1 pass, got %d", len(passes))
+			}
+			if rt := passes[0].engineRuntimeS(); rt != nil {
+				t.Errorf("engineRuntimeS = %v, want nil", rt)
+			}
+		})
+	}
+}
+
 func TestDetectPasses_MultiplePassesAndOngoing(t *testing.T) {
 	// IN, out, IN, IN(end) — two passes; the second is still inside at the end.
 	samples := []GeoSample{

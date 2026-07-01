@@ -85,6 +85,10 @@ type GeoSample struct {
 	Lat      float64
 	Lng      float64
 	SpeedKph *float64
+	// ObdRunTimeS is OBD "run time since engine start" (seconds) at this bucket,
+	// nil when the vehicle doesn't report it. Pass-level engine runtime is the
+	// last-minus-first of these within a pass — see detectPasses.
+	ObdRunTimeS *float64
 }
 
 // FleetLocationsResult separates vehicles with accessible location data from
@@ -502,6 +506,7 @@ func (t *telemetryAPIService) GeofenceSamples(tenant models.Tenant, tokenID uint
 			timestamp
 			currentLocationCoordinates(agg: LAST) { latitude longitude }
 			speed(agg: MAX)
+			obdRunTime(agg: MAX)
 		}
 	}`, tokenID, from, to, interval)
 
@@ -518,7 +523,8 @@ func (t *telemetryAPIService) GeofenceSamples(tenant models.Tenant, tokenID uint
 					Latitude  float64 `json:"latitude"`
 					Longitude float64 `json:"longitude"`
 				} `json:"currentLocationCoordinates"`
-				Speed *float64 `json:"speed"`
+				Speed      *float64 `json:"speed"`
+				ObdRunTime *float64 `json:"obdRunTime"`
 			} `json:"samples"`
 		} `json:"data"`
 	}
@@ -536,10 +542,11 @@ func (t *telemetryAPIService) GeofenceSamples(tenant models.Tenant, tokenID uint
 			continue
 		}
 		out = append(out, GeoSample{
-			Time:     ts,
-			Lat:      s.CurrentLocationCoordinates.Latitude,
-			Lng:      s.CurrentLocationCoordinates.Longitude,
-			SpeedKph: s.Speed,
+			Time:        ts,
+			Lat:         s.CurrentLocationCoordinates.Latitude,
+			Lng:         s.CurrentLocationCoordinates.Longitude,
+			SpeedKph:    s.Speed,
+			ObdRunTimeS: s.ObdRunTime,
 		})
 	}
 	// signals returns buckets in ascending time, but detection relies on order —
