@@ -978,9 +978,6 @@
 <trans-unit id="s51cf5795e7631ded">
   <source>No telemetry access</source>
 </trans-unit>
-<trans-unit id="s639accf775aa8ef0">
-  <source>No integration</source>
-</trans-unit>
 <trans-unit id="s3cf3a9dbc14e94f6">
   <source><x id="0" equiv-text="${this.visibleCards().length}"/> vehicles</source>
 </trans-unit>
@@ -992,9 +989,6 @@
 </trans-unit>
 <trans-unit id="sad3e3c8146fc920f">
   <source>Status</source>
-</trans-unit>
-<trans-unit id="s03970aa76a09982d">
-  <source>Integration</source>
 </trans-unit>
 <trans-unit id="s9b38dee53cc7751c">
   <source>Last Location</source>
@@ -1298,7 +1292,7 @@
 </trans-unit>
 <trans-unit id="last-seen-prefix">
   <source>Last seen</source>
-  <target>Visto por última vez</target>
+  <target>Visto</target>
 </trans-unit>
 <trans-unit id="s80b97d0375031960">
   <source>Could not load DIMO settings. Please enter credentials manually.</source>
@@ -1329,6 +1323,12 @@
 <trans-unit id="sbca88f204f03e049">
   <source>Real-time</source>
   <target>Tiempo real</target>
+</trans-unit>
+<trans-unit id="se0ebd1b6c2f24183">
+  <source>Upload vehicle documents to identify this vehicle</source>
+</trans-unit>
+<trans-unit id="s7468e87263dfff7e">
+  <source>Identifier</source>
 </trans-unit>
 </body>
 </file>
