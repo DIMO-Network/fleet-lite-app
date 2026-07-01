@@ -39,7 +39,7 @@ IDENTITY_API_ENDPOINT: https://identity-api.dimo.zone/query
 
 ## Document services (glovebox)
 EXTRACT_API_URL: https://extract.dimo.zone/extract
-FETCH_API_URL:   https://fetch-api.dimo.zone/v1/fetch/objects
+FETCH_API_URL:   https://fetch-api.dimo.zone/query
 ATTEST_API_URL:  https://attest.dimo.zone
 
 ## Telemetry (vehicle-details charts)

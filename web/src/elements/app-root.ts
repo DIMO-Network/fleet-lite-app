@@ -67,6 +67,7 @@ export class AppRoot extends LitElement {
             { path: '/:tenantId/vehicles/:tokenId',   render: ({ tokenId }) => html`<vehicle-details-view .tenantId=${this.tenantId} .tokenId=${tokenId}></vehicle-details-view>` },
             { path: '/:tenantId/groups',              render: () => html`<groups-management-view .tenantId=${this.tenantId}></groups-management-view>` },
             { path: '/:tenantId/geofences',           render: () => html`<geofences-management-view .tenantId=${this.tenantId}></geofences-management-view>` },
+            { path: '/:tenantId/glovebox/:tokenId',   render: ({ tokenId }) => html`<glovebox-view .tenantId=${this.tenantId} .initialTokenId=${tokenId}></glovebox-view>` },
             { path: '/:tenantId/glovebox',            render: () => html`<glovebox-view .tenantId=${this.tenantId}></glovebox-view>` },
             { path: '/:tenantId/settings',            render: () => html`<account-settings-view .tenantId=${this.tenantId}></account-settings-view>` },
             { path: '/:tenantId/stats',               render: () => html`<fleet-list-view .tenantId=${this.tenantId}></fleet-list-view>` },

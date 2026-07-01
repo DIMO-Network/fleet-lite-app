@@ -1466,7 +1466,6 @@ export class FleetOverviewView extends LitElement {
                             </p>
                         ` : ''}
                         ${v.online ? html`
-                            ${!v.vin && v.location ? html`<p class="location">${v.location}</p>` : ''}
                             ${v.notification
                                 ? html`<div class="row-flex">
                                         <p class="seen">${v.lastSeen ? this.formatLastSeen(v.lastSeen) : v.seenAt}</p>

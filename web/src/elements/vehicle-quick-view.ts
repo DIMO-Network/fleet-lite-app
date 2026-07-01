@@ -298,6 +298,33 @@ export class VehicleQuickView extends LitElement {
                 font: var(--type-body-sm);
                 color: var(--on-surface-variant);
             }
+            .identifiers {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 6px;
+                padding: 8px 16px 0;
+            }
+            .plate-pill {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                background: var(--surface-container-high);
+                border: 1px solid var(--outline-variant);
+                border-radius: var(--radius-sm);
+                padding: 3px 8px;
+                font: var(--type-label-caps);
+                letter-spacing: 0.04em;
+                color: var(--on-surface-variant);
+                white-space: nowrap;
+            }
+            .plate-pill .material-symbols-outlined { font-size: 14px; }
+            .vin-pill {
+                font-family: var(--font-mono);
+                font-size: 11px;
+                color: var(--on-surface-variant);
+                white-space: nowrap;
+            }
             .close-btn {
                 background: none;
                 border: none;
@@ -578,7 +605,7 @@ export class VehicleQuickView extends LitElement {
                             ${v.isFavorite ? html`<span class="material-symbols-outlined favorite-star" title="${msg('Favorite')}">star</span>` : ''}
                             <span>${v.title}</span>
                         </h3>
-                        <div class="sub">${v.location ? html`${v.location} · ` : ''}${v.seenAt}</div>
+                        <div class="sub">${v.seenAt}</div>
                     </div>
                     <div class="header-actions">
                         <button
@@ -596,6 +623,19 @@ export class VehicleQuickView extends LitElement {
                         </button>
                     </div>
                 </header>
+
+                ${v.licensePlate || v.vin ? html`
+                    <div class="identifiers">
+                        ${v.licensePlate ? html`
+                            <span class="plate-pill">
+                                <span class="material-symbols-outlined">directions_car</span>${v.licensePlate}
+                            </span>
+                        ` : nothing}
+                        ${v.vin ? html`
+                            <span class="vin-pill">${v.vin}</span>
+                        ` : nothing}
+                    </div>
+                ` : nothing}
 
                 ${(v.groups?.length ?? 0) > 0 ? html`
                     <div class="groups">

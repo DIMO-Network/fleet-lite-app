@@ -57,6 +57,8 @@ export class FleetListView extends LitElement {
             errorMessage: integrated ? undefined : msg('No DIMO integration — pair a device to stream telemetry'),
             isFavorite: v.isFavorite ?? false,
             groups: v.groups ?? [],
+            licensePlate: v.licensePlate,
+            vin: v.vin || undefined,
         };
     }
 
@@ -102,6 +104,8 @@ export class FleetListView extends LitElement {
                 c.title.toLowerCase().includes(q)
                 || c.tokenId.includes(q)
                 || c.location.toLowerCase().includes(q)
+                || (c.licensePlate?.toLowerCase().includes(q) ?? false)
+                || (c.vin?.toLowerCase().includes(q) ?? false)
             );
         }
         if (this.showHidden) {
@@ -251,10 +255,23 @@ export class FleetListView extends LitElement {
                         </div>
                     </div>
                 </td>
-                <td class="col-integration">
-                    ${v.online
-                        ? html`<span class="integration-badge">${v.location}</span>`
-                        : html`<span class="offline-label">${msg('No integration')}</span>`}
+                <td class="col-identifier">
+                    ${v.licensePlate ? html`
+                        <span class="identifier-plate">
+                            <span class="material-symbols-outlined">directions_car</span>${v.licensePlate}
+                        </span>
+                    ` : nothing}
+                    ${v.vin ? html`
+                        <span class="identifier-vin">${v.vin}</span>
+                    ` : nothing}
+                    ${!v.licensePlate && !v.vin ? html`
+                        <a class="upload-id-btn"
+                           href="#/${this.tenantId}/glovebox/${v.tokenId}"
+                           title=${msg('Upload vehicle documents to identify this vehicle')}
+                           aria-label=${msg('Upload vehicle documents to identify this vehicle')}>
+                            <span class="material-symbols-outlined">inventory_2</span>
+                        </a>
+                    ` : nothing}
                 </td>
                 <td class="col-location mono">${this.formatLocation(v.tokenId)}</td>
                 <td class="col-groups">
@@ -370,7 +387,7 @@ export class FleetListView extends LitElement {
                             <th class="col-vehicle sortable" @click=${() => this.setSort('name')}>
                                 ${msg('Vehicle')}${this.sortIcon('name')}
                             </th>
-                            <th class="col-integration">${msg('Integration')}</th>
+                            <th class="col-identifier">${msg('Identifier')}</th>
                             <th class="col-location">${msg('Last Location')}</th>
                             <th class="col-groups">${msg('Groups')}</th>
                             <th class="col-token sortable" @click=${() => this.setSort('tokenId')}>
@@ -551,7 +568,7 @@ export class FleetListView extends LitElement {
             /* ── Column widths ────────────────────────────────────── */
             .col-status   { width: 48px; text-align: center; }
             .col-vehicle  { min-width: 200px; }
-            .col-integration { width: 180px; }
+            .col-identifier { width: 180px; }
             .col-location { width: 180px; }
             .col-groups   { width: 180px; }
             .col-token    { width: 100px; }
@@ -598,9 +615,11 @@ export class FleetListView extends LitElement {
             }
             .no-perm-badge .material-symbols-outlined { font-size: 11px; }
 
-            /* ── Integration badge ────────────────────────────────── */
-            .integration-badge {
-                display: inline-block;
+            /* ── Identifier cell ─────────────────────────────────── */
+            .identifier-plate {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
                 background: var(--surface-container-high);
                 border: 1px solid var(--outline-variant);
                 border-radius: var(--radius-sm);
@@ -610,11 +629,31 @@ export class FleetListView extends LitElement {
                 color: var(--on-surface-variant);
                 white-space: nowrap;
             }
-            .offline-label {
-                font: var(--type-body-sm);
+            .identifier-plate .material-symbols-outlined { font-size: 14px; }
+            .identifier-plate + .identifier-vin { margin-top: 4px; }
+
+            .identifier-vin {
+                display: block;
+                font-family: var(--font-mono);
+                font-size: 11px;
                 color: var(--on-surface-variant);
-                opacity: 0.5;
+                margin-top: 0;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                max-width: 148px;
             }
+
+            .upload-id-btn {
+                display: inline-flex;
+                align-items: center;
+                color: var(--on-surface-variant);
+                opacity: 0.4;
+                text-decoration: none;
+                transition: opacity 0.15s, color 0.15s;
+            }
+            .upload-id-btn:hover { opacity: 1; color: var(--primary); }
+            .upload-id-btn .material-symbols-outlined { font-size: 20px; }
 
             /* ── Location ─────────────────────────────────────────── */
             .mono {

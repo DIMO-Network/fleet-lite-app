@@ -27,6 +27,7 @@ type DocumentsController struct {
 	extractAPI   service.ExtractAPIService
 	attestSvc    service.AttestService
 	fetchAPI     *gateway.FetchAPI
+	plateSvc     *service.LicensePlateSyncService
 }
 
 func NewDocumentsController(
@@ -37,6 +38,7 @@ func NewDocumentsController(
 	extractAPI service.ExtractAPIService,
 	attestSvc service.AttestService,
 	fetchAPI *gateway.FetchAPI,
+	plateSvc *service.LicensePlateSyncService,
 ) *DocumentsController {
 	return &DocumentsController{
 		logger:       logger,
@@ -46,6 +48,7 @@ func NewDocumentsController(
 		extractAPI:   extractAPI,
 		attestSvc:    attestSvc,
 		fetchAPI:     fetchAPI,
+		plateSvc:     plateSvc,
 	}
 }
 
@@ -168,6 +171,13 @@ func (d *DocumentsController) AttestDocument(c *fiber.Ctx) error {
 		d.logger.Err(err).Int64("tokenID", req.TokenID).Msg("attest failed")
 		return fiber.NewError(fiber.StatusBadGateway, "attestation failed: "+err.Error())
 	}
+	if req.Category == service.VehicleRegistrationCloudEventType {
+		go func() {
+			if _, err := d.plateSvc.SyncVehicle(context.Background(), tenant, req.TokenID, service.SyncOpts{}); err != nil {
+				d.logger.Warn().Err(err).Int64("tokenID", req.TokenID).Msg("post-upload plate/VIN sync failed")
+			}
+		}()
+	}
 	return c.JSON(result)
 }
 
@@ -212,13 +222,17 @@ func (d *DocumentsController) ListDocuments(c *fiber.Ctx) error {
 		if e.Type != "dimo.tombstone" {
 			continue
 		}
-		// data: {referenceId, rawReferenceId?}
+		// data: {voidsId, rawReferenceId?} — attest API renamed referenceId→voidsId;
+		// parse both so existing tombstones stored under the old name still work.
 		var d struct {
+			VoidsID        string `json:"voidsId"`
 			ReferenceID    string `json:"referenceId"`
 			RawReferenceID string `json:"rawReferenceId"`
 		}
 		_ = jsonUnmarshal(e.Data, &d)
-		if d.ReferenceID != "" {
+		if d.VoidsID != "" {
+			tombstoned[d.VoidsID] = struct{}{}
+		} else if d.ReferenceID != "" {
 			tombstoned[d.ReferenceID] = struct{}{}
 		}
 		if d.RawReferenceID != "" {
