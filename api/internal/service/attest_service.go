@@ -288,7 +288,7 @@ func (s *attestService) Tombstone(tenant models.Tenant, parsedID, rawID, tokenDI
 	}
 	apiKey := tenant.DIMOPrivateKey
 
-	data := map[string]interface{}{"referenceId": parsedID}
+	data := map[string]interface{}{"voidsId": parsedID}
 	if rawID != "" {
 		data["rawReferenceId"] = rawID
 	}
