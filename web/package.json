@@ -10,7 +10,9 @@
     "lint": "eslint src --fix",
     "lint:check": "eslint src",
     "localize:extract": "lit-localize extract",
-    "localize:build": "lit-localize build"
+    "localize:build": "lit-localize build",
+    "localize": "lit-localize extract && lit-localize build",
+    "localize:check": "npm run localize && git diff --exit-code -- xliff src/generated"
   },
   "dependencies": {
     "@lit-labs/router": "^0.1.4",
