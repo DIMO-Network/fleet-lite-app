@@ -11,6 +11,7 @@ var TableNames = struct {
 	Invitations          string
 	TenantUsers          string
 	Tenants              string
+	UserPreferences      string
 	VehicleFavorites     string
 	VehicleFleetGroups   string
 	VehicleGeofences     string
@@ -23,6 +24,7 @@ var TableNames = struct {
 	Invitations:          "invitations",
 	TenantUsers:          "tenant_users",
 	Tenants:              "tenants",
+	UserPreferences:      "user_preferences",
 	VehicleFavorites:     "vehicle_favorites",
 	VehicleFleetGroups:   "vehicle_fleet_groups",
 	VehicleGeofences:     "vehicle_geofences",
