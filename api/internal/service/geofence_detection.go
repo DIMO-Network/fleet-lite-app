@@ -35,13 +35,16 @@ type PassSummary struct {
 	DwellS        int       `json:"dwellS"`
 	MaxSpeedKph   *float64  `json:"maxSpeedKph,omitempty"`
 	SpeedExceeded bool      `json:"speedExceeded"`
-	EntryLat      float64   `json:"entryLat"`
-	EntryLng      float64   `json:"entryLng"`
-	ExitLat       float64   `json:"exitLat"`
-	ExitLng       float64   `json:"exitLng"`
-	MaxSpeedLat   *float64  `json:"maxSpeedLat,omitempty"`
-	MaxSpeedLng   *float64  `json:"maxSpeedLng,omitempty"`
-	NumSamples    int       `json:"numSamples"`
+	// ObdRuntimeS is engine-on seconds during the pass (obdRunTime last-minus-
+	// first), distinct from dwell. Absent when unavailable/unreliable.
+	ObdRuntimeS *float64 `json:"obdRuntimeS,omitempty"`
+	EntryLat    float64  `json:"entryLat"`
+	EntryLng    float64  `json:"entryLng"`
+	ExitLat     float64  `json:"exitLat"`
+	ExitLng     float64  `json:"exitLng"`
+	MaxSpeedLat *float64 `json:"maxSpeedLat,omitempty"`
+	MaxSpeedLng *float64 `json:"maxSpeedLng,omitempty"`
+	NumSamples  int      `json:"numSamples"`
 }
 
 // GeofenceCrossing is one geofence a trip/window touched, with its passes.
@@ -67,6 +70,28 @@ type detectedPass struct {
 	maxSpeedLat *float64
 	maxSpeedLng *float64
 	numSamples  int
+	// first/last obdRunTime (run time since engine start, seconds) observed
+	// inside the pass, and how many readings were seen; the last-minus-first is
+	// the engine-on time during the pass.
+	firstObdRunTime *float64
+	lastObdRunTime  *float64
+	obdSamples      int
+}
+
+// engineRuntimeS returns the engine-on seconds accrued during the pass:
+// obdRunTime at the last in-pass sample minus the first. Nil when the vehicle
+// doesn't report obdRunTime, when there are fewer than two readings (a single
+// point can't measure elapsed runtime), or when the counter went backwards
+// (engine restarted mid-pass, resetting it) — the delta would be meaningless.
+func (p detectedPass) engineRuntimeS() *float64 {
+	if p.obdSamples < 2 || p.firstObdRunTime == nil || p.lastObdRunTime == nil {
+		return nil
+	}
+	d := *p.lastObdRunTime - *p.firstObdRunTime
+	if d < 0 {
+		return nil
+	}
+	return &d
 }
 
 // GeofenceDetectionService computes which geofences a vehicle's telemetry passed
@@ -214,6 +239,7 @@ func (s *GeofenceDetectionService) persistPasses(ctx context.Context, tokenID in
 			MaxSpeedLat: null.Float64FromPtr(p.maxSpeedLat),
 			MaxSpeedLNG: null.Float64FromPtr(p.maxSpeedLng),
 			NumSamples:  p.numSamples,
+			ObdRunTimeS: null.Float64FromPtr(p.engineRuntimeS()),
 		}
 		if err := m.Insert(ctx, writer, boil.Infer()); err != nil {
 			return fmt.Errorf("insert pass: %w", err)
@@ -301,6 +327,7 @@ func toPassSummary(r *dbmodels.GeofencePass) PassSummary {
 		MaxSpeedLat: r.MaxSpeedLat.Ptr(),
 		MaxSpeedLng: r.MaxSpeedLNG.Ptr(),
 		NumSamples:  r.NumSamples,
+		ObdRuntimeS: r.ObdRunTimeS.Ptr(),
 	}
 }
 
@@ -591,6 +618,14 @@ func detectPasses(samples []GeoSample, rings [][][]float64) []detectedPass {
 				cur.maxSpeed = &sp
 				cur.maxSpeedLat = &lat
 				cur.maxSpeedLng = &lng
+			}
+			if smp.ObdRunTimeS != nil {
+				rt := *smp.ObdRunTimeS
+				if cur.firstObdRunTime == nil {
+					cur.firstObdRunTime = &rt
+				}
+				cur.lastObdRunTime = &rt
+				cur.obdSamples++
 			}
 		} else if cur != nil {
 			passes = append(passes, *cur)

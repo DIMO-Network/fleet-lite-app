@@ -46,6 +46,12 @@ export interface GeofencePass {
     maxSpeedKph?: number;
     /** True when maxSpeedKph exceeds the geofence's current speed limit. */
     speedExceeded: boolean;
+    /**
+     * Engine-on seconds accrued during the pass (obdRunTime last-minus-first).
+     * Distinct from dwellS (wall-clock inside). Absent when the vehicle doesn't
+     * report obdRunTime or the reading is unreliable.
+     */
+    obdRuntimeS?: number;
     entryLat: number;
     entryLng: number;
     exitLat: number;

@@ -39,6 +39,7 @@ type GeofencePass struct {
 	MaxSpeedLNG null.Float64 `boil:"max_speed_lng" json:"max_speed_lng,omitempty" toml:"max_speed_lng" yaml:"max_speed_lng,omitempty"`
 	NumSamples  int          `boil:"num_samples" json:"num_samples" toml:"num_samples" yaml:"num_samples"`
 	CreatedAt   time.Time    `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
+	ObdRunTimeS null.Float64 `boil:"obd_run_time_s" json:"obd_run_time_s,omitempty" toml:"obd_run_time_s" yaml:"obd_run_time_s,omitempty"`
 
 	R *geofencePassR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L geofencePassL  `boil:"-" json:"-" toml:"-" yaml:"-"`
@@ -60,6 +61,7 @@ var GeofencePassColumns = struct {
 	MaxSpeedLNG string
 	NumSamples  string
 	CreatedAt   string
+	ObdRunTimeS string
 }{
 	GeofenceID:  "geofence_id",
 	TenantID:    "tenant_id",
@@ -76,6 +78,7 @@ var GeofencePassColumns = struct {
 	MaxSpeedLNG: "max_speed_lng",
 	NumSamples:  "num_samples",
 	CreatedAt:   "created_at",
+	ObdRunTimeS: "obd_run_time_s",
 }
 
 var GeofencePassTableColumns = struct {
@@ -94,6 +97,7 @@ var GeofencePassTableColumns = struct {
 	MaxSpeedLNG string
 	NumSamples  string
 	CreatedAt   string
+	ObdRunTimeS string
 }{
 	GeofenceID:  "geofence_passes.geofence_id",
 	TenantID:    "geofence_passes.tenant_id",
@@ -110,6 +114,7 @@ var GeofencePassTableColumns = struct {
 	MaxSpeedLNG: "geofence_passes.max_speed_lng",
 	NumSamples:  "geofence_passes.num_samples",
 	CreatedAt:   "geofence_passes.created_at",
+	ObdRunTimeS: "geofence_passes.obd_run_time_s",
 }
 
 // Generated where
@@ -243,6 +248,7 @@ var GeofencePassWhere = struct {
 	MaxSpeedLNG whereHelpernull_Float64
 	NumSamples  whereHelperint
 	CreatedAt   whereHelpertime_Time
+	ObdRunTimeS whereHelpernull_Float64
 }{
 	GeofenceID:  whereHelperstring{field: "\"geofence_passes\".\"geofence_id\""},
 	TenantID:    whereHelperstring{field: "\"geofence_passes\".\"tenant_id\""},
@@ -259,6 +265,7 @@ var GeofencePassWhere = struct {
 	MaxSpeedLNG: whereHelpernull_Float64{field: "\"geofence_passes\".\"max_speed_lng\""},
 	NumSamples:  whereHelperint{field: "\"geofence_passes\".\"num_samples\""},
 	CreatedAt:   whereHelpertime_Time{field: "\"geofence_passes\".\"created_at\""},
+	ObdRunTimeS: whereHelpernull_Float64{field: "\"geofence_passes\".\"obd_run_time_s\""},
 }
 
 // GeofencePassRels is where relationship names are stored.
@@ -298,9 +305,9 @@ func (r *geofencePassR) GetGeofence() *Geofence {
 type geofencePassL struct{}
 
 var (
-	geofencePassAllColumns            = []string{"geofence_id", "tenant_id", "token_id", "entered_at", "exited_at", "dwell_s", "max_speed_kph", "entry_lat", "entry_lng", "exit_lat", "exit_lng", "max_speed_lat", "max_speed_lng", "num_samples", "created_at"}
+	geofencePassAllColumns            = []string{"geofence_id", "tenant_id", "token_id", "entered_at", "exited_at", "dwell_s", "max_speed_kph", "entry_lat", "entry_lng", "exit_lat", "exit_lng", "max_speed_lat", "max_speed_lng", "num_samples", "created_at", "obd_run_time_s"}
 	geofencePassColumnsWithoutDefault = []string{"geofence_id", "tenant_id", "token_id", "entered_at", "exited_at", "dwell_s", "entry_lat", "entry_lng", "exit_lat", "exit_lng", "num_samples"}
-	geofencePassColumnsWithDefault    = []string{"max_speed_kph", "max_speed_lat", "max_speed_lng", "created_at"}
+	geofencePassColumnsWithDefault    = []string{"max_speed_kph", "max_speed_lat", "max_speed_lng", "created_at", "obd_run_time_s"}
 	geofencePassPrimaryKeyColumns     = []string{"geofence_id", "token_id", "entered_at"}
 	geofencePassGeneratedColumns      = []string{}
 )
