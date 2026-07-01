@@ -1,3 +1,5 @@
+import { ApiService } from './api-service.ts';
+
 export type UnitSystem = 'imperial' | 'metric';
 export type Locale = 'en' | 'es';
 
@@ -19,6 +21,10 @@ const STORAGE_KEY = 'fleet-lite:units';
 const LOCALE_KEY = 'fleet-lite:locale';
 const TRIP_MECHANISM_KEY = 'fleet-lite:trip-mechanism';
 const EVENT_NAME = 'fleet-lite-prefs-changed';
+const PREFS_ENDPOINT = '/me/preferences';
+
+/** The explicitly-set preferences this browser mirrors to the backend. */
+type StoredPrefs = Partial<Record<'units' | 'locale' | 'tripMechanism', string>>;
 
 const VALID_TRIP_MECHANISMS: readonly TripMechanism[] = [
     'auto', 'ignitionDetection', 'frequencyAnalysis', 'changePointDetection', 'idling', 'refuel', 'recharge',
@@ -45,15 +51,16 @@ export class PrefsService {
         return PrefsService._instance;
     }
 
-    /** Returns the current preference (defaults to imperial for US-centric UX). */
+    /** Returns the current preference (defaults to metric; explicit imperial is respected). */
     public getUnits(): UnitSystem {
         const v = localStorage.getItem(STORAGE_KEY);
-        return v === 'metric' ? 'metric' : 'imperial';
+        return v === 'imperial' ? 'imperial' : 'metric';
     }
 
     public setUnits(u: UnitSystem): void {
         localStorage.setItem(STORAGE_KEY, u);
         window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: { units: u } }));
+        void this.pushToServer();
     }
 
     public toggleUnits(): UnitSystem {
@@ -75,6 +82,7 @@ export class PrefsService {
     public setLocale(l: Locale): void {
         localStorage.setItem(LOCALE_KEY, l);
         window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: { locale: l } }));
+        void this.pushToServer();
     }
 
     public toggleLocale(): Locale {
@@ -92,6 +100,70 @@ export class PrefsService {
     public setTripMechanism(m: TripMechanism): void {
         localStorage.setItem(TRIP_MECHANISM_KEY, m);
         window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: { tripMechanism: m } }));
+        void this.pushToServer();
+    }
+
+    /** The explicitly-set preferences in localStorage (the set the server mirrors). */
+    private storedPrefs(): StoredPrefs {
+        const p: StoredPrefs = {};
+        const u = localStorage.getItem(STORAGE_KEY);
+        if (u) p.units = u;
+        const l = localStorage.getItem(LOCALE_KEY);
+        if (l) p.locale = l;
+        const t = localStorage.getItem(TRIP_MECHANISM_KEY);
+        if (t) p.tripMechanism = t;
+        return p;
+    }
+
+    /**
+     * Best-effort write-through of the current preferences to the backend. No-op
+     * when unauthenticated (no token) — anonymous users stay localStorage-only.
+     */
+    private async pushToServer(): Promise<void> {
+        if (!localStorage.getItem('token')) return;
+        try {
+            await ApiService.getInstance().put(PREFS_ENDPOINT, this.storedPrefs());
+        } catch {
+            // best-effort; localStorage remains the local source of truth
+        }
+    }
+
+    /**
+     * Load the wallet's server-stored preferences and reconcile with this
+     * browser: server wins, and any local-only keys the server lacked are
+     * backfilled up (migrating this browser's existing choices). Applied to
+     * localStorage and broadcast so components re-render. Call once per session
+     * after auth (from app-root). Best-effort — offline keeps working locally.
+     */
+    public async hydrateFromServer(): Promise<void> {
+        if (!localStorage.getItem('token')) return;
+        let server: StoredPrefs;
+        try {
+            server = await ApiService.getInstance().get<StoredPrefs>(PREFS_ENDPOINT);
+        } catch {
+            return; // unreachable / unauthorized — stay on localStorage
+        }
+        const merged: StoredPrefs = { ...this.storedPrefs(), ...server }; // server precedence
+
+        let changed = false;
+        const apply = (key: string, next: string | undefined) => {
+            if (next && next !== localStorage.getItem(key)) {
+                localStorage.setItem(key, next);
+                changed = true;
+            }
+        };
+        apply(STORAGE_KEY, merged.units);
+        apply(LOCALE_KEY, merged.locale);
+        apply(TRIP_MECHANISM_KEY, merged.tripMechanism);
+
+        // Backfill: this browser had keys the server didn't → push the merge up.
+        const keys: (keyof StoredPrefs)[] = ['units', 'locale', 'tripMechanism'];
+        if (keys.some(k => merged[k] !== undefined && merged[k] !== server[k])) {
+            void this.pushToServer();
+        }
+        if (changed) {
+            window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: { hydrated: true } }));
+        }
     }
 
     /**

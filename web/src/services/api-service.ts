@@ -94,6 +94,20 @@ export class ApiService {
         return parseJson<T>(res);
     }
 
+    public async put<T>(endpoint: string, body: unknown, auth: boolean = true): Promise<T> {
+        const res = await fetch(this.buildUrl(endpoint), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...this.authHeader(auth) },
+            body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+            const text = await safeText(res);
+            this.handle401IfAuthed(res.status, auth, text);
+            throw new ApiError(res.status, text);
+        }
+        return parseJson<T>(res);
+    }
+
     public async delete<T>(endpoint: string, auth: boolean = true): Promise<T> {
         const res = await fetch(this.buildUrl(endpoint), {
             method: 'DELETE',

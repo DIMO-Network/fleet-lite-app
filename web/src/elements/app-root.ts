@@ -80,6 +80,15 @@ export class AppRoot extends LitElement {
         // initial paint is already localized (lit-localize runtime mode).
         const locale = PrefsService.getInstance().getLocale();
         if (locale === 'es') await setLocale(locale);
+        // Pull this wallet's server-stored preferences (units/locale/…) and
+        // reconcile with this browser, so choices follow the user across
+        // devices. Non-blocking; reload only if the locale changed (same as a
+        // manual language switch) — units and other prefs re-render live.
+        void PrefsService.getInstance().hydrateFromServer().then(() => {
+            if (PrefsService.getInstance().getLocale() !== locale) {
+                window.location.reload();
+            }
+        });
         window.addEventListener('hashchange', this.boundOnHashChange);
         this.onHashChange();
     }
