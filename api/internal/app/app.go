@@ -164,8 +164,9 @@ func App(
 	tenantApp.Get("/telemetry/:tokenID/replay", telemetryCtrl.GetTripReplay)
 
 	// Glovebox / documents
+	plateSvc := service.NewLicensePlateSyncService(logger, pdb, fetchAPI, authProvider)
 	documentsCtrl := controllers.NewDocumentsController(
-		logger, settings, vehicleSvc, authProvider, extractAPI, attestSvc, fetchAPI,
+		logger, settings, vehicleSvc, authProvider, extractAPI, attestSvc, fetchAPI, plateSvc,
 	)
 	tenantApp.Post("/documents/extract", documentsCtrl.ExtractDocument)
 	tenantApp.Get("/documents/vin-lookup", documentsCtrl.LookupVIN)

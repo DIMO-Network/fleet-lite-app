@@ -27,6 +27,7 @@ type DocumentsController struct {
 	extractAPI   service.ExtractAPIService
 	attestSvc    service.AttestService
 	fetchAPI     *gateway.FetchAPI
+	plateSvc     *service.LicensePlateSyncService
 }
 
 func NewDocumentsController(
@@ -37,6 +38,7 @@ func NewDocumentsController(
 	extractAPI service.ExtractAPIService,
 	attestSvc service.AttestService,
 	fetchAPI *gateway.FetchAPI,
+	plateSvc *service.LicensePlateSyncService,
 ) *DocumentsController {
 	return &DocumentsController{
 		logger:       logger,
@@ -46,6 +48,7 @@ func NewDocumentsController(
 		extractAPI:   extractAPI,
 		attestSvc:    attestSvc,
 		fetchAPI:     fetchAPI,
+		plateSvc:     plateSvc,
 	}
 }
 
@@ -167,6 +170,13 @@ func (d *DocumentsController) AttestDocument(c *fiber.Ctx) error {
 	if err != nil {
 		d.logger.Err(err).Int64("tokenID", req.TokenID).Msg("attest failed")
 		return fiber.NewError(fiber.StatusBadGateway, "attestation failed: "+err.Error())
+	}
+	if req.Category == service.VehicleRegistrationCloudEventType {
+		go func() {
+			if _, err := d.plateSvc.SyncVehicle(context.Background(), tenant, req.TokenID, service.SyncOpts{}); err != nil {
+				d.logger.Warn().Err(err).Int64("tokenID", req.TokenID).Msg("post-upload plate/VIN sync failed")
+			}
+		}()
 	}
 	return c.JSON(result)
 }
