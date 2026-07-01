@@ -22,7 +22,7 @@
 'hda00449e21a287da': html`La licencia de desarrollador de fleet-lite <code>${0}</code>
                                         necesita permisos SACD sobre este vehículo antes de que se pueda cargar la lista de documentos.
                                         Los documentos que suba aquí igual se guardan — simplemente aún no puede listarlos ni descargarlos.`,
-'last-seen-prefix': `Visto por última vez`,
+'last-seen-prefix': `Visto`,
 's00a1c2a73e54ca2a': `No hay viajes en este período.`,
 's019255e2c936db36': `ej. Costa Este`,
 's02795b9b8f085e7b': `Guantera`,
@@ -349,12 +349,12 @@
 's4280e090367d36bb': `Copy API key`,
 's65d89f28a70694dd': `Save your API key now — it cannot be retrieved after this step.`,
 's51cf5795e7631ded': `No telemetry access`,
-'s639accf775aa8ef0': `No integration`,
+'se0ebd1b6c2f24183': `Upload vehicle documents to identify this vehicle`,
 's3cf3a9dbc14e94f6': str`${0} vehicles`,
 's7b7163270e57e8b4': `Refresh`,
 's160db8e7aaf41fd7': `No vehicles found.`,
 'sad3e3c8146fc920f': `Status`,
-'s03970aa76a09982d': `Integration`,
+'s7468e87263dfff7e': `Identifier`,
 's9b38dee53cc7751c': `Last Location`,
 'se68398e3c2c760b2': `Token`,
     };

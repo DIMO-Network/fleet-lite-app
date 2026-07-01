@@ -19,3 +19,11 @@ jobs:
       - name: lint
         run: npm run lint:check
         working-directory: web
+      - name: localize drift check
+        run: |
+          npm run localize
+          if ! git diff --exit-code -- xliff src/generated; then
+            echo "::error::Localization is out of sync. Run 'npm run localize' in web/ and commit the changes to xliff/ and src/generated/."
+            exit 1
+          fi
+        working-directory: web
