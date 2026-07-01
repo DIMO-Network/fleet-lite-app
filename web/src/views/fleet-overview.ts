@@ -13,6 +13,11 @@ import { ApiService } from '../services/api-service.ts';
 import { TelemetryService } from '../services/telemetry-service.ts';
 import { FleetCache } from '../services/fleet-cache.ts';
 import { Vehicle, VehicleCard, VehiclesResponse, VehicleGroupRef } from '../types/vehicle.ts';
+import {
+    createFleetMap, applyTileTheme, createVehicleClusterGroup,
+    seedLocationsFromDb, fetchFleetLocations,
+    VEHICLE_MARKER_STYLE, VEHICLE_MARKER_STYLE_HOVER, VEHICLE_MARKER_STYLE_SELECTED, VEHICLE_MARKER_STYLE_HIDDEN,
+} from '../utils/fleet-map.ts';
 import { brandLogoUrl } from '../utils/brand-logo.ts';
 import { contrastingBadgeBackground } from '../utils/logo-color.ts';
 import '../elements/vehicle-quick-view.ts';
@@ -41,18 +46,9 @@ export class FleetOverviewView extends LitElement {
     @state() private brokenLogos = new Set<string>();
     /** Per-vehicle badge background colors, picked to contrast with the loaded logo. */
     @state() private logoBadgeColors = new Map<string, string>();
-    // Progressive location loading: one tokenId per request, three requests
-    // in flight. Each response carries exactly one vehicle, so every marker
-    // paints the moment its location resolves — no batch ever waits on a
-    // slower neighbor.
-    private static readonly LOCATIONS_CHUNK_SIZE = 1;
-    private static readonly LOCATIONS_PARALLEL = 3;
-    // Don't re-pull a vehicle's location from telemetry-api if we fetched it
-    // within this window — render it from the DB cache instead. The backend
-    // stamps location_pulled_at on real fetches. See docs/LOCATION_REFRESH_PLAN.md.
-    private static readonly LOCATION_FRESH_WINDOW_MS = 5 * 60 * 1000;
     // Incremented per load; lets stale in-flight chunk results from a
-    // superseded load (tenant switch, manual refresh) be discarded.
+    // superseded load (tenant switch, manual refresh) be discarded. The
+    // progressive-loading tuning + freshness window now live in fleet-map.ts.
     private loadGeneration = 0;
     // Vehicle shown in the quick-view overlay (null = closed). Opened by
     // clicking a marker or a list card; full details remain a click away
@@ -81,24 +77,10 @@ export class FleetOverviewView extends LitElement {
         this.updateTileLayer(theme);
     };
 
-    private buildTileLayer(theme: 'dark' | 'light'): L.TileLayer {
-        const url = theme === 'light'
-            ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
-            : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
-        return L.tileLayer(url, {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
-            subdomains: 'abcd',
-            maxZoom: 19,
-        });
-    }
-
     private updateTileLayer(theme: 'dark' | 'light'): void {
         if (!this.leafletMap) return;
-        this.tileLayer?.remove();
-        this.tileLayer = this.buildTileLayer(theme);
-        this.tileLayer.addTo(this.leafletMap);
         const mapEl = this.renderRoot.querySelector<HTMLElement>('.map');
-        if (mapEl) mapEl.classList.toggle('dark-tiles', theme === 'dark');
+        this.tileLayer = applyTileTheme(this.leafletMap, this.tileLayer, mapEl, theme);
     }
 
     private centerMap() {
@@ -146,10 +128,10 @@ export class FleetOverviewView extends LitElement {
     // Small dots by default — fleets can run to thousands of vehicles, so the
     // map must stay readable at density. Hover grows the dot to make it an
     // easier click target; selection grows it further and recolors.
-    private static readonly MARKER_STYLE = { radius: 4, fillColor: '#69dbad', color: '#ffffff', weight: 1.5, opacity: 0.9, fillOpacity: 0.85 };
-    private static readonly MARKER_STYLE_HOVER = { radius: 8, fillColor: '#69dbad', color: '#ffffff', weight: 2, opacity: 1, fillOpacity: 0.95 };
-    private static readonly MARKER_STYLE_SELECTED = { radius: 9, fillColor: '#f5c84b', color: '#ffffff', weight: 2.5, opacity: 1, fillOpacity: 0.95 };
-    private static readonly MARKER_STYLE_HIDDEN = { radius: 4, fillColor: '#808080', color: '#ffffff', weight: 1, opacity: 0.35, fillOpacity: 0.35 };
+    private static readonly MARKER_STYLE = VEHICLE_MARKER_STYLE;
+    private static readonly MARKER_STYLE_HOVER = VEHICLE_MARKER_STYLE_HOVER;
+    private static readonly MARKER_STYLE_SELECTED = VEHICLE_MARKER_STYLE_SELECTED;
+    private static readonly MARKER_STYLE_HIDDEN = VEHICLE_MARKER_STYLE_HIDDEN;
 
     private openQuickView(v: VehicleCard) {
         // Restore the previously selected marker, highlight the new one. Any
@@ -275,18 +257,6 @@ export class FleetOverviewView extends LitElement {
         return [...cards].sort((a, b) => Number(!!b.isFavorite) - Number(!!a.isFavorite));
     }
 
-    /** Seed map coordinates from the DB's cached last-GPS-fix so markers paint
-     * instantly on first load, before the live telemetry fan-out reconciles them. */
-    private seedLocationsFromDb(vehicles: Vehicle[]): Record<string, { lat: number; lon: number }> {
-        const seed: Record<string, { lat: number; lon: number }> = {};
-        for (const v of vehicles) {
-            if (typeof v.lastLat === 'number' && typeof v.lastLon === 'number') {
-                seed[String(v.tokenId)] = { lat: v.lastLat, lon: v.lastLon };
-            }
-        }
-        return seed;
-    }
-
     /** Render an ISO timestamp as a localized "last seen 5 min ago" string,
      * picking the largest sensible unit. Empty for an unparseable/future time. */
     private formatLastSeen(iso?: string): string {
@@ -396,7 +366,7 @@ export class FleetOverviewView extends LitElement {
         // Paint markers immediately from the DB's cached last-GPS-fix so the map
         // isn't blank while the live per-vehicle fan-out (below) streams in; the
         // fan-out then overwrites these with fresh coordinates.
-        this.lastLocations = this.seedLocationsFromDb(rawVehicles);
+        this.lastLocations = seedLocationsFromDb(rawVehicles);
         if (Object.keys(this.lastLocations).length > 0) {
             this.placeMarkers();
             this.centerMap();
@@ -420,48 +390,28 @@ export class FleetOverviewView extends LitElement {
         // resolves — a 100+ vehicle fleet paints in seconds instead of waiting
         // for one monolithic call. Per-vehicle JWT checks on the backend
         // determine which vehicles the dev license has SACD access to.
-        const gen = ++this.loadGeneration;
         // Partial refresh: only fan out for vehicles whose cached location is
         // stale (older than the window, or never pulled). Fresh vehicles are
         // already painted from the DB seed above, so a fully-fresh fleet makes
         // zero telemetry calls. A manual refresh (force) re-pulls everything.
-        const now = Date.now();
-        const isStale = (v: Vehicle) =>
-            force || !v.locationPulledAt ||
-            now - new Date(v.locationPulledAt).getTime() >= FleetOverviewView.LOCATION_FRESH_WINDOW_MS;
-        const ids = rawVehicles.filter(isStale).map((v) => String(v.tokenId));
-        const chunks: string[][] = [];
-        for (let i = 0; i < ids.length; i += FleetOverviewView.LOCATIONS_CHUNK_SIZE) {
-            chunks.push(ids.slice(i, i + FleetOverviewView.LOCATIONS_CHUNK_SIZE));
-        }
-
+        // The loader streams results per chunk; we frame the map on the first.
+        const gen = ++this.loadGeneration;
         const noPermSet = new Set<string>();
-        let nextChunk = 0;
         let fittedOnce = false;
-        const worker = async () => {
-            while (nextChunk < chunks.length) {
-                if (gen !== this.loadGeneration) return; // superseded by a newer load
-                const batch = chunks[nextChunk++];
-                try {
-                    const res = await TelemetryService.getInstance().fleetLocations(force, batch);
-                    if (gen !== this.loadGeneration) return;
-                    for (const id of res.noPermissions ?? []) noPermSet.add(id);
-                    Object.assign(this.lastLocations, res.locations);
-                    this.addMarkers(res.locations);
-                    // Frame the map as soon as anything is placed; the final
-                    // fit below covers the full set.
-                    if (!fittedOnce && this.markers.size > 0) {
-                        fittedOnce = true;
-                        this.centerMap();
-                    }
-                } catch {
-                    // Batch failed (network) — keep going; map shows what it has.
+        await fetchFleetLocations({
+            vehicles: rawVehicles,
+            force,
+            isCurrent: () => gen === this.loadGeneration,
+            onNoPermissions: (ids) => ids.forEach((id) => noPermSet.add(id)),
+            onBatch: (locations) => {
+                Object.assign(this.lastLocations, locations);
+                this.addMarkers(locations);
+                if (!fittedOnce && this.markers.size > 0) {
+                    fittedOnce = true;
+                    this.centerMap();
                 }
-            }
-        };
-        await Promise.all(
-            Array.from({ length: Math.min(FleetOverviewView.LOCATIONS_PARALLEL, chunks.length) }, () => worker()),
-        );
+            },
+        });
         if (gen !== this.loadGeneration) return;
 
         // Mark vehicles where JWT exchange failed (no SACD permissions).
@@ -538,44 +488,14 @@ export class FleetOverviewView extends LitElement {
         }
     }
 
-    private clusterIcon(count: number): L.DivIcon {
-        const size = count < 10 ? 32 : count < 50 ? 40 : 48;
-        const total = size + 12;
-        return L.divIcon({
-            html: `<div style="width:${size}px;height:${size}px;background:#69dbad;border:2px solid #1a2332;border-radius:50%;box-shadow:0 0 0 6px rgba(105,219,173,0.25);display:flex;align-items:center;justify-content:center;font-size:${size < 40 ? 11 : 13}px;font-weight:600;color:#1a2332;">${count}</div>`,
-            className: '',
-            iconSize: [total, total],
-            iconAnchor: [total / 2, total / 2],
-        });
-    }
-
     override firstUpdated() {
         const el = this.renderRoot.querySelector<HTMLElement>('.map');
         if (!el) return;
-        // Bound latitude to Web Mercator's valid range but leave longitude open so
-        // panning across the antimeridian wraps into the next copy of the world.
-        const worldBounds = L.latLngBounds([-85.051129, -Infinity], [85.051129, Infinity]);
-        this.leafletMap = L.map(el, {
-            zoomControl: false,
-            attributionControl: true,
-            maxBounds: worldBounds,
-            maxBoundsViscosity: 1.0,
-            worldCopyJump: true,
-        }).setView([39.5, -98.35], 4);
-        this.tileLayer = this.buildTileLayer(themeService.current);
-        this.tileLayer.addTo(this.leafletMap);
-        const mapEl = this.renderRoot.querySelector<HTMLElement>('.map');
-        if (mapEl && themeService.current === 'dark') mapEl.classList.add('dark-tiles');
+        this.leafletMap = createFleetMap(el, { zoomControl: false });
+        this.tileLayer = applyTileTheme(this.leafletMap, null, el, themeService.current);
         window.addEventListener('theme-change', this.boundOnThemeChange);
 
-        this.clusterGroup = L.markerClusterGroup({
-            iconCreateFunction: (cluster) => this.clusterIcon(cluster.getChildCount()),
-            showCoverageOnHover: false,
-            zoomToBoundsOnClick: true,
-            spiderfyOnMaxZoom: true,
-            maxClusterRadius: 60,
-            animate: true,
-        });
+        this.clusterGroup = createVehicleClusterGroup();
         this.clusterGroup.addTo(this.leafletMap);
 
         this.resizeObserver = new ResizeObserver(() => this.updateMinZoom());

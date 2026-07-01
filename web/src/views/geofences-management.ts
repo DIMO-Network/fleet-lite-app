@@ -3,6 +3,7 @@ import { msg, str } from '@lit/localize';
 import { customElement, property, state } from 'lit/decorators.js';
 import L from 'leaflet';
 import leafletCss from 'leaflet/dist/leaflet.css?inline';
+import markerClusterCss from 'leaflet.markercluster/dist/MarkerCluster.css?inline';
 import { sharedStyles } from '../global-styles.ts';
 import { themeService } from '../services/theme-service.ts';
 import { ApiService } from '../services/api-service.ts';
@@ -12,6 +13,11 @@ import { Geofence, GeoJSONPolygon } from '../types/geofence.ts';
 import { FleetGroup } from '../types/group.ts';
 import { Vehicle, VehiclesResponse } from '../types/vehicle.ts';
 import { formatArea } from '../utils/geo.ts';
+import {
+    createFleetMap, applyTileTheme, createVehicleClusterGroup, createVehicleMarker,
+    seedLocationsFromDb, fetchFleetLocations, LatLon,
+    VEHICLE_MARKER_STYLE, VEHICLE_MARKER_STYLE_HOVER,
+} from '../utils/fleet-map.ts';
 import '../elements/create-geofence-modal.ts';
 import '../elements/manage-geofence-vehicles-modal.ts';
 import '../elements/geofence-activity-modal.ts';
@@ -41,10 +47,18 @@ export class GeofencesManagementView extends LitElement {
     @state() private activity: Geofence | null = null;
     @state() private confirmingDeleteId: string | null = null;
     @state() private selectedId: string | null = null;
+    // Optional overlay of live vehicle GPS dots (off by default). Geofences stay
+    // the zoom focus — turning this on never refits the map.
+    @state() private showVehicleLocations = false;
 
     private leafletMap: L.Map | null = null;
     private tileLayer: L.TileLayer | null = null;
     private geofenceLayers = new Map<string, L.Polygon>();
+    private vehicleLayer: L.MarkerClusterGroup | null = null;
+    private vehicleMarkers = new Map<string, L.CircleMarker>();
+    // Bumped per vehicle-location load; abandons stale in-flight fan-out when the
+    // overlay is toggled off or reloaded.
+    private vehLoadGeneration = 0;
     private drawPoints: L.LatLng[] = [];
     private drawLine: L.Polyline | null = null;
     private drawVertices: L.LayerGroup | null = null;
@@ -64,50 +78,91 @@ export class GeofencesManagementView extends LitElement {
     override firstUpdated() {
         const el = this.renderRoot.querySelector<HTMLElement>('.map');
         if (!el) return;
-        const worldBounds = L.latLngBounds([-85.051129, -Infinity], [85.051129, Infinity]);
-        this.leafletMap = L.map(el, {
-            zoomControl: true,
-            attributionControl: true,
-            maxBounds: worldBounds,
-            maxBoundsViscosity: 1.0,
-            worldCopyJump: true,
-        }).setView([39.5, -98.35], 4);
-        this.tileLayer = this.buildTileLayer(themeService.current);
-        this.tileLayer.addTo(this.leafletMap);
-        if (themeService.current === 'dark') el.classList.add('dark-tiles');
+        this.leafletMap = createFleetMap(el, { zoomControl: true });
+        this.tileLayer = applyTileTheme(this.leafletMap, null, el, themeService.current);
         window.addEventListener('theme-change', this.boundOnThemeChange);
         // Data may have arrived before the map existed — draw it now.
         this.renderGeofences();
+        if (this.showVehicleLocations) void this.loadVehicleLocations();
     }
 
     override disconnectedCallback() {
         window.removeEventListener('theme-change', this.boundOnThemeChange);
         this.leafletMap?.off('click', this.boundMapClick);
         this.geofenceLayers.clear();
+        this.vehLoadGeneration++;
+        this.vehicleMarkers.clear();
+        this.vehicleLayer = null;
         this.leafletMap?.remove();
         this.leafletMap = null;
         this.tileLayer = null;
         super.disconnectedCallback();
     }
 
-    private buildTileLayer(theme: 'dark' | 'light'): L.TileLayer {
-        const url = theme === 'light'
-            ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
-            : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
-        return L.tileLayer(url, {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
-            subdomains: 'abcd',
-            maxZoom: 19,
-        });
-    }
-
     private updateTileLayer(theme: 'dark' | 'light'): void {
         if (!this.leafletMap) return;
-        this.tileLayer?.remove();
-        this.tileLayer = this.buildTileLayer(theme);
-        this.tileLayer.addTo(this.leafletMap);
         const el = this.renderRoot.querySelector<HTMLElement>('.map');
-        el?.classList.toggle('dark-tiles', theme === 'dark');
+        this.tileLayer = applyTileTheme(this.leafletMap, this.tileLayer, el, theme);
+    }
+
+    // ---- vehicle GPS overlay --------------------------------------------------
+
+    /** Toggle the live vehicle GPS dots. On: seed from the DB and background-
+     *  refresh via telemetry (same flow as the vehicle map). Off: drop the layer
+     *  and abandon any in-flight fan-out. Never refits — geofences own the zoom. */
+    private toggleVehicleLocations() {
+        this.showVehicleLocations = !this.showVehicleLocations;
+        if (this.showVehicleLocations) {
+            void this.loadVehicleLocations();
+        } else {
+            this.vehLoadGeneration++;
+            this.vehicleLayer?.remove();
+            this.vehicleLayer = null;
+            this.vehicleMarkers.clear();
+        }
+    }
+
+    private vehicleTitle(v: Vehicle): string {
+        const d = v.definition;
+        const parts = [d.year ? String(d.year) : '', d.make, d.model].filter(Boolean);
+        return parts.length ? parts.join(' ') : `Vehicle #${v.tokenId}`;
+    }
+
+    private async loadVehicleLocations() {
+        if (!this.leafletMap) return;
+        if (!this.vehicleLayer) {
+            this.vehicleLayer = createVehicleClusterGroup();
+            this.vehicleLayer.addTo(this.leafletMap);
+        }
+        const gen = ++this.vehLoadGeneration;
+        // First paint from the DB's cached last-GPS-fix (already loaded with the
+        // geofences), then background-refresh the stale ones via telemetry.
+        this.addVehicleMarkers(seedLocationsFromDb(this.vehicles));
+        await fetchFleetLocations({
+            vehicles: this.vehicles,
+            isCurrent: () => gen === this.vehLoadGeneration && this.showVehicleLocations,
+            onBatch: (locations) => this.addVehicleMarkers(locations),
+        });
+        if (gen === this.vehLoadGeneration) this.vehicleLayer?.refreshClusters();
+    }
+
+    /** Add new vehicle dots or move existing ones in place. Never fits bounds —
+     *  the geofences remain the map's focus. */
+    private addVehicleMarkers(locations: Record<string, LatLon>) {
+        if (!this.vehicleLayer) return;
+        const titleMap = new Map(this.vehicles.map((v) => [String(v.tokenId), this.vehicleTitle(v)]));
+        for (const [tokenId, coords] of Object.entries(locations)) {
+            const existing = this.vehicleMarkers.get(tokenId);
+            if (existing) {
+                existing.setLatLng([coords.lat, coords.lon]);
+                continue;
+            }
+            const marker = createVehicleMarker(coords.lat, coords.lon, titleMap.get(tokenId) ?? `Vehicle ${tokenId}`);
+            marker.on('mouseover', () => marker.setStyle(VEHICLE_MARKER_STYLE_HOVER));
+            marker.on('mouseout', () => marker.setStyle(VEHICLE_MARKER_STYLE));
+            this.vehicleLayer.addLayer(marker);
+            this.vehicleMarkers.set(tokenId, marker);
+        }
     }
 
     private async load() {
@@ -284,6 +339,7 @@ export class GeofencesManagementView extends LitElement {
     static styles = [
         sharedStyles,
         unsafeCSS(leafletCss),
+        unsafeCSS(markerClusterCss),
         css`
             :host { display: flex; flex-direction: column; width: 100%; height: 100%; background: var(--background); }
             header.top-bar {
@@ -300,6 +356,17 @@ export class GeofencesManagementView extends LitElement {
                 font: var(--type-label-caps); letter-spacing: 0.05em; text-transform: uppercase; font-weight: 700; cursor: pointer;
             }
             .new-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+            .top-actions { display: flex; align-items: center; gap: 10px; }
+            .toggle-btn {
+                display: flex; align-items: center; gap: 8px;
+                background: transparent; color: var(--on-surface-variant);
+                border: 1px solid var(--outline-variant); padding: 10px 16px; border-radius: var(--radius-md);
+                font: var(--type-label-caps); letter-spacing: 0.05em; text-transform: uppercase; font-weight: 700; cursor: pointer;
+            }
+            .toggle-btn:hover:not(:disabled):not(.active) { color: var(--primary); border-color: var(--primary); }
+            .toggle-btn.active { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+            .toggle-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+            .toggle-btn .material-symbols-outlined { font-size: 18px; }
 
             .body { position: relative; flex: 1; min-height: 0; }
             .map { position: absolute; inset: 0; z-index: 0; }
@@ -421,9 +488,20 @@ export class GeofencesManagementView extends LitElement {
         return html`
             <header class="top-bar">
                 <h2>${msg('Geofences')}</h2>
-                <button class="new-btn" ?disabled=${this.drawing} @click=${() => this.startDraw()}>
-                    <span class="material-symbols-outlined">add_location_alt</span> ${msg('New geofence')}
-                </button>
+                <div class="top-actions">
+                    <button
+                        class=${this.showVehicleLocations ? 'toggle-btn active' : 'toggle-btn'}
+                        ?disabled=${this.loading}
+                        aria-pressed=${this.showVehicleLocations}
+                        @click=${() => this.toggleVehicleLocations()}
+                    >
+                        <span class="material-symbols-outlined">${this.showVehicleLocations ? 'location_on' : 'location_off'}</span>
+                        ${msg('Vehicles')}
+                    </button>
+                    <button class="new-btn" ?disabled=${this.drawing} @click=${() => this.startDraw()}>
+                        <span class="material-symbols-outlined">add_location_alt</span> ${msg('New geofence')}
+                    </button>
+                </div>
             </header>
 
             <div class="body">
