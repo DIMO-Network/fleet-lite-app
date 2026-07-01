@@ -122,7 +122,7 @@ export class GeofenceActivityModal extends LitElement {
                 background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px);
             }
             .card {
-                width: 100%; max-width: 640px; max-height: 82vh;
+                width: 100%; max-width: 640px; max-height: calc(100vh - 40px);
                 background: var(--surface-container); border: 1px solid var(--outline-variant);
                 border-radius: var(--radius-lg); padding: 24px; color: var(--on-surface);
                 position: relative; display: flex; flex-direction: column;
@@ -191,12 +191,6 @@ export class GeofenceActivityModal extends LitElement {
                 padding: 12px; background: rgba(255, 180, 171, 0.04);
                 border: 1px solid rgba(255, 180, 171, 0.2); color: var(--error);
                 border-radius: var(--radius-md); font: var(--type-body-sm); margin-top: 12px;
-            }
-            .footer { display: flex; justify-content: flex-end; margin-top: 16px; }
-            .footer button {
-                padding: 10px 18px; border-radius: var(--radius-md);
-                font: var(--type-label-caps); letter-spacing: 0.05em; text-transform: uppercase; font-weight: 700;
-                border: 1px solid transparent; background: var(--primary); color: var(--on-primary); cursor: pointer;
             }
         `,
     ];
@@ -285,10 +279,6 @@ export class GeofenceActivityModal extends LitElement {
                 </div>
 
                 ${this.errorMessage ? html`<div class="error-text">${this.errorMessage}</div>` : nothing}
-
-                <div class="footer">
-                    <button @click=${this.dispatchClose}>${msg('Done')}</button>
-                </div>
             </div>
         `;
     }
