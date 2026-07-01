@@ -81,6 +81,8 @@ func App(
 	settingsCtrl := controllers.NewSettingsController(settings, logger)
 	tenantsCtrl := controllers.NewTenantsController(logger, settings, tenantSvc, vehicleSvc, identity, authProvider)
 	invitationsCtrl := controllers.NewInvitationsController(logger, tenantSvc, invitationSvc)
+	userPrefsSvc := service.NewUserPrefsService(logger, pdb)
+	userPrefsCtrl := controllers.NewUserPrefsController(logger, userPrefsSvc)
 
 	// Public endpoints (no auth)
 	app.Get("/public/settings", settingsCtrl.GetPublicSettings)
@@ -106,6 +108,11 @@ func App(
 	authApp.Post("/tenants/:id/members", tenantsCtrl.AddMember)
 	authApp.Delete("/tenants/:id/members/:wallet", tenantsCtrl.RemoveMember)
 	authApp.Post("/tenants/:id/login", tenantsCtrl.LoginTouch)
+
+	// Per-user UI preferences (units, locale, …), keyed by the caller's wallet.
+	// Wallet-global, not tenant-scoped — JWT only. See USER_PREFERENCES_PLAN.md.
+	authApp.Get("/me/preferences", userPrefsCtrl.GetPreferences)
+	authApp.Put("/me/preferences", userPrefsCtrl.PutPreferences)
 
 	// Member invitations. Create/list/revoke/resend authorize against the :id
 	// path tenant (owner-only except list). Accept is JWT-only and NOT
