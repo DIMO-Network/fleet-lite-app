@@ -122,7 +122,7 @@ export class GeofenceActivityModal extends LitElement {
                 background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px);
             }
             .card {
-                width: 100%; max-width: 560px; max-height: 82vh;
+                width: 100%; max-width: 640px; max-height: 82vh;
                 background: var(--surface-container); border: 1px solid var(--outline-variant);
                 border-radius: var(--radius-lg); padding: 24px; color: var(--on-surface);
                 position: relative; display: flex; flex-direction: column;
@@ -148,25 +148,43 @@ export class GeofenceActivityModal extends LitElement {
             .capped { font: var(--type-body-sm); color: #f5c84b; margin: 4px 0 0; display: flex; gap: 6px; align-items: flex-start; }
             .capped .material-symbols-outlined { font-size: 16px; margin-top: 1px; }
 
-            .list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+            /* Legend clarifying the two duration-like columns (users confused
+               dwell-inside vs engine-on time). */
+            .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 10px 0 0; font: var(--type-body-sm); color: var(--on-surface-variant); }
+            .legend b { color: var(--on-surface); font-weight: 600; }
+
+            .list { flex: 1; overflow-y: auto; margin-top: 12px; }
             .list::-webkit-scrollbar { width: 6px; }
             .list::-webkit-scrollbar-thumb { background-color: var(--outline-variant); border-radius: 10px; }
 
-            .veh {
-                border: 1px solid var(--outline-variant); border-radius: var(--radius-md);
-                background: var(--surface-container-low); padding: 12px;
+            table.passes { width: 100%; border-collapse: collapse; }
+            .passes thead th {
+                position: sticky; top: 0; z-index: 1; background: var(--surface-container);
+                text-align: left; padding: 9px 12px; white-space: nowrap;
+                color: var(--on-surface-variant); font: var(--type-label-caps);
+                letter-spacing: 0.05em; text-transform: uppercase;
+                border-bottom: 1px solid var(--outline-variant);
             }
-            .veh .title { font: var(--type-body-md); color: var(--primary); margin-bottom: 6px; }
-            .pass {
-                display: flex; align-items: center; justify-content: space-between; gap: 10px;
-                font: var(--type-body-sm); color: var(--on-surface-variant); padding: 3px 0;
+            .passes th.num, .passes td.num { text-align: right; }
+            .passes tbody td {
+                padding: 9px 12px; white-space: nowrap;
+                font: var(--type-body-sm); color: var(--on-surface);
+                border-bottom: 1px solid var(--surface-container-high);
             }
-            .pass .times { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
-            .pass .times .material-symbols-outlined { font-size: 12px; }
-            .pass .meta { display: inline-flex; align-items: center; gap: 10px; white-space: nowrap; }
-            .speed { display: inline-flex; align-items: center; gap: 3px; }
+            /* Per-vehicle grouping row spanning the table width. */
+            .veh-row td {
+                padding: 14px 12px 6px; color: var(--primary); font: var(--type-body-md);
+                border-bottom: 1px solid var(--outline-variant);
+            }
+            .veh-row .count {
+                display: inline-block; margin-left: 8px; padding: 1px 8px;
+                border-radius: var(--radius-full); background: var(--surface-container-high);
+                color: var(--on-surface-variant); font: var(--type-label-caps); letter-spacing: 0.03em;
+            }
+            .pass-row td:first-child { color: var(--on-surface); }
+            .pass-row td { color: var(--on-surface-variant); }
             .speed.over { color: var(--error); font-weight: 600; }
-            .speed .material-symbols-outlined { font-size: 13px; }
+            .dash { color: var(--outline); }
 
             .empty-state { color: var(--on-surface-variant); font: var(--type-body-sm); padding: 24px; text-align: center; }
             .error-text {
@@ -183,22 +201,21 @@ export class GeofenceActivityModal extends LitElement {
         `,
     ];
 
-    private renderPass(p: VehiclePasses['passes'][number]) {
+    private renderPassRow(p: VehiclePasses['passes'][number]) {
         const max = p.maxSpeedKph != null ? formatSpeed(p.maxSpeedKph) : null;
+        const dash = html`<span class="dash">—</span>`;
         return html`
-            <div class="pass">
-                <span class="times">
-                    ${tripTimeShort(p.enteredAt)}
-                    <span class="material-symbols-outlined">arrow_forward</span>
-                    ${tripTimeShort(p.exitedAt)}
-                </span>
-                <span class="meta">
-                    <span>${formatDwell(p.dwellS)}</span>
-                    ${max ? html`<span class="speed ${p.speedExceeded ? 'over' : ''}">
-                        ${p.speedExceeded ? html`<span class="material-symbols-outlined">speed</span>` : nothing}${max.value} ${max.unit}
-                    </span>` : nothing}
-                </span>
-            </div>
+            <tr class="pass-row">
+                <td>${tripTimeShort(p.enteredAt)}</td>
+                <td>${tripTimeShort(p.exitedAt)}</td>
+                <td class="num">${formatDwell(p.dwellS)}</td>
+                <td class="num">
+                    ${max
+                        ? html`<span class="speed ${p.speedExceeded ? 'over' : ''}">${max.value} ${max.unit}</span>`
+                        : dash}
+                </td>
+                <td class="num">${p.obdRuntimeS != null ? formatDwell(p.obdRuntimeS) : dash}</td>
+            </tr>
         `;
     }
 
@@ -231,15 +248,40 @@ export class GeofenceActivityModal extends LitElement {
                         ${msg(str`This geofence applies to many vehicles — scanning the first ${this.total}.`)}</p>`
                     : nothing}
 
+                ${this.results.length > 0
+                    ? html`<p class="legend">
+                        <span><b>${msg('Duration')}</b> — ${msg('time inside the geofence')}</span>
+                        <span><b>${msg('Engine runtime')}</b> — ${msg('engine-on time during the pass')}</span>
+                    </p>`
+                    : nothing}
+
                 <div class="list">
                     ${this.results.length === 0 && !this.scanning
                         ? html`<p class="empty-state">${msg('No vehicles passed through in this window.')}</p>`
-                        : this.results.map((r) => html`
-                            <div class="veh">
-                                <div class="title">${this.vehicleTitle(r.tokenId)}</div>
-                                ${r.passes.map((p) => this.renderPass(p))}
-                            </div>
-                        `)}
+                        : this.results.length === 0
+                            ? nothing
+                            : html`<table class="passes">
+                                <thead>
+                                    <tr>
+                                        <th>${msg('Time in')}</th>
+                                        <th>${msg('Time out')}</th>
+                                        <th class="num">${msg('Duration')}</th>
+                                        <th class="num">${msg('Max speed')}</th>
+                                        <th class="num">${msg('Engine runtime')}</th>
+                                    </tr>
+                                </thead>
+                                ${this.results.map((r) => html`
+                                    <tbody>
+                                        <tr class="veh-row">
+                                            <td colspan="5">
+                                                ${this.vehicleTitle(r.tokenId)}
+                                                <span class="count">${r.passes.length}×</span>
+                                            </td>
+                                        </tr>
+                                        ${r.passes.map((p) => this.renderPassRow(p))}
+                                    </tbody>
+                                `)}
+                            </table>`}
                 </div>
 
                 ${this.errorMessage ? html`<div class="error-text">${this.errorMessage}</div>` : nothing}

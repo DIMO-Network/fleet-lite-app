@@ -926,12 +926,14 @@
 </trans-unit>
 <trans-unit id="s92921878e886e36d">
   <source>Duration</source>
+<target>Duración</target>
 </trans-unit>
 <trans-unit id="s106f6269e3ce9d0c">
   <source>Avg speed</source>
 </trans-unit>
 <trans-unit id="s1d4ddddf4ee38ea6">
   <source>Max speed</source>
+<target>Vel. máx.</target>
 </trans-unit>
 <trans-unit id="s061cc20e3432dead">
   <source>Pause</source>
@@ -1329,6 +1331,26 @@
 </trans-unit>
 <trans-unit id="s7468e87263dfff7e">
   <source>Identifier</source>
+</trans-unit>
+<trans-unit id="s7b7e8e2fc035021f">
+  <source>time inside the geofence</source>
+<target>tiempo dentro de la geocerca</target>
+</trans-unit>
+<trans-unit id="s93b5111b63459c67">
+  <source>Engine runtime</source>
+<target>Tiempo motor</target>
+</trans-unit>
+<trans-unit id="s25edbe26de08a2af">
+  <source>engine-on time during the pass</source>
+<target>tiempo con el motor encendido durante el paso</target>
+</trans-unit>
+<trans-unit id="sd08a6db66b8b4603">
+  <source>Time in</source>
+<target>Entrada</target>
+</trans-unit>
+<trans-unit id="sd4558bf8b3225d70">
+  <source>Time out</source>
+<target>Salida</target>
 </trans-unit>
 </body>
 </file>
