@@ -113,6 +113,25 @@ export class GeofenceActivityModal extends LitElement {
         return parts.length ? parts.join(' ') : msg(str`Vehicle #${tokenId}`);
     }
 
+    /** Per-vehicle grouping-row header: bold name + plate + VIN + pass count. */
+    private renderVehicleHead(tokenId: number, passCount: number) {
+        const v = this.vehicles.find((x) => x.tokenId === tokenId);
+        return html`
+            <div class="veh-head">
+                <span class="name">${this.vehicleTitle(tokenId)}</span>
+                ${v?.licensePlate
+                    ? html`<span class="plate" title=${msg('License plate')}>
+                        <span class="material-symbols-outlined">directions_car</span>${v.licensePlate}
+                    </span>`
+                    : nothing}
+                ${v?.vin
+                    ? html`<span class="vin" title=${msg('VIN')}>${v.vin}</span>`
+                    : nothing}
+                <span class="count">${passCount}×</span>
+            </div>
+        `;
+    }
+
     static styles = [
         sharedStyles,
         css`
@@ -173,11 +192,21 @@ export class GeofenceActivityModal extends LitElement {
             }
             /* Per-vehicle grouping row spanning the table width. */
             .veh-row td {
-                padding: 14px 12px 6px; color: var(--primary); font: var(--type-body-md);
-                border-bottom: 1px solid var(--outline-variant);
+                padding: 14px 12px 6px; border-bottom: 1px solid var(--outline-variant);
             }
-            .veh-row .count {
-                display: inline-block; margin-left: 8px; padding: 1px 8px;
+            .veh-head { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; }
+            .veh-head .name { font: var(--type-body-md); font-weight: 700; color: var(--primary); }
+            .veh-head .plate {
+                display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px;
+                border-radius: var(--radius-full); background: var(--surface-container-low);
+                font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; color: var(--on-surface);
+            }
+            .veh-head .plate .material-symbols-outlined { font-size: 14px; color: var(--primary); }
+            .veh-head .vin {
+                font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.02em; color: var(--on-surface-variant);
+            }
+            .veh-head .count {
+                margin-left: auto; padding: 1px 8px;
                 border-radius: var(--radius-full); background: var(--surface-container-high);
                 color: var(--on-surface-variant); font: var(--type-label-caps); letter-spacing: 0.03em;
             }
@@ -267,10 +296,7 @@ export class GeofenceActivityModal extends LitElement {
                                 ${this.results.map((r) => html`
                                     <tbody>
                                         <tr class="veh-row">
-                                            <td colspan="5">
-                                                ${this.vehicleTitle(r.tokenId)}
-                                                <span class="count">${r.passes.length}×</span>
-                                            </td>
+                                            <td colspan="5">${this.renderVehicleHead(r.tokenId, r.passes.length)}</td>
                                         </tr>
                                         ${r.passes.map((p) => this.renderPassRow(p))}
                                     </tbody>
