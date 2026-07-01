@@ -113,6 +113,25 @@ export class GeofenceActivityModal extends LitElement {
         return parts.length ? parts.join(' ') : msg(str`Vehicle #${tokenId}`);
     }
 
+    /** Per-vehicle grouping-row header: bold name + plate + VIN + pass count. */
+    private renderVehicleHead(tokenId: number, passCount: number) {
+        const v = this.vehicles.find((x) => x.tokenId === tokenId);
+        return html`
+            <div class="veh-head">
+                <span class="name">${this.vehicleTitle(tokenId)}</span>
+                ${v?.licensePlate
+                    ? html`<span class="plate" title=${msg('License plate')}>
+                        <span class="material-symbols-outlined">directions_car</span>${v.licensePlate}
+                    </span>`
+                    : nothing}
+                ${v?.vin
+                    ? html`<span class="vin" title=${msg('VIN')}>${v.vin}</span>`
+                    : nothing}
+                <span class="count">${passCount}×</span>
+            </div>
+        `;
+    }
+
     static styles = [
         sharedStyles,
         css`
@@ -122,7 +141,7 @@ export class GeofenceActivityModal extends LitElement {
                 background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px);
             }
             .card {
-                width: 100%; max-width: 640px; max-height: 82vh;
+                width: 100%; max-width: 640px; max-height: calc(100vh - 40px);
                 background: var(--surface-container); border: 1px solid var(--outline-variant);
                 border-radius: var(--radius-lg); padding: 24px; color: var(--on-surface);
                 position: relative; display: flex; flex-direction: column;
@@ -173,11 +192,21 @@ export class GeofenceActivityModal extends LitElement {
             }
             /* Per-vehicle grouping row spanning the table width. */
             .veh-row td {
-                padding: 14px 12px 6px; color: var(--primary); font: var(--type-body-md);
-                border-bottom: 1px solid var(--outline-variant);
+                padding: 14px 12px 6px; border-bottom: 1px solid var(--outline-variant);
             }
-            .veh-row .count {
-                display: inline-block; margin-left: 8px; padding: 1px 8px;
+            .veh-head { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; }
+            .veh-head .name { font: var(--type-body-md); font-weight: 700; color: var(--primary); }
+            .veh-head .plate {
+                display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px;
+                border-radius: var(--radius-full); background: var(--surface-container-low);
+                font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; color: var(--on-surface);
+            }
+            .veh-head .plate .material-symbols-outlined { font-size: 14px; color: var(--primary); }
+            .veh-head .vin {
+                font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.02em; color: var(--on-surface-variant);
+            }
+            .veh-head .count {
+                margin-left: auto; padding: 1px 8px;
                 border-radius: var(--radius-full); background: var(--surface-container-high);
                 color: var(--on-surface-variant); font: var(--type-label-caps); letter-spacing: 0.03em;
             }
@@ -191,12 +220,6 @@ export class GeofenceActivityModal extends LitElement {
                 padding: 12px; background: rgba(255, 180, 171, 0.04);
                 border: 1px solid rgba(255, 180, 171, 0.2); color: var(--error);
                 border-radius: var(--radius-md); font: var(--type-body-sm); margin-top: 12px;
-            }
-            .footer { display: flex; justify-content: flex-end; margin-top: 16px; }
-            .footer button {
-                padding: 10px 18px; border-radius: var(--radius-md);
-                font: var(--type-label-caps); letter-spacing: 0.05em; text-transform: uppercase; font-weight: 700;
-                border: 1px solid transparent; background: var(--primary); color: var(--on-primary); cursor: pointer;
             }
         `,
     ];
@@ -273,10 +296,7 @@ export class GeofenceActivityModal extends LitElement {
                                 ${this.results.map((r) => html`
                                     <tbody>
                                         <tr class="veh-row">
-                                            <td colspan="5">
-                                                ${this.vehicleTitle(r.tokenId)}
-                                                <span class="count">${r.passes.length}×</span>
-                                            </td>
+                                            <td colspan="5">${this.renderVehicleHead(r.tokenId, r.passes.length)}</td>
                                         </tr>
                                         ${r.passes.map((p) => this.renderPassRow(p))}
                                     </tbody>
@@ -285,10 +305,6 @@ export class GeofenceActivityModal extends LitElement {
                 </div>
 
                 ${this.errorMessage ? html`<div class="error-text">${this.errorMessage}</div>` : nothing}
-
-                <div class="footer">
-                    <button @click=${this.dispatchClose}>${msg('Done')}</button>
-                </div>
             </div>
         `;
     }

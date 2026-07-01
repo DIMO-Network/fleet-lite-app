@@ -1,4 +1,5 @@
 import { Trip } from '../types/telemetry.ts';
+import { getLocale } from '../localization.ts';
 
 /**
  * Helpers over telemetry-api `segments` results, shared by the quick-view
@@ -19,10 +20,10 @@ export function tripDistanceKm(trip: Trip): number | undefined {
     return d >= 0 ? d : undefined;
 }
 
-/** "Wed 2:15 PM" in the user's locale — compact enough for a list row. */
+/** "Wed 2:15 PM" in the app's selected language — compact enough for a list row. */
 export function tripTimeShort(iso: string): string {
     const d = new Date(iso);
-    return d.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+    return d.toLocaleString(getLocale(), { weekday: 'short', hour: 'numeric', minute: '2-digit' });
 }
 
 /**
