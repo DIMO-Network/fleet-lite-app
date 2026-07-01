@@ -7,6 +7,7 @@ import { Vehicle, VehiclesResponse } from '../types/vehicle.ts';
 import { DocumentService } from '../services/document-service.ts';
 import { DocumentEntry } from '../types/document.ts';
 import { categoryLabel, EXPECTED_CE_TYPES, CE_TYPE_TO_LABEL } from '../utils/document-categories.ts';
+import { FleetCache } from '../services/fleet-cache.ts';
 import '../elements/upload-document-modal.ts';
 import '../elements/document-detail-modal.ts';
 
@@ -120,6 +121,7 @@ export class GloveboxView extends LitElement {
     private closeUpload = () => { this.showUploadModal = false; };
     private onUploaded = async (e: CustomEvent<{ tokenId: number }>) => {
         this.showUploadModal = false;
+        FleetCache.invalidate();
         if (this.selected && e.detail.tokenId === this.selected.tokenId) {
             await this.loadDocs(this.selected.tokenId);
         }
