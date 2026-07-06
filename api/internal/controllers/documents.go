@@ -173,6 +173,10 @@ func (d *DocumentsController) AttestDocument(c *fiber.Ctx) error {
 	}
 	if req.Category == service.VehicleRegistrationCloudEventType {
 		go func() {
+			// fetch-api needs a few seconds to index the newly attested document
+			// before SyncVehicle can read it back; without this delay the goroutine
+			// races the indexer and writes nothing.
+			time.Sleep(10 * time.Second)
 			if _, err := d.plateSvc.SyncVehicle(context.Background(), tenant, req.TokenID, service.SyncOpts{}); err != nil {
 				d.logger.Warn().Err(err).Int64("tokenID", req.TokenID).Msg("post-upload plate/VIN sync failed")
 			}
