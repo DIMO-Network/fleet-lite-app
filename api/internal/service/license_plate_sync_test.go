@@ -66,11 +66,19 @@ func TestLatestPlate(t *testing.T) {
 			wantPlate: "KEEPME",
 			wantFound: true,
 		},
+		{
+			name: "nested extract-api shape with plateNumber alias",
+			entries: []gateway.AttestationEntry{
+				reg(base, `{"data":{"fields":{"plateNumber":"8WSK941","vin":"JTJGARBZ0M5023425"}},"type":"dimo.document.vehicle.registration"}`),
+			},
+			wantPlate: "8WSK941",
+			wantFound: true,
+		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			plate, found := latestRegistrationField(c.entries, licensePlateField)
+			plate, found := latestRegistrationField(c.entries, licensePlateFieldNames)
 			if found != c.wantFound || plate != c.wantPlate {
 				t.Fatalf("latestRegistrationField(license_plate) = (%q, %v), want (%q, %v)", plate, found, c.wantPlate, c.wantFound)
 			}
@@ -116,11 +124,19 @@ func TestLatestRegistrationFieldVIN(t *testing.T) {
 			wantVIN:   "KEEPVIN",
 			wantFound: true,
 		},
+		{
+			name: "nested extract-api shape",
+			entries: []gateway.AttestationEntry{
+				reg(base, `{"data":{"fields":{"plateNumber":"8WSK941","vin":"JTJGARBZ0M5023425"}},"type":"dimo.document.vehicle.registration"}`),
+			},
+			wantVIN:   "JTJGARBZ0M5023425",
+			wantFound: true,
+		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			vin, found := latestRegistrationField(c.entries, vinField)
+			vin, found := latestRegistrationField(c.entries, vinFieldNames)
 			if found != c.wantFound || vin != c.wantVIN {
 				t.Fatalf("latestRegistrationField(vin) = (%q, %v), want (%q, %v)", vin, found, c.wantVIN, c.wantFound)
 			}
