@@ -23,13 +23,21 @@ import (
 // one that carries a license_plate and cache it locally.
 const VehicleRegistrationCloudEventType = "dimo.document.vehicle.registration"
 
-// licensePlateField and vinField are the keys the plate and VIN live under in
-// the registration document's parsed data. Both are read from the same
-// dimo.document.vehicle.registration attestation in one pass.
-const (
-	licensePlateField = "license_plate"
-	vinField          = "vin"
+// licensePlateFieldNames and vinFieldNames are the keys the plate and VIN live
+// under in the registration document's parsed data. Both are read from the
+// same dimo.document.vehicle.registration attestation in one pass. The extract
+// API's raw response is passed through to attestation verbatim and is not
+// flat — the real fields live nested (e.g. under "data"."fields") and the
+// extract API calls the plate "plateNumber", not "license_plate", so multiple
+// names and a nested search are required. See findFieldInDoc.
+var (
+	licensePlateFieldNames = []string{"license_plate", "plateNumber"}
+	vinFieldNames          = []string{"vin"}
 )
+
+// registrationWrapperKeys are the keys under which the real registration
+// fields may be nested, mirroring the wrapper shape the extract API uses.
+var registrationWrapperKeys = []string{"data", "fields", "result", "document"}
 
 // LicensePlateSyncService is the read/cache half of the vehicle-registration
 // feature: it reads a vehicle's latest dimo.document.vehicle.registration
@@ -92,12 +100,12 @@ func (s *LicensePlateSyncService) SyncVehicle(ctx context.Context, tenant models
 	// missing field is "unknown", not "removed". So we only ever write changes.
 	res := PlateSyncResult{Plate: v.LicensePlate.String, VIN: v.Vin.String}
 	updates := dbmodels.M{}
-	if plate, found := latestRegistrationField(entries, licensePlateField); found && plate != v.LicensePlate.String {
+	if plate, found := latestRegistrationField(entries, licensePlateFieldNames); found && plate != v.LicensePlate.String {
 		updates["license_plate"] = null.StringFrom(plate)
 		res.Changed = true
 		res.Plate = plate
 	}
-	if vin, found := latestRegistrationField(entries, vinField); found && vin != v.Vin.String {
+	if vin, found := latestRegistrationField(entries, vinFieldNames); found && vin != v.Vin.String {
 		updates["vin"] = null.StringFrom(vin)
 		res.VINChanged = true
 		res.VIN = vin
@@ -123,10 +131,14 @@ func (s *LicensePlateSyncService) SyncVehicle(ctx context.Context, tenant models
 	return res, nil
 }
 
-// latestRegistrationField returns the value of the given string field from the
-// most-recent (by CE time) registration document that carries a non-empty one,
-// and whether such a document was found. Used for both license_plate and vin.
-func latestRegistrationField(entries []gateway.AttestationEntry, field string) (string, bool) {
+// latestRegistrationField returns the value of the first matching name in
+// names from the most-recent (by CE time) registration document that carries
+// a non-empty one, and whether such a document was found. Used for both
+// license_plate and vin. Multiple names support the extract API's field
+// aliases (e.g. "plateNumber" alongside "license_plate"); the search also
+// recurses into registrationWrapperKeys since the extract API's raw response
+// is attested verbatim and is not flat.
+func latestRegistrationField(entries []gateway.AttestationEntry, names []string) (string, bool) {
 	var val string
 	var found bool
 	var latest time.Time
@@ -139,16 +151,8 @@ func latestRegistrationField(entries []gateway.AttestationEntry, field string) (
 		if err := json.Unmarshal(e.Data, &doc); err != nil {
 			continue
 		}
-		raw, ok := doc[field]
+		p, ok := findFieldInDoc(doc, names, 0, 4)
 		if !ok {
-			continue
-		}
-		var p string
-		if err := json.Unmarshal(raw, &p); err != nil {
-			continue
-		}
-		p = strings.TrimSpace(p)
-		if p == "" {
 			continue
 		}
 		t, _ := time.Parse(time.RFC3339, e.Time)
@@ -159,4 +163,41 @@ func latestRegistrationField(entries []gateway.AttestationEntry, field string) (
 		}
 	}
 	return val, found
+}
+
+// findFieldInDoc looks for the first of names as a non-empty string at doc's
+// top level, then recurses into registrationWrapperKeys up to maxDepth levels
+// deep (mirrors extract_api.go's findVINInMap, which needs the same nested
+// search over the extract API's raw response shape).
+func findFieldInDoc(doc map[string]json.RawMessage, names []string, depth, maxDepth int) (string, bool) {
+	if depth > maxDepth {
+		return "", false
+	}
+	for _, name := range names {
+		raw, ok := doc[name]
+		if !ok {
+			continue
+		}
+		var p string
+		if err := json.Unmarshal(raw, &p); err != nil {
+			continue
+		}
+		if p = strings.TrimSpace(p); p != "" {
+			return p, true
+		}
+	}
+	for _, key := range registrationWrapperKeys {
+		raw, ok := doc[key]
+		if !ok {
+			continue
+		}
+		var nested map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &nested); err != nil {
+			continue
+		}
+		if v, ok := findFieldInDoc(nested, names, depth+1, maxDepth); ok {
+			return v, true
+		}
+	}
+	return "", false
 }
