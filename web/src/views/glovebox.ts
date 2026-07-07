@@ -520,7 +520,7 @@ export class GloveboxView extends LitElement {
                                     <strong>${msg('Grant DIMO permissions to view documents on this vehicle.')}</strong>
                                     <p>
                                         ${msg(html`The fleet-lite dev license <code>${this.devLicense}</code>
-                                        needs SACD permissions on this vehicle before the document list can load.
+                                        needs data-sharing permission for this vehicle before its document list can load.
                                         Documents you upload here are still saved — you just can't list or download them yet.`)}
                                     </p>
                                 </div>

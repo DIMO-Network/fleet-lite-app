@@ -254,7 +254,7 @@ export class UploadDocumentModal extends LitElement {
     private renderPick() {
         return html`
             <h2>${msg('Add a document')}</h2>
-            <p class="sub">${msg("PDF, JPG, or PNG. We'll read the VIN and any structured fields, then attest a CloudEvent pair on your behalf.")}</p>
+            <p class="sub">${msg("PDF, JPG, or PNG. We'll read the VIN and other details automatically, then securely save the document to DIMO.")}</p>
             <label class="drop">
                 <input type="file" accept="application/pdf,image/jpeg,image/png" @change=${this.onFilePicked} />
                 <div class="icon"><span class="material-symbols-outlined">upload_file</span></div>
@@ -269,7 +269,7 @@ export class UploadDocumentModal extends LitElement {
 
     private renderReview() {
         if (!this.extractResult) {
-            return html`<div class="status"><div class="big">${msg('Reading document…')}</div><div>${msg('Calling the DIMO extract API.')}</div></div>`;
+            return html`<div class="status"><div class="big">${msg('Reading document…')}</div><div>${msg('Pulling out the VIN and other details.')}</div></div>`;
         }
         const vin = this.extractResult.vin?.trim();
         const canSubmit = this.selectedTokenId !== null;
@@ -325,13 +325,13 @@ export class UploadDocumentModal extends LitElement {
     }
 
     private renderSubmitting() {
-        return html`<div class="status"><div class="big">${msg('Signing & attesting…')}</div><div>${msg('Posting raw + parsed CloudEvents to attest.dimo.zone.')}</div></div>`;
+        return html`<div class="status"><div class="big">${msg('Saving document…')}</div><div>${msg('Signing and securely storing your document with DIMO.')}</div></div>`;
     }
 
     private renderDone() {
         return html`
             <h2>${msg('Saved')}</h2>
-            <p class="sub">${msg('Your document is attested on DIMO. The list will refresh.')}</p>
+            <p class="sub">${msg('Your document has been saved to DIMO. The list will refresh.')}</p>
             <div class="actions"><button class="primary" @click=${this.dispatchClose}>${msg('Done')}</button></div>
         `;
     }

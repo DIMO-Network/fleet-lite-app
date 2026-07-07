@@ -158,7 +158,7 @@ export class DocumentDetailModal extends LitElement {
     }
 
     private async onDelete() {
-        if (!confirm(msg('Delete this document? This emits a tombstone CloudEvent — the underlying file stays on DIMO infrastructure but no longer surfaces here.'))) {
+        if (!confirm(msg("Delete this document? It will be removed from your list. The file itself stays stored on DIMO's infrastructure."))) {
             return;
         }
         this.deleting = true;
@@ -189,7 +189,7 @@ export class DocumentDetailModal extends LitElement {
                 ${this.errorMessage ? html`<div class="error-text">${this.errorMessage}</div>` : nothing}
 
                 <dl>
-                    <dt>${msg('Cloud event')}</dt>
+                    <dt>${msg('Document ID')}</dt>
                     <dd><code>${this.document.id}</code></dd>
                     <dt>${msg('File hash')}</dt>
                     <dd><code>${this.document.fileHash || '—'}</code></dd>

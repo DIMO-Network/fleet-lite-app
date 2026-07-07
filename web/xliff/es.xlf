@@ -66,17 +66,9 @@
   <source>Download failed</source>
   <target>Error al descargar</target>
 </trans-unit>
-<trans-unit id="s30f4c80302a9dfa9">
-  <source>Delete this document? This emits a tombstone CloudEvent — the underlying file stays on DIMO infrastructure but no longer surfaces here.</source>
-  <target>¿Eliminar este documento? Esto emite un CloudEvent de tipo tombstone — el archivo subyacente permanece en la infraestructura de DIMO pero ya no aparece aquí.</target>
-</trans-unit>
 <trans-unit id="se50bb7aee2221dff">
   <source>Delete failed</source>
   <target>Error al eliminar</target>
-</trans-unit>
-<trans-unit id="s78cea1ee53a45cd6">
-  <source>Cloud event</source>
-  <target>Cloud event</target>
 </trans-unit>
 <trans-unit id="s149aa6bc7c32b9a5">
   <source>File hash</source>
@@ -262,10 +254,6 @@
   <source>Add a document</source>
   <target>Agregar un documento</target>
 </trans-unit>
-<trans-unit id="s8188c86759436652">
-  <source>PDF, JPG, or PNG. We'll read the VIN and any structured fields, then attest a CloudEvent pair on your behalf.</source>
-  <target>PDF, JPG o PNG. Leeremos el VIN y cualquier campo estructurado, luego certificaremos un par de CloudEvents en su nombre.</target>
-</trans-unit>
 <trans-unit id="h68eb2ca9278bb2bf">
   <source>Drop a file here, or <x id="0" equiv-text="&lt;strong&gt;"/>click to choose<x id="1" equiv-text="&lt;/strong&gt;"/></source>
   <target>Suelte un archivo aquí, o <x id="0" equiv-text="&lt;strong&gt;"/>haga clic para elegir<x id="1" equiv-text="&lt;/strong&gt;"/></target>
@@ -281,10 +269,6 @@
 <trans-unit id="s0a47e8c52033e05a">
   <source>Reading document…</source>
   <target>Leyendo documento…</target>
-</trans-unit>
-<trans-unit id="s70304ce49c7370b0">
-  <source>Calling the DIMO extract API.</source>
-  <target>Llamando a la API de extracción de DIMO.</target>
 </trans-unit>
 <trans-unit id="sb85774dc5d18ff0f">
   <source>Confirm</source>
@@ -318,21 +302,9 @@
   <source>Save document</source>
   <target>Guardar documento</target>
 </trans-unit>
-<trans-unit id="sca48cd086a646831">
-  <source>Signing &amp; attesting…</source>
-  <target>Firmando y certificando…</target>
-</trans-unit>
-<trans-unit id="sd3589ee7ac34fea4">
-  <source>Posting raw + parsed CloudEvents to attest.dimo.zone.</source>
-  <target>Enviando CloudEvents en bruto + procesados a attest.dimo.zone.</target>
-</trans-unit>
 <trans-unit id="s44fa1773e1e78784">
   <source>Saved</source>
   <target>Guardado</target>
-</trans-unit>
-<trans-unit id="s6e37e1ae8665c6ef">
-  <source>Your document is attested on DIMO. The list will refresh.</source>
-  <target>Su documento está certificado en DIMO. La lista se actualizará.</target>
 </trans-unit>
 <trans-unit id="s0379fc73608ab971">
   <source>Done</source>
@@ -525,14 +497,6 @@
 <trans-unit id="s98b3c841368a7b6f">
   <source>Grant DIMO permissions to view documents on this vehicle.</source>
   <target>Otorgue permisos de DIMO para ver documentos de este vehículo.</target>
-</trans-unit>
-<trans-unit id="hda00449e21a287da">
-  <source>The fleet-lite dev license <x id="0" equiv-text="&lt;code&gt;${this.devLicense}&lt;/code&gt;"/>
-                                        needs SACD permissions on this vehicle before the document list can load.
-                                        Documents you upload here are still saved — you just can't list or download them yet.</source>
-  <target>La licencia de desarrollador de fleet-lite <x id="0" equiv-text="&lt;code&gt;${this.devLicense}&lt;/code&gt;"/>
-                                        necesita permisos SACD sobre este vehículo antes de que se pueda cargar la lista de documentos.
-                                        Los documentos que suba aquí igual se guardan — simplemente aún no puede listarlos ni descargarlos.</target>
 </trans-unit>
 <trans-unit id="sf993bb199fefbe04">
   <source>All</source>
@@ -1351,6 +1315,42 @@
 <trans-unit id="sd4558bf8b3225d70">
   <source>Time out</source>
 <target>Salida</target>
+</trans-unit>
+<trans-unit id="s04b1606f40a07395">
+  <source>Delete this document? It will be removed from your list. The file itself stays stored on DIMO's infrastructure.</source>
+  <target>¿Eliminar este documento? Se quitará de su lista. El archivo en sí permanece almacenado en la infraestructura de DIMO.</target>
+</trans-unit>
+<trans-unit id="s1457ec4f895d93b1">
+  <source>Document ID</source>
+  <target>ID del documento</target>
+</trans-unit>
+<trans-unit id="s62d4898071676447">
+  <source>PDF, JPG, or PNG. We'll read the VIN and other details automatically, then securely save the document to DIMO.</source>
+  <target>PDF, JPG o PNG. Leeremos el VIN y otros datos automáticamente, luego guardaremos el documento de forma segura en DIMO.</target>
+</trans-unit>
+<trans-unit id="s8d38137a1bd6af89">
+  <source>Pulling out the VIN and other details.</source>
+  <target>Extrayendo el VIN y otros datos.</target>
+</trans-unit>
+<trans-unit id="sf07dd29e75899a32">
+  <source>Saving document…</source>
+  <target>Guardando documento…</target>
+</trans-unit>
+<trans-unit id="s48cb998b9f54d836">
+  <source>Signing and securely storing your document with DIMO.</source>
+  <target>Firmando y almacenando su documento de forma segura con DIMO.</target>
+</trans-unit>
+<trans-unit id="s008718e504db8790">
+  <source>Your document has been saved to DIMO. The list will refresh.</source>
+  <target>Su documento se ha guardado en DIMO. La lista se actualizará.</target>
+</trans-unit>
+<trans-unit id="h8f1dd6cca4bb7128">
+  <source>The fleet-lite dev license <x id="0" equiv-text="&lt;code&gt;${this.devLicense}&lt;/code&gt;"/>
+                                        needs data-sharing permission for this vehicle before its document list can load.
+                                        Documents you upload here are still saved — you just can't list or download them yet.</source>
+  <target>La licencia de desarrollador de fleet-lite <x id="0" equiv-text="&lt;code&gt;${this.devLicense}&lt;/code&gt;"/>
+                                        necesita permiso para compartir datos sobre este vehículo antes de que se pueda cargar su lista de documentos.
+                                        Los documentos que suba aquí igual se guardan — simplemente aún no puede listarlos ni descargarlos.</target>
 </trans-unit>
 </body>
 </file>
