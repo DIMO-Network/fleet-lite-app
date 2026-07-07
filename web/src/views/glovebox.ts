@@ -42,14 +42,23 @@ export class GloveboxView extends LitElement {
 
     @state() private documents: DocumentEntry[] = [];
     @state() private loadingDocs = false;
+    // Record counts for vehicles the user has already viewed, keyed by
+    // tokenId — kept around so a card doesn't revert to the generic "View
+    // documents" placeholder once its count is known, even after the user
+    // navigates to another vehicle and back.
+    @state() private docCounts = new Map<number, number>();
     @state() private permissionsRequired = false;
     @state() private devLicense = '';
 
     @state() private showUploadModal = false;
     @state() private detailOpen: DocumentEntry | null = null;
 
+    private connected = false;
+    private static readonly PREFETCH_PARALLEL = 3;
+
     async connectedCallback() {
         super.connectedCallback();
+        this.connected = true;
         try {
             const res = await ApiService.getInstance().get<VehiclesResponse>('/vehicles');
             this.vehicles = res.vehicles || [];
@@ -65,6 +74,36 @@ export class GloveboxView extends LitElement {
         } finally {
             this.loadingVehicles = false;
         }
+        // Fire-and-forget: fill in record counts for the rest of the fleet in
+        // the background so cards show a real count on first paint instead of
+        // the generic "View documents" placeholder until clicked.
+        void this.prefetchDocCounts();
+    }
+
+    disconnectedCallback() {
+        this.connected = false;
+        super.disconnectedCallback();
+    }
+
+    private async prefetchDocCounts() {
+        const targets = this.vehicles.filter((v) => !this.docCounts.has(v.tokenId));
+        let next = 0;
+        const worker = async () => {
+            while (next < targets.length) {
+                if (!this.connected) return;
+                const v = targets[next++];
+                try {
+                    const res = await DocumentService.getInstance().list(v.tokenId);
+                    if (!this.connected) return;
+                    this.docCounts = new Map(this.docCounts).set(v.tokenId, (res.documents || []).length);
+                } catch {
+                    // Leave uncached — the card falls back to "View documents".
+                }
+            }
+        };
+        await Promise.all(
+            Array.from({ length: Math.min(GloveboxView.PREFETCH_PARALLEL, targets.length) }, () => worker()),
+        );
     }
 
     private async loadDocs(tokenId: number) {
@@ -77,6 +116,7 @@ export class GloveboxView extends LitElement {
             this.documents = res.documents || [];
             this.permissionsRequired = !!res.permissionsRequired;
             this.devLicense = res.devLicense || '';
+            this.docCounts = new Map(this.docCounts).set(tokenId, this.documents.length);
         } catch (e) {
             console.error('Failed to load documents', e);
         } finally {
@@ -433,6 +473,18 @@ export class GloveboxView extends LitElement {
         `,
     ];
 
+    private recordLabel(count: number) {
+        return msg(str`${count} Record${count === 1 ? '' : 's'}`);
+    }
+
+    private renderCardCount(v: Vehicle) {
+        if (v.tokenId === this.selected?.tokenId) {
+            return this.loadingDocs ? msg('Loading…') : this.recordLabel(this.documents.length);
+        }
+        const cached = this.docCounts.get(v.tokenId);
+        return cached !== undefined ? this.recordLabel(cached) : msg('View documents');
+    }
+
     private renderListCard(v: Vehicle) {
         const cls = v.tokenId === this.selected?.tokenId ? 'vehicle-card active' : 'vehicle-card';
         return html`
@@ -442,9 +494,7 @@ export class GloveboxView extends LitElement {
                 </div>
                 <div class="vehicle-meta">
                     <h3>${vehicleTitle(v)}</h3>
-                    <p>${v.tokenId === this.selected?.tokenId
-                            ? (this.loadingDocs ? msg('Loading…') : msg(str`${this.documents.length} Record${this.documents.length === 1 ? '' : 's'}`))
-                            : msg('View documents')}</p>
+                    <p>${this.renderCardCount(v)}</p>
                 </div>
                 <div class="right-group">
                     <span class="material-symbols-outlined">chevron_right</span>
@@ -507,7 +557,7 @@ export class GloveboxView extends LitElement {
                     </div>
                     <div>
                         <h2>${this.selected ? vehicleTitle(this.selected) : msg('Select a vehicle')}</h2>
-                        <p>${this.selected ? msg(str`${total} Record${total === 1 ? '' : 's'}`) : msg('Pick a vehicle from the list')}</p>
+                        <p>${this.selected ? this.recordLabel(total) : msg('Pick a vehicle from the list')}</p>
                     </div>
                     <tenant-switcher .currentTenantId=${this.tenantId} style="margin-left:auto;"></tenant-switcher>
                 </div>

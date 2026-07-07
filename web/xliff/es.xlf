@@ -475,8 +475,8 @@
   <target>Cargando…</target>
 </trans-unit>
 <trans-unit id="s558c3d600c58d654">
-  <source><x id="0" equiv-text="${this.documents.length}"/> Record<x id="1" equiv-text="${this.documents.length === 1 ? '' : 's'}"/></source>
-  <target><x id="0" equiv-text="${this.documents.length}"/> Registro<x id="1" equiv-text="${this.documents.length === 1 ? '' : 's'}"/></target>
+  <source><x id="0" equiv-text="${count}"/> Record<x id="1" equiv-text="${count === 1 ? '' : 's'}"/></source>
+  <target><x id="0" equiv-text="${count}"/> Registro<x id="1" equiv-text="${count === 1 ? '' : 's'}"/></target>
 </trans-unit>
 <trans-unit id="s5de6302caaf70c36">
   <source>View documents</source>
