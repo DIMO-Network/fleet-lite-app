@@ -15,6 +15,7 @@ var TableNames = struct {
 	VehicleFavorites     string
 	VehicleFleetGroups   string
 	VehicleGeofences     string
+	VehicleTcoSettings   string
 	Vehicles             string
 }{
 	FleetGroups:          "fleet_groups",
@@ -28,5 +29,6 @@ var TableNames = struct {
 	VehicleFavorites:     "vehicle_favorites",
 	VehicleFleetGroups:   "vehicle_fleet_groups",
 	VehicleGeofences:     "vehicle_geofences",
+	VehicleTcoSettings:   "vehicle_tco_settings",
 	Vehicles:             "vehicles",
 }
