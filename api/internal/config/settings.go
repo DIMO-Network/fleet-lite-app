@@ -57,7 +57,11 @@ type Settings struct {
 	// (see api/templates/postmark, pushed via `make push-postmark-templates`).
 	// AppBaseURL is the public origin used to build the accept link.
 	// InviteExpiryHours bounds how long an invite token stays valid.
-	PostmarkServerToken     string  `yaml:"POSTMARK_SERVER_TOKEN"` // secret
+	// PostmarkWebhookSecret is the basic-auth password Postmark presents when
+	// POSTing delivery/open/bounce events to /webhooks/postmark; empty disables
+	// the endpoint. See docs/POSTMARK_WEBHOOK_PLAN.md.
+	PostmarkServerToken     string  `yaml:"POSTMARK_SERVER_TOKEN"`   // secret
+	PostmarkWebhookSecret   string  `yaml:"POSTMARK_WEBHOOK_SECRET"` // secret
 	InvitationFromEmail     string  `yaml:"INVITATION_FROM_EMAIL"`
 	InvitationTemplateAlias string  `yaml:"POSTMARK_INVITATION_TEMPLATE_ALIAS"`
 	AppBaseURL              url.URL `yaml:"APP_BASE_URL"`

@@ -51,6 +51,7 @@ VEHICLE_NFT_ADDRESS: '0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF'
 
 ## Member invitations (Postmark transactional email)
 POSTMARK_SERVER_TOKEN: ''                              # secret — Postmark server API token
+POSTMARK_WEBHOOK_SECRET: ''                            # secret — basic-auth password for /webhooks/postmark
 INVITATION_FROM_EMAIL: 'no-reply@dimo.co'              # must be a verified Postmark sender
 POSTMARK_INVITATION_TEMPLATE_ALIAS: 'fleet-invitation' # api/templates/postmark, pushed via make push-postmark-templates
 APP_BASE_URL: 'https://local-fleet-lite.dimo.org:3009' # public origin for the accept link

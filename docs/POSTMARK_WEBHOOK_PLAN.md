@@ -108,9 +108,11 @@ resets to `sent` with the new `MessageID`.
 
 ## Rollout order
 
-1. Migration + send-side capture (`MessageID`, metadata, `TrackOpens`) — safe alone.
-2. Webhook endpoint + secret in helm values; configure Postmark webhook; watch
-   info logs for events.
+1. ✅ Migration + send-side capture (`MessageID`, metadata, `TrackOpens`) — PR #77.
+2. ✅ Webhook endpoint (`POST /webhooks/postmark`, basic-auth via
+   `POSTMARK_WEBHOOK_SECRET`) + chart secret + `make configure-postmark-webhook`
+   (idempotent create/update via the Postmark Webhooks API — no dashboard step).
+   After deploy: create the AWS secret, then run the configure command per env.
 3. UI status on pending invites.
 
 ## Open questions

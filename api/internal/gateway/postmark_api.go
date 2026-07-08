@@ -135,15 +135,99 @@ func (p *PostmarkAPI) UpsertTemplate(alias, name, subject, htmlBody, textBody st
 	return nil
 }
 
+// postmarkWebhook mirrors the Postmark Webhooks API object (POST/PUT /webhooks).
+// Only the triggers we consume are modeled; see docs/POSTMARK_WEBHOOK_PLAN.md.
+type postmarkWebhook struct {
+	ID            int               `json:"ID,omitempty"`
+	URL           string            `json:"Url"`
+	MessageStream string            `json:"MessageStream"`
+	HTTPAuth      *postmarkHTTPAuth `json:"HttpAuth,omitempty"`
+	Triggers      postmarkTriggers  `json:"Triggers"`
+}
+
+type postmarkHTTPAuth struct {
+	Username string `json:"Username"`
+	Password string `json:"Password"`
+}
+
+type postmarkTriggers struct {
+	Delivery struct {
+		Enabled bool `json:"Enabled"`
+	} `json:"Delivery"`
+	Bounce struct {
+		Enabled        bool `json:"Enabled"`
+		IncludeContent bool `json:"IncludeContent"`
+	} `json:"Bounce"`
+	Open struct {
+		Enabled           bool `json:"Enabled"`
+		PostFirstOpenOnly bool `json:"PostFirstOpenOnly"`
+	} `json:"Open"`
+}
+
+// EnsureInvitationWebhook idempotently configures the outbound-stream webhook
+// that feeds invitation email tracking: delivery + bounce + first-open events
+// POSTed to webhookURL with the given basic-auth credentials. Looks up any
+// existing webhook for the URL and updates it in place, else creates one.
+// Rerunnable per environment — used by `make configure-postmark-webhook`.
+func (p *PostmarkAPI) EnsureInvitationWebhook(webhookURL, username, password string) error {
+	if !p.Enabled() {
+		return fmt.Errorf("postmark server token not configured")
+	}
+
+	desired := postmarkWebhook{
+		URL:           webhookURL,
+		MessageStream: "outbound",
+		HTTPAuth:      &postmarkHTTPAuth{Username: username, Password: password},
+	}
+	desired.Triggers.Delivery.Enabled = true
+	desired.Triggers.Bounce.Enabled = true
+	desired.Triggers.Open.Enabled = true
+	desired.Triggers.Open.PostFirstOpenOnly = true
+
+	var list struct {
+		Webhooks []postmarkWebhook `json:"Webhooks"`
+	}
+	if err := p.do("GET", "/webhooks?MessageStream=outbound", nil, &list); err != nil {
+		return fmt.Errorf("list postmark webhooks: %w", err)
+	}
+
+	method, path := "POST", "/webhooks"
+	for _, w := range list.Webhooks {
+		if w.URL == webhookURL {
+			method, path = "PUT", fmt.Sprintf("/webhooks/%d", w.ID)
+			break
+		}
+	}
+
+	var resp struct {
+		ID        int    `json:"ID"`
+		ErrorCode int    `json:"ErrorCode"`
+		Message   string `json:"Message"`
+	}
+	if err := p.do(method, path, desired, &resp); err != nil {
+		return err
+	}
+	if resp.ErrorCode != 0 {
+		return fmt.Errorf("postmark webhook %s error %d: %s", method, resp.ErrorCode, resp.Message)
+	}
+	p.logger.Info().Str("url", webhookURL).Str("op", method).Int("id", resp.ID).
+		Msg("postmark invitation webhook configured (delivery, bounce, first-open)")
+	return nil
+}
+
 // do performs a JSON request against the Postmark API and decodes the response
 // into out (which may be nil). A non-2xx HTTP status is an error; Postmark-level
 // errors (ErrorCode in the body) are left for the caller to inspect.
 func (p *PostmarkAPI) do(method, path string, payload, out any) error {
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("marshal postmark request: %w", err)
+	var reqBody io.Reader
+	if payload != nil {
+		body, err := json.Marshal(payload)
+		if err != nil {
+			return fmt.Errorf("marshal postmark request: %w", err)
+		}
+		reqBody = bytes.NewBuffer(body)
 	}
-	req, err := http.NewRequest(method, p.baseURL+path, bytes.NewBuffer(body))
+	req, err := http.NewRequest(method, p.baseURL+path, reqBody)
 	if err != nil {
 		return fmt.Errorf("build postmark request: %w", err)
 	}
