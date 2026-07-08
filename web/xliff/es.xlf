@@ -1352,6 +1352,30 @@
                                         necesita permiso para compartir datos sobre este vehículo antes de que se pueda cargar su lista de documentos.
                                         Los documentos que suba aquí igual se guardan — simplemente aún no puede listarlos ni descargarlos.</target>
 </trans-unit>
+<trans-unit id="sd1544db4dc3b46fc">
+  <source>Past invitations (<x id="0" equiv-text="${past.length}"/>)</source>
+  <target>Invitaciones anteriores (<x id="0" equiv-text="${past.length}"/>)</target>
+</trans-unit>
+<trans-unit id="s1ac80b8b5b7ec4e6">
+  <source>Accepted <x id="0" equiv-text="${acceptedDate}"/> · connected as <x id="1" equiv-text="${account}"/></source>
+  <target>Aceptada el <x id="0" equiv-text="${acceptedDate}"/> · se conectó como <x id="1" equiv-text="${account}"/></target>
+</trans-unit>
+<trans-unit id="s7f9650948f592d9a">
+  <source>Accepted <x id="0" equiv-text="${acceptedDate}"/></source>
+  <target>Aceptada el <x id="0" equiv-text="${acceptedDate}"/></target>
+</trans-unit>
+<trans-unit id="sb02060159e1ae498">
+  <source>Expired <x id="0" equiv-text="${expiredDate}"/></source>
+  <target>Venció el <x id="0" equiv-text="${expiredDate}"/></target>
+</trans-unit>
+<trans-unit id="se0d1d6bd81fc1980">
+  <source>Accepted</source>
+  <target>Aceptada</target>
+</trans-unit>
+<trans-unit id="sd923f95605fed7b2">
+  <source>Expired</source>
+  <target>Vencida</target>
+</trans-unit>
 </body>
 </file>
 </xliff>
