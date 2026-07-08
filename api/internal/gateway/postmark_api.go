@@ -51,7 +51,12 @@ type InvitationModel struct {
 // endpoint (POST /email/withTemplate) using the given template alias. The alias
 // is chosen by the caller from the inviter's locale (e.g. fleet-invitation /
 // fleet-invitation-es) — see InvitationService.templateAlias.
-func (p *PostmarkAPI) SendInvitation(toEmail, templateAlias string, model InvitationModel) error {
+//
+// metadata is attached to the message and echoed back verbatim in every webhook
+// event (delivery/open/bounce), which is how those events are correlated to an
+// invitation row — see docs/POSTMARK_WEBHOOK_PLAN.md. Returns Postmark's
+// MessageID ("" when sending is disabled) as a secondary correlation key.
+func (p *PostmarkAPI) SendInvitation(toEmail, templateAlias string, model InvitationModel, metadata map[string]string) (string, error) {
 	if !p.Enabled() {
 		// Local-dev sink: with no Postmark token we can't send, so log the accept
 		// link at info level — copy it from the logs to exercise the accept flow
@@ -61,7 +66,7 @@ func (p *PostmarkAPI) SendInvitation(toEmail, templateAlias string, model Invita
 			Str("template", templateAlias).
 			Str("accept_url", model.AcceptURL).
 			Msg("postmark not configured; invitation email skipped — use this accept link locally")
-		return nil
+		return "", nil
 	}
 	payload := map[string]any{
 		"From":          p.settings.InvitationFromEmail,
@@ -69,18 +74,25 @@ func (p *PostmarkAPI) SendInvitation(toEmail, templateAlias string, model Invita
 		"TemplateAlias": templateAlias,
 		"TemplateModel": model,
 		"MessageStream": "outbound",
+		// Open tracking is per-message; the webhook only sees opens for messages
+		// sent with it. Best-effort signal (needs the client to load images).
+		"TrackOpens": true,
+	}
+	if len(metadata) > 0 {
+		payload["Metadata"] = metadata
 	}
 	var resp struct {
 		ErrorCode int    `json:"ErrorCode"`
 		Message   string `json:"Message"`
+		MessageID string `json:"MessageID"`
 	}
 	if err := p.do("POST", "/email/withTemplate", payload, &resp); err != nil {
-		return err
+		return "", err
 	}
 	if resp.ErrorCode != 0 {
-		return fmt.Errorf("postmark send error %d: %s", resp.ErrorCode, resp.Message)
+		return "", fmt.Errorf("postmark send error %d: %s", resp.ErrorCode, resp.Message)
 	}
-	return nil
+	return resp.MessageID, nil
 }
 
 // UpsertTemplate creates or updates a Postmark template by alias. Used by the
