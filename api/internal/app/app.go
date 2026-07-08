@@ -191,6 +191,16 @@ func App(
 	tenantApp.Get("/documents/download", documentsCtrl.DownloadDocument)
 	tenantApp.Delete("/documents/:id", documentsCtrl.DeleteDocument)
 
+	// Total cost of ownership reporting (operating costs from Glovebox
+	// documents + optional acquisition/depreciation settings per vehicle).
+	tcoSvc := service.NewTCOService(logger, pdb, fetchAPI, authProvider, vehicleSvc)
+	tcoCtrl := controllers.NewTCOController(logger, tcoSvc, vehicleSvc)
+	tenantApp.Get("/tco/settings", tcoCtrl.GetSettings)
+	tenantApp.Put("/tco/settings", tcoCtrl.PutSettings)
+	tenantApp.Get("/tco/summary", tcoCtrl.GetSummary)
+	tenantApp.Get("/tco/vehicle/:tokenId", tcoCtrl.GetVehicleDetail)
+	tenantApp.Get("/tco/export.csv", tcoCtrl.ExportCSV)
+
 	return app
 }
 
