@@ -27,9 +27,15 @@ const (
 	InviteStatusAccepted = "accepted"
 	InviteStatusRevoked  = "revoked"
 
-	// EmailStatusSent is stamped when Postmark accepts the message; the webhook
-	// (docs/POSTMARK_WEBHOOK_PLAN.md phase 2) upgrades it to delivered/opened/bounced.
-	EmailStatusSent = "sent"
+	// Email-tracking statuses. Sent is stamped when Postmark accepts the
+	// message; the /webhooks/postmark receiver upgrades it from webhook events.
+	// Upgrades are monotonic (sent < delivered < opened; bounced beats all)
+	// because Postmark retries and events can arrive out of order — see
+	// docs/POSTMARK_WEBHOOK_PLAN.md.
+	EmailStatusSent      = "sent"
+	EmailStatusDelivered = "delivered"
+	EmailStatusOpened    = "opened"
+	EmailStatusBounced   = "bounced"
 
 	localeEN = "en"
 	localeES = "es"
@@ -260,6 +266,62 @@ func (s *InvitationService) Resend(ctx context.Context, tenantID, invitationID, 
 		return fmt.Errorf("%w: %v", ErrEmailNotSent, err)
 	}
 	s.markEmailSent(ctx, inv, messageID)
+	return nil
+}
+
+// emailStatusRank orders email-tracking statuses for monotonic upgrades. A
+// status may only replace one with a strictly lower rank; unknown/empty ranks
+// lowest so any real status wins.
+func emailStatusRank(status string) int {
+	switch status {
+	case EmailStatusSent:
+		return 1
+	case EmailStatusDelivered:
+		return 2
+	case EmailStatusOpened:
+		return 3
+	case EmailStatusBounced:
+		return 4
+	default:
+		return 0
+	}
+}
+
+// ApplyEmailEvent records a Postmark webhook event (delivered/opened/bounced)
+// against the invitation it belongs to, resolved by invitation id (message
+// metadata) with the Postmark message id as fallback. Unknown invitations and
+// out-of-order/duplicate events are ignored — the webhook must 200 either way
+// so Postmark stops retrying.
+func (s *InvitationService) ApplyEmailEvent(ctx context.Context, invitationID, messageID, status string, occurredAt time.Time, detail string) error {
+	mods := []qm.QueryMod{dbmodels.InvitationWhere.ID.EQ(invitationID)}
+	if invitationID == "" {
+		if messageID == "" {
+			return nil
+		}
+		mods = []qm.QueryMod{dbmodels.InvitationWhere.PostmarkMessageID.EQ(null.StringFrom(messageID))}
+	}
+	inv, err := dbmodels.Invitations(mods...).One(ctx, s.pdb.DBS().Reader)
+	if err != nil {
+		s.logger.Info().Str("invitation", invitationID).Str("messageId", messageID).Str("status", status).
+			Msg("invite flow: email event for unknown invitation ignored")
+		return nil
+	}
+	if emailStatusRank(status) <= emailStatusRank(inv.EmailStatus.String) {
+		return nil
+	}
+	if occurredAt.IsZero() {
+		occurredAt = time.Now()
+	}
+	inv.EmailStatus = null.StringFrom(status)
+	inv.EmailStatusAt = null.TimeFrom(occurredAt)
+	inv.EmailStatusDetail = null.NewString(detail, detail != "")
+	if _, err := inv.Update(ctx, s.pdb.DBS().Writer,
+		boil.Whitelist("email_status", "email_status_at", "email_status_detail")); err != nil {
+		return fmt.Errorf("record email event: %w", err)
+	}
+	s.logger.Info().Str("invitation", inv.ID).Str("tenant", inv.TenantID).Str("email", inv.Email).
+		Str("status", status).Str("detail", detail).
+		Msg("invite flow: email " + status)
 	return nil
 }
 

@@ -81,11 +81,15 @@ func App(
 	settingsCtrl := controllers.NewSettingsController(settings, logger)
 	tenantsCtrl := controllers.NewTenantsController(logger, settings, tenantSvc, vehicleSvc, identity, authProvider)
 	invitationsCtrl := controllers.NewInvitationsController(logger, tenantSvc, invitationSvc)
+	webhooksCtrl := controllers.NewWebhooksController(logger, settings, invitationSvc)
 	userPrefsSvc := service.NewUserPrefsService(logger, pdb)
 	userPrefsCtrl := controllers.NewUserPrefsController(logger, userPrefsSvc)
 
 	// Public endpoints (no auth)
 	app.Get("/public/settings", settingsCtrl.GetPublicSettings)
+	// Postmark can't do DIMO JWTs — the webhook authenticates with basic auth
+	// against POSTMARK_WEBHOOK_SECRET inside the handler.
+	app.Post("/webhooks/postmark", webhooksCtrl.HandlePostmark)
 	app.Get("/identity/vehicle/:tokenID", identityCtrl.GetVehicleByTokenID)
 	app.Get("/identity/definition/:id", identityCtrl.GetDefinitionByID)
 	app.Get("/identity/owner/:owner", identityCtrl.GetOwnerBy0x)
