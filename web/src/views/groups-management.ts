@@ -26,6 +26,7 @@ export class GroupsManagementView extends LitElement {
     @state() private creating = false;
     @state() private managing: FleetGroup | null = null;
     @state() private confirmingDeleteId: string | null = null;
+    @state() private searchQuery = '';
 
     connectedCallback() {
         super.connectedCallback();
@@ -83,6 +84,37 @@ export class GroupsManagementView extends LitElement {
             }
             .canvas { flex: 1; width: 100%; max-width: 880px; margin: 0 auto; padding: var(--stack-lg) var(--gutter); box-sizing: border-box; }
 
+            /* Same search treatment as the fleet list view. */
+            .search-wrap {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                background: var(--surface-container);
+                border: 1px solid var(--outline-variant);
+                border-radius: var(--radius-md);
+                padding: 8px 12px;
+                max-width: 360px;
+                margin-bottom: var(--stack-md);
+            }
+            .search-wrap .material-symbols-outlined { font-size: 18px; color: var(--on-surface-variant); }
+            .search-wrap input {
+                background: none;
+                border: none;
+                outline: none;
+                color: var(--on-surface);
+                font: var(--type-body-md);
+                flex: 1;
+            }
+            .clear-btn {
+                background: none;
+                border: none;
+                padding: 0;
+                color: var(--on-surface-variant);
+                cursor: pointer;
+                display: flex;
+            }
+            .clear-btn .material-symbols-outlined { font-size: 16px; }
+
             .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
 
             .group-card {
@@ -119,6 +151,12 @@ export class GroupsManagementView extends LitElement {
             .empty-state .material-symbols-outlined { font-size: 40px; display: block; margin-bottom: 12px; opacity: 0.6; }
         `,
     ];
+
+    private get visibleGroups(): FleetGroup[] {
+        const q = this.searchQuery.trim().toLowerCase();
+        if (!q) return this.groups;
+        return this.groups.filter((g) => g.name.toLowerCase().includes(q));
+    }
 
     private renderCard(g: FleetGroup) {
         const confirming = this.confirmingDeleteId === g.id;
@@ -160,6 +198,24 @@ export class GroupsManagementView extends LitElement {
             </header>
 
             <div class="canvas">
+                ${this.groups.length > 0
+                    ? html`
+                        <div class="search-wrap">
+                            <span class="material-symbols-outlined">search</span>
+                            <input
+                                type="search"
+                                placeholder="${msg('Search groups…')}"
+                                .value=${this.searchQuery}
+                                @input=${(e: Event) => { this.searchQuery = (e.target as HTMLInputElement).value; }}
+                            />
+                            ${this.searchQuery ? html`
+                                <button class="clear-btn" @click=${() => { this.searchQuery = ''; }}>
+                                    <span class="material-symbols-outlined">close</span>
+                                </button>
+                            ` : nothing}
+                        </div>
+                      `
+                    : nothing}
                 ${this.loading
                     ? html`<p class="empty-state">${msg('Loading groups…')}</p>`
                     : this.errorMessage
@@ -169,7 +225,9 @@ export class GroupsManagementView extends LitElement {
                                 <span class="material-symbols-outlined">workspaces</span>
                                 ${msg('No groups yet. Create one to organize your fleet.')}
                             </div>`
-                            : html`<div class="grid">${this.groups.map((g) => this.renderCard(g))}</div>`}
+                            : this.visibleGroups.length === 0
+                                ? html`<p class="empty-state">${msg('No groups match your search.')}</p>`
+                                : html`<div class="grid">${this.visibleGroups.map((g) => this.renderCard(g))}</div>`}
             </div>
 
             ${this.creating

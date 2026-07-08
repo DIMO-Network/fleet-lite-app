@@ -1376,6 +1376,22 @@
   <source>Expired</source>
   <target>Vencida</target>
 </trans-unit>
+<trans-unit id="s1f64dec14c84753c">
+  <source>Search geofences…</source>
+  <target>Buscar geocercas…</target>
+</trans-unit>
+<trans-unit id="s7a24bda6d094df75">
+  <source>No geofences match your search.</source>
+  <target>Ninguna geocerca coincide con su búsqueda.</target>
+</trans-unit>
+<trans-unit id="sa2ec3c07744e025f">
+  <source>Search groups…</source>
+  <target>Buscar grupos…</target>
+</trans-unit>
+<trans-unit id="s7a245ae970092034">
+  <source>No groups match your search.</source>
+  <target>Ningún grupo coincide con su búsqueda.</target>
+</trans-unit>
 </body>
 </file>
 </xliff>
