@@ -85,15 +85,20 @@ func (s *InvitationService) Create(ctx context.Context, tenantID, inviterWallet,
 	}
 
 	// Supersede prior pending invites for this email so only one link is live.
-	if _, err := dbmodels.Invitations(
+	superseded, err := dbmodels.Invitations(
 		dbmodels.InvitationWhere.TenantID.EQ(tenantID),
 		qm.And("lower(email) = ?", email),
 		dbmodels.InvitationWhere.Status.EQ(InviteStatusPending),
 	).UpdateAll(ctx, s.pdb.DBS().Writer, dbmodels.M{
 		"status":     InviteStatusRevoked,
 		"updated_at": time.Now(),
-	}); err != nil {
+	})
+	if err != nil {
 		return nil, fmt.Errorf("supersede pending invites: %w", err)
+	}
+	if superseded > 0 {
+		s.logger.Info().Str("tenant", tenantID).Str("email", email).Int64("count", superseded).
+			Msg("invite flow: superseded prior pending invitations (their links are now dead)")
 	}
 
 	token, hash, err := generateInviteToken()
@@ -113,6 +118,9 @@ func (s *InvitationService) Create(ctx context.Context, tenantID, inviterWallet,
 	if err := inv.Insert(ctx, s.pdb.DBS().Writer, boil.Infer()); err != nil {
 		return nil, fmt.Errorf("insert invitation: %w", err)
 	}
+	s.logger.Info().Str("invitation", inv.ID).Str("tenant", tenantID).Str("email", email).
+		Str("role", role).Str("invitedBy", inv.InvitedByWallet).Time("expiresAt", inv.ExpiresAt).
+		Msg("invite flow: invitation created")
 
 	if err := s.sendEmail(ctx, tenantID, inviterWallet, email, token, locale); err != nil {
 		// The invite is persisted and usable; report the email failure as a partial
@@ -133,9 +141,18 @@ func (s *InvitationService) Accept(ctx context.Context, token, inviteeWallet str
 		dbmodels.InvitationWhere.TokenHash.EQ(hash),
 	).One(ctx, s.pdb.DBS().Reader)
 	if err != nil {
+		// The client response is deliberately vague; log the real reason so the
+		// flow is traceable. An unknown hash means the link was superseded by a
+		// newer invite/resend, or was never issued.
+		s.logger.Info().Str("wallet", strings.ToLower(inviteeWallet)).Str("tokenHashPrefix", hash[:8]).
+			Msg("invite flow: accept failed — token not found (superseded by a newer invite/resend, or never issued)")
 		return "", ErrInviteInvalid
 	}
 	if inv.Status != InviteStatusPending || time.Now().After(inv.ExpiresAt) {
+		s.logger.Info().Str("invitation", inv.ID).Str("tenant", inv.TenantID).Str("email", inv.Email).
+			Str("status", inv.Status).Time("expiresAt", inv.ExpiresAt).
+			Str("acceptedByWallet", inv.InviteeWallet.String).Str("attemptingWallet", strings.ToLower(inviteeWallet)).
+			Msg("invite flow: accept failed — invitation not pending or expired")
 		return "", ErrInviteInvalid
 	}
 
@@ -152,6 +169,9 @@ func (s *InvitationService) Accept(ctx context.Context, token, inviteeWallet str
 		boil.Whitelist("status", "invitee_wallet", "accepted_at", "updated_at")); err != nil {
 		return inv.TenantID, fmt.Errorf("mark invitation accepted: %w", err)
 	}
+	s.logger.Info().Str("invitation", inv.ID).Str("tenant", inv.TenantID).Str("email", inv.Email).
+		Str("role", inv.Role).Str("inviteeWallet", inv.InviteeWallet.String).
+		Msg("invite flow: invitation accepted")
 	return inv.TenantID, nil
 }
 
@@ -166,7 +186,7 @@ func (s *InvitationService) List(ctx context.Context, tenantID string) (dbmodels
 // Revoke marks a pending invitation revoked. No-op (no error) if it isn't
 // pending or doesn't belong to the tenant.
 func (s *InvitationService) Revoke(ctx context.Context, tenantID, invitationID string) error {
-	_, err := dbmodels.Invitations(
+	n, err := dbmodels.Invitations(
 		dbmodels.InvitationWhere.ID.EQ(invitationID),
 		dbmodels.InvitationWhere.TenantID.EQ(tenantID),
 		dbmodels.InvitationWhere.Status.EQ(InviteStatusPending),
@@ -174,6 +194,10 @@ func (s *InvitationService) Revoke(ctx context.Context, tenantID, invitationID s
 		"status":     InviteStatusRevoked,
 		"updated_at": time.Now(),
 	})
+	if err == nil && n > 0 {
+		s.logger.Info().Str("invitation", invitationID).Str("tenant", tenantID).
+			Msg("invite flow: invitation revoked")
+	}
 	return err
 }
 
@@ -199,6 +223,9 @@ func (s *InvitationService) Resend(ctx context.Context, tenantID, invitationID, 
 		boil.Whitelist("token_hash", "expires_at", "updated_at")); err != nil {
 		return fmt.Errorf("refresh invitation token: %w", err)
 	}
+	s.logger.Info().Str("invitation", inv.ID).Str("tenant", tenantID).Str("email", inv.Email).
+		Time("expiresAt", inv.ExpiresAt).
+		Msg("invite flow: token refreshed for resend (previous link is now dead)")
 	if err := s.sendEmail(ctx, tenantID, inviterWallet, inv.Email, token, locale); err != nil {
 		// Token was refreshed but the email didn't go out — partial success, the
 		// invite stays pending and can be resent again once email is fixed.
@@ -222,7 +249,13 @@ func (s *InvitationService) sendEmail(ctx context.Context, tenantID, inviterWall
 		Inviter:    inviterWallet,
 		ExpiresIn:  s.expiryLabel(locale),
 	}
-	return s.postmark.SendInvitation(email, s.templateAlias(locale), model)
+	alias := s.templateAlias(locale)
+	if err := s.postmark.SendInvitation(email, alias, model); err != nil {
+		return err
+	}
+	s.logger.Info().Str("tenant", tenantID).Str("email", email).Str("template", alias).
+		Msg("invite flow: invitation email dispatched")
+	return nil
 }
 
 // templateAlias maps an inviter locale to the Postmark template alias. English

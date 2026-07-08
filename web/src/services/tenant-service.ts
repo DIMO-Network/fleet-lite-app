@@ -35,6 +35,8 @@ export interface Invitation {
     createdAt: string;
     expiresAt: string;
     acceptedAt?: string;
+    /** Wallet that accepted the invite — the account it actually bound to. */
+    inviteeWallet?: string;
 }
 
 interface InvitationsResponse {

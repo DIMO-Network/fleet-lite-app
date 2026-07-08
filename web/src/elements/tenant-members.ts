@@ -32,6 +32,7 @@ export class TenantMembers extends LitElement {
     @state() private inviteError = '';
     @state() private inviteNotice = '';
     @state() private busyInviteId = ''; // invitation currently being revoked/resent
+    @state() private showPast = false; // past-invitations section, collapsed by default
 
     static styles = [
         sharedStyles,
@@ -197,6 +198,25 @@ export class TenantMembers extends LitElement {
             .text-btn:hover { background: var(--surface-container-high); color: var(--on-surface); }
             .text-btn.danger:hover { color: var(--error); border-color: var(--error); }
             .text-btn[disabled] { opacity: 0.5; cursor: default; }
+
+            /* Collapsible "Past invitations" header: section-label styling on a button. */
+            .section-toggle {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                background: none;
+                border: none;
+                padding: 0;
+                cursor: pointer;
+                font: var(--type-label-caps);
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                color: var(--on-surface-variant);
+                margin: var(--stack-lg) 0 var(--stack-sm);
+            }
+            .section-toggle:hover { color: var(--on-surface); }
+            .section-toggle .material-symbols-outlined { font-size: 18px; }
+            .badge.expired { color: var(--error); border-color: var(--error); }
         `,
     ];
 
@@ -244,9 +264,24 @@ export class TenantMembers extends LitElement {
         }
     }
 
-    /** Pending invites only — accepted ones already appear in the roster. */
+    /** Live pending invites — accepted ones appear in the roster, expired ones under "Past invitations". */
     private get pendingInvites(): Invitation[] {
-        return this.invites.filter(i => i.status === 'pending');
+        return this.invites.filter(i => i.status === 'pending' && !isExpired(i));
+    }
+
+    /** Accepted and expired invites, shown in the collapsed history section. */
+    private get pastInvites(): Invitation[] {
+        return this.invites.filter(i => i.status === 'accepted' || (i.status === 'pending' && isExpired(i)));
+    }
+
+    /**
+     * Human label for the account that accepted an invite: the roster email if
+     * that wallet is (still) a member, else the shortened wallet.
+     */
+    private accountLabel(wallet?: string): string {
+        if (!wallet) return '';
+        const member = this.members.find(m => m.wallet.toLowerCase() === wallet.toLowerCase());
+        return member?.email || shortWallet(wallet);
     }
 
     private async inviteMember(e: Event) {
@@ -299,6 +334,9 @@ export class TenantMembers extends LitElement {
             this.inviteNotice = res.emailSent === false
                 ? msg('Invitation refreshed, but the email could not be sent. Check email delivery configuration.')
                 : msg('Invitation re-sent.');
+            // Resend renews the expiry, which can move an expired invite back to
+            // the pending list — refresh so it lands in the right section.
+            await this.load();
         } catch (err) {
             this.inviteError = extractMessage(err) || msg('Could not resend invitation.');
         } finally {
@@ -403,6 +441,7 @@ export class TenantMembers extends LitElement {
 
     private renderOwnerControls() {
         const pending = this.pendingInvites;
+        const past = this.pastInvites;
         return html`
             <div class="section-label">${msg('Invite by email')}</div>
             <form class="invite-form" @submit=${this.inviteMember}>
@@ -432,6 +471,21 @@ export class TenantMembers extends LitElement {
                 ? html`
                     <div class="section-label">${msg('Pending invitations')}</div>
                     <div class="row-group">${pending.map(i => this.renderInvite(i))}</div>
+                  `
+                : ''}
+            ${past.length > 0
+                ? html`
+                    <button
+                        class="section-toggle"
+                        aria-expanded=${this.showPast}
+                        @click=${() => (this.showPast = !this.showPast)}
+                    >
+                        <span class="material-symbols-outlined">${this.showPast ? 'expand_more' : 'chevron_right'}</span>
+                        ${msg(str`Past invitations (${past.length})`)}
+                    </button>
+                    ${this.showPast
+                        ? html`<div class="row-group">${past.map(i => this.renderPastInvite(i))}</div>`
+                        : ''}
                   `
                 : ''}
 
@@ -478,6 +532,61 @@ export class TenantMembers extends LitElement {
             </div>
         `;
     }
+
+    /**
+     * A past invitation: accepted (shows when and which account connected) or
+     * expired (shows when it lapsed; can still be re-sent, which revives it as
+     * pending with a fresh link, or revoked to clear it from this list).
+     */
+    private renderPastInvite(i: Invitation) {
+        const busy = this.busyInviteId === i.id;
+        const accepted = i.status === 'accepted';
+        const acceptedDate = i.acceptedAt ? new Date(i.acceptedAt).toLocaleDateString() : '';
+        const expiredDate = new Date(i.expiresAt).toLocaleDateString();
+        const account = this.accountLabel(i.inviteeWallet);
+        return html`
+            <div class="member invite-row">
+                <div class="left-group">
+                    <span class="material-symbols-outlined" style="color: var(--on-surface-variant);">
+                        ${accepted ? 'how_to_reg' : 'event_busy'}
+                    </span>
+                    <div class="identity">
+                        <span class="email-id">${i.email}</span>
+                        <span class="meta" title=${i.inviteeWallet ?? ''}>
+                            ${accepted
+                                ? account
+                                    ? msg(str`Accepted ${acceptedDate} · connected as ${account}`)
+                                    : msg(str`Accepted ${acceptedDate}`)
+                                : msg(str`Expired ${expiredDate}`)}
+                        </span>
+                    </div>
+                </div>
+                <div class="right-group">
+                    <span class="badge ${accepted ? '' : 'expired'}">
+                        ${accepted ? msg('Accepted') : msg('Expired')}
+                    </span>
+                    ${accepted
+                        ? ''
+                        : html`
+                            <button
+                                class="text-btn"
+                                ?disabled=${busy}
+                                @click=${() => this.resendInvite(i.id)}
+                            >${msg('Resend')}</button>
+                            <button
+                                class="text-btn danger"
+                                ?disabled=${busy}
+                                @click=${() => this.revokeInvite(i.id)}
+                            >${msg('Revoke')}</button>
+                          `}
+                </div>
+            </div>
+        `;
+    }
+}
+
+function isExpired(i: Invitation): boolean {
+    return new Date(i.expiresAt).getTime() < Date.now();
 }
 
 function shortWallet(w: string): string {

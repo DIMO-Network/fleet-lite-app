@@ -58,6 +58,10 @@ type invitationJSON struct {
 	CreatedAt  string  `json:"createdAt"`
 	ExpiresAt  string  `json:"expiresAt"`
 	AcceptedAt *string `json:"acceptedAt,omitempty"`
+	// InviteeWallet is the wallet that accepted the invite — the account the
+	// invitation actually bound to, which may differ from the emailed address's
+	// expected owner (e.g. a shared session consumed the link).
+	InviteeWallet *string `json:"inviteeWallet,omitempty"`
 	// EmailSent is set only on create/resend responses (true = the email
 	// dispatched, false = saved but delivery failed). Omitted when listing.
 	EmailSent *bool `json:"emailSent,omitempty"`
@@ -200,6 +204,10 @@ func toInvitationJSON(r *dbmodels.Invitation) invitationJSON {
 	if r.AcceptedAt.Valid {
 		s := r.AcceptedAt.Time.UTC().Format(time.RFC3339)
 		out.AcceptedAt = &s
+	}
+	if r.InviteeWallet.Valid && r.InviteeWallet.String != "" {
+		w := r.InviteeWallet.String
+		out.InviteeWallet = &w
 	}
 	return out
 }
