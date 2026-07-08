@@ -3,13 +3,17 @@ package service
 import (
 	"context"
 	"database/sql"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	dbmodels "github.com/DIMO-Network/fleet-lite-app/internal/db/models"
 	"github.com/DIMO-Network/fleet-lite-app/internal/gateway"
+	"github.com/DIMO-Network/fleet-lite-app/internal/models"
 	"github.com/DIMO-Network/shared/pkg/db"
 	"github.com/aarondl/null/v8"
 	"github.com/aarondl/sqlboiler/v4/boil"
@@ -200,4 +204,212 @@ func (s *TCOService) UpsertSettings(ctx context.Context, tenantID string, tokenI
 		),
 		boil.Infer(),
 	)
+}
+
+// VehicleTCOSummary is one vehicle's cost breakdown for the TCO report.
+type VehicleTCOSummary struct {
+	VehicleTokenID     int64              `json:"tokenId"`
+	VehicleLabel       string             `json:"vehicleLabel"`
+	VIN                string             `json:"vin,omitempty"`
+	OperatingCost      float64            `json:"operatingCost"`
+	CostByCategory     map[string]float64 `json:"costByCategory"`
+	AcquisitionCost    float64            `json:"acquisitionCost"`
+	DepreciationToDate float64            `json:"depreciationToDate"`
+	TotalTCO           float64            `json:"totalTco"`
+	Settings           TCOSettings        `json:"settings"`
+	LineItems          []LineItem         `json:"lineItems"`
+}
+
+// FleetTotals sums each VehicleTCOSummary field across the fleet.
+type FleetTotals struct {
+	OperatingCost      float64 `json:"operatingCost"`
+	AcquisitionCost    float64 `json:"acquisitionCost"`
+	DepreciationToDate float64 `json:"depreciationToDate"`
+	TotalTCO           float64 `json:"totalTco"`
+}
+
+// FleetTCOSummary is the fleet-wide rollup: each vehicle's summary plus totals.
+type FleetTCOSummary struct {
+	Vehicles []VehicleTCOSummary `json:"vehicles"`
+	Fleet    FleetTotals         `json:"fleet"`
+}
+
+// vehicleLabel formats "<year> <make> <model>", falling back to "Vehicle #<id>".
+func vehicleLabel(v models.Vehicle) string {
+	d := v.Definition
+	parts := make([]string, 0, 3)
+	if d.Year != 0 {
+		parts = append(parts, strconv.Itoa(d.Year))
+	}
+	if d.Make != "" {
+		parts = append(parts, d.Make)
+	}
+	if d.Model != "" {
+		parts = append(parts, d.Model)
+	}
+	if len(parts) == 0 {
+		return fmt.Sprintf("Vehicle #%d", v.TokenID)
+	}
+	return strings.Join(parts, " ")
+}
+
+// descriptionFor derives a human label for a line item from its parsed data's
+// "fileName"/"name" field, falling back to the CE type's last segment.
+func descriptionFor(e gateway.AttestationEntry) string {
+	var payload struct {
+		Name     string `json:"name"`
+		FileName string `json:"fileName"`
+	}
+	if len(e.Data) > 0 {
+		_ = json.Unmarshal(e.Data, &payload)
+	}
+	if payload.FileName != "" {
+		return payload.FileName
+	}
+	if payload.Name != "" {
+		return payload.Name
+	}
+	parts := strings.Split(e.Type, ".")
+	return parts[len(parts)-1]
+}
+
+// VehicleSummary builds one vehicle's TCO breakdown: cost-eligible document
+// amounts summed by category, plus acquisition/depreciation if settings exist.
+func (s *TCOService) VehicleSummary(ctx context.Context, tenant models.Tenant, tokenID int64) (*VehicleTCOSummary, error) {
+	vehicle, err := s.vehicleSvc.GetVehicle(ctx, tenant.ID, tokenID)
+	if err != nil {
+		return nil, fmt.Errorf("get vehicle: %w", err)
+	}
+	label := vehicleLabel(*vehicle)
+
+	tokenDID := s.authProvider.BuildVehicleDID(uint64(tokenID))
+	entries, err := s.fetchAPI.ListByDID(tenant, tokenDID, 500)
+	if err != nil {
+		return nil, fmt.Errorf("list documents: %w", err)
+	}
+
+	lineItems := make([]LineItem, 0, len(entries))
+	for _, e := range entries {
+		if !isCostEligible(e.Type) {
+			continue
+		}
+		amount, currency, ok := extractAmount(e.Data)
+		if !ok {
+			continue
+		}
+		lineItems = append(lineItems, LineItem{
+			VehicleTokenID: tokenID,
+			VehicleLabel:   label,
+			VIN:            vehicle.VIN,
+			Date:           e.Time,
+			Category:       e.Type,
+			Description:    descriptionFor(e),
+			Amount:         amount,
+			Currency:       currency,
+		})
+	}
+
+	settings, err := s.GetSettings(ctx, tenant.ID, tokenID)
+	if err != nil {
+		return nil, fmt.Errorf("get tco settings: %w", err)
+	}
+
+	summary := &VehicleTCOSummary{
+		VehicleTokenID: tokenID,
+		VehicleLabel:   label,
+		VIN:            vehicle.VIN,
+		CostByCategory: sumLineItemsByCategory(lineItems),
+		Settings:       settings,
+		LineItems:      lineItems,
+	}
+	for _, v := range summary.CostByCategory {
+		summary.OperatingCost += v
+	}
+	if settings.PurchasePrice != nil {
+		summary.AcquisitionCost = *settings.PurchasePrice
+		if settings.PurchaseDate != nil && settings.UsefulLifeYears != nil {
+			purchaseDate, perr := time.Parse("2006-01-02", *settings.PurchaseDate)
+			if perr == nil {
+				summary.DepreciationToDate = straightLineDepreciation(*settings.PurchasePrice, purchaseDate, *settings.UsefulLifeYears, time.Now())
+			}
+		}
+	}
+	summary.TotalTCO = summary.OperatingCost + summary.AcquisitionCost
+	return summary, nil
+}
+
+// FleetSummary builds the TCO rollup for every vehicle in the tenant. Vehicles
+// are processed sequentially — one fetch-api round trip each — which is
+// acceptable for the fleet sizes this app targets; revisit with a worker pool
+// if that stops being true. A single vehicle's failure is logged and skipped
+// rather than failing the whole report.
+func (s *TCOService) FleetSummary(ctx context.Context, tenant models.Tenant) (*FleetTCOSummary, error) {
+	vehicles, err := s.vehicleSvc.ListVehicles(ctx, tenant.ID)
+	if err != nil {
+		return nil, fmt.Errorf("list vehicles: %w", err)
+	}
+	out := &FleetTCOSummary{Vehicles: make([]VehicleTCOSummary, 0, len(vehicles))}
+	for _, v := range vehicles {
+		summary, err := s.VehicleSummary(ctx, tenant, v.TokenID)
+		if err != nil {
+			s.logger.Warn().Err(err).Int64("tokenID", v.TokenID).Msg("tco vehicle summary failed, skipping")
+			continue
+		}
+		out.Vehicles = append(out.Vehicles, *summary)
+		out.Fleet.OperatingCost += summary.OperatingCost
+		out.Fleet.AcquisitionCost += summary.AcquisitionCost
+		out.Fleet.DepreciationToDate += summary.DepreciationToDate
+		out.Fleet.TotalTCO += summary.TotalTCO
+	}
+	return out, nil
+}
+
+// ceTypeToLabel mirrors web/src/utils/document-categories.ts's CE_TYPE_TO_LABEL
+// so the CSV export reads the same as the app. Duplicated deliberately: the
+// frontend map is TypeScript and can't be imported into Go.
+var ceTypeToLabel = map[string]string{
+	"dimo.document.vehicle.service.invoice":  "Service & parts",
+	"dimo.document.vehicle.insurance":        "Insurance",
+	"dimo.document.vehicle.registration":     "Registration",
+	"dimo.document.vehicle.inspection":       "Inspection",
+	"dimo.document.vehicle.finance":          "Finance",
+	"dimo.document.vehicle.regulatory.other": "Regulatory",
+	"dimo.document.vehicle.maintenance":      "Service & parts",
+	"dimo.document.vehicle.expense":          "Other",
+	FuelCloudEventType:                       "Fuel",
+}
+
+func categoryLabelForCSV(ceType string) string {
+	if l, ok := ceTypeToLabel[ceType]; ok {
+		return l
+	}
+	return ceType
+}
+
+// BuildCSV renders line items (plus trailing acquisition/depreciation summary
+// rows per vehicle) as CSV text.
+func BuildCSV(summaries []VehicleTCOSummary) string {
+	var b strings.Builder
+	w := csv.NewWriter(&b)
+	_ = w.Write([]string{"vehicle", "vin", "date", "category", "description", "amount", "currency"})
+	for _, v := range summaries {
+		for _, li := range v.LineItems {
+			_ = w.Write([]string{
+				li.VehicleLabel, li.VIN, li.Date, categoryLabelForCSV(li.Category), li.Description,
+				strconv.FormatFloat(li.Amount, 'f', 2, 64), li.Currency,
+			})
+		}
+		if v.Settings.PurchasePrice != nil {
+			_ = w.Write([]string{
+				v.VehicleLabel, v.VIN, "(acquisition)", "Acquisition", "Purchase price",
+				strconv.FormatFloat(*v.Settings.PurchasePrice, 'f', 2, 64), v.Settings.Currency,
+			})
+			_ = w.Write([]string{
+				v.VehicleLabel, v.VIN, "(acquisition)", "Depreciation", "Depreciation to date",
+				strconv.FormatFloat(-v.DepreciationToDate, 'f', 2, 64), v.Settings.Currency,
+			})
+		}
+	}
+	w.Flush()
+	return b.String()
 }

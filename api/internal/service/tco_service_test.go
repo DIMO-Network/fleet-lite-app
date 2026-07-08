@@ -3,6 +3,7 @@ package service
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -99,5 +100,34 @@ func TestSumLineItemsByCategory(t *testing.T) {
 	}
 	if len(got) != 2 {
 		t.Fatalf("expected 2 categories, got %d", len(got))
+	}
+}
+
+func TestBuildCSV(t *testing.T) {
+	price := 20000.0
+	summaries := []VehicleTCOSummary{
+		{
+			VehicleLabel:       "2021 Subaru Ascent",
+			VIN:                "1HGCM82633A123456",
+			DepreciationToDate: 5000,
+			Settings:           TCOSettings{PurchasePrice: &price, Currency: "USD"},
+			LineItems: []LineItem{
+				{VehicleLabel: "2021 Subaru Ascent", VIN: "1HGCM82633A123456", Date: "2026-03-14", Category: "dimo.document.vehicle.service.invoice", Description: "invoice.pdf", Amount: 412.5, Currency: "USD"},
+			},
+		},
+	}
+	got := BuildCSV(summaries)
+	wantHeader := "vehicle,vin,date,category,description,amount,currency"
+	if !strings.Contains(got, wantHeader) {
+		t.Fatalf("missing header row, got:\n%s", got)
+	}
+	if !strings.Contains(got, "412.50,USD") {
+		t.Fatalf("missing line item row, got:\n%s", got)
+	}
+	if !strings.Contains(got, "20000.00,USD") {
+		t.Fatalf("missing acquisition row, got:\n%s", got)
+	}
+	if !strings.Contains(got, "-5000.00,USD") {
+		t.Fatalf("missing depreciation row, got:\n%s", got)
 	}
 }
