@@ -288,8 +288,13 @@ func (s *TCOService) VehicleSummary(ctx context.Context, tenant models.Tenant, t
 		return nil, fmt.Errorf("list documents: %w", err)
 	}
 
+	tombstoned := gateway.TombstonedIDs(entries)
+
 	lineItems := make([]LineItem, 0, len(entries))
 	for _, e := range entries {
+		if _, gone := tombstoned[e.ID]; gone {
+			continue
+		}
 		if !isCostEligible(e.Type) {
 			continue
 		}

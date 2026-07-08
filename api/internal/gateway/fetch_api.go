@@ -176,6 +176,34 @@ func (f *FetchAPI) FindRawByFilehash(tenant models.Tenant, tokenDID, fileHash st
 	return nil, nil
 }
 
+// TombstonedIDs scans entries for dimo.tombstone CEs and returns the set of
+// CE ids they void. Both the parsed id (voidsId, or the older referenceId
+// name) and the paired raw id (rawReferenceId) are included, matching the
+// dimo.tombstone data shape: {voidsId, rawReferenceId?}.
+func TombstonedIDs(entries []AttestationEntry) map[string]struct{} {
+	tombstoned := map[string]struct{}{}
+	for _, e := range entries {
+		if e.Type != "dimo.tombstone" {
+			continue
+		}
+		var d struct {
+			VoidsID        string `json:"voidsId"`
+			ReferenceID    string `json:"referenceId"`
+			RawReferenceID string `json:"rawReferenceId"`
+		}
+		_ = json.Unmarshal(e.Data, &d)
+		if d.VoidsID != "" {
+			tombstoned[d.VoidsID] = struct{}{}
+		} else if d.ReferenceID != "" {
+			tombstoned[d.ReferenceID] = struct{}{}
+		}
+		if d.RawReferenceID != "" {
+			tombstoned[d.RawReferenceID] = struct{}{}
+		}
+	}
+	return tombstoned
+}
+
 func isDocumentType(t string) bool {
 	return strings.HasPrefix(t, "dimo.document.") ||
 		strings.HasPrefix(t, "dimo.raw.") ||

@@ -119,6 +119,7 @@ export class TCOView extends LitElement {
         this.detailTokenId = v.tokenId;
         this.loadingDetail = true;
         this.detailError = '';
+        this.settingsError = '';
         try {
             this.detail = await TCOService.getInstance().getVehicleDetail(v.tokenId);
             this.formPurchasePrice = this.detail.settings.purchasePrice?.toString() ?? '';
