@@ -50,6 +50,34 @@
         p { font-size: 14px; color: var(--on-surface-variant); line-height: 1.6; }
         .spacer { margin-top: 24px; }
         .error-text { color: var(--error); }
+        .identity {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            color: var(--on-surface);
+            margin-top: 8px;
+            word-break: break-all;
+        }
+        .primary-btn {
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            background: var(--secondary);
+            color: #131313;
+            border: none;
+            border-radius: 999px;
+            padding: 12px 28px;
+            cursor: pointer;
+        }
+        .primary-btn:hover { filter: brightness(1.1); }
+        .link-btn {
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            background: none;
+            border: none;
+            color: var(--secondary);
+            cursor: pointer;
+            text-decoration: underline;
+        }
         .footer {
             margin-top: 32px;
             font-family: 'JetBrains Mono', monospace;
@@ -76,6 +104,19 @@
         <div class="spacer">
             <login-element></login-element>
         </div>
+    </div>
+
+    <div id="view-confirm" style="display: none;">
+        <h1>You've been invited</h1>
+        <p>You're accepting this invitation as</p>
+        <p class="identity" id="confirm-identity"></p>
+        <div class="spacer">
+            <button class="primary-btn" id="confirm-accept">Accept invitation</button>
+        </div>
+        <p class="spacer">
+            Not you?
+            <button class="link-btn" id="confirm-switch">Sign in with a different account</button>
+        </p>
     </div>
 
     <div id="view-success" style="display: none;">
