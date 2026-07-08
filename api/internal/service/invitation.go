@@ -27,6 +27,10 @@ const (
 	InviteStatusAccepted = "accepted"
 	InviteStatusRevoked  = "revoked"
 
+	// EmailStatusSent is stamped when Postmark accepts the message; the webhook
+	// (docs/POSTMARK_WEBHOOK_PLAN.md phase 2) upgrades it to delivered/opened/bounced.
+	EmailStatusSent = "sent"
+
 	localeEN = "en"
 	localeES = "es"
 
@@ -47,7 +51,7 @@ var ErrEmailNotSent = errors.New("invitation saved but the email could not be se
 // postmarkSender is the slice of the Postmark gateway the service needs. Kept as
 // an interface so the service is testable without a live Postmark.
 type postmarkSender interface {
-	SendInvitation(toEmail, templateAlias string, model gateway.InvitationModel) error
+	SendInvitation(toEmail, templateAlias string, model gateway.InvitationModel, metadata map[string]string) (messageID string, err error)
 }
 
 // InvitationService owns the email-invitation lifecycle: issue (with a hashed
@@ -122,13 +126,35 @@ func (s *InvitationService) Create(ctx context.Context, tenantID, inviterWallet,
 		Str("role", role).Str("invitedBy", inv.InvitedByWallet).Time("expiresAt", inv.ExpiresAt).
 		Msg("invite flow: invitation created")
 
-	if err := s.sendEmail(ctx, tenantID, inviterWallet, email, token, locale); err != nil {
+	messageID, err := s.sendEmail(ctx, tenantID, inviterWallet, email, token, locale, inv.ID)
+	if err != nil {
 		// The invite is persisted and usable; report the email failure as a partial
 		// success (ErrEmailNotSent) so the caller returns the invite + a warning.
 		s.logger.Err(err).Str("tenant", tenantID).Str("email", email).Msg("send invitation email")
 		return inv, fmt.Errorf("%w: %v", ErrEmailNotSent, err)
 	}
+	s.markEmailSent(ctx, inv, messageID)
 	return inv, nil
+}
+
+// markEmailSent stamps the Postmark message id + email_status='sent' on the
+// invitation after a successful dispatch; the Postmark webhook later upgrades
+// the status (see docs/POSTMARK_WEBHOOK_PLAN.md). Best-effort: tracking is
+// advisory, so a failure is logged, never surfaced. No-op when sending is
+// disabled (empty messageID, local dev).
+func (s *InvitationService) markEmailSent(ctx context.Context, inv *dbmodels.Invitation, messageID string) {
+	if messageID == "" {
+		return
+	}
+	inv.PostmarkMessageID = null.StringFrom(messageID)
+	inv.EmailStatus = null.StringFrom(EmailStatusSent)
+	inv.EmailStatusAt = null.TimeFrom(time.Now())
+	inv.EmailStatusDetail = null.String{} // clear stale detail from a prior bounce
+	if _, err := inv.Update(ctx, s.pdb.DBS().Writer,
+		boil.Whitelist("postmark_message_id", "email_status", "email_status_at", "email_status_detail")); err != nil {
+		s.logger.Warn().Err(err).Str("invitation", inv.ID).Str("messageId", messageID).
+			Msg("invite flow: could not record email tracking status")
+	}
 }
 
 // Accept validates the token and binds the invitee's wallet to the tenant with
@@ -226,18 +252,23 @@ func (s *InvitationService) Resend(ctx context.Context, tenantID, invitationID, 
 	s.logger.Info().Str("invitation", inv.ID).Str("tenant", tenantID).Str("email", inv.Email).
 		Time("expiresAt", inv.ExpiresAt).
 		Msg("invite flow: token refreshed for resend (previous link is now dead)")
-	if err := s.sendEmail(ctx, tenantID, inviterWallet, inv.Email, token, locale); err != nil {
+	messageID, err := s.sendEmail(ctx, tenantID, inviterWallet, inv.Email, token, locale, inv.ID)
+	if err != nil {
 		// Token was refreshed but the email didn't go out — partial success, the
 		// invite stays pending and can be resent again once email is fixed.
 		s.logger.Err(err).Str("tenant", tenantID).Str("email", inv.Email).Msg("resend invitation email")
 		return fmt.Errorf("%w: %v", ErrEmailNotSent, err)
 	}
+	s.markEmailSent(ctx, inv, messageID)
 	return nil
 }
 
 // sendEmail builds the accept link + template model and dispatches via Postmark,
-// picking the template whose language matches the inviter's locale.
-func (s *InvitationService) sendEmail(ctx context.Context, tenantID, inviterWallet, email, token, locale string) error {
+// picking the template whose language matches the inviter's locale. The
+// invitation id rides along as message metadata so delivery/open/bounce
+// webhooks can be correlated back to the row; the returned MessageID ("" when
+// sending is disabled) is the secondary correlation key.
+func (s *InvitationService) sendEmail(ctx context.Context, tenantID, inviterWallet, email, token, locale, invitationID string) (string, error) {
 	tenant, err := s.tenantSvc.GetTenantByID(ctx, tenantID)
 	tenantName := tenantID
 	if err == nil && tenant.Name != "" {
@@ -250,12 +281,14 @@ func (s *InvitationService) sendEmail(ctx context.Context, tenantID, inviterWall
 		ExpiresIn:  s.expiryLabel(locale),
 	}
 	alias := s.templateAlias(locale)
-	if err := s.postmark.SendInvitation(email, alias, model); err != nil {
-		return err
+	messageID, err := s.postmark.SendInvitation(email, alias, model, map[string]string{"invitation_id": invitationID})
+	if err != nil {
+		return "", err
 	}
 	s.logger.Info().Str("tenant", tenantID).Str("email", email).Str("template", alias).
+		Str("messageId", messageID).
 		Msg("invite flow: invitation email dispatched")
-	return nil
+	return messageID, nil
 }
 
 // templateAlias maps an inviter locale to the Postmark template alias. English
