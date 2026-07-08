@@ -47,6 +47,7 @@ export class GeofencesManagementView extends LitElement {
     @state() private activity: Geofence | null = null;
     @state() private confirmingDeleteId: string | null = null;
     @state() private selectedId: string | null = null;
+    @state() private searchQuery = '';
     // Optional overlay of live vehicle GPS dots (off by default). Geofences stay
     // the zoom focus — turning this on never refits the map.
     @state() private showVehicleLocations = false;
@@ -419,6 +420,37 @@ export class GeofencesManagementView extends LitElement {
 
             .panel-empty { padding: 24px 16px; text-align: center; color: var(--on-surface-variant); font: var(--type-body-sm); }
 
+            /* Same search treatment as the fleet list view, sized for the panel. */
+            .search-wrap {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                background: var(--surface-container);
+                border: 1px solid var(--outline-variant);
+                border-radius: var(--radius-md);
+                padding: 6px 10px;
+                margin: 0 12px 8px;
+            }
+            .search-wrap .material-symbols-outlined { font-size: 16px; color: var(--on-surface-variant); }
+            .search-wrap input {
+                background: none;
+                border: none;
+                outline: none;
+                color: var(--on-surface);
+                font: var(--type-body-sm);
+                flex: 1;
+                min-width: 0;
+            }
+            .clear-btn {
+                background: none;
+                border: none;
+                padding: 0;
+                color: var(--on-surface-variant);
+                cursor: pointer;
+                display: flex;
+            }
+            .clear-btn .material-symbols-outlined { font-size: 14px; }
+
             .draw-bar {
                 position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 35;
                 display: flex; align-items: center; gap: 12px;
@@ -442,6 +474,13 @@ export class GeofencesManagementView extends LitElement {
             }
         `,
     ];
+
+    /** Panel list filtered by the search box; map overlays stay unfiltered. */
+    private get visibleGeofences(): Geofence[] {
+        const q = this.searchQuery.trim().toLowerCase();
+        if (!q) return this.geofences;
+        return this.geofences.filter((g) => g.name.toLowerCase().includes(q));
+    }
 
     private renderCard(g: Geofence) {
         const confirming = this.confirmingDeleteId === g.id;
@@ -511,12 +550,32 @@ export class GeofencesManagementView extends LitElement {
 
                 <div class="panel">
                     <div class="panel-head">${msg('Geofences')} ${this.geofences.length ? `(${this.geofences.length})` : ''}</div>
+                    ${this.geofences.length > 0
+                        ? html`
+                            <div class="search-wrap">
+                                <span class="material-symbols-outlined">search</span>
+                                <input
+                                    type="search"
+                                    placeholder="${msg('Search geofences…')}"
+                                    .value=${this.searchQuery}
+                                    @input=${(e: Event) => { this.searchQuery = (e.target as HTMLInputElement).value; }}
+                                />
+                                ${this.searchQuery ? html`
+                                    <button class="clear-btn" @click=${() => { this.searchQuery = ''; }}>
+                                        <span class="material-symbols-outlined">close</span>
+                                    </button>
+                                ` : nothing}
+                            </div>
+                          `
+                        : nothing}
                     <div class="panel-list">
                         ${this.loading
                             ? html`<p class="panel-empty">${msg('Loading geofences…')}</p>`
                             : this.geofences.length === 0
                                 ? html`<p class="panel-empty">${msg('No geofences yet. Click “New geofence” and draw an area on the map.')}</p>`
-                                : this.geofences.map((g) => this.renderCard(g))}
+                                : this.visibleGeofences.length === 0
+                                    ? html`<p class="panel-empty">${msg('No geofences match your search.')}</p>`
+                                    : this.visibleGeofences.map((g) => this.renderCard(g))}
                     </div>
                 </div>
 
