@@ -23,8 +23,8 @@ func NewTenantMiddleware(tenantSvc *service.TenantService, logger *zerolog.Logge
 			return fiber.NewError(fiber.StatusBadRequest, "Tenant-Id header is required")
 		}
 
-		role, err := tenantSvc.GetMembershipRole(c.Context(), tenantID, wallet.Hex())
-		if err != nil || role == "" {
+		membership, err := tenantSvc.GetMembership(c.Context(), tenantID, wallet.Hex())
+		if err != nil || membership.Role == "" {
 			return fiber.NewError(fiber.StatusForbidden, "no access to tenant")
 		}
 
@@ -35,7 +35,12 @@ func NewTenantMiddleware(tenantSvc *service.TenantService, logger *zerolog.Logge
 		}
 
 		c.Locals(controllers.TenantLocalsKey, *tenant)
-		c.Locals("tenant_role", role)
+		c.Locals(controllers.RoleLocalsKey, membership.Role)
+		// Limited members carry their allowed group ids; owners and full-access
+		// members (NULL column) get no entry = unrestricted. See GROUP_ACCESS_PLAN.md.
+		if membership.Role != service.RoleOwner && membership.AllowedGroupIds != nil {
+			c.Locals(controllers.AllowedGroupsLocalsKey, []string(membership.AllowedGroupIds))
+		}
 		return c.Next()
 	}
 }

@@ -14,6 +14,48 @@ import (
 // decrypted tenant for the current request.
 const TenantLocalsKey = "tenant"
 
+// RoleLocalsKey is where the tenant middleware stashes the caller's membership
+// role ("owner" / "member") for the current tenant.
+const RoleLocalsKey = "tenant_role"
+
+// AllowedGroupsLocalsKey is where the tenant middleware stashes the caller's
+// allowed fleet-group ids — set ONLY when the caller is a limited member
+// (owners and full-access members have no entry). See docs/GROUP_ACCESS_PLAN.md.
+const AllowedGroupsLocalsKey = "tenant_allowed_groups"
+
+// GetTenantRole returns the caller's role in the current tenant ("" if the
+// tenant middleware didn't run).
+func GetTenantRole(c *fiber.Ctx) string {
+	role, _ := c.Locals(RoleLocalsKey).(string)
+	return role
+}
+
+// GetAllowedGroups returns the fleet-group ids the caller is limited to.
+// limited=false (ids nil) means unrestricted — an owner or a full-access
+// member. limited=true with an empty slice is a member with access to nothing.
+func GetAllowedGroups(c *fiber.Ctx) (ids []string, limited bool) {
+	ids, limited = c.Locals(AllowedGroupsLocalsKey).([]string)
+	return ids, limited
+}
+
+// toSet builds a membership set from a slice of ids.
+func toSet(ids []string) map[string]bool {
+	set := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		set[id] = true
+	}
+	return set
+}
+
+// RequireFullAccess rejects limited members. Management mutations (fleet-group
+// and geofence CRUD) are reserved for owners and full-access members.
+func RequireFullAccess(c *fiber.Ctx) error {
+	if _, limited := GetAllowedGroups(c); limited {
+		return fiber.NewError(fiber.StatusForbidden, "your access is limited to specific groups; ask an owner to make this change")
+	}
+	return nil
+}
+
 // GetTenant returns the resolved tenant the tenant middleware loaded into the
 // request context (after validating the caller's membership).
 func GetTenant(c *fiber.Ctx) (models.Tenant, error) {

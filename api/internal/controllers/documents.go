@@ -52,9 +52,11 @@ func NewDocumentsController(
 	}
 }
 
-// vehicleInTenant reports whether the tokenID is one of the tenant's synced vehicles.
-func (d *DocumentsController) vehicleInTenant(ctx context.Context, tenantID string, tokenID uint64) bool {
-	_, err := d.vehicleSvc.GetVehicle(ctx, tenantID, int64(tokenID))
+// vehicleInTenant reports whether the tokenID is one of the tenant's synced
+// vehicles — and, for limited members, inside their allowed groups.
+func (d *DocumentsController) vehicleInTenant(c *fiber.Ctx, tenantID string, tokenID uint64) bool {
+	allowed, _ := GetAllowedGroups(c)
+	_, err := d.vehicleSvc.GetVehicle(c.Context(), tenantID, int64(tokenID), allowed)
 	return err == nil
 }
 
@@ -145,7 +147,7 @@ func (d *DocumentsController) AttestDocument(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "tokenId, category, fileBase64 are required")
 	}
 
-	if !d.vehicleInTenant(c.Context(), tenant.ID, uint64(req.TokenID)) {
+	if !d.vehicleInTenant(c, tenant.ID, uint64(req.TokenID)) {
 		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
 	}
 
@@ -196,7 +198,7 @@ func (d *DocumentsController) ListDocuments(c *fiber.Ctx) error {
 	if err != nil || tokenID == 0 {
 		return fiber.NewError(fiber.StatusBadRequest, "valid tokenId query param required")
 	}
-	if !d.vehicleInTenant(c.Context(), tenant.ID, tokenID) {
+	if !d.vehicleInTenant(c, tenant.ID, tokenID) {
 		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
 	}
 
@@ -293,7 +295,7 @@ func (d *DocumentsController) DownloadDocument(c *fiber.Ctx) error {
 	if fileHash == "" {
 		return fiber.NewError(fiber.StatusBadRequest, "filehash query param required")
 	}
-	if !d.vehicleInTenant(c.Context(), tenant.ID, tokenID) {
+	if !d.vehicleInTenant(c, tenant.ID, tokenID) {
 		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
 	}
 
@@ -335,7 +337,7 @@ func (d *DocumentsController) DeleteDocument(c *fiber.Ctx) error {
 	if err != nil || tokenID == 0 {
 		return fiber.NewError(fiber.StatusBadRequest, "valid tokenId query param required")
 	}
-	if !d.vehicleInTenant(c.Context(), tenant.ID, tokenID) {
+	if !d.vehicleInTenant(c, tenant.ID, tokenID) {
 		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
 	}
 

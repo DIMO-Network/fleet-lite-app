@@ -77,7 +77,7 @@ func App(
 	fleetGroupsCtrl := controllers.NewFleetGroupsController(logger, groupSvc, groupSyncSvc, attestSvc)
 	geofenceSvc := service.NewGeofenceService(logger, pdb)
 	geofenceDetectionSvc := service.NewGeofenceDetectionService(logger, pdb, telemetryAPI, geofenceSvc)
-	geofencesCtrl := controllers.NewGeofencesController(logger, geofenceSvc, attestSvc, geofenceDetectionSvc)
+	geofencesCtrl := controllers.NewGeofencesController(logger, geofenceSvc, attestSvc, geofenceDetectionSvc, vehicleSvc)
 	settingsCtrl := controllers.NewSettingsController(settings, logger)
 	tenantsCtrl := controllers.NewTenantsController(logger, settings, tenantSvc, vehicleSvc, identity, authProvider)
 	invitationsCtrl := controllers.NewInvitationsController(logger, tenantSvc, invitationSvc)
@@ -111,6 +111,7 @@ func App(
 	authApp.Get("/tenants/:id/members", tenantsCtrl.GetMembers)
 	authApp.Post("/tenants/:id/members", tenantsCtrl.AddMember)
 	authApp.Delete("/tenants/:id/members/:wallet", tenantsCtrl.RemoveMember)
+	authApp.Put("/tenants/:id/members/:wallet/access", tenantsCtrl.UpdateMemberAccess)
 	authApp.Post("/tenants/:id/login", tenantsCtrl.LoginTouch)
 
 	// Per-user UI preferences (units, locale, …), keyed by the caller's wallet.
@@ -130,6 +131,10 @@ func App(
 
 	// Tenant-scoped data routes (JWT + Tenant-Id header membership check).
 	tenantApp := authApp.Group("", NewTenantMiddleware(tenantSvc, logger))
+
+	// The caller's own role + group scope for the current tenant (drives
+	// role/scope-aware UI). See docs/GROUP_ACCESS_PLAN.md.
+	tenantApp.Get("/me/access", tenantsCtrl.GetMyAccess)
 
 	tenantApp.Get("/vehicles", vehiclesCtrl.GetVehicles)
 	tenantApp.Get("/vehicles/:tokenID", vehiclesCtrl.GetVehicle)

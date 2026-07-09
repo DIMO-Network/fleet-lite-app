@@ -19,6 +19,7 @@ import (
 	"github.com/aarondl/null/v8"
 	"github.com/aarondl/sqlboiler/v4/boil"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
+	"github.com/aarondl/sqlboiler/v4/types"
 	"github.com/rs/zerolog"
 )
 
@@ -85,13 +86,23 @@ func NewInvitationService(logger *zerolog.Logger, pdb *db.Store, settings *confi
 // same (tenant, email), generates a single-use token (storing only its hash),
 // persists the row, and sends the accept-link email via Postmark. Returns the
 // stored invitation.
-func (s *InvitationService) Create(ctx context.Context, tenantID, inviterWallet, email, role, locale string) (*dbmodels.Invitation, error) {
+//
+// allowedGroupIDs limits the future member to those fleet groups (nil = full
+// access); ignored for owner invites, and every id must be one of the tenant's
+// groups. See docs/GROUP_ACCESS_PLAN.md.
+func (s *InvitationService) Create(ctx context.Context, tenantID, inviterWallet, email, role, locale string, allowedGroupIDs []string) (*dbmodels.Invitation, error) {
 	email = strings.TrimSpace(strings.ToLower(email))
 	if email == "" {
 		return nil, fmt.Errorf("email is required")
 	}
 	if role != RoleOwner {
 		role = RoleMember
+	}
+	if role == RoleOwner {
+		allowedGroupIDs = nil
+	}
+	if err := s.validateGroupIDs(ctx, tenantID, allowedGroupIDs); err != nil {
+		return nil, err
 	}
 
 	// Supersede prior pending invites for this email so only one link is live.
@@ -124,6 +135,7 @@ func (s *InvitationService) Create(ctx context.Context, tenantID, inviterWallet,
 		Status:          InviteStatusPending,
 		InvitedByWallet: strings.ToLower(inviterWallet),
 		ExpiresAt:       time.Now().Add(s.expiry()),
+		AllowedGroupIds: types.StringArray(allowedGroupIDs),
 	}
 	if err := inv.Insert(ctx, s.pdb.DBS().Writer, boil.Infer()); err != nil {
 		return nil, fmt.Errorf("insert invitation: %w", err)
@@ -188,7 +200,7 @@ func (s *InvitationService) Accept(ctx context.Context, token, inviteeWallet str
 		return "", ErrInviteInvalid
 	}
 
-	if err := s.tenantSvc.AddMember(ctx, inv.TenantID, inviteeWallet, inv.Role); err != nil {
+	if err := s.tenantSvc.AddMember(ctx, inv.TenantID, inviteeWallet, inv.Role, []string(inv.AllowedGroupIds)); err != nil {
 		return "", fmt.Errorf("add member: %w", err)
 	}
 
@@ -267,6 +279,46 @@ func (s *InvitationService) Resend(ctx context.Context, tenantID, invitationID, 
 	}
 	s.markEmailSent(ctx, inv, messageID)
 	return nil
+}
+
+// validateGroupIDs verifies every id names one of the tenant's fleet groups.
+// nil (full access) passes trivially; an empty non-nil slice also passes (a
+// member with access to nothing — the UI prevents it, the API tolerates it).
+func (s *InvitationService) validateGroupIDs(ctx context.Context, tenantID string, groupIDs []string) error {
+	if len(groupIDs) == 0 {
+		return nil
+	}
+	n, err := dbmodels.FleetGroups(
+		dbmodels.FleetGroupWhere.TenantID.EQ(tenantID),
+		qm.AndIn("id in ?", toInterfaceSlice(groupIDs)...),
+	).Count(ctx, s.pdb.DBS().Reader)
+	if err != nil {
+		return fmt.Errorf("validate group ids: %w", err)
+	}
+	if int(n) != len(uniqueStrings(groupIDs)) {
+		return fmt.Errorf("one or more group ids do not exist in this tenant")
+	}
+	return nil
+}
+
+func toInterfaceSlice(ss []string) []interface{} {
+	out := make([]interface{}, len(ss))
+	for i, s := range ss {
+		out[i] = s
+	}
+	return out
+}
+
+func uniqueStrings(ss []string) []string {
+	seen := make(map[string]struct{}, len(ss))
+	out := ss[:0:0]
+	for _, s := range ss {
+		if _, ok := seen[s]; !ok {
+			seen[s] = struct{}{}
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // emailStatusRank orders email-tracking statuses for monotonic upgrades. A

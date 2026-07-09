@@ -91,6 +91,31 @@ func (s *FleetGroupService) ListGroups(ctx context.Context, tenantID string) ([]
 	return out, nil
 }
 
+// VehicleInGroups reports whether the vehicle belongs to at least one of the
+// given fleet groups. Used to authorize limited members' per-vehicle requests.
+func (s *FleetGroupService) VehicleInGroups(ctx context.Context, tenantID string, tokenID int64, groupIDs []string) (bool, error) {
+	if len(groupIDs) == 0 {
+		return false, nil
+	}
+	n, err := dbmodels.VehicleFleetGroups(
+		dbmodels.VehicleFleetGroupWhere.TenantID.EQ(tenantID),
+		dbmodels.VehicleFleetGroupWhere.TokenID.EQ(tokenID),
+		qm.AndIn("fleet_group_id in ?", toAnySlice(groupIDs)...),
+	).Count(ctx, s.pdb.DBS().Reader)
+	if err != nil {
+		return false, fmt.Errorf("vehicle in groups: %w", err)
+	}
+	return n > 0, nil
+}
+
+func toAnySlice(ss []string) []interface{} {
+	out := make([]interface{}, len(ss))
+	for i, s := range ss {
+		out[i] = s
+	}
+	return out
+}
+
 // GetGroup returns one group for the tenant, or ErrGroupNotFound.
 func (s *FleetGroupService) GetGroup(ctx context.Context, tenantID, groupID string) (*dbmodels.FleetGroup, error) {
 	g, err := dbmodels.FleetGroups(

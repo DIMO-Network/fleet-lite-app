@@ -58,6 +58,9 @@ type invitationJSON struct {
 	CreatedAt  string  `json:"createdAt"`
 	ExpiresAt  string  `json:"expiresAt"`
 	AcceptedAt *string `json:"acceptedAt,omitempty"`
+	// AllowedGroupIds limits the future member to those fleet groups; absent =
+	// full access. See docs/GROUP_ACCESS_PLAN.md.
+	AllowedGroupIDs []string `json:"allowedGroupIds,omitempty"`
 	// InviteeWallet is the wallet that accepted the invite — the account the
 	// invitation actually bound to, which may differ from the emailed address's
 	// expected owner (e.g. a shared session consumed the link).
@@ -71,6 +74,9 @@ type createInvitationRequest struct {
 	Email  string `json:"email"`
 	Role   string `json:"role"`
 	Locale string `json:"locale"`
+	// AllowedGroupIds limits the invited member to those fleet groups; omit or
+	// null for full access. Ignored for owner invites.
+	AllowedGroupIDs []string `json:"allowedGroupIds"`
 }
 
 // CreateInvitation — POST /tenants/:id/invitations. Owner-only. Issues an
@@ -84,7 +90,7 @@ func (ic *InvitationsController) CreateInvitation(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil || req.Email == "" {
 		return fiber.NewError(fiber.StatusBadRequest, "email is required")
 	}
-	inv, err := ic.invitationSvc.Create(c.Context(), c.Params("id"), inviter, req.Email, req.Role, req.Locale)
+	inv, err := ic.invitationSvc.Create(c.Context(), c.Params("id"), inviter, req.Email, req.Role, req.Locale, req.AllowedGroupIDs)
 	if err != nil {
 		// Saved-but-email-failed is a partial success: the invite row exists and is
 		// usable, so return it (201) with emailSent=false instead of a 5xx that would
@@ -100,17 +106,13 @@ func (ic *InvitationsController) CreateInvitation(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(toInvitationJSONWithEmail(inv, true))
 }
 
-// ListInvitations — GET /tenants/:id/invitations. Any member can list.
+// ListInvitations — GET /tenants/:id/invitations. Owner-only — invitations are
+// a user-management surface (they carry emails and access scopes).
 func (ic *InvitationsController) ListInvitations(c *fiber.Ctx) error {
-	wallet, err := GetWalletAddressFromJWT(c)
-	if err != nil {
-		return fiber.NewError(fiber.StatusUnauthorized, err.Error())
+	if _, err := ic.requireOwner(c); err != nil {
+		return err
 	}
 	tenantID := c.Params("id")
-	role, err := ic.tenantSvc.GetMembershipRole(c.Context(), tenantID, wallet.Hex())
-	if err != nil || role == "" {
-		return fiber.NewError(fiber.StatusForbidden, "no access to tenant")
-	}
 	rows, err := ic.invitationSvc.List(c.Context(), tenantID)
 	if err != nil {
 		ic.logger.Err(err).Str("tenant", tenantID).Msg("list invitations")
@@ -209,6 +211,7 @@ func toInvitationJSON(r *dbmodels.Invitation) invitationJSON {
 		w := r.InviteeWallet.String
 		out.InviteeWallet = &w
 	}
+	out.AllowedGroupIDs = r.AllowedGroupIds
 	return out
 }
 

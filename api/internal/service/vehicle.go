@@ -12,9 +12,42 @@ import (
 	"github.com/DIMO-Network/shared/pkg/db"
 	"github.com/aarondl/null/v8"
 	"github.com/aarondl/sqlboiler/v4/boil"
+	"github.com/aarondl/sqlboiler/v4/queries"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
+	"github.com/lib/pq"
 	"github.com/rs/zerolog"
 )
+
+// AccessibleTokenIDs returns the set of vehicle token ids a limited member may
+// touch (union of their allowed groups). Callers with unrestricted access
+// should not call this — pass-through their full sets instead.
+func (s *VehicleService) AccessibleTokenIDs(ctx context.Context, tenantID string, allowedGroupIDs []string) (map[int64]bool, error) {
+	var rows []struct {
+		TokenID int64 `boil:"token_id"`
+	}
+	if err := queries.Raw(
+		`SELECT DISTINCT token_id FROM vehicle_fleet_groups WHERE tenant_id = $1 AND fleet_group_id = ANY($2)`,
+		tenantID, pq.Array(allowedGroupIDs),
+	).Bind(ctx, s.pdb.DBS().Reader, &rows); err != nil {
+		return nil, fmt.Errorf("accessible token ids: %w", err)
+	}
+	out := make(map[int64]bool, len(rows))
+	for _, r := range rows {
+		out[r.TokenID] = true
+	}
+	return out, nil
+}
+
+// allowedGroupsFilter restricts a vehicles query to tokens inside any of the
+// caller's allowed fleet groups. Only applied for limited members (non-nil
+// allowedGroupIDs) — ungrouped vehicles are deliberately invisible to them.
+// See docs/GROUP_ACCESS_PLAN.md.
+func allowedGroupsFilter(tenantID string, allowedGroupIDs []string) qm.QueryMod {
+	return qm.Where(
+		"token_id IN (SELECT token_id FROM vehicle_fleet_groups WHERE tenant_id = ? AND fleet_group_id = ANY(?))",
+		tenantID, pq.Array(allowedGroupIDs),
+	)
+}
 
 // VehicleService syncs a tenant's privileged vehicles from identity-api into the
 // DB and reads them back, scoped by tenant.
@@ -75,15 +108,21 @@ func (s *VehicleService) SyncVehicles(ctx context.Context, tenant *models.Tenant
 }
 
 // ListVehicles returns the tenant's synced vehicles in identity-api Vehicle
-// shape, with IsFavorite populated from the tenant's favorites.
-func (s *VehicleService) ListVehicles(ctx context.Context, tenantID string) ([]models.Vehicle, error) {
-	rows, err := dbmodels.Vehicles(
+// shape, with IsFavorite populated from the tenant's favorites. A non-nil
+// allowedGroupIDs limits the result to vehicles in those fleet groups (limited
+// members); nil means unrestricted.
+func (s *VehicleService) ListVehicles(ctx context.Context, tenantID string, allowedGroupIDs []string) ([]models.Vehicle, error) {
+	mods := []qm.QueryMod{
 		qm.Where("tenant_id = ?", tenantID),
 		// Most-recently-seen first (the composite idx_vehicles_tenant_last_seen
 		// serves this filter+sort); never-seen vehicles sort last, token_id as a
 		// stable tiebreaker. Favourites are pinned to the top client-side.
 		qm.OrderBy("last_seen DESC NULLS LAST, token_id"),
-	).All(ctx, s.pdb.DBS().Reader)
+	}
+	if allowedGroupIDs != nil {
+		mods = append(mods, allowedGroupsFilter(tenantID, allowedGroupIDs))
+	}
+	rows, err := dbmodels.Vehicles(mods...).All(ctx, s.pdb.DBS().Reader)
 	if err != nil {
 		return nil, err
 	}
@@ -103,12 +142,19 @@ func (s *VehicleService) ListVehicles(ctx context.Context, tenantID string) ([]m
 	return out, nil
 }
 
-// GetVehicle returns one synced vehicle for the tenant, or nil if not found.
-func (s *VehicleService) GetVehicle(ctx context.Context, tenantID string, tokenID int64) (*models.Vehicle, error) {
-	r, err := dbmodels.Vehicles(
+// GetVehicle returns one synced vehicle for the tenant, or an error if not
+// found. A non-nil allowedGroupIDs additionally requires the vehicle to be in
+// one of those groups — out-of-scope vehicles error exactly like nonexistent
+// ones, so limited members can't probe what exists.
+func (s *VehicleService) GetVehicle(ctx context.Context, tenantID string, tokenID int64, allowedGroupIDs []string) (*models.Vehicle, error) {
+	mods := []qm.QueryMod{
 		qm.Where("tenant_id = ?", tenantID),
 		qm.And("token_id = ?", tokenID),
-	).One(ctx, s.pdb.DBS().Reader)
+	}
+	if allowedGroupIDs != nil {
+		mods = append(mods, allowedGroupsFilter(tenantID, allowedGroupIDs))
+	}
+	r, err := dbmodels.Vehicles(mods...).One(ctx, s.pdb.DBS().Reader)
 	if err != nil {
 		return nil, err
 	}
