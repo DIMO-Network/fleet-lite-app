@@ -157,6 +157,9 @@ type memberJSON struct {
 	Role        string  `json:"role"`
 	Email       string  `json:"email,omitempty"`
 	LastLoginAt *string `json:"lastLoginAt,omitempty"`
+	// AllowedGroupIds is the member's group scope: absent = full access,
+	// an array = limited to those fleet groups. See docs/GROUP_ACCESS_PLAN.md.
+	AllowedGroupIds []string `json:"allowedGroupIds,omitempty"`
 }
 
 // GetMembers — GET /tenants/:id/members. Any member can list the tenant's members.
@@ -175,6 +178,10 @@ func (t *TenantsController) GetMembers(c *fiber.Ctx) error {
 		if r.LastLoginAt.Valid {
 			s := r.LastLoginAt.Time.UTC().Format(time.RFC3339)
 			m.LastLoginAt = &s
+		}
+		// nil = full access; an array = limited to those fleet groups.
+		if r.Role != service.RoleOwner && r.AllowedGroupIds != nil {
+			m.AllowedGroupIds = r.AllowedGroupIds
 		}
 		out = append(out, m)
 	}
@@ -206,6 +213,9 @@ func (t *TenantsController) LoginTouch(c *fiber.Ctx) error {
 type addMemberRequest struct {
 	Wallet string `json:"wallet"`
 	Role   string `json:"role"`
+	// AllowedGroupIds limits the member to those fleet groups; omit/null for
+	// full access. Ignored for owner role.
+	AllowedGroupIds []string `json:"allowedGroupIds"`
 }
 
 // AddMember — POST /tenants/:id/members. Owner-only; adds a wallet to the tenant.
@@ -225,11 +235,49 @@ func (t *TenantsController) AddMember(c *fiber.Ctx) error {
 	if memberRole != service.RoleOwner {
 		memberRole = service.RoleMember
 	}
-	if err := t.tenantSvc.AddMember(c.Context(), c.Params("id"), req.Wallet, memberRole); err != nil {
+	if err := t.tenantSvc.AddMember(c.Context(), c.Params("id"), req.Wallet, memberRole, req.AllowedGroupIds); err != nil {
 		t.logger.Err(err).Msg("add member")
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to add member")
 	}
 	return c.JSON(fiber.Map{"ok": true})
+}
+
+type updateMemberAccessRequest struct {
+	// AllowedGroupIds: null = full access, array = limited to those groups.
+	AllowedGroupIds []string `json:"allowedGroupIds"`
+}
+
+// UpdateMemberAccess — PUT /tenants/:id/members/:wallet/access. Owner-only;
+// changes an existing member's allowed fleet groups (null = full access).
+func (t *TenantsController) UpdateMemberAccess(c *fiber.Ctx) error {
+	_, role, err := t.requireMember(c)
+	if err != nil {
+		return err
+	}
+	if role != service.RoleOwner {
+		return fiber.NewError(fiber.StatusForbidden, "only an owner can manage members")
+	}
+	var req updateMemberAccessRequest
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+	if err := t.tenantSvc.UpdateMemberAccess(c.Context(), c.Params("id"), c.Params("wallet"), req.AllowedGroupIds); err != nil {
+		t.logger.Err(err).Str("tenant", c.Params("id")).Msg("update member access")
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	return c.JSON(fiber.Map{"ok": true})
+}
+
+// GetMyAccess — GET /me/access (tenant-scoped). Returns the caller's own role
+// and group scope so any view can cheaply render/gate by it.
+// allowedGroupIds is null for unrestricted callers (owners, full members).
+func (t *TenantsController) GetMyAccess(c *fiber.Ctx) error {
+	role := GetTenantRole(c)
+	allowed, limited := GetAllowedGroups(c)
+	if !limited {
+		return c.JSON(fiber.Map{"role": role, "allowedGroupIds": nil})
+	}
+	return c.JSON(fiber.Map{"role": role, "allowedGroupIds": allowed})
 }
 
 // RemoveMember — DELETE /tenants/:id/members/:wallet. Owner-only.

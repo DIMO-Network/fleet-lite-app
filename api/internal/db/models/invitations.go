@@ -18,28 +18,30 @@ import (
 	"github.com/aarondl/sqlboiler/v4/queries"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
 	"github.com/aarondl/sqlboiler/v4/queries/qmhelper"
+	"github.com/aarondl/sqlboiler/v4/types"
 	"github.com/aarondl/strmangle"
 	"github.com/friendsofgo/errors"
 )
 
 // Invitation is an object representing the database table.
 type Invitation struct {
-	ID                string      `boil:"id" json:"id" toml:"id" yaml:"id"`
-	TenantID          string      `boil:"tenant_id" json:"tenant_id" toml:"tenant_id" yaml:"tenant_id"`
-	Email             string      `boil:"email" json:"email" toml:"email" yaml:"email"`
-	Role              string      `boil:"role" json:"role" toml:"role" yaml:"role"`
-	TokenHash         string      `boil:"token_hash" json:"token_hash" toml:"token_hash" yaml:"token_hash"`
-	Status            string      `boil:"status" json:"status" toml:"status" yaml:"status"`
-	InvitedByWallet   string      `boil:"invited_by_wallet" json:"invited_by_wallet" toml:"invited_by_wallet" yaml:"invited_by_wallet"`
-	InviteeWallet     null.String `boil:"invitee_wallet" json:"invitee_wallet,omitempty" toml:"invitee_wallet" yaml:"invitee_wallet,omitempty"`
-	CreatedAt         time.Time   `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
-	UpdatedAt         time.Time   `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
-	ExpiresAt         time.Time   `boil:"expires_at" json:"expires_at" toml:"expires_at" yaml:"expires_at"`
-	AcceptedAt        null.Time   `boil:"accepted_at" json:"accepted_at,omitempty" toml:"accepted_at" yaml:"accepted_at,omitempty"`
-	PostmarkMessageID null.String `boil:"postmark_message_id" json:"postmark_message_id,omitempty" toml:"postmark_message_id" yaml:"postmark_message_id,omitempty"`
-	EmailStatus       null.String `boil:"email_status" json:"email_status,omitempty" toml:"email_status" yaml:"email_status,omitempty"`
-	EmailStatusAt     null.Time   `boil:"email_status_at" json:"email_status_at,omitempty" toml:"email_status_at" yaml:"email_status_at,omitempty"`
-	EmailStatusDetail null.String `boil:"email_status_detail" json:"email_status_detail,omitempty" toml:"email_status_detail" yaml:"email_status_detail,omitempty"`
+	ID                string            `boil:"id" json:"id" toml:"id" yaml:"id"`
+	TenantID          string            `boil:"tenant_id" json:"tenant_id" toml:"tenant_id" yaml:"tenant_id"`
+	Email             string            `boil:"email" json:"email" toml:"email" yaml:"email"`
+	Role              string            `boil:"role" json:"role" toml:"role" yaml:"role"`
+	TokenHash         string            `boil:"token_hash" json:"token_hash" toml:"token_hash" yaml:"token_hash"`
+	Status            string            `boil:"status" json:"status" toml:"status" yaml:"status"`
+	InvitedByWallet   string            `boil:"invited_by_wallet" json:"invited_by_wallet" toml:"invited_by_wallet" yaml:"invited_by_wallet"`
+	InviteeWallet     null.String       `boil:"invitee_wallet" json:"invitee_wallet,omitempty" toml:"invitee_wallet" yaml:"invitee_wallet,omitempty"`
+	CreatedAt         time.Time         `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
+	UpdatedAt         time.Time         `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
+	ExpiresAt         time.Time         `boil:"expires_at" json:"expires_at" toml:"expires_at" yaml:"expires_at"`
+	AcceptedAt        null.Time         `boil:"accepted_at" json:"accepted_at,omitempty" toml:"accepted_at" yaml:"accepted_at,omitempty"`
+	PostmarkMessageID null.String       `boil:"postmark_message_id" json:"postmark_message_id,omitempty" toml:"postmark_message_id" yaml:"postmark_message_id,omitempty"`
+	EmailStatus       null.String       `boil:"email_status" json:"email_status,omitempty" toml:"email_status" yaml:"email_status,omitempty"`
+	EmailStatusAt     null.Time         `boil:"email_status_at" json:"email_status_at,omitempty" toml:"email_status_at" yaml:"email_status_at,omitempty"`
+	EmailStatusDetail null.String       `boil:"email_status_detail" json:"email_status_detail,omitempty" toml:"email_status_detail" yaml:"email_status_detail,omitempty"`
+	AllowedGroupIds   types.StringArray `boil:"allowed_group_ids" json:"allowed_group_ids,omitempty" toml:"allowed_group_ids" yaml:"allowed_group_ids,omitempty"`
 
 	R *invitationR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L invitationL  `boil:"-" json:"-" toml:"-" yaml:"-"`
@@ -62,6 +64,7 @@ var InvitationColumns = struct {
 	EmailStatus       string
 	EmailStatusAt     string
 	EmailStatusDetail string
+	AllowedGroupIds   string
 }{
 	ID:                "id",
 	TenantID:          "tenant_id",
@@ -79,6 +82,7 @@ var InvitationColumns = struct {
 	EmailStatus:       "email_status",
 	EmailStatusAt:     "email_status_at",
 	EmailStatusDetail: "email_status_detail",
+	AllowedGroupIds:   "allowed_group_ids",
 }
 
 var InvitationTableColumns = struct {
@@ -98,6 +102,7 @@ var InvitationTableColumns = struct {
 	EmailStatus       string
 	EmailStatusAt     string
 	EmailStatusDetail string
+	AllowedGroupIds   string
 }{
 	ID:                "invitations.id",
 	TenantID:          "invitations.tenant_id",
@@ -115,6 +120,7 @@ var InvitationTableColumns = struct {
 	EmailStatus:       "invitations.email_status",
 	EmailStatusAt:     "invitations.email_status_at",
 	EmailStatusDetail: "invitations.email_status_detail",
+	AllowedGroupIds:   "invitations.allowed_group_ids",
 }
 
 // Generated where
@@ -199,6 +205,11 @@ func (w whereHelpernull_Time) GTE(x null.Time) qm.QueryMod {
 func (w whereHelpernull_Time) IsNull() qm.QueryMod    { return qmhelper.WhereIsNull(w.field) }
 func (w whereHelpernull_Time) IsNotNull() qm.QueryMod { return qmhelper.WhereIsNotNull(w.field) }
 
+func (w whereHelpertypes_StringArray) IsNull() qm.QueryMod { return qmhelper.WhereIsNull(w.field) }
+func (w whereHelpertypes_StringArray) IsNotNull() qm.QueryMod {
+	return qmhelper.WhereIsNotNull(w.field)
+}
+
 var InvitationWhere = struct {
 	ID                whereHelperstring
 	TenantID          whereHelperstring
@@ -216,6 +227,7 @@ var InvitationWhere = struct {
 	EmailStatus       whereHelpernull_String
 	EmailStatusAt     whereHelpernull_Time
 	EmailStatusDetail whereHelpernull_String
+	AllowedGroupIds   whereHelpertypes_StringArray
 }{
 	ID:                whereHelperstring{field: "\"invitations\".\"id\""},
 	TenantID:          whereHelperstring{field: "\"invitations\".\"tenant_id\""},
@@ -233,6 +245,7 @@ var InvitationWhere = struct {
 	EmailStatus:       whereHelpernull_String{field: "\"invitations\".\"email_status\""},
 	EmailStatusAt:     whereHelpernull_Time{field: "\"invitations\".\"email_status_at\""},
 	EmailStatusDetail: whereHelpernull_String{field: "\"invitations\".\"email_status_detail\""},
+	AllowedGroupIds:   whereHelpertypes_StringArray{field: "\"invitations\".\"allowed_group_ids\""},
 }
 
 // InvitationRels is where relationship names are stored.
@@ -272,9 +285,9 @@ func (r *invitationR) GetTenant() *Tenant {
 type invitationL struct{}
 
 var (
-	invitationAllColumns            = []string{"id", "tenant_id", "email", "role", "token_hash", "status", "invited_by_wallet", "invitee_wallet", "created_at", "updated_at", "expires_at", "accepted_at", "postmark_message_id", "email_status", "email_status_at", "email_status_detail"}
+	invitationAllColumns            = []string{"id", "tenant_id", "email", "role", "token_hash", "status", "invited_by_wallet", "invitee_wallet", "created_at", "updated_at", "expires_at", "accepted_at", "postmark_message_id", "email_status", "email_status_at", "email_status_detail", "allowed_group_ids"}
 	invitationColumnsWithoutDefault = []string{"tenant_id", "email", "token_hash", "invited_by_wallet", "expires_at"}
-	invitationColumnsWithDefault    = []string{"id", "role", "status", "invitee_wallet", "created_at", "updated_at", "accepted_at", "postmark_message_id", "email_status", "email_status_at", "email_status_detail"}
+	invitationColumnsWithDefault    = []string{"id", "role", "status", "invitee_wallet", "created_at", "updated_at", "accepted_at", "postmark_message_id", "email_status", "email_status_at", "email_status_detail", "allowed_group_ids"}
 	invitationPrimaryKeyColumns     = []string{"id"}
 	invitationGeneratedColumns      = []string{}
 )

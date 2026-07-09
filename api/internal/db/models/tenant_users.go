@@ -18,78 +18,86 @@ import (
 	"github.com/aarondl/sqlboiler/v4/queries"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
 	"github.com/aarondl/sqlboiler/v4/queries/qmhelper"
+	"github.com/aarondl/sqlboiler/v4/types"
 	"github.com/aarondl/strmangle"
 	"github.com/friendsofgo/errors"
 )
 
 // TenantUser is an object representing the database table.
 type TenantUser struct {
-	TenantID    string      `boil:"tenant_id" json:"tenant_id" toml:"tenant_id" yaml:"tenant_id"`
-	Wallet      string      `boil:"wallet" json:"wallet" toml:"wallet" yaml:"wallet"`
-	Role        string      `boil:"role" json:"role" toml:"role" yaml:"role"`
-	CreatedAt   time.Time   `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
-	UpdatedAt   time.Time   `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
-	LastLoginAt null.Time   `boil:"last_login_at" json:"last_login_at,omitempty" toml:"last_login_at" yaml:"last_login_at,omitempty"`
-	Email       null.String `boil:"email" json:"email,omitempty" toml:"email" yaml:"email,omitempty"`
+	TenantID        string            `boil:"tenant_id" json:"tenant_id" toml:"tenant_id" yaml:"tenant_id"`
+	Wallet          string            `boil:"wallet" json:"wallet" toml:"wallet" yaml:"wallet"`
+	Role            string            `boil:"role" json:"role" toml:"role" yaml:"role"`
+	CreatedAt       time.Time         `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
+	UpdatedAt       time.Time         `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
+	LastLoginAt     null.Time         `boil:"last_login_at" json:"last_login_at,omitempty" toml:"last_login_at" yaml:"last_login_at,omitempty"`
+	Email           null.String       `boil:"email" json:"email,omitempty" toml:"email" yaml:"email,omitempty"`
+	AllowedGroupIds types.StringArray `boil:"allowed_group_ids" json:"allowed_group_ids,omitempty" toml:"allowed_group_ids" yaml:"allowed_group_ids,omitempty"`
 
 	R *tenantUserR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L tenantUserL  `boil:"-" json:"-" toml:"-" yaml:"-"`
 }
 
 var TenantUserColumns = struct {
-	TenantID    string
-	Wallet      string
-	Role        string
-	CreatedAt   string
-	UpdatedAt   string
-	LastLoginAt string
-	Email       string
+	TenantID        string
+	Wallet          string
+	Role            string
+	CreatedAt       string
+	UpdatedAt       string
+	LastLoginAt     string
+	Email           string
+	AllowedGroupIds string
 }{
-	TenantID:    "tenant_id",
-	Wallet:      "wallet",
-	Role:        "role",
-	CreatedAt:   "created_at",
-	UpdatedAt:   "updated_at",
-	LastLoginAt: "last_login_at",
-	Email:       "email",
+	TenantID:        "tenant_id",
+	Wallet:          "wallet",
+	Role:            "role",
+	CreatedAt:       "created_at",
+	UpdatedAt:       "updated_at",
+	LastLoginAt:     "last_login_at",
+	Email:           "email",
+	AllowedGroupIds: "allowed_group_ids",
 }
 
 var TenantUserTableColumns = struct {
-	TenantID    string
-	Wallet      string
-	Role        string
-	CreatedAt   string
-	UpdatedAt   string
-	LastLoginAt string
-	Email       string
+	TenantID        string
+	Wallet          string
+	Role            string
+	CreatedAt       string
+	UpdatedAt       string
+	LastLoginAt     string
+	Email           string
+	AllowedGroupIds string
 }{
-	TenantID:    "tenant_users.tenant_id",
-	Wallet:      "tenant_users.wallet",
-	Role:        "tenant_users.role",
-	CreatedAt:   "tenant_users.created_at",
-	UpdatedAt:   "tenant_users.updated_at",
-	LastLoginAt: "tenant_users.last_login_at",
-	Email:       "tenant_users.email",
+	TenantID:        "tenant_users.tenant_id",
+	Wallet:          "tenant_users.wallet",
+	Role:            "tenant_users.role",
+	CreatedAt:       "tenant_users.created_at",
+	UpdatedAt:       "tenant_users.updated_at",
+	LastLoginAt:     "tenant_users.last_login_at",
+	Email:           "tenant_users.email",
+	AllowedGroupIds: "tenant_users.allowed_group_ids",
 }
 
 // Generated where
 
 var TenantUserWhere = struct {
-	TenantID    whereHelperstring
-	Wallet      whereHelperstring
-	Role        whereHelperstring
-	CreatedAt   whereHelpertime_Time
-	UpdatedAt   whereHelpertime_Time
-	LastLoginAt whereHelpernull_Time
-	Email       whereHelpernull_String
+	TenantID        whereHelperstring
+	Wallet          whereHelperstring
+	Role            whereHelperstring
+	CreatedAt       whereHelpertime_Time
+	UpdatedAt       whereHelpertime_Time
+	LastLoginAt     whereHelpernull_Time
+	Email           whereHelpernull_String
+	AllowedGroupIds whereHelpertypes_StringArray
 }{
-	TenantID:    whereHelperstring{field: "\"tenant_users\".\"tenant_id\""},
-	Wallet:      whereHelperstring{field: "\"tenant_users\".\"wallet\""},
-	Role:        whereHelperstring{field: "\"tenant_users\".\"role\""},
-	CreatedAt:   whereHelpertime_Time{field: "\"tenant_users\".\"created_at\""},
-	UpdatedAt:   whereHelpertime_Time{field: "\"tenant_users\".\"updated_at\""},
-	LastLoginAt: whereHelpernull_Time{field: "\"tenant_users\".\"last_login_at\""},
-	Email:       whereHelpernull_String{field: "\"tenant_users\".\"email\""},
+	TenantID:        whereHelperstring{field: "\"tenant_users\".\"tenant_id\""},
+	Wallet:          whereHelperstring{field: "\"tenant_users\".\"wallet\""},
+	Role:            whereHelperstring{field: "\"tenant_users\".\"role\""},
+	CreatedAt:       whereHelpertime_Time{field: "\"tenant_users\".\"created_at\""},
+	UpdatedAt:       whereHelpertime_Time{field: "\"tenant_users\".\"updated_at\""},
+	LastLoginAt:     whereHelpernull_Time{field: "\"tenant_users\".\"last_login_at\""},
+	Email:           whereHelpernull_String{field: "\"tenant_users\".\"email\""},
+	AllowedGroupIds: whereHelpertypes_StringArray{field: "\"tenant_users\".\"allowed_group_ids\""},
 }
 
 // TenantUserRels is where relationship names are stored.
@@ -129,9 +137,9 @@ func (r *tenantUserR) GetTenant() *Tenant {
 type tenantUserL struct{}
 
 var (
-	tenantUserAllColumns            = []string{"tenant_id", "wallet", "role", "created_at", "updated_at", "last_login_at", "email"}
+	tenantUserAllColumns            = []string{"tenant_id", "wallet", "role", "created_at", "updated_at", "last_login_at", "email", "allowed_group_ids"}
 	tenantUserColumnsWithoutDefault = []string{"tenant_id", "wallet"}
-	tenantUserColumnsWithDefault    = []string{"role", "created_at", "updated_at", "last_login_at", "email"}
+	tenantUserColumnsWithDefault    = []string{"role", "created_at", "updated_at", "last_login_at", "email", "allowed_group_ids"}
 	tenantUserPrimaryKeyColumns     = []string{"tenant_id", "wallet"}
 	tenantUserGeneratedColumns      = []string{}
 )

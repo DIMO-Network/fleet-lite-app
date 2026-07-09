@@ -80,6 +80,17 @@ func (fc *FleetGroupsController) GetGroups(c *fiber.Ctx) error {
 		fc.logger.Err(err).Str("tenant", tenant.ID).Msg("list fleet groups")
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to list fleet groups")
 	}
+	// Limited members only see their allowed groups.
+	if allowed, limited := GetAllowedGroups(c); limited {
+		allowedSet := toSet(allowed)
+		kept := groups[:0]
+		for _, g := range groups {
+			if allowedSet[g.Group.ID] {
+				kept = append(kept, g)
+			}
+		}
+		groups = kept
+	}
 	out := make([]FleetGroupResponse, len(groups))
 	for i, g := range groups {
 		out[i] = toFleetGroupResponse(g.Group, g.VehicleCount)
@@ -92,6 +103,10 @@ func (fc *FleetGroupsController) GetGroup(c *fiber.Ctx) error {
 	tenant, err := GetTenant(c)
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	// Out-of-scope groups look nonexistent to limited members.
+	if allowed, limited := GetAllowedGroups(c); limited && !toSet(allowed)[c.Params("id")] {
+		return fiber.NewError(fiber.StatusNotFound, "fleet group not found")
 	}
 	g, err := fc.groups.GetGroup(c.Context(), tenant.ID, c.Params("id"))
 	if err != nil {
@@ -106,6 +121,9 @@ func (fc *FleetGroupsController) GetGroup(c *fiber.Ctx) error {
 
 // CreateGroup — POST /fleet/groups {name,color}
 func (fc *FleetGroupsController) CreateGroup(c *fiber.Ctx) error {
+	if err := RequireFullAccess(c); err != nil {
+		return err
+	}
 	tenant, err := GetTenant(c)
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
@@ -129,6 +147,9 @@ func (fc *FleetGroupsController) CreateGroup(c *fiber.Ctx) error {
 
 // UpdateGroup — PATCH /fleet/groups/:id {name?,color?}
 func (fc *FleetGroupsController) UpdateGroup(c *fiber.Ctx) error {
+	if err := RequireFullAccess(c); err != nil {
+		return err
+	}
 	tenant, err := GetTenant(c)
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
@@ -152,6 +173,9 @@ func (fc *FleetGroupsController) UpdateGroup(c *fiber.Ctx) error {
 
 // DeleteGroup — DELETE /fleet/groups/:id
 func (fc *FleetGroupsController) DeleteGroup(c *fiber.Ctx) error {
+	if err := RequireFullAccess(c); err != nil {
+		return err
+	}
 	tenant, err := GetTenant(c)
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
@@ -173,6 +197,9 @@ func (fc *FleetGroupsController) DeleteGroup(c *fiber.Ctx) error {
 
 // AddVehicleToGroup — POST /fleet/vehicles/:tokenID/group/:groupID
 func (fc *FleetGroupsController) AddVehicleToGroup(c *fiber.Ctx) error {
+	if err := RequireFullAccess(c); err != nil {
+		return err
+	}
 	tenant, err := GetTenant(c)
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
@@ -191,6 +218,9 @@ func (fc *FleetGroupsController) AddVehicleToGroup(c *fiber.Ctx) error {
 
 // RemoveVehicleFromGroup — DELETE /fleet/vehicles/:tokenID/group/:groupID
 func (fc *FleetGroupsController) RemoveVehicleFromGroup(c *fiber.Ctx) error {
+	if err := RequireFullAccess(c); err != nil {
+		return err
+	}
 	tenant, err := GetTenant(c)
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
@@ -223,6 +253,15 @@ func (fc *FleetGroupsController) SyncVehicleGroups(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	// Limited members may only sync vehicles inside their allowed groups (and
+	// out-of-scope vehicles look nonexistent).
+	allowed, limited := GetAllowedGroups(c)
+	if limited {
+		ok, aerr := fc.groups.VehicleInGroups(c.Context(), tenant.ID, int64(tokenID), allowed)
+		if aerr != nil || !ok {
+			return fiber.NewError(fiber.StatusNotFound, "vehicle not found")
+		}
+	}
 
 	res, err := fc.sync.SyncVehicle(c.Context(), tenant, int64(tokenID), service.SyncOpts{Cooldown: lazySyncCooldown})
 	if err != nil {
@@ -244,6 +283,17 @@ func (fc *FleetGroupsController) SyncVehicleGroups(c *fiber.Ctx) error {
 	}
 	if groups == nil {
 		groups = []service.GroupRef{}
+	}
+	// Don't leak the names of groups outside a limited member's scope.
+	if limited {
+		allowedSet := toSet(allowed)
+		kept := groups[:0]
+		for _, g := range groups {
+			if allowedSet[g.ID] {
+				kept = append(kept, g)
+			}
+		}
+		groups = kept
 	}
 	return c.JSON(fiber.Map{"groups": groups, "synced": !res.Skipped, "added": res.Added, "removed": res.Removed})
 }

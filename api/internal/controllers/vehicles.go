@@ -32,7 +32,8 @@ func (v *VehiclesController) GetVehicles(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 
-	vehicles, err := v.vehicleSvc.ListVehicles(c.Context(), tenant.ID)
+	allowed, limited := GetAllowedGroups(c)
+	vehicles, err := v.vehicleSvc.ListVehicles(c.Context(), tenant.ID, allowed)
 	if err != nil {
 		v.logger.Err(err).Str("tenant", tenant.ID).Msg("failed to list tenant vehicles")
 		return fiber.NewError(fiber.StatusBadGateway, "failed to fetch vehicles")
@@ -46,8 +47,21 @@ func (v *VehiclesController) GetVehicles(c *fiber.Ctx) error {
 		v.logger.Err(err).Str("tenant", tenant.ID).Msg("failed to load vehicle groups")
 		groupsByToken = nil
 	}
+	allowedSet := toSet(allowed)
 	for i := range vehicles {
-		if g := groupsByToken[vehicles[i].TokenID]; g != nil {
+		g := groupsByToken[vehicles[i].TokenID]
+		// Limited members shouldn't see refs to groups outside their scope even
+		// on vehicles they can access via another (allowed) group.
+		if limited && g != nil {
+			kept := g[:0:0]
+			for _, ref := range g {
+				if allowedSet[ref.ID] {
+					kept = append(kept, ref)
+				}
+			}
+			g = kept
+		}
+		if g != nil {
 			vehicles[i].Groups = g
 		} else {
 			vehicles[i].Groups = []models.GroupRef{}
@@ -67,7 +81,8 @@ func (v *VehiclesController) GetVehicle(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	vehicle, err := v.vehicleSvc.GetVehicle(c.Context(), tenant.ID, int64(tokenID))
+	allowed, _ := GetAllowedGroups(c)
+	vehicle, err := v.vehicleSvc.GetVehicle(c.Context(), tenant.ID, int64(tokenID), allowed)
 	if err != nil {
 		v.logger.Err(err).Uint64("tokenID", tokenID).Str("tenant", tenant.ID).Msg("failed to fetch vehicle")
 		return fiber.NewError(fiber.StatusNotFound, "vehicle not found")
@@ -87,6 +102,11 @@ func (v *VehiclesController) AddFavorite(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	if allowed, limited := GetAllowedGroups(c); limited {
+		if _, err := v.vehicleSvc.GetVehicle(c.Context(), tenant.ID, int64(tokenID), allowed); err != nil {
+			return fiber.NewError(fiber.StatusNotFound, "vehicle not found")
+		}
+	}
 	if err := v.vehicleSvc.AddFavorite(c.Context(), tenant.ID, int64(tokenID)); err != nil {
 		v.logger.Err(err).Uint64("tokenID", tokenID).Str("tenant", tenant.ID).Msg("failed to add favorite")
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to add favorite")
@@ -104,6 +124,11 @@ func (v *VehiclesController) RemoveFavorite(c *fiber.Ctx) error {
 	tokenID, err := ParseTokenIDParam(c, "tokenID")
 	if err != nil {
 		return err
+	}
+	if allowed, limited := GetAllowedGroups(c); limited {
+		if _, err := v.vehicleSvc.GetVehicle(c.Context(), tenant.ID, int64(tokenID), allowed); err != nil {
+			return fiber.NewError(fiber.StatusNotFound, "vehicle not found")
+		}
 	}
 	if err := v.vehicleSvc.RemoveFavorite(c.Context(), tenant.ID, int64(tokenID)); err != nil {
 		v.logger.Err(err).Uint64("tokenID", tokenID).Str("tenant", tenant.ID).Msg("failed to remove favorite")

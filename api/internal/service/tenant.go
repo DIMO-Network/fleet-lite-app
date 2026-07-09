@@ -20,6 +20,7 @@ import (
 	"github.com/aarondl/null/v8"
 	"github.com/aarondl/sqlboiler/v4/boil"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
+	"github.com/aarondl/sqlboiler/v4/types"
 	"github.com/patrickmn/go-cache"
 	"github.com/rs/zerolog"
 )
@@ -65,7 +66,7 @@ func (s *TenantService) CreateTenant(ctx context.Context, name, clientID, apiKey
 	if err := tenant.Insert(ctx, s.pdb.DBS().Writer, boil.Infer()); err != nil {
 		return nil, fmt.Errorf("insert tenant: %w", err)
 	}
-	if err := s.AddMember(ctx, tenant.ID, ownerWallet, RoleOwner); err != nil {
+	if err := s.AddMember(ctx, tenant.ID, ownerWallet, RoleOwner, nil); err != nil {
 		return nil, fmt.Errorf("add owner membership: %w", err)
 	}
 	return tenant, nil
@@ -117,14 +118,20 @@ func (s *TenantService) ListTenantsForWallet(ctx context.Context, wallet string)
 
 // GetMembershipRole returns the wallet's role in the tenant, or "" if not a member.
 func (s *TenantService) GetMembershipRole(ctx context.Context, tenantID, wallet string) (string, error) {
-	tu, err := dbmodels.TenantUsers(
-		qm.Where("tenant_id = ?", tenantID),
-		qm.And("lower(wallet) = lower(?)", wallet),
-	).One(ctx, s.pdb.DBS().Reader)
+	tu, err := s.GetMembership(ctx, tenantID, wallet)
 	if err != nil {
 		return "", err
 	}
 	return tu.Role, nil
+}
+
+// GetMembership returns the wallet's full membership row (role + allowed
+// groups) in the tenant.
+func (s *TenantService) GetMembership(ctx context.Context, tenantID, wallet string) (*dbmodels.TenantUser, error) {
+	return dbmodels.TenantUsers(
+		qm.Where("tenant_id = ?", tenantID),
+		qm.And("lower(wallet) = lower(?)", wallet),
+	).One(ctx, s.pdb.DBS().Reader)
 }
 
 // ListMembers returns every membership row for a tenant, oldest first (owner
@@ -136,18 +143,43 @@ func (s *TenantService) ListMembers(ctx context.Context, tenantID string) (dbmod
 	).All(ctx, s.pdb.DBS().Reader)
 }
 
-// AddMember upserts a wallet's membership in a tenant.
-func (s *TenantService) AddMember(ctx context.Context, tenantID, wallet, role string) error {
+// AddMember upserts a wallet's membership in a tenant. allowedGroupIDs limits a
+// member to those fleet groups; nil = full access. Owners are always
+// unrestricted, so the column is forced NULL for them regardless of the
+// argument. See docs/GROUP_ACCESS_PLAN.md.
+func (s *TenantService) AddMember(ctx context.Context, tenantID, wallet, role string, allowedGroupIDs []string) error {
 	if role == "" {
 		role = RoleMember
 	}
+	if role == RoleOwner {
+		allowedGroupIDs = nil
+	}
 	tu := &dbmodels.TenantUser{
-		TenantID: tenantID,
-		Wallet:   strings.ToLower(wallet),
-		Role:     role,
+		TenantID:        tenantID,
+		Wallet:          strings.ToLower(wallet),
+		Role:            role,
+		AllowedGroupIds: types.StringArray(allowedGroupIDs),
 	}
 	return tu.Upsert(ctx, s.pdb.DBS().Writer, true,
-		[]string{"tenant_id", "wallet"}, boil.Whitelist("role", "updated_at"), boil.Infer())
+		[]string{"tenant_id", "wallet"},
+		boil.Whitelist("role", "allowed_group_ids", "updated_at"), boil.Infer())
+}
+
+// UpdateMemberAccess changes an existing member's allowed fleet groups
+// (nil = full access). Owners cannot be limited; attempting to returns an
+// error so the caller surfaces it instead of silently ignoring the request.
+func (s *TenantService) UpdateMemberAccess(ctx context.Context, tenantID, wallet string, allowedGroupIDs []string) error {
+	tu, err := s.GetMembership(ctx, tenantID, wallet)
+	if err != nil {
+		return fmt.Errorf("membership not found: %w", err)
+	}
+	if tu.Role == RoleOwner && allowedGroupIDs != nil {
+		return fmt.Errorf("owners always have full access; demote to member first")
+	}
+	tu.AllowedGroupIds = types.StringArray(allowedGroupIDs)
+	tu.UpdatedAt = time.Now()
+	_, err = tu.Update(ctx, s.pdb.DBS().Writer, boil.Whitelist("allowed_group_ids", "updated_at"))
+	return err
 }
 
 // TouchLogin records a member's login: bumps last_login_at to now and stores
