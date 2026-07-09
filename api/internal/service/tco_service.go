@@ -326,8 +326,10 @@ func costAmendments(entries []gateway.AttestationEntry, tombstoned map[string]st
 
 // VehicleSummary builds one vehicle's TCO breakdown: cost-eligible document
 // amounts summed by category, plus acquisition/depreciation if settings exist.
-func (s *TCOService) VehicleSummary(ctx context.Context, tenant models.Tenant, tokenID int64) (*VehicleTCOSummary, error) {
-	vehicle, err := s.vehicleSvc.GetVehicle(ctx, tenant.ID, tokenID)
+// allowedGroupIDs scopes the lookup to a limited member's accessible groups
+// (nil for owners/full-access members); see VehicleService.GetVehicle.
+func (s *TCOService) VehicleSummary(ctx context.Context, tenant models.Tenant, tokenID int64, allowedGroupIDs []string) (*VehicleTCOSummary, error) {
+	vehicle, err := s.vehicleSvc.GetVehicle(ctx, tenant.ID, tokenID, allowedGroupIDs)
 	if err != nil {
 		return nil, fmt.Errorf("get vehicle: %w", err)
 	}
@@ -428,14 +430,16 @@ func (s *TCOService) BackfillAmount(tenant models.Tenant, tokenID int64, documen
 // acceptable for the fleet sizes this app targets; revisit with a worker pool
 // if that stops being true. A single vehicle's failure is logged and skipped
 // rather than failing the whole report.
-func (s *TCOService) FleetSummary(ctx context.Context, tenant models.Tenant) (*FleetTCOSummary, error) {
-	vehicles, err := s.vehicleSvc.ListVehicles(ctx, tenant.ID)
+// allowedGroupIDs scopes the vehicle list to a limited member's accessible
+// groups (nil for owners/full-access members); see VehicleService.ListVehicles.
+func (s *TCOService) FleetSummary(ctx context.Context, tenant models.Tenant, allowedGroupIDs []string) (*FleetTCOSummary, error) {
+	vehicles, err := s.vehicleSvc.ListVehicles(ctx, tenant.ID, allowedGroupIDs)
 	if err != nil {
 		return nil, fmt.Errorf("list vehicles: %w", err)
 	}
 	out := &FleetTCOSummary{Vehicles: make([]VehicleTCOSummary, 0, len(vehicles))}
 	for _, v := range vehicles {
-		summary, err := s.VehicleSummary(ctx, tenant, v.TokenID)
+		summary, err := s.VehicleSummary(ctx, tenant, v.TokenID, allowedGroupIDs)
 		if err != nil {
 			s.logger.Warn().Err(err).Int64("tokenID", v.TokenID).Msg("tco vehicle summary failed, skipping")
 			continue

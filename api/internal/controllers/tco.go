@@ -2,7 +2,6 @@
 package controllers
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 
@@ -21,9 +20,11 @@ func NewTCOController(logger *zerolog.Logger, tcoSvc *service.TCOService, vehicl
 	return &TCOController{logger: logger, tcoSvc: tcoSvc, vehicleSvc: vehicleSvc}
 }
 
-// vehicleInTenant reports whether the tokenID is one of the tenant's synced vehicles.
-func (t *TCOController) vehicleInTenant(ctx context.Context, tenantID string, tokenID int64) bool {
-	_, err := t.vehicleSvc.GetVehicle(ctx, tenantID, tokenID)
+// vehicleInTenant reports whether the tokenID is one of the tenant's synced
+// vehicles — and, for limited members, inside their allowed groups.
+func (t *TCOController) vehicleInTenant(c *fiber.Ctx, tenantID string, tokenID int64) bool {
+	allowed, _ := GetAllowedGroups(c)
+	_, err := t.vehicleSvc.GetVehicle(c.Context(), tenantID, tokenID, allowed)
 	return err == nil
 }
 
@@ -37,7 +38,7 @@ func (t *TCOController) GetSettings(c *fiber.Ctx) error {
 	if err != nil || tokenID == 0 {
 		return fiber.NewError(fiber.StatusBadRequest, "valid tokenId query param required")
 	}
-	if !t.vehicleInTenant(c.Context(), tenant.ID, tokenID) {
+	if !t.vehicleInTenant(c, tenant.ID, tokenID) {
 		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
 	}
 	settings, err := t.tcoSvc.GetSettings(c.Context(), tenant.ID, tokenID)
@@ -69,7 +70,7 @@ func (t *TCOController) PutSettings(c *fiber.Ctx) error {
 	if req.TokenID == 0 {
 		return fiber.NewError(fiber.StatusBadRequest, "tokenId is required")
 	}
-	if !t.vehicleInTenant(c.Context(), tenant.ID, req.TokenID) {
+	if !t.vehicleInTenant(c, tenant.ID, req.TokenID) {
 		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
 	}
 	currency := req.Currency
@@ -95,7 +96,8 @@ func (t *TCOController) GetSummary(c *fiber.Ctx) error {
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	summary, err := t.tcoSvc.FleetSummary(c.Context(), tenant)
+	allowed, _ := GetAllowedGroups(c)
+	summary, err := t.tcoSvc.FleetSummary(c.Context(), tenant, allowed)
 	if err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "tco summary: "+err.Error())
 	}
@@ -112,10 +114,11 @@ func (t *TCOController) GetVehicleDetail(c *fiber.Ctx) error {
 	if err != nil || tokenID == 0 {
 		return fiber.NewError(fiber.StatusBadRequest, "valid tokenId path param required")
 	}
-	if !t.vehicleInTenant(c.Context(), tenant.ID, tokenID) {
+	if !t.vehicleInTenant(c, tenant.ID, tokenID) {
 		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
 	}
-	summary, err := t.tcoSvc.VehicleSummary(c.Context(), tenant, tokenID)
+	allowed, _ := GetAllowedGroups(c)
+	summary, err := t.tcoSvc.VehicleSummary(c.Context(), tenant, tokenID, allowed)
 	if err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "tco vehicle summary: "+err.Error())
 	}
@@ -144,7 +147,7 @@ func (t *TCOController) BackfillAmount(c *fiber.Ctx) error {
 	if documentID == "" {
 		return fiber.NewError(fiber.StatusBadRequest, "documentId path param required")
 	}
-	if !t.vehicleInTenant(c.Context(), tenant.ID, tokenID) {
+	if !t.vehicleInTenant(c, tenant.ID, tokenID) {
 		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
 	}
 	var req BackfillAmountRequest
@@ -178,17 +181,19 @@ func (t *TCOController) ExportCSV(c *fiber.Ctx) error {
 		if err != nil || tokenID == 0 {
 			return fiber.NewError(fiber.StatusBadRequest, "invalid tokenId")
 		}
-		if !t.vehicleInTenant(c.Context(), tenant.ID, tokenID) {
+		if !t.vehicleInTenant(c, tenant.ID, tokenID) {
 			return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
 		}
-		summary, err := t.tcoSvc.VehicleSummary(c.Context(), tenant, tokenID)
+		allowed, _ := GetAllowedGroups(c)
+		summary, err := t.tcoSvc.VehicleSummary(c.Context(), tenant, tokenID, allowed)
 		if err != nil {
 			return fiber.NewError(fiber.StatusInternalServerError, "tco vehicle summary: "+err.Error())
 		}
 		summaries = []service.VehicleTCOSummary{*summary}
 		filename = fmt.Sprintf("tco-vehicle-%d.csv", tokenID)
 	} else {
-		fleet, err := t.tcoSvc.FleetSummary(c.Context(), tenant)
+		allowed, _ := GetAllowedGroups(c)
+		fleet, err := t.tcoSvc.FleetSummary(c.Context(), tenant, allowed)
 		if err != nil {
 			return fiber.NewError(fiber.StatusInternalServerError, "tco summary: "+err.Error())
 		}
