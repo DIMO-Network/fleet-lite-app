@@ -23,10 +23,16 @@ spec:
           labels:
             {{- include "fleet-lite-app.selectorLabels" $ | nindent 12 }}
             cronjob: {{ .name }}
-          {{- with $.Values.podAnnotations }}
           annotations:
+            # Job pods must NOT be meshed: the namespace has linkerd injection
+            # enabled, and an injected linkerd-proxy sidecar outlives the main
+            # container, so the pod never terminates, the job never completes,
+            # and activeDeadlineSeconds kills it as Failed even though the work
+            # succeeded (daily KubeJob alerts). Same fix as ingest-tesla-restarter.
+            linkerd.io/inject: disabled
+            {{- with $.Values.podAnnotations }}
             {{- toYaml . | nindent 12 }}
-          {{- end }}
+            {{- end }}
         spec:
           {{- with $.Values.imagePullSecrets }}
           imagePullSecrets:
