@@ -51,10 +51,11 @@ type LicensePlateSyncService struct {
 	pdb          *db.Store
 	fetchAPI     *gateway.FetchAPI
 	authProvider *gateway.DimoAuthProvider
+	telemetry    TelemetryAPIService
 }
 
-func NewLicensePlateSyncService(logger *zerolog.Logger, pdb *db.Store, fetchAPI *gateway.FetchAPI, authProvider *gateway.DimoAuthProvider) *LicensePlateSyncService {
-	return &LicensePlateSyncService{logger: logger, pdb: pdb, fetchAPI: fetchAPI, authProvider: authProvider}
+func NewLicensePlateSyncService(logger *zerolog.Logger, pdb *db.Store, fetchAPI *gateway.FetchAPI, authProvider *gateway.DimoAuthProvider, telemetry TelemetryAPIService) *LicensePlateSyncService {
+	return &LicensePlateSyncService{logger: logger, pdb: pdb, fetchAPI: fetchAPI, authProvider: authProvider, telemetry: telemetry}
 }
 
 // PlateSyncResult reports what a SyncVehicle call did across the registration
@@ -64,6 +65,7 @@ type PlateSyncResult struct {
 	Plate      string // the resolved plate (empty when none found)
 	VINChanged bool   // the cached vin was updated
 	VIN        string // the resolved vin (empty when none found)
+	VINSource  string // where a newly-cached vin came from: "registration" | "vc"
 }
 
 // SyncVehicle pulls one vehicle's registration attestations and caches the latest
@@ -109,6 +111,22 @@ func (s *LicensePlateSyncService) SyncVehicle(ctx context.Context, tenant models
 		updates["vin"] = null.StringFrom(vin)
 		res.VINChanged = true
 		res.VIN = vin
+		res.VINSource = "registration"
+	}
+
+	// VIN VC fallback: most vehicles never get a registration document
+	// uploaded, but almost all carry a DIMO VIN verifiable credential — read
+	// it when the VIN is still unknown after the document pass. Pull-once by
+	// construction: once vehicles.vin is set, res.VIN is non-empty here and
+	// the vehicle never costs another telemetry query. See
+	// docs/VIN_SYNC_PLAN.md.
+	if res.VIN == "" {
+		if vin, found := s.vinFromVC(tenant, tokenID); found {
+			updates["vin"] = null.StringFrom(vin)
+			res.VINChanged = true
+			res.VIN = vin
+			res.VINSource = "vc"
+		}
 	}
 
 	if len(updates) == 0 {
@@ -127,6 +145,68 @@ func (s *LicensePlateSyncService) SyncVehicle(ctx context.Context, tenant models
 		dbmodels.VehicleWhere.TokenID.EQ(tokenID),
 	).UpdateAll(ctx, s.pdb.DBS().Writer, updates); err != nil {
 		return PlateSyncResult{}, fmt.Errorf("update registration fields: %w", err)
+	}
+	return res, nil
+}
+
+// vinFromVC wraps TelemetryAPIService.VINFromVC with this service's skip-
+// quietly posture: no SACD, no VC, or a transient error all come back as
+// found=false and are retried on a future pass (only while vin IS NULL).
+func (s *LicensePlateSyncService) vinFromVC(tenant models.Tenant, tokenID int64) (string, bool) {
+	if s.telemetry == nil {
+		return "", false
+	}
+	vin, found, err := s.telemetry.VINFromVC(tenant, uint64(tokenID))
+	if err != nil {
+		s.logger.Debug().Err(err).Str("tenant_id", tenant.ID).Int64("token_id", tokenID).
+			Msg("vin vc read failed, skipping")
+		return "", false
+	}
+	return vin, found
+}
+
+// SyncVINOnly fills vehicles.vin from the DIMO VIN VC for one vehicle,
+// skipping the fetch-api registration pull — the lean path for the cron's
+// -vin-only backfill. No-op when the vehicle already has a VIN (pull-once).
+// Same fill-if-missing and dry-run semantics as SyncVehicle.
+func (s *LicensePlateSyncService) SyncVINOnly(ctx context.Context, tenant models.Tenant, tokenID int64, dryRun bool) (PlateSyncResult, error) {
+	v, err := dbmodels.Vehicles(
+		dbmodels.VehicleWhere.TenantID.EQ(tenant.ID),
+		dbmodels.VehicleWhere.TokenID.EQ(tokenID),
+	).One(ctx, s.pdb.DBS().Reader)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return PlateSyncResult{}, ErrVehicleNotFound
+		}
+		return PlateSyncResult{}, fmt.Errorf("load vehicle: %w", err)
+	}
+
+	res := PlateSyncResult{Plate: v.LicensePlate.String, VIN: v.Vin.String}
+	if v.Vin.String != "" {
+		return res, nil
+	}
+	vin, found := s.vinFromVC(tenant, tokenID)
+	if !found {
+		return res, nil
+	}
+	res.VINChanged = true
+	res.VIN = vin
+	res.VINSource = "vc"
+
+	if dryRun {
+		s.logger.Info().Str("tenant_id", tenant.ID).Int64("token_id", tokenID).
+			Str("vin", vin).Msg("would cache vin from vc")
+		return res, nil
+	}
+
+	if _, err := dbmodels.Vehicles(
+		dbmodels.VehicleWhere.TenantID.EQ(tenant.ID),
+		dbmodels.VehicleWhere.TokenID.EQ(tokenID),
+	).UpdateAll(ctx, s.pdb.DBS().Writer, dbmodels.M{
+		"vin":        null.StringFrom(vin),
+		"updated_at": time.Now(),
+	}); err != nil {
+		return PlateSyncResult{}, fmt.Errorf("update vin: %w", err)
 	}
 	return res, nil
 }

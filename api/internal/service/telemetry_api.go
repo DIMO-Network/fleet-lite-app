@@ -132,6 +132,11 @@ type TelemetryAPIService interface {
 	// JWT exchange fails are returned in NoPermissions. Results are cached
 	// per tenant for fleetLocationsCacheTTL; force bypasses the cache.
 	FleetLocations(ctx context.Context, tenant models.Tenant, tokenIDs []uint64, force bool) (FleetLocationsResult, error)
+	// VINFromVC reads the vehicle's VIN off its latest DIMO VIN verifiable
+	// credential (`vinVCLatest`). found=false with a nil error means the
+	// vehicle has no VC (or an empty vin) — not a failure. Requires privilege
+	// 5 (GetVINCredential), which the vehicle-JWT exchange already requests.
+	VINFromVC(tenant models.Tenant, tokenID uint64) (vin string, found bool, err error)
 }
 
 // SegmentPoint is one end of a detected trip: a GPS fix plus its timestamp.
@@ -271,6 +276,46 @@ func (t *telemetryAPIService) LatestLocation(tenant models.Tenant, tokenID uint6
 		Longitude: loc.Value.Longitude,
 		Timestamp: loc.Timestamp,
 	}, nil
+}
+
+// VINFromVC queries `vinVCLatest(tokenId)` for the VIN carried on the
+// vehicle's latest VIN verifiable credential. See the interface doc for the
+// found/error contract; a "no VC" GraphQL error (should the API express
+// absence that way) surfaces as err and is treated by callers as
+// skip-and-retry-later, which is equally safe. Pull-once callers gate on
+// vehicles.vin IS NULL so a filled vehicle never costs another query (DCX).
+func (t *telemetryAPIService) VINFromVC(tenant models.Tenant, tokenID uint64) (string, bool, error) {
+	q := fmt.Sprintf("query { vinVCLatest(tokenId: %d) { vin } }", tokenID)
+
+	raw, err := t.query(tenant, tokenID, q)
+	if err != nil {
+		return "", false, err
+	}
+	return parseVINVCResponse(raw)
+}
+
+// parseVINVCResponse extracts the VIN from a `vinVCLatest { vin }` response
+// body. A null vinVCLatest or blank vin is (found=false, nil) — no VC exists.
+func parseVINVCResponse(raw []byte) (string, bool, error) {
+	var resp struct {
+		Data struct {
+			VinVCLatest *struct {
+				Vin string `json:"vin"`
+			} `json:"vinVCLatest"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return "", false, fmt.Errorf("parse vinVCLatest: %w", err)
+	}
+	vc := resp.Data.VinVCLatest
+	if vc == nil {
+		return "", false, nil
+	}
+	vin := strings.TrimSpace(vc.Vin)
+	if vin == "" {
+		return "", false, nil
+	}
+	return vin, true, nil
 }
 
 // TimeSeries queries `signals(tokenId, from, to, interval)` for one signal
