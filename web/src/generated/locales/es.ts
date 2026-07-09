@@ -5,8 +5,8 @@
     import {html} from 'lit';
     import {str} from '@lit/localize';
 
-     
-     
+    /* eslint-disable no-irregular-whitespace */
+    /* eslint-disable @typescript-eslint/no-explicit-any */
 
     export const templates = {
       'h3da2e750affa6331': html`VIN detectado <span class="vin">${0}</span>`,
