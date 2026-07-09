@@ -37,7 +37,21 @@ type AttestService interface {
 	// AttestVehicleGeofences publishes a vehicle's manual geofence ids as a
 	// single CE whose subject is the vehicle DID.
 	AttestVehicleGeofences(tenant models.Tenant, tokenID uint64, geofenceIDs []string) (string, error)
+	// AttestCostAmendment publishes a small overlay CE that attaches a dollar
+	// amount to an already-attested, immutable document — used to backfill
+	// TCO figures onto documents uploaded before/without an amount. See
+	// CostAmendmentCloudEventType.
+	AttestCostAmendment(tenant models.Tenant, tokenID uint64, documentID string, amount float64, currency string) (string, error)
 }
+
+// CostAmendmentCloudEventType is the CE type for a TCO cost-amendment overlay
+// (see AttestCostAmendment). Mirrors dimo.tombstone's "reference another CE by
+// id" pattern instead of mutating the original, immutable document.
+const CostAmendmentCloudEventType = "dimo.document.vehicle.cost-amendment"
+
+// TCOAttestationProducer stamps our app's cost-amendment CEs, mirroring
+// GroupAttestationProducer/GeofenceAttestationProducer.
+const TCOAttestationProducer = "fleet-lite-app"
 
 // VehicleGroupsCloudEventType is the CE type for a vehicle's group-membership
 // document. fetch-api admits it via its dimo.document.* prefix filter.
@@ -440,6 +454,56 @@ func (s *attestService) AttestVehicleGeofences(tenant models.Tenant, tokenID uin
 	s.logger.Info().Uint64("tokenID", tokenID).Int("geofences", len(geofenceIDs)).Msg("Submitting vehicle geofences cloud event")
 	if err := s.submitCloudEvent(ev, developerJWT); err != nil {
 		return "", fmt.Errorf("submit vehicle geofences cloud event: %w", err)
+	}
+	return ev.ID, nil
+}
+
+// AttestCostAmendment publishes a single parsed CloudEvent that attaches a
+// dollar amount to an already-attested document, without mutating or
+// re-attesting the original (CEs on DIS are immutable). Subject is the
+// vehicle DID; data is {"documentId","amount","currency"}. TCOService reads
+// these back and overlays the amount onto documentId's line item wherever
+// the original document itself has no amount. Mirrors AttestVehicleGroups'
+// signing.
+func (s *attestService) AttestCostAmendment(tenant models.Tenant, tokenID uint64, documentID string, amount float64, currency string) (string, error) {
+	if documentID == "" {
+		return "", fmt.Errorf("documentID is required")
+	}
+	if currency == "" {
+		currency = "USD"
+	}
+	developerJWT, err := s.authProvider.GetDeveloperJWT(tenant)
+	if err != nil {
+		return "", fmt.Errorf("developer JWT: %w", err)
+	}
+	dataMap := map[string]interface{}{
+		"documentId": documentID,
+		"amount":     amount,
+		"currency":   currency,
+	}
+	dataBytes, err := json.Marshal(dataMap)
+	if err != nil {
+		return "", fmt.Errorf("marshal cost amendment data: %w", err)
+	}
+	sig, err := signDataSecp256k1(dataBytes, tenant.DIMOPrivateKey)
+	if err != nil {
+		return "", fmt.Errorf("sign cost amendment data: %w", err)
+	}
+	ev := signedCloudEvent{
+		SpecVersion:     "1.0",
+		ID:              uuid.New().String(),
+		Source:          tenant.ClientID,
+		Producer:        TCOAttestationProducer,
+		Type:            CostAmendmentCloudEventType,
+		Subject:         s.authProvider.BuildVehicleDID(tokenID),
+		Time:            time.Now().UTC().Format(time.RFC3339),
+		DataContentType: "application/json",
+		Data:            dataMap,
+		Signature:       sig,
+	}
+	s.logger.Info().Uint64("tokenID", tokenID).Str("documentID", documentID).Msg("Submitting cost amendment cloud event")
+	if err := s.submitCloudEvent(ev, developerJWT); err != nil {
+		return "", fmt.Errorf("submit cost amendment cloud event: %w", err)
 	}
 	return ev.ID, nil
 }

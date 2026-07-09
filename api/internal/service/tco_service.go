@@ -89,6 +89,9 @@ func straightLineDepreciation(purchasePrice float64, purchaseDate time.Time, use
 
 // LineItem is one cost-eligible document, flattened for reporting/export.
 type LineItem struct {
+	// ID is the document's parsed CE id — the reference a cost-amendment CE
+	// (see AttestCostAmendment) or a future edit needs to target it.
+	ID             string  `json:"id"`
 	VehicleTokenID int64   `json:"vehicleTokenId"`
 	VehicleLabel   string  `json:"vehicleLabel"`
 	VIN            string  `json:"vin"`
@@ -126,15 +129,17 @@ type TCOService struct {
 	fetchAPI     *gateway.FetchAPI
 	authProvider *gateway.DimoAuthProvider
 	vehicleSvc   *VehicleService
+	attestSvc    AttestService
 }
 
-func NewTCOService(logger *zerolog.Logger, pdb *db.Store, fetchAPI *gateway.FetchAPI, authProvider *gateway.DimoAuthProvider, vehicleSvc *VehicleService) *TCOService {
+func NewTCOService(logger *zerolog.Logger, pdb *db.Store, fetchAPI *gateway.FetchAPI, authProvider *gateway.DimoAuthProvider, vehicleSvc *VehicleService, attestSvc AttestService) *TCOService {
 	return &TCOService{
 		logger:       logger,
 		pdb:          pdb,
 		fetchAPI:     fetchAPI,
 		authProvider: authProvider,
 		vehicleSvc:   vehicleSvc,
+		attestSvc:    attestSvc,
 	}
 }
 
@@ -218,6 +223,11 @@ type VehicleTCOSummary struct {
 	TotalTCO           float64            `json:"totalTco"`
 	Settings           TCOSettings        `json:"settings"`
 	LineItems          []LineItem         `json:"lineItems"`
+	// MissingAmounts are cost-eligible, non-tombstoned documents that have no
+	// amount — neither inline (extractAmount) nor via a cost-amendment CE
+	// (AttestCostAmendment). Amount/Currency are zero-valued; the frontend
+	// offers a way to backfill one via PUT /tco/vehicle/:tokenId/backfill/:documentId.
+	MissingAmounts []LineItem `json:"missingAmounts,omitempty"`
 	// PermissionsRequired mirrors DocumentsController.ListDocuments: the dev
 	// license lacks SACD permissions on this vehicle, so its document list
 	// (and therefore its cost figures) couldn't be read. Acquisition/
@@ -279,6 +289,41 @@ func descriptionFor(e gateway.AttestationEntry) string {
 	return parts[len(parts)-1]
 }
 
+type costAmendment struct {
+	amount   float64
+	currency string
+}
+
+// costAmendments scans entries for dimo.document.vehicle.cost-amendment CEs
+// (see AttestCostAmendment) and returns the amount/currency each names,
+// keyed by the documentId it overlays. Tombstoned amendments are excluded so
+// a mistaken backfill can be un-done the same way a document delete is.
+func costAmendments(entries []gateway.AttestationEntry, tombstoned map[string]struct{}) map[string]costAmendment {
+	out := map[string]costAmendment{}
+	for _, e := range entries {
+		if e.Type != CostAmendmentCloudEventType {
+			continue
+		}
+		if _, gone := tombstoned[e.ID]; gone {
+			continue
+		}
+		var payload struct {
+			DocumentID string  `json:"documentId"`
+			Amount     float64 `json:"amount"`
+			Currency   string  `json:"currency"`
+		}
+		if err := json.Unmarshal(e.Data, &payload); err != nil || payload.DocumentID == "" {
+			continue
+		}
+		currency := payload.Currency
+		if currency == "" {
+			currency = "USD"
+		}
+		out[payload.DocumentID] = costAmendment{amount: payload.Amount, currency: currency}
+	}
+	return out
+}
+
 // VehicleSummary builds one vehicle's TCO breakdown: cost-eligible document
 // amounts summed by category, plus acquisition/depreciation if settings exist.
 func (s *TCOService) VehicleSummary(ctx context.Context, tenant models.Tenant, tokenID int64) (*VehicleTCOSummary, error) {
@@ -305,8 +350,10 @@ func (s *TCOService) VehicleSummary(ctx context.Context, tenant models.Tenant, t
 	}
 
 	tombstoned := gateway.TombstonedIDs(entries)
+	amendments := costAmendments(entries, tombstoned)
 
 	lineItems := make([]LineItem, 0, len(entries))
+	missingAmounts := make([]LineItem, 0)
 	for _, e := range entries {
 		if _, gone := tombstoned[e.ID]; gone {
 			continue
@@ -314,20 +361,24 @@ func (s *TCOService) VehicleSummary(ctx context.Context, tenant models.Tenant, t
 		if !isCostEligible(e.Type) {
 			continue
 		}
-		amount, currency, ok := extractAmount(e.Data)
-		if !ok {
-			continue
-		}
-		lineItems = append(lineItems, LineItem{
+		li := LineItem{
+			ID:             e.ID,
 			VehicleTokenID: tokenID,
 			VehicleLabel:   label,
 			VIN:            vehicle.VIN,
 			Date:           e.Time,
 			Category:       e.Type,
 			Description:    descriptionFor(e),
-			Amount:         amount,
-			Currency:       currency,
-		})
+		}
+		if amount, currency, ok := extractAmount(e.Data); ok {
+			li.Amount, li.Currency = amount, currency
+			lineItems = append(lineItems, li)
+		} else if am, ok := amendments[e.ID]; ok {
+			li.Amount, li.Currency = am.amount, am.currency
+			lineItems = append(lineItems, li)
+		} else {
+			missingAmounts = append(missingAmounts, li)
+		}
 	}
 
 	settings, err := s.GetSettings(ctx, tenant.ID, tokenID)
@@ -342,6 +393,7 @@ func (s *TCOService) VehicleSummary(ctx context.Context, tenant models.Tenant, t
 		CostByCategory:      sumLineItemsByCategory(lineItems),
 		Settings:            settings,
 		LineItems:           lineItems,
+		MissingAmounts:      missingAmounts,
 		PermissionsRequired: permissionsRequired,
 	}
 	for _, v := range summary.CostByCategory {
@@ -358,6 +410,17 @@ func (s *TCOService) VehicleSummary(ctx context.Context, tenant models.Tenant, t
 	}
 	summary.TotalTCO = summary.OperatingCost + summary.AcquisitionCost
 	return summary, nil
+}
+
+// BackfillAmount attaches a dollar amount to a document that was uploaded
+// without one (see MissingAmounts), by publishing a cost-amendment CE that
+// references it — the original document CE is immutable and never touched.
+// Returns the new amendment CE's id.
+func (s *TCOService) BackfillAmount(tenant models.Tenant, tokenID int64, documentID string, amount float64, currency string) (string, error) {
+	if documentID == "" {
+		return "", fmt.Errorf("documentID is required")
+	}
+	return s.attestSvc.AttestCostAmendment(tenant, uint64(tokenID), documentID, amount, currency)
 }
 
 // FleetSummary builds the TCO rollup for every vehicle in the tenant. Vehicles

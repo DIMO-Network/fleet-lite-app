@@ -122,6 +122,49 @@ func (t *TCOController) GetVehicleDetail(c *fiber.Ctx) error {
 	return c.JSON(summary)
 }
 
+// BackfillAmountRequest is the body for PUT /tco/vehicle/:tokenId/backfill/:documentId.
+type BackfillAmountRequest struct {
+	Amount   float64 `json:"amount"`
+	Currency string  `json:"currency"`
+}
+
+// BackfillAmount — PUT /tco/vehicle/:tokenId/backfill/:documentId. Attaches a
+// dollar amount to a document that was uploaded without one, via a
+// cost-amendment CE (the original document is immutable and untouched).
+func (t *TCOController) BackfillAmount(c *fiber.Ctx) error {
+	tenant, err := GetTenant(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	tokenID, err := strconv.ParseInt(c.Params("tokenId"), 10, 64)
+	if err != nil || tokenID == 0 {
+		return fiber.NewError(fiber.StatusBadRequest, "valid tokenId path param required")
+	}
+	documentID := c.Params("documentId")
+	if documentID == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "documentId path param required")
+	}
+	if !t.vehicleInTenant(c.Context(), tenant.ID, tokenID) {
+		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
+	}
+	var req BackfillAmountRequest
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request body: "+err.Error())
+	}
+	if req.Amount <= 0 {
+		return fiber.NewError(fiber.StatusBadRequest, "amount must be greater than 0")
+	}
+	currency := req.Currency
+	if currency == "" {
+		currency = "USD"
+	}
+	amendmentID, err := t.tcoSvc.BackfillAmount(tenant, tokenID, documentID, req.Amount, currency)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadGateway, "backfill amount: "+err.Error())
+	}
+	return c.JSON(fiber.Map{"id": amendmentID})
+}
+
 // ExportCSV — GET /tco/export.csv (optionally ?tokenId=N for a single vehicle).
 func (t *TCOController) ExportCSV(c *fiber.Ctx) error {
 	tenant, err := GetTenant(c)

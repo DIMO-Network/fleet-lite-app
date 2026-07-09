@@ -31,6 +31,16 @@ export class TCOService {
         return ApiService.getInstance().get<VehicleTCOSummary>(`/tco/vehicle/${tokenId}`);
     }
 
+    /** PUT /tco/vehicle/:tokenId/backfill/:documentId. Attaches a dollar
+     * amount to a document that was uploaded without one, via a
+     * cost-amendment CE — the original document is untouched. */
+    backfillAmount(tokenId: number, documentId: string, amount: number, currency = 'USD'): Promise<{ id: string }> {
+        return ApiService.getInstance().put<{ id: string }>(
+            `/tco/vehicle/${tokenId}/backfill/${encodeURIComponent(documentId)}`,
+            { amount, currency },
+        );
+    }
+
     /** Trigger a browser download of the CSV export. Omit tokenId for the fleet-wide export. */
     async exportCsv(tokenId?: number): Promise<void> {
         const base = ApiService.getInstance().getApiBaseUrl();

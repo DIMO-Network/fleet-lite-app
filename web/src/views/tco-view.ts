@@ -4,8 +4,9 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { ApiService } from '../services/api-service.ts';
 import { hiddenVehiclesService } from '../services/hidden-vehicles-service.ts';
+import { TCOCache } from '../services/tco-cache.ts';
 import { TCOService } from '../services/tco-service.ts';
-import { VehicleTCOSummary } from '../types/tco.ts';
+import { LineItem, VehicleTCOSummary } from '../types/tco.ts';
 import { Vehicle, VehiclesResponse } from '../types/vehicle.ts';
 import { categoryLabel } from '../utils/document-categories.ts';
 
@@ -36,6 +37,8 @@ export class TCOView extends LitElement {
     private unsubscribeHidden: (() => void) | null = null;
     private connected = false;
     private static readonly PREFETCH_PARALLEL = 3;
+    private static readonly PAGE_SIZE = 10;
+    @state() private page = 0;
     @state() private detailTokenId: number | null = null;
     @state() private detail: VehicleTCOSummary | null = null;
     @state() private loadingDetail = false;
@@ -46,6 +49,11 @@ export class TCOView extends LitElement {
     @state() private formPurchasePrice = '';
     @state() private formPurchaseDate = '';
     @state() private formUsefulLifeYears = '';
+    // Backfill: draft amount text per missing-amount document id, plus which
+    // ones are mid-save or errored — keyed by LineItem.id.
+    @state() private backfillDrafts = new Map<string, string>();
+    @state() private backfillSaving = new Set<string>();
+    @state() private backfillErrors = new Map<string, string>();
 
     static styles = [
         sharedStyles,
@@ -292,6 +300,89 @@ export class TCOView extends LitElement {
                 color: var(--on-surface-variant);
                 margin-bottom: var(--stack-sm);
             }
+
+            /* ── Backfill missing amounts ─────────────────────────────── */
+            .missing-hint {
+                font: var(--type-body-sm);
+                color: var(--on-surface-variant);
+                margin-bottom: var(--stack-sm);
+            }
+            tr.missing-row td { vertical-align: top; }
+            .backfill-input input {
+                width: 110px;
+                background: var(--surface-container);
+                color: var(--on-surface);
+                border: 1px solid var(--outline-variant);
+                border-radius: var(--radius-sm);
+                padding: 6px 8px;
+                font-family: inherit;
+                font-size: 13px;
+                text-align: right;
+            }
+            .backfill-input input:focus { outline: 1px solid var(--primary); }
+            .backfill-save-btn {
+                padding: 6px 12px;
+                border-radius: var(--radius-sm);
+                background: var(--primary);
+                color: var(--on-primary);
+                border: none;
+                font: var(--type-label-caps);
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+                font-size: 10px;
+                cursor: pointer;
+                white-space: nowrap;
+            }
+            .backfill-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+            .missing-row .form-error { margin-top: 4px; font-size: 11px; }
+
+            .refresh-btn {
+                background: none;
+                border: 1px solid var(--outline-variant);
+                border-radius: var(--radius-md);
+                color: var(--on-surface-variant);
+                padding: 8px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                transition: color 0.15s;
+            }
+            .refresh-btn:hover { color: var(--primary); }
+            .refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+            .refresh-btn.spinning .material-symbols-outlined { animation: tco-spin 0.8s linear infinite; }
+            @keyframes tco-spin { to { transform: rotate(360deg); } }
+
+            /* ── Pagination ───────────────────────────────────────────── */
+            .fleet-total-scope {
+                font: var(--type-label-caps);
+                letter-spacing: 0.03em;
+                color: var(--on-surface-variant);
+                font-weight: 400;
+                text-transform: none;
+            }
+            .pagination {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-top: var(--stack-sm);
+            }
+            .pagination-info { font: var(--type-body-sm); color: var(--on-surface-variant); }
+            .pagination-controls { display: flex; align-items: center; gap: 8px; }
+            .page-btn {
+                background: none;
+                border: 1px solid var(--outline-variant);
+                border-radius: var(--radius-md);
+                color: var(--on-surface-variant);
+                padding: 6px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                transition: color 0.15s, border-color 0.15s;
+            }
+            .page-btn:hover:not(:disabled) { color: var(--primary); border-color: var(--primary); }
+            .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+            .page-btn .material-symbols-outlined { font-size: 18px; }
+            .page-indicator { font: var(--type-body-sm); color: var(--on-surface-variant); min-width: 56px; text-align: center; }
         `,
     ];
 
@@ -302,8 +393,35 @@ export class TCOView extends LitElement {
         this.unsubscribeHidden = hiddenVehiclesService.subscribe(() => {
             this.hiddenVehicles = hiddenVehiclesService.getHidden(this.tenantId);
         });
+
+        const cached = TCOCache.get(this.tenantId);
+        if (cached) {
+            // Serve the last-loaded fleet table instantly — no loading state,
+            // no re-fetch — then top up anything not yet in hand (e.g. a
+            // vehicle that synced in since the cache was built).
+            this.vehicles = cached.vehicles;
+            this.tcoByToken = cached.tcoByToken;
+            this.loading = false;
+            void this.prefetchTco();
+            return;
+        }
+        await this.loadFresh();
+    }
+
+    disconnectedCallback() {
+        this.connected = false;
+        this.unsubscribeHidden?.();
+        this.unsubscribeHidden = null;
+        super.disconnectedCallback();
+    }
+
+    /** Full reload from scratch: fresh /vehicles list, cleared cost figures,
+     * then re-prefetch. Used on cache miss and by the manual refresh button. */
+    private async loadFresh() {
         this.loading = true;
         this.error = '';
+        this.tcoByToken = new Map();
+        this.page = 0;
         try {
             const res = await ApiService.getInstance().get<VehiclesResponse>('/vehicles');
             this.vehicles = res.vehicles || [];
@@ -313,17 +431,22 @@ export class TCOView extends LitElement {
         } finally {
             this.loading = false;
         }
+        this.syncCache();
         // Fire-and-forget: fill in each vehicle's cost figures in the
         // background so the table shows real numbers as they arrive instead
         // of blocking the whole view on the slowest vehicle's fetch-api call.
         void this.prefetchTco();
     }
 
-    disconnectedCallback() {
-        this.connected = false;
-        this.unsubscribeHidden?.();
-        this.unsubscribeHidden = null;
-        super.disconnectedCallback();
+    private async refresh() {
+        TCOCache.invalidate();
+        await this.loadFresh();
+    }
+
+    /** Push the current vehicles/tcoByToken into TCOCache so the next visit
+     * serves instantly. Call after any state change worth remembering. */
+    private syncCache() {
+        TCOCache.set(this.tenantId, { vehicles: this.vehicles, tcoByToken: this.tcoByToken });
     }
 
     /** Vehicles hidden elsewhere (Fleet List) are skipped here too, unless
@@ -346,6 +469,7 @@ export class TCOView extends LitElement {
                     const detail = await TCOService.getInstance().getVehicleDetail(v.tokenId);
                     if (!this.connected) return;
                     this.tcoByToken = new Map(this.tcoByToken).set(v.tokenId, detail);
+                    this.syncCache();
                 } catch (e) {
                     console.error('Failed to load TCO for vehicle', v.tokenId, e);
                     // Leave uncached — the row falls back to a loading dash.
@@ -362,6 +486,9 @@ export class TCOView extends LitElement {
         this.loadingDetail = true;
         this.detailError = '';
         this.settingsError = '';
+        this.backfillDrafts = new Map();
+        this.backfillSaving = new Set();
+        this.backfillErrors = new Map();
         try {
             // Reuse the prefetched figures if already in hand so the drilldown
             // paints instantly; otherwise fetch fresh (e.g. clicked before its
@@ -370,6 +497,7 @@ export class TCOView extends LitElement {
             this.detail = cached ?? await TCOService.getInstance().getVehicleDetail(tokenId);
             if (!cached) {
                 this.tcoByToken = new Map(this.tcoByToken).set(tokenId, this.detail);
+                this.syncCache();
             }
             this.formPurchasePrice = this.detail.settings.purchasePrice?.toString() ?? '';
             this.formPurchaseDate = this.detail.settings.purchaseDate ?? '';
@@ -414,11 +542,46 @@ export class TCOView extends LitElement {
             });
             this.detail = await TCOService.getInstance().getVehicleDetail(this.detailTokenId);
             this.tcoByToken = new Map(this.tcoByToken).set(this.detailTokenId, this.detail);
+            this.syncCache();
         } catch (e) {
             console.error('Failed to save TCO settings', e);
             this.settingsError = e instanceof Error ? e.message : msg('Failed to save');
         } finally {
             this.savingSettings = false;
+        }
+    }
+
+    private async backfillAmount(li: LineItem) {
+        if (this.detailTokenId === null) return;
+        const raw = (this.backfillDrafts.get(li.id) ?? '').trim();
+        const amount = Number(raw);
+        if (raw === '' || Number.isNaN(amount) || amount <= 0) {
+            this.backfillErrors = new Map(this.backfillErrors).set(li.id, msg('Enter an amount greater than 0'));
+            return;
+        }
+        this.backfillSaving = new Set(this.backfillSaving).add(li.id);
+        const errs = new Map(this.backfillErrors);
+        errs.delete(li.id);
+        this.backfillErrors = errs;
+        try {
+            await TCOService.getInstance().backfillAmount(this.detailTokenId, li.id, amount, 'USD');
+            // Refetch so the document moves from missingAmounts into lineItems
+            // with its new figure, and operating cost/totals recompute.
+            this.detail = await TCOService.getInstance().getVehicleDetail(this.detailTokenId);
+            this.tcoByToken = new Map(this.tcoByToken).set(this.detailTokenId, this.detail);
+            this.syncCache();
+            const drafts = new Map(this.backfillDrafts);
+            drafts.delete(li.id);
+            this.backfillDrafts = drafts;
+        } catch (e) {
+            console.error('Failed to backfill amount', li.id, e);
+            this.backfillErrors = new Map(this.backfillErrors).set(
+                li.id, e instanceof Error ? e.message : msg('Failed to save'),
+            );
+        } finally {
+            const saving = new Set(this.backfillSaving);
+            saving.delete(li.id);
+            this.backfillSaving = saving;
         }
     }
 
@@ -458,6 +621,7 @@ export class TCOView extends LitElement {
 
     private toggleShowHidden() {
         this.showHidden = !this.showHidden;
+        this.page = 0;
         if (this.showHidden) {
             // Rows just revealed may not have been prefetched yet (prefetch
             // skips hidden vehicles) — top up in the background.
@@ -491,6 +655,9 @@ export class TCOView extends LitElement {
             `;
         }
         const allLoaded = visible.every((v) => this.tcoByToken.has(v.tokenId));
+        // Fleet total is always summed across every visible vehicle, not just
+        // the current page, so it stays a true fleet-wide figure regardless
+        // of pagination.
         let fleetOperating = 0, fleetAcquisition = 0, fleetDepreciation = 0, fleetTotal = 0;
         for (const v of visible) {
             const t = this.tcoByToken.get(v.tokenId);
@@ -500,6 +667,11 @@ export class TCOView extends LitElement {
             fleetDepreciation += t.depreciationToDate;
             fleetTotal += t.totalTco;
         }
+
+        const totalPages = Math.max(1, Math.ceil(visible.length / TCOView.PAGE_SIZE));
+        const page = Math.min(this.page, totalPages - 1);
+        const pageVehicles = visible.slice(page * TCOView.PAGE_SIZE, (page + 1) * TCOView.PAGE_SIZE);
+
         return html`
             ${this.hiddenVehicles.size > 0 ? html`
                 <div class="hidden-toggle-row">
@@ -522,7 +694,7 @@ export class TCOView extends LitElement {
                         </tr>
                     </thead>
                     <tbody>
-                        ${visible.map((v) => html`
+                        ${pageVehicles.map((v) => html`
                             <tr class=${this.hiddenVehicles.has(String(v.tokenId)) ? 'hidden-row' : ''}
                                 @click=${() => this.openVehicle(v.tokenId)}>
                                 <td>${vehicleTitle(v)}</td>
@@ -535,7 +707,7 @@ export class TCOView extends LitElement {
                     </tbody>
                     <tfoot>
                         <tr>
-                            <td>${msg('Fleet total')}</td>
+                            <td>${msg('Fleet total')} <span class="fleet-total-scope">(${msg('all')} ${visible.length})</span></td>
                             <td class="num">${allLoaded ? formatMoney(fleetOperating) : html`<span class="cell-loading">···</span>`}</td>
                             <td class="num">${allLoaded ? formatMoney(fleetAcquisition) : html`<span class="cell-loading">···</span>`}</td>
                             <td class="num">${allLoaded ? formatMoney(fleetDepreciation) : html`<span class="cell-loading">···</span>`}</td>
@@ -544,6 +716,23 @@ export class TCOView extends LitElement {
                     </tfoot>
                 </table>
             </div>
+            ${totalPages > 1 ? html`
+                <div class="pagination">
+                    <span class="pagination-info">
+                        ${msg('Showing')} ${page * TCOView.PAGE_SIZE + 1}–${Math.min((page + 1) * TCOView.PAGE_SIZE, visible.length)}
+                        ${msg('of')} ${visible.length}
+                    </span>
+                    <div class="pagination-controls">
+                        <button class="page-btn" ?disabled=${page === 0} @click=${() => { this.page = page - 1; }}>
+                            <span class="material-symbols-outlined">chevron_left</span>
+                        </button>
+                        <span class="page-indicator">${page + 1} / ${totalPages}</span>
+                        <button class="page-btn" ?disabled=${page >= totalPages - 1} @click=${() => { this.page = page + 1; }}>
+                            <span class="material-symbols-outlined">chevron_right</span>
+                        </button>
+                    </div>
+                </div>
+            ` : nothing}
         `;
     }
 
@@ -610,6 +799,57 @@ export class TCOView extends LitElement {
                 ${this.settingsError ? html`<span class="form-error">${this.settingsError}</span>` : nothing}
             </div>
 
+            ${d.missingAmounts && d.missingAmounts.length > 0 ? html`
+                <div class="section-label">${msg('Missing amounts')}</div>
+                <p class="missing-hint">
+                    ${msg('These documents don’t have a cost amount on file. Add one to include them in this vehicle’s totals.')}
+                </p>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>${msg('Date')}</th>
+                                <th>${msg('Category')}</th>
+                                <th>${msg('Description')}</th>
+                                <th class="num">${msg('Amount')}</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${d.missingAmounts.map((li) => html`
+                                <tr class="missing-row">
+                                    <td>${new Date(li.date).toLocaleDateString()}</td>
+                                    <td>${categoryLabel(li.category)}</td>
+                                    <td>${li.description}</td>
+                                    <td class="num">
+                                        <div class="backfill-input">
+                                            <input type="text" inputmode="decimal" placeholder="0.00"
+                                                .value=${this.backfillDrafts.get(li.id) ?? ''}
+                                                @input=${(e: Event) => {
+                                                    const drafts = new Map(this.backfillDrafts);
+                                                    drafts.set(li.id, (e.target as HTMLInputElement).value);
+                                                    this.backfillDrafts = drafts;
+                                                }}
+                                                @keydown=${(e: KeyboardEvent) => { if (e.key === 'Enter') this.backfillAmount(li); }} />
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <button class="backfill-save-btn"
+                                            ?disabled=${this.backfillSaving.has(li.id)}
+                                            @click=${() => this.backfillAmount(li)}>
+                                            ${this.backfillSaving.has(li.id) ? msg('Saving…') : msg('Save')}
+                                        </button>
+                                        ${this.backfillErrors.has(li.id)
+                                            ? html`<div class="form-error">${this.backfillErrors.get(li.id)}</div>`
+                                            : nothing}
+                                    </td>
+                                </tr>
+                            `)}
+                        </tbody>
+                    </table>
+                </div>
+            ` : nothing}
+
             <div class="section-label">${msg('Line items')}</div>
             ${d.lineItems.length === 0
                 ? html`<div class="empty">${msg('No cost documents on file for this vehicle yet.')}</div>`
@@ -649,6 +889,12 @@ export class TCOView extends LitElement {
                 </div>
                 <div class="right">
                     ${this.detailTokenId === null ? html`
+                        <button class="refresh-btn ${this.loading ? 'spinning' : ''}"
+                            title=${msg('Refresh')}
+                            ?disabled=${this.loading}
+                            @click=${() => this.refresh()}>
+                            <span class="material-symbols-outlined">refresh</span>
+                        </button>
                         <button class="export-btn" ?disabled=${this.exporting || this.loading} @click=${() => this.exportFleetCsv()}>
                             <span class="material-symbols-outlined" style="font-size:18px;">download</span>
                             ${this.exporting ? msg('Exporting…') : msg('Export CSV')}

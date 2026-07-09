@@ -8,6 +8,7 @@ import { DocumentService } from '../services/document-service.ts';
 import { DocumentEntry } from '../types/document.ts';
 import { categoryLabel, EXPECTED_CE_TYPES, CE_TYPE_TO_LABEL } from '../utils/document-categories.ts';
 import { FleetCache } from '../services/fleet-cache.ts';
+import { TCOCache } from '../services/tco-cache.ts';
 import '../elements/upload-document-modal.ts';
 import '../elements/document-detail-modal.ts';
 
@@ -162,6 +163,9 @@ export class GloveboxView extends LitElement {
     private onUploaded = async (e: CustomEvent<{ tokenId: number }>) => {
         this.showUploadModal = false;
         FleetCache.invalidate();
+        // A new document may add a cost-eligible line item — don't let a
+        // stale TCO cache hide it on the next visit to that tab.
+        TCOCache.invalidate();
         if (this.selected && e.detail.tokenId === this.selected.tokenId) {
             await this.loadDocs(this.selected.tokenId);
         }
@@ -171,6 +175,8 @@ export class GloveboxView extends LitElement {
     private closeDetail = () => { this.detailOpen = null; };
     private onDeleted = async (e: CustomEvent<{ tokenId: number }>) => {
         this.detailOpen = null;
+        // A deleted (tombstoned) document must stop counting toward TCO too.
+        TCOCache.invalidate();
         if (this.selected && e.detail.tokenId === this.selected.tokenId) {
             await this.loadDocs(this.selected.tokenId);
         }

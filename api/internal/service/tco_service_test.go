@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/DIMO-Network/fleet-lite-app/internal/gateway"
 )
 
 func TestIsCostEligible(t *testing.T) {
@@ -129,5 +131,46 @@ func TestBuildCSV(t *testing.T) {
 	}
 	if !strings.Contains(got, "-5000.00,USD") {
 		t.Fatalf("missing depreciation row, got:\n%s", got)
+	}
+}
+
+func TestCostAmendments(t *testing.T) {
+	entries := []gateway.AttestationEntry{
+		{
+			ID:   "amend-1",
+			Type: "dimo.document.vehicle.cost-amendment",
+			Data: json.RawMessage(`{"documentId":"doc-1","amount":150,"currency":"EUR"}`),
+		},
+		{
+			ID:   "amend-2",
+			Type: "dimo.document.vehicle.cost-amendment",
+			Data: json.RawMessage(`{"documentId":"doc-2","amount":75}`),
+		},
+		{
+			ID:   "amend-3-tombstoned",
+			Type: "dimo.document.vehicle.cost-amendment",
+			Data: json.RawMessage(`{"documentId":"doc-3","amount":999}`),
+		},
+		{
+			ID:   "not-an-amendment",
+			Type: "dimo.document.vehicle.insurance",
+			Data: json.RawMessage(`{"amount":10}`),
+		},
+	}
+	tombstoned := map[string]struct{}{"amend-3-tombstoned": {}}
+
+	got := costAmendments(entries, tombstoned)
+
+	if len(got) != 2 {
+		t.Fatalf("expected 2 amendments, got %d: %+v", len(got), got)
+	}
+	if am := got["doc-1"]; am.amount != 150 || am.currency != "EUR" {
+		t.Fatalf("doc-1 amendment = %+v, want {150 EUR}", am)
+	}
+	if am := got["doc-2"]; am.amount != 75 || am.currency != "USD" {
+		t.Fatalf("doc-2 amendment (currency default) = %+v, want {75 USD}", am)
+	}
+	if _, ok := got["doc-3"]; ok {
+		t.Fatalf("tombstoned amendment for doc-3 should be excluded")
 	}
 }
