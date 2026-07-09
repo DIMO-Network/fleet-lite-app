@@ -4,6 +4,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { ApiService } from '../services/api-service.ts';
 import { FleetGroupService } from '../services/fleet-group-service.ts';
+import { TenantService } from '../services/tenant-service.ts';
 import { FleetGroup } from '../types/group.ts';
 import { Vehicle, VehiclesResponse } from '../types/vehicle.ts';
 import '../elements/create-fleet-group-modal.ts';
@@ -27,6 +28,8 @@ export class GroupsManagementView extends LitElement {
     @state() private managing: FleetGroup | null = null;
     @state() private confirmingDeleteId: string | null = null;
     @state() private searchQuery = '';
+    /** True for limited members: the view is a read-only list of their groups. */
+    @state() private readOnly = false;
 
     connectedCallback() {
         super.connectedCallback();
@@ -43,6 +46,13 @@ export class GroupsManagementView extends LitElement {
             this.groups = groups;
             this.vehicles = vehiclesRes.vehicles || [];
             this.errorMessage = null;
+            // Limited members get a read-only view (the API rejects mutations too).
+            try {
+                const access = await TenantService.getInstance().fetchMyAccess();
+                this.readOnly = access.allowedGroupIds !== null;
+            } catch {
+                this.readOnly = false;
+            }
         } catch (e) {
             console.error('Failed to load groups', e);
             this.errorMessage = e instanceof Error ? e.message : msg('Failed to load groups');
@@ -167,23 +177,25 @@ export class GroupsManagementView extends LitElement {
                     <span class="name">${g.name}</span>
                 </div>
                 <span class="count">${g.vehicleCount ?? 0} ${(g.vehicleCount ?? 0) === 1 ? msg('vehicle') : msg('vehicles')}</span>
-                ${confirming
-                    ? html`<div class="confirm">
-                        <span>${msg(str`Delete “${g.name}”?`)}</span>
-                        <button class="yes" @click=${() => this.onDelete(g)}>${msg('Delete')}</button>
-                        <button class="no" @click=${() => { this.confirmingDeleteId = null; }}>${msg('Cancel')}</button>
-                    </div>`
-                    : html`<div class="card-actions">
-                        <button @click=${() => { this.managing = g; }}>
-                            <span class="material-symbols-outlined">directions_car</span> ${msg('Vehicles')}
-                        </button>
-                        <button @click=${() => { this.editing = g; }}>
-                            <span class="material-symbols-outlined">palette</span> ${msg('Color')}
-                        </button>
-                        <button class="danger" @click=${() => { this.confirmingDeleteId = g.id; }}>
-                            <span class="material-symbols-outlined">delete</span> ${msg('Delete')}
-                        </button>
-                    </div>`}
+                ${this.readOnly
+                    ? nothing
+                    : confirming
+                        ? html`<div class="confirm">
+                            <span>${msg(str`Delete “${g.name}”?`)}</span>
+                            <button class="yes" @click=${() => this.onDelete(g)}>${msg('Delete')}</button>
+                            <button class="no" @click=${() => { this.confirmingDeleteId = null; }}>${msg('Cancel')}</button>
+                        </div>`
+                        : html`<div class="card-actions">
+                            <button @click=${() => { this.managing = g; }}>
+                                <span class="material-symbols-outlined">directions_car</span> ${msg('Vehicles')}
+                            </button>
+                            <button @click=${() => { this.editing = g; }}>
+                                <span class="material-symbols-outlined">palette</span> ${msg('Color')}
+                            </button>
+                            <button class="danger" @click=${() => { this.confirmingDeleteId = g.id; }}>
+                                <span class="material-symbols-outlined">delete</span> ${msg('Delete')}
+                            </button>
+                        </div>`}
             </div>
         `;
     }
@@ -192,9 +204,11 @@ export class GroupsManagementView extends LitElement {
         return html`
             <header class="top-bar">
                 <h2>${msg('Fleet Groups')}</h2>
-                <button class="new-btn" @click=${() => { this.creating = true; }}>
-                    <span class="material-symbols-outlined">add</span> ${msg('New group')}
-                </button>
+                ${!this.readOnly
+                    ? html`<button class="new-btn" @click=${() => { this.creating = true; }}>
+                        <span class="material-symbols-outlined">add</span> ${msg('New group')}
+                    </button>`
+                    : nothing}
             </header>
 
             <div class="canvas">

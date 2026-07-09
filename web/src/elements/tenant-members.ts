@@ -4,7 +4,10 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { getTokenClaims } from '../utils/token.ts';
 import { ApiError } from '../services/api-service.ts';
-import { TenantService, Member, Invitation, ROLE_OWNER, ROLE_MEMBER } from '../services/tenant-service.ts';
+import { TenantService, Member, Invitation, MyAccess, ROLE_OWNER } from '../services/tenant-service.ts';
+import { FleetGroupService } from '../services/fleet-group-service.ts';
+import { FleetGroup } from '../types/group.ts';
+import './invite-member-modal.ts';
 
 /**
  * Members management for the current tenant, embedded in the settings view.
@@ -26,13 +29,14 @@ export class TenantMembers extends LitElement {
     @state() private busyWallet = ''; // wallet currently being removed
 
     @state() private invites: Invitation[] = [];
-    @state() private newEmail = '';
-    @state() private newRole = ROLE_MEMBER;
-    @state() private inviting = false;
     @state() private inviteError = '';
     @state() private inviteNotice = '';
     @state() private busyInviteId = ''; // invitation currently being revoked/resent
     @state() private showPast = false; // past-invitations section, collapsed by default
+    @state() private groups: FleetGroup[] = []; // for the invite modal + access chips
+    @state() private inviteOpen = false; // invite-member modal
+    @state() private editingAccess: Member | null = null; // edit-access modal target
+    @state() private myAccess: MyAccess | null = null; // non-owner "your access" summary
 
     static styles = [
         sharedStyles,
@@ -199,6 +203,37 @@ export class TenantMembers extends LitElement {
             .text-btn.danger:hover { color: var(--error); border-color: var(--error); }
             .text-btn[disabled] { opacity: 0.5; cursor: default; }
 
+            .invite-btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                background: var(--primary);
+                color: var(--on-primary);
+                border: none;
+                border-radius: var(--radius-full);
+                padding: 12px 22px;
+                font: var(--type-label-caps);
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                cursor: pointer;
+            }
+            .invite-btn .material-symbols-outlined { font-size: 18px; }
+            .badge.access { text-transform: none; letter-spacing: normal; }
+            .access-panel { display: flex; gap: 14px; padding: 16px; align-items: flex-start; }
+            .access-text { display: flex; flex-direction: column; gap: 8px; font: var(--type-body-md); color: var(--on-surface); }
+            .access-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+            .access-chips .none { font: var(--type-body-sm); color: var(--on-surface-variant); }
+            .group-chip {
+                display: inline-block;
+                border: 1px solid;
+                border-radius: var(--radius-sm);
+                padding: 2px 8px;
+                font: var(--type-label-caps);
+                letter-spacing: 0.04em;
+                font-size: 10px;
+                white-space: nowrap;
+            }
+
             /* Collapsible "Past invitations" header: section-label styling on a button. */
             .section-toggle {
                 display: flex;
@@ -245,6 +280,14 @@ export class TenantMembers extends LitElement {
         this.error = '';
         try {
             this.members = await TenantService.getInstance().fetchMembers(this.tenantId);
+            // Groups feed the invite modal's picker and the access chips; for a
+            // limited member the API already returns only their groups, which is
+            // exactly what the "your access" summary needs. Non-fatal.
+            try {
+                this.groups = await FleetGroupService.getInstance().list();
+            } catch {
+                this.groups = [];
+            }
             // Pending invites are only shown to owners (who manage them). Load
             // them after members so isOwner is known; failure here is non-fatal.
             if (this.isOwner) {
@@ -253,8 +296,14 @@ export class TenantMembers extends LitElement {
                 } catch {
                     this.invites = [];
                 }
+                this.myAccess = null;
             } else {
                 this.invites = [];
+                try {
+                    this.myAccess = await TenantService.getInstance().fetchMyAccess();
+                } catch {
+                    this.myAccess = null;
+                }
             }
         } catch (err) {
             this.error = extractMessage(err) || msg('Could not load members.');
@@ -284,31 +333,29 @@ export class TenantMembers extends LitElement {
         return member?.email || shortWallet(wallet);
     }
 
-    private async inviteMember(e: Event) {
-        e.preventDefault();
+    /** The invite modal saved: show the sent/not-sent notice and refresh. */
+    private onInviteSaved(e: CustomEvent) {
+        const { emailSent, email } = (e.detail ?? {}) as { emailSent?: boolean; email?: string };
+        this.inviteOpen = false;
         this.inviteError = '';
-        this.inviteNotice = '';
-        const email = this.newEmail.trim().toLowerCase();
-        // Light client-side check; the server is the source of truth.
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-            this.inviteError = msg('Enter a valid email address.');
-            return;
-        }
-        this.inviting = true;
-        try {
-            const res = await TenantService.getInstance().createInvitation(this.tenantId, email, this.newRole);
-            this.newEmail = '';
-            this.newRole = ROLE_MEMBER;
-            // The invite is saved either way; distinguish whether the email went out.
-            this.inviteNotice = res.emailSent === false
-                ? msg(str`Invitation created for ${email}, but the email could not be sent. Use Resend once email delivery is configured.`)
-                : msg(str`Invitation sent to ${email}.`);
-            await this.load();
-        } catch (err) {
-            this.inviteError = extractMessage(err) || msg('Could not send invitation.');
-        } finally {
-            this.inviting = false;
-        }
+        this.inviteNotice = emailSent === false
+            ? msg(str`Invitation created for ${email ?? ''}, but the email could not be sent. Use Resend once email delivery is configured.`)
+            : msg(str`Invitation sent to ${email ?? ''}.`);
+        void this.load();
+    }
+
+    /** Human summary of an allowed-groups scope ("All groups" / "N groups"). */
+    private accessLabel(allowedGroupIds?: string[]): string {
+        if (!allowedGroupIds) return msg('All groups');
+        const n = allowedGroupIds.length;
+        return n === 1 ? msg('1 group') : msg(str`${n} groups`);
+    }
+
+    /** Tooltip listing the group names behind an access chip. */
+    private accessTitle(allowedGroupIds?: string[]): string {
+        if (!allowedGroupIds) return '';
+        const byId = new Map(this.groups.map((g) => [g.id, g.name]));
+        return allowedGroupIds.map((id) => byId.get(id) ?? id).join(', ');
     }
 
     private async revokeInvite(id: string) {
@@ -403,7 +450,20 @@ export class TenantMembers extends LitElement {
                     ${isSelf ? html`<span class="you">${msg('You')}</span>` : ''}
                 </div>
                 <div class="right-group">
+                    ${!isOwnerRole
+                        ? html`<span class="badge access" title=${this.accessTitle(m.allowedGroupIds)}>
+                            ${this.accessLabel(m.allowedGroupIds)}
+                        </span>`
+                        : ''}
                     <span class="badge ${isOwnerRole ? 'owner' : ''}">${m.role}</span>
+                    ${this.isOwner && !isOwnerRole
+                        ? html`
+                            <button
+                                class="text-btn"
+                                @click=${() => { this.editingAccess = m; }}
+                            >${msg('Edit access')}</button>
+                          `
+                        : ''}
                     ${canRemove
                         ? html`
                             <button
@@ -435,7 +495,57 @@ export class TenantMembers extends LitElement {
                     : this.members.map(m => this.renderMember(m))}
             </div>
             ${this.error && this.members.length > 0 ? html`<div class="error">${this.error}</div>` : ''}
-            ${this.isOwner ? this.renderOwnerControls() : ''}
+            ${this.isOwner ? this.renderOwnerControls() : this.renderMyAccess()}
+            ${this.inviteOpen
+                ? html`<invite-member-modal
+                    .tenantId=${this.tenantId}
+                    .groups=${this.groups}
+                    @close=${() => { this.inviteOpen = false; }}
+                    @saved=${this.onInviteSaved}
+                  ></invite-member-modal>`
+                : ''}
+            ${this.editingAccess
+                ? html`<invite-member-modal
+                    .tenantId=${this.tenantId}
+                    .groups=${this.groups}
+                    .member=${this.editingAccess}
+                    @close=${() => { this.editingAccess = null; }}
+                    @saved=${() => { this.editingAccess = null; void this.load(); }}
+                  ></invite-member-modal>`
+                : ''}
+        `;
+    }
+
+    /**
+     * Non-owners see their own access level here: full access, or the list of
+     * groups they're limited to (their /fleet/groups response is already
+     * scoped, so it carries exactly those groups' names/colors).
+     */
+    private renderMyAccess() {
+        if (!this.myAccess) return html``;
+        const limited = this.myAccess.allowedGroupIds !== null;
+        return html`
+            <div class="section-label">${msg('Your access')}</div>
+            <div class="row-group">
+                <div class="access-panel">
+                    <span class="material-symbols-outlined" style="color: var(--on-surface-variant);">
+                        ${limited ? 'lock' : 'lock_open'}
+                    </span>
+                    <div class="access-text">
+                        ${limited
+                            ? html`
+                                <span>${msg('Limited access to the following groups:')}</span>
+                                <div class="access-chips">
+                                    ${this.groups.map((g) => html`
+                                        <span class="group-chip" style="border-color:${g.color}; color:${g.color}">${g.name}</span>
+                                    `)}
+                                    ${this.groups.length === 0 ? html`<span class="none">${msg('No groups assigned yet — ask an owner.')}</span>` : ''}
+                                </div>
+                              `
+                            : html`<span>${msg('You have access to all groups and vehicles.')}</span>`}
+                    </div>
+                </div>
+            </div>
         `;
     }
 
@@ -444,26 +554,10 @@ export class TenantMembers extends LitElement {
         const past = this.pastInvites;
         return html`
             <div class="section-label">${msg('Invite by email')}</div>
-            <form class="invite-form" @submit=${this.inviteMember}>
-                <input
-                    type="email"
-                    placeholder="${msg('teammate@company.com')}"
-                    autocomplete="off"
-                    .value=${this.newEmail}
-                    @input=${(e: Event) => (this.newEmail = (e.target as HTMLInputElement).value)}
-                />
-                <select
-                    .value=${this.newRole}
-                    @change=${(e: Event) => (this.newRole = (e.target as HTMLSelectElement).value)}
-                    title="${msg('Role')}"
-                >
-                    <option value=${ROLE_MEMBER}>${msg('Member')}</option>
-                    <option value=${ROLE_OWNER}>${msg('Owner')}</option>
-                </select>
-                <button type="submit" ?disabled=${this.inviting}>
-                    ${this.inviting ? msg('Sending…') : msg('Send invite')}
-                </button>
-            </form>
+            <button class="invite-btn" @click=${() => { this.inviteOpen = true; }}>
+                <span class="material-symbols-outlined">person_add</span>
+                ${msg('Invite member')}
+            </button>
             ${this.inviteError ? html`<div class="error">${this.inviteError}</div>` : ''}
             ${this.inviteNotice ? html`<div class="notice">${this.inviteNotice}</div>` : ''}
 
@@ -514,7 +608,7 @@ export class TenantMembers extends LitElement {
                     <span class="material-symbols-outlined" style="color: var(--on-surface-variant);">mail</span>
                     <div class="identity">
                         <span class="email-id">${i.email}</span>
-                        <span class="meta">${msg(str`Invited as ${i.role} · expires ${expires.toLocaleDateString()}`)}</span>
+                        <span class="meta" title=${this.accessTitle(i.allowedGroupIds)}>${msg(str`Invited as ${i.role} · ${this.accessLabel(i.allowedGroupIds)} · expires ${expires.toLocaleDateString()}`)}</span>
                     </div>
                 </div>
                 <div class="right-group">

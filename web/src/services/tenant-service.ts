@@ -18,6 +18,15 @@ export interface Member {
     email?: string;
     /** ISO timestamp of the member's last recorded login, if any. */
     lastLoginAt?: string;
+    /** Fleet-group ids the member is limited to; absent = access to all groups. */
+    allowedGroupIds?: string[];
+}
+
+/** The caller's own role + group scope in the current tenant (GET /me/access). */
+export interface MyAccess {
+    role: string;
+    /** null = unrestricted (owner or full-access member). */
+    allowedGroupIds: string[] | null;
 }
 
 interface MembersResponse {
@@ -37,6 +46,8 @@ export interface Invitation {
     acceptedAt?: string;
     /** Wallet that accepted the invite — the account it actually bound to. */
     inviteeWallet?: string;
+    /** Fleet-group ids the invitee will be limited to; absent = all groups. */
+    allowedGroupIds?: string[];
 }
 
 interface InvitationsResponse {
@@ -152,12 +163,29 @@ export class TenantService {
         tenantId: string,
         email: string,
         role: string = ROLE_MEMBER,
+        allowedGroupIds: string[] | null = null,
         locale: string = getLocale(),
     ): Promise<InvitationResult> {
         return ApiService.getInstance().post<InvitationResult>(
             `/tenants/${encodeURIComponent(tenantId)}/invitations`,
-            { email, role, locale },
+            { email, role, locale, allowedGroupIds },
         );
+    }
+
+    /**
+     * PUT /tenants/:id/members/:wallet/access — owner-only; change an existing
+     * member's group scope (null = full access).
+     */
+    public async updateMemberAccess(tenantId: string, wallet: string, allowedGroupIds: string[] | null): Promise<void> {
+        await ApiService.getInstance().put(
+            `/tenants/${encodeURIComponent(tenantId)}/members/${encodeURIComponent(wallet)}/access`,
+            { allowedGroupIds },
+        );
+    }
+
+    /** GET /me/access — the caller's own role + group scope in the current tenant. */
+    public async fetchMyAccess(): Promise<MyAccess> {
+        return ApiService.getInstance().get<MyAccess>('/me/access');
     }
 
     /** DELETE /tenants/:id/invitations/:invId — owner-only; revoke a pending invite. */
