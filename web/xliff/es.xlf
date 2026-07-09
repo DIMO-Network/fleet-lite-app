@@ -795,7 +795,6 @@
 <trans-unit id="sef0e9754d33af9eb">
   <source>Invitation sent to <x id="0" equiv-text="${email ?? ''}"/>.</source>
   <target>Invitación enviada a <x id="0" equiv-text="${email ?? ''}"/>.</target>
-  <target>Invitación enviada a <x id="0" equiv-text="${email}"/>.</target>
 </trans-unit>
 <trans-unit id="s307f80cb3f7264d4">
   <source>Could not revoke invitation.</source>
@@ -1236,7 +1235,6 @@
 <trans-unit id="sae30ab7e78f2cf7f">
   <source>Invitation created for <x id="0" equiv-text="${email ?? ''}"/>, but the email could not be sent. Use Resend once email delivery is configured.</source>
   <target>Se creó la invitación para <x id="0" equiv-text="${email ?? ''}"/>, pero no se pudo enviar el correo. Use Reenviar cuando el envío de correos esté configurado.</target>
-  <target>Invitación creada para <x id="0" equiv-text="${email}"/>, pero no se pudo enviar el correo. Usa Reenviar cuando se configure el envío de correos.</target>
 </trans-unit>
 <trans-unit id="s55a3299919bc4cd5">
   <source>Invitation refreshed, but the email could not be sent. Check email delivery configuration.</source>
