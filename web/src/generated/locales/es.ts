@@ -5,8 +5,8 @@
     import {html} from 'lit';
     import {str} from '@lit/localize';
 
-    /* eslint-disable no-irregular-whitespace */
-    /* eslint-disable @typescript-eslint/no-explicit-any */
+     
+     
 
     export const templates = {
       'h3da2e750affa6331': html`VIN detectado <span class="vin">${0}</span>`,
@@ -72,7 +72,6 @@
 's21b06c38fc4164db': `Avanzado`,
 's236ae937cbcd6a39': `Acercar`,
 's24ff675ff8ff0ed4': `vehículos`,
-'s25bebd009ff852a4': `Seguimiento en Vivo`,
 's25c9b139cc1a6be8': `Contraer panel`,
 's25edbe26de08a2af': `tiempo con el motor encendido durante el paso`,
 's2868ccc6ec4b7b45': `No se pudo reenviar la invitación.`,
@@ -186,7 +185,6 @@
 's83f3b9e92ba665c7': `Quitar de la geocerca`,
 's846b3790b6e25c1c': `Cuenta`,
 's84fe348d9e99e6b0': `Creando…`,
-'s8652720463582db6': `Detener actualización automática`,
 's8773d074e96d8e74': `Agregar un documento`,
 's879ecc0cdb12e5e3': `Introduce un nombre para la geocerca.`,
 's87e746b950339c11': `No se pudo quitar el miembro.`,
@@ -286,7 +284,6 @@
 'sce4e2b0f570b1bd8': `Su acceso`,
 'sd01aa11617062a46': str`${0} de ${1} vehículos atravesaron · ${2} pasos`,
 'sd08a6db66b8b4603': `Entrada`,
-'sd11b62914720d468': `Iniciar actualización automática`,
 'sd12e9358e7e366cd': `Aún no hay integración con DIMO`,
 'sd1544db4dc3b46fc': str`Invitaciones anteriores (${0})`,
 'sd1e8f2f9e01188e8': `Acceso limitado a los siguientes grupos:`,

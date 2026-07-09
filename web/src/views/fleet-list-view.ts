@@ -4,9 +4,9 @@ import { msg, str } from '@lit/localize';
 import { sharedStyles } from '../global-styles.ts';
 import { hiddenVehiclesService } from '../services/hidden-vehicles-service.ts';
 import { ApiService } from '../services/api-service.ts';
-import { TelemetryService } from '../services/telemetry-service.ts';
 import { FleetCache } from '../services/fleet-cache.ts';
 import { Vehicle, VehicleCard, VehiclesResponse } from '../types/vehicle.ts';
+import { seedLocationsFromDb, fetchFleetLocations } from '../utils/fleet-map.ts';
 import '../elements/tenant-switcher.ts';
 
 type SortKey = 'status' | 'name' | 'tokenId';
@@ -29,8 +29,6 @@ export class FleetListView extends LitElement {
     private unsubscribeHidden: (() => void) | null = null;
 
     private loadGeneration = 0;
-    private static readonly LOCATIONS_CHUNK_SIZE = 1;
-    private static readonly LOCATIONS_PARALLEL = 3;
 
     private formatTitle(v: Vehicle): string {
         const d = v.definition;
@@ -125,11 +123,23 @@ export class FleetListView extends LitElement {
                 this.loading = false;
                 return;
             }
+            // Cold load: render instantly from the last persisted snapshot
+            // while the /vehicles fetch below revalidates. Paint-only — the
+            // fresh response replaces everything shown here.
+            const tid = this.tenantId;
+            const persisted = await FleetCache.loadPersisted(tid);
+            if (persisted && tid === this.tenantId) {
+                this.vehicles = persisted.vehicles;
+                this.lastLocations = persisted.locations;
+                this.loading = false;
+            }
         }
 
+        let rawVehicles: Vehicle[] = [];
         try {
             const res = await ApiService.getInstance().get<VehiclesResponse>('/vehicles');
-            const cards = (res.vehicles || []).map((v) => this.toCard(v));
+            rawVehicles = res.vehicles || [];
+            const cards = rawVehicles.map((v) => this.toCard(v));
             cards.sort((a, b) => Number(!!b.isFavorite) - Number(!!a.isFavorite));
             this.vehicles = cards;
             this.loading = false;
@@ -139,33 +149,22 @@ export class FleetListView extends LitElement {
             return;
         }
 
-        this.lastLocations = {};
+        // Show DB-cached coordinates immediately, then fan out only for the
+        // vehicles whose location is stale (older than the freshness window).
+        // A fully-fresh fleet makes zero telemetry calls — same shared loader
+        // as the map view, so both views generate identical backend load.
+        this.lastLocations = seedLocationsFromDb(rawVehicles);
         const gen = ++this.loadGeneration;
-        const ids = this.vehicles.map((v) => v.tokenId);
-        const chunks: string[][] = [];
-        for (let i = 0; i < ids.length; i += FleetListView.LOCATIONS_CHUNK_SIZE) {
-            chunks.push(ids.slice(i, i + FleetListView.LOCATIONS_CHUNK_SIZE));
-        }
-
         const noPermSet = new Set<string>();
-        let nextChunk = 0;
-        const worker = async () => {
-            while (nextChunk < chunks.length) {
-                if (gen !== this.loadGeneration) return;
-                const batch = chunks[nextChunk++];
-                try {
-                    const locRes = await TelemetryService.getInstance().fleetLocations(force, batch);
-                    if (gen !== this.loadGeneration) return;
-                    for (const id of locRes.noPermissions ?? []) noPermSet.add(id);
-                    this.lastLocations = { ...this.lastLocations, ...locRes.locations };
-                } catch {
-                    // keep going on batch failure
-                }
-            }
-        };
-        await Promise.all(
-            Array.from({ length: Math.min(FleetListView.LOCATIONS_PARALLEL, chunks.length) }, () => worker()),
-        );
+        await fetchFleetLocations({
+            vehicles: rawVehicles,
+            force,
+            isCurrent: () => gen === this.loadGeneration,
+            onNoPermissions: (ids) => ids.forEach((id) => noPermSet.add(id)),
+            onBatch: (locations) => {
+                this.lastLocations = { ...this.lastLocations, ...locations };
+            },
+        });
         if (gen !== this.loadGeneration) return;
 
         if (noPermSet.size > 0) {

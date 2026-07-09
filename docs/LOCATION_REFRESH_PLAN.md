@@ -10,7 +10,11 @@ Builds directly on the last-seen cache (PR #61): `vehicles.last_lat/last_lon/
 last_seen` + the telemetry write-through already exist.
 
 Created: 2026-06-30
-Status: design / pre-implementation.
+Status: SHIPPED (PRs #64 window + #66 real-time toggle, prod 2026-06-30).
+Follow-up 2026-07-09: FleetCache persisted to IndexedDB (idb-keyval) for instant
+cold-load paint (paint-then-revalidate, server wins); global "Live Tracking"
+60s force-refresh button removed (per-vehicle quick-view toggle is the live
+mechanism); fleet-list-view unified onto the shared freshness-window loader.
 
 ---
 

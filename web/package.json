@@ -20,6 +20,7 @@
     "@lit/localize": "^0.12.2",
     "@types/leaflet": "^1.9.21",
     "dayjs": "^1.11.20",
+    "idb-keyval": "^6.3.0",
     "leaflet": "^1.9.4",
     "leaflet.markercluster": "^1.5.3",
     "lit": "^3.3.2"
