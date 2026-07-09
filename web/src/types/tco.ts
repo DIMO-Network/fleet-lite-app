@@ -28,6 +28,10 @@ export interface VehicleTCOSummary {
     totalTco: number;
     settings: TCOSettings;
     lineItems: LineItem[];
+    /** True when the dev license lacks SACD permissions on this vehicle — its
+     * document/operating-cost figures could not be read (acquisition/
+     * depreciation still work, since those are DB-only). */
+    permissionsRequired?: boolean;
 }
 
 export interface FleetTotals {

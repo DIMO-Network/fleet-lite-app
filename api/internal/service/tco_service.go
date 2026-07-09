@@ -218,6 +218,12 @@ type VehicleTCOSummary struct {
 	TotalTCO           float64            `json:"totalTco"`
 	Settings           TCOSettings        `json:"settings"`
 	LineItems          []LineItem         `json:"lineItems"`
+	// PermissionsRequired mirrors DocumentsController.ListDocuments: the dev
+	// license lacks SACD permissions on this vehicle, so its document list
+	// (and therefore its cost figures) couldn't be read. Acquisition/
+	// depreciation figures are still populated from vehicle_tco_settings,
+	// which doesn't depend on fetch-api access.
+	PermissionsRequired bool `json:"permissionsRequired,omitempty"`
 }
 
 // FleetTotals sums each VehicleTCOSummary field across the fleet.
@@ -284,8 +290,18 @@ func (s *TCOService) VehicleSummary(ctx context.Context, tenant models.Tenant, t
 
 	tokenDID := s.authProvider.BuildVehicleDID(uint64(tokenID))
 	entries, err := s.fetchAPI.ListByDID(tenant, tokenDID, 500)
+	permissionsRequired := false
 	if err != nil {
-		return nil, fmt.Errorf("list documents: %w", err)
+		// Mirrors DocumentsController.ListDocuments: a 403 here means the dev
+		// license lacks SACD permissions on this vehicle, not that something
+		// is actually broken. Degrade to an empty (but still valid) summary —
+		// acquisition/depreciation below still works since it's DB-only —
+		// rather than failing the whole vehicle out of the fleet report.
+		if strings.Contains(err.Error(), "lacks permissions") || strings.Contains(err.Error(), "status code 403") {
+			permissionsRequired = true
+		} else {
+			return nil, fmt.Errorf("list documents: %w", err)
+		}
 	}
 
 	tombstoned := gateway.TombstonedIDs(entries)
@@ -320,12 +336,13 @@ func (s *TCOService) VehicleSummary(ctx context.Context, tenant models.Tenant, t
 	}
 
 	summary := &VehicleTCOSummary{
-		VehicleTokenID: tokenID,
-		VehicleLabel:   label,
-		VIN:            vehicle.VIN,
-		CostByCategory: sumLineItemsByCategory(lineItems),
-		Settings:       settings,
-		LineItems:      lineItems,
+		VehicleTokenID:      tokenID,
+		VehicleLabel:        label,
+		VIN:                 vehicle.VIN,
+		CostByCategory:      sumLineItemsByCategory(lineItems),
+		Settings:            settings,
+		LineItems:           lineItems,
+		PermissionsRequired: permissionsRequired,
 	}
 	for _, v := range summary.CostByCategory {
 		summary.OperatingCost += v
