@@ -159,7 +159,7 @@ type memberJSON struct {
 	LastLoginAt *string `json:"lastLoginAt,omitempty"`
 	// AllowedGroupIds is the member's group scope: absent = full access,
 	// an array = limited to those fleet groups. See docs/GROUP_ACCESS_PLAN.md.
-	AllowedGroupIds []string `json:"allowedGroupIds,omitempty"`
+	AllowedGroupIDs []string `json:"allowedGroupIds,omitempty"`
 }
 
 // GetMembers — GET /tenants/:id/members. Any member can list the tenant's members.
@@ -181,7 +181,7 @@ func (t *TenantsController) GetMembers(c *fiber.Ctx) error {
 		}
 		// nil = full access; an array = limited to those fleet groups.
 		if r.Role != service.RoleOwner && r.AllowedGroupIds != nil {
-			m.AllowedGroupIds = r.AllowedGroupIds
+			m.AllowedGroupIDs = r.AllowedGroupIds
 		}
 		out = append(out, m)
 	}
@@ -215,7 +215,7 @@ type addMemberRequest struct {
 	Role   string `json:"role"`
 	// AllowedGroupIds limits the member to those fleet groups; omit/null for
 	// full access. Ignored for owner role.
-	AllowedGroupIds []string `json:"allowedGroupIds"`
+	AllowedGroupIDs []string `json:"allowedGroupIds"`
 }
 
 // AddMember — POST /tenants/:id/members. Owner-only; adds a wallet to the tenant.
@@ -235,7 +235,7 @@ func (t *TenantsController) AddMember(c *fiber.Ctx) error {
 	if memberRole != service.RoleOwner {
 		memberRole = service.RoleMember
 	}
-	if err := t.tenantSvc.AddMember(c.Context(), c.Params("id"), req.Wallet, memberRole, req.AllowedGroupIds); err != nil {
+	if err := t.tenantSvc.AddMember(c.Context(), c.Params("id"), req.Wallet, memberRole, req.AllowedGroupIDs); err != nil {
 		t.logger.Err(err).Msg("add member")
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to add member")
 	}
@@ -244,7 +244,7 @@ func (t *TenantsController) AddMember(c *fiber.Ctx) error {
 
 type updateMemberAccessRequest struct {
 	// AllowedGroupIds: null = full access, array = limited to those groups.
-	AllowedGroupIds []string `json:"allowedGroupIds"`
+	AllowedGroupIDs []string `json:"allowedGroupIds"`
 }
 
 // UpdateMemberAccess — PUT /tenants/:id/members/:wallet/access. Owner-only;
@@ -261,7 +261,7 @@ func (t *TenantsController) UpdateMemberAccess(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
-	if err := t.tenantSvc.UpdateMemberAccess(c.Context(), c.Params("id"), c.Params("wallet"), req.AllowedGroupIds); err != nil {
+	if err := t.tenantSvc.UpdateMemberAccess(c.Context(), c.Params("id"), c.Params("wallet"), req.AllowedGroupIDs); err != nil {
 		t.logger.Err(err).Str("tenant", c.Params("id")).Msg("update member access")
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
