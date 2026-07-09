@@ -838,7 +838,7 @@
 </trans-unit>
 <trans-unit id="sb730f38dec076dc2">
   <source>Add by wallet address</source>
-  <target>Agregar por dirección de cartera</target>
+  <target>Agregar por dirección de Wallet 0x</target>
 </trans-unit>
 <trans-unit id="s12d31c3ac9b2687e">
   <source>Resend</source>
