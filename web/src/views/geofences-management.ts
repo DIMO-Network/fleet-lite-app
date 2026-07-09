@@ -9,6 +9,7 @@ import { themeService } from '../services/theme-service.ts';
 import { ApiService } from '../services/api-service.ts';
 import { GeofenceService } from '../services/geofence-service.ts';
 import { FleetGroupService } from '../services/fleet-group-service.ts';
+import { TenantService } from '../services/tenant-service.ts';
 import { Geofence, GeoJSONPolygon } from '../types/geofence.ts';
 import { FleetGroup } from '../types/group.ts';
 import { Vehicle, VehiclesResponse } from '../types/vehicle.ts';
@@ -48,6 +49,8 @@ export class GeofencesManagementView extends LitElement {
     @state() private confirmingDeleteId: string | null = null;
     @state() private selectedId: string | null = null;
     @state() private searchQuery = '';
+    /** True for limited members: management controls hide, data arrives pre-filtered. */
+    @state() private readOnly = false;
     // Optional overlay of live vehicle GPS dots (off by default). Geofences stay
     // the zoom focus — turning this on never refits the map.
     @state() private showVehicleLocations = false;
@@ -178,6 +181,13 @@ export class GeofencesManagementView extends LitElement {
             this.vehicles = vehiclesRes.vehicles || [];
             this.groups = groups;
             this.errorMessage = null;
+            // Limited members get a read-only view (the API rejects mutations too).
+            try {
+                const access = await TenantService.getInstance().fetchMyAccess();
+                this.readOnly = access.allowedGroupIds !== null;
+            } catch {
+                this.readOnly = false;
+            }
             this.renderGeofences();
         } catch (e) {
             console.error('Failed to load geofences', e);
@@ -507,17 +517,21 @@ export class GeofencesManagementView extends LitElement {
                         <button @click=${() => { this.activity = g; }}>
                             <span class="material-symbols-outlined">history</span> ${msg('Activity')}
                         </button>
-                        ${g.scope === 'manual'
+                        ${!this.readOnly && g.scope === 'manual'
                             ? html`<button @click=${() => { this.managing = g; }}>
                                 <span class="material-symbols-outlined">directions_car</span> ${msg('Vehicles')}
                             </button>`
                             : nothing}
-                        <button @click=${() => { this.editing = g; }}>
-                            <span class="material-symbols-outlined">edit</span> ${msg('Edit')}
-                        </button>
-                        <button class="danger" @click=${() => { this.confirmingDeleteId = g.id; }}>
-                            <span class="material-symbols-outlined">delete</span> ${msg('Delete')}
-                        </button>
+                        ${!this.readOnly
+                            ? html`
+                                <button @click=${() => { this.editing = g; }}>
+                                    <span class="material-symbols-outlined">edit</span> ${msg('Edit')}
+                                </button>
+                                <button class="danger" @click=${() => { this.confirmingDeleteId = g.id; }}>
+                                    <span class="material-symbols-outlined">delete</span> ${msg('Delete')}
+                                </button>
+                              `
+                            : nothing}
                     </div>`}
             </div>
         `;
@@ -537,9 +551,11 @@ export class GeofencesManagementView extends LitElement {
                         <span class="material-symbols-outlined">${this.showVehicleLocations ? 'location_on' : 'location_off'}</span>
                         ${msg('Vehicles')}
                     </button>
-                    <button class="new-btn" ?disabled=${this.drawing} @click=${() => this.startDraw()}>
-                        <span class="material-symbols-outlined">add_location_alt</span> ${msg('New geofence')}
-                    </button>
+                    ${!this.readOnly
+                        ? html`<button class="new-btn" ?disabled=${this.drawing} @click=${() => this.startDraw()}>
+                            <span class="material-symbols-outlined">add_location_alt</span> ${msg('New geofence')}
+                        </button>`
+                        : nothing}
                 </div>
             </header>
 

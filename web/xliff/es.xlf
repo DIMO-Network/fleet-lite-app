@@ -792,17 +792,10 @@
   <source>Avg per day</source>
   <target>Promedio por día</target>
 </trans-unit>
-<trans-unit id="sdcfed6e7b373824a">
-  <source>Enter a valid email address.</source>
-  <target>Introduce una dirección de correo electrónico válida.</target>
-</trans-unit>
 <trans-unit id="sef0e9754d33af9eb">
-  <source>Invitation sent to <x id="0" equiv-text="${email}"/>.</source>
+  <source>Invitation sent to <x id="0" equiv-text="${email ?? ''}"/>.</source>
+  <target>Invitación enviada a <x id="0" equiv-text="${email ?? ''}"/>.</target>
   <target>Invitación enviada a <x id="0" equiv-text="${email}"/>.</target>
-</trans-unit>
-<trans-unit id="s55787a5a881a16e8">
-  <source>Could not send invitation.</source>
-  <target>No se pudo enviar la invitación.</target>
 </trans-unit>
 <trans-unit id="s307f80cb3f7264d4">
   <source>Could not revoke invitation.</source>
@@ -836,10 +829,6 @@
   <source>Owner</source>
   <target>Propietario</target>
 </trans-unit>
-<trans-unit id="s6ead281adf0d371d">
-  <source>Sending…</source>
-  <target>Enviando…</target>
-</trans-unit>
 <trans-unit id="s55c22b612968d7d8">
   <source>Send invite</source>
   <target>Enviar invitación</target>
@@ -851,10 +840,6 @@
 <trans-unit id="sb730f38dec076dc2">
   <source>Add by wallet address</source>
   <target>Agregar por dirección de cartera</target>
-</trans-unit>
-<trans-unit id="sc35b0daad746e90d">
-  <source>Invited as <x id="0" equiv-text="${i.role}"/> · expires <x id="1" equiv-text="${expires.toLocaleDateString()}"/></source>
-  <target>Invitado como <x id="0" equiv-text="${i.role}"/> · vence <x id="1" equiv-text="${expires.toLocaleDateString()}"/></target>
 </trans-unit>
 <trans-unit id="s12d31c3ac9b2687e">
   <source>Resend</source>
@@ -1249,7 +1234,8 @@
   <target>Copiar VIN</target>
 </trans-unit>
 <trans-unit id="sae30ab7e78f2cf7f">
-  <source>Invitation created for <x id="0" equiv-text="${email}"/>, but the email could not be sent. Use Resend once email delivery is configured.</source>
+  <source>Invitation created for <x id="0" equiv-text="${email ?? ''}"/>, but the email could not be sent. Use Resend once email delivery is configured.</source>
+  <target>Se creó la invitación para <x id="0" equiv-text="${email ?? ''}"/>, pero no se pudo enviar el correo. Use Reenviar cuando el envío de correos esté configurado.</target>
   <target>Invitación creada para <x id="0" equiv-text="${email}"/>, pero no se pudo enviar el correo. Usa Reenviar cuando se configure el envío de correos.</target>
 </trans-unit>
 <trans-unit id="s55a3299919bc4cd5">
@@ -1391,6 +1377,98 @@
 <trans-unit id="s7a245ae970092034">
   <source>No groups match your search.</source>
   <target>Ningún grupo coincide con su búsqueda.</target>
+</trans-unit>
+<trans-unit id="s069467a1aa0f893d">
+  <source>Could not save. Please try again.</source>
+  <target>No se pudo guardar. Inténtelo de nuevo.</target>
+</trans-unit>
+<trans-unit id="s1096f5086f319e01">
+  <source>Filter groups…</source>
+  <target>Filtrar grupos…</target>
+</trans-unit>
+<trans-unit id="scd3a79dd8e4d0fcb">
+  <source>No groups yet — create groups first, or grant access to all groups.</source>
+  <target>Aún no hay grupos: primero cree grupos, o conceda acceso a todos los grupos.</target>
+</trans-unit>
+<trans-unit id="s60cef68a76d1024e">
+  <source>No groups match your filter.</source>
+  <target>Ningún grupo coincide con su filtro.</target>
+</trans-unit>
+<trans-unit id="s58bfb494feb8eb02">
+  <source><x id="0" equiv-text="${this.selected.size}"/> selected</source>
+  <target><x id="0" equiv-text="${this.selected.size}"/> seleccionados</target>
+</trans-unit>
+<trans-unit id="s41c3a5bef07e9a19">
+  <source>Edit access</source>
+  <target>Editar acceso</target>
+</trans-unit>
+<trans-unit id="sf58e4d73e35ce582">
+  <source>Invite member</source>
+  <target>Invitar miembro</target>
+</trans-unit>
+<trans-unit id="s7a3eec8ffbe5cb83">
+  <source>Change which groups <x id="0" equiv-text="${this.member?.email || this.member?.wallet || ''}"/> can see.</source>
+  <target>Cambie qué grupos puede ver <x id="0" equiv-text="${this.member?.email || this.member?.wallet || ''}"/>.</target>
+</trans-unit>
+<trans-unit id="s760e9cd2db10f3ae">
+  <source>Send an email invitation and choose which groups the new member can see.</source>
+  <target>Envíe una invitación por correo y elija qué grupos podrá ver el nuevo miembro.</target>
+</trans-unit>
+<trans-unit id="sd1f44f1a8bc20e67">
+  <source>Email</source>
+  <target>Correo electrónico</target>
+</trans-unit>
+<trans-unit id="s178778b0490b0a5e">
+  <source>Group access</source>
+  <target>Acceso a grupos</target>
+</trans-unit>
+<trans-unit id="s8bcded9ae5282197">
+  <source>Sees every vehicle, including ones not in any group.</source>
+  <target>Ve todos los vehículos, incluidos los que no están en ningún grupo.</target>
+</trans-unit>
+<trans-unit id="s08f5c8a0ca562916">
+  <source>Selected groups only</source>
+  <target>Solo grupos seleccionados</target>
+</trans-unit>
+<trans-unit id="s7ea16f831814fcb9">
+  <source>Sees only vehicles in the chosen groups; management views are read-only.</source>
+  <target>Solo ve los vehículos de los grupos elegidos; las vistas de administración son de solo lectura.</target>
+</trans-unit>
+<trans-unit id="s5f6ba880807a5ffe">
+  <source>Owners always have access to all groups.</source>
+  <target>Los propietarios siempre tienen acceso a todos los grupos.</target>
+</trans-unit>
+<trans-unit id="s9b7382b7ca7fde6a">
+  <source>Save access</source>
+  <target>Guardar acceso</target>
+</trans-unit>
+<trans-unit id="see06ddaf16993b27">
+  <source>1 group</source>
+  <target>1 grupo</target>
+</trans-unit>
+<trans-unit id="s3df0cd574c6a991b">
+  <source><x id="0" equiv-text="${n}"/> groups</source>
+  <target><x id="0" equiv-text="${n}"/> grupos</target>
+</trans-unit>
+<trans-unit id="sce4e2b0f570b1bd8">
+  <source>Your access</source>
+  <target>Su acceso</target>
+</trans-unit>
+<trans-unit id="sd1e8f2f9e01188e8">
+  <source>Limited access to the following groups:</source>
+  <target>Acceso limitado a los siguientes grupos:</target>
+</trans-unit>
+<trans-unit id="sfedc31958f58f903">
+  <source>No groups assigned yet — ask an owner.</source>
+  <target>Aún no tiene grupos asignados: consulte a un propietario.</target>
+</trans-unit>
+<trans-unit id="s9d120138fa5ec126">
+  <source>You have access to all groups and vehicles.</source>
+  <target>Tiene acceso a todos los grupos y vehículos.</target>
+</trans-unit>
+<trans-unit id="s70514eced9b70fc2">
+  <source>Invited as <x id="0" equiv-text="${i.role}"/> · <x id="1" equiv-text="${this.accessLabel(i.allowedGroupIds)}"/> · expires <x id="2" equiv-text="${expires.toLocaleDateString()}"/></source>
+  <target>Invitado como <x id="0" equiv-text="${i.role}"/> · <x id="1" equiv-text="${this.accessLabel(i.allowedGroupIds)}"/> · vence <x id="2" equiv-text="${expires.toLocaleDateString()}"/></target>
 </trans-unit>
 </body>
 </file>
