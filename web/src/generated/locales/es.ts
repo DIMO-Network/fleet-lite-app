@@ -252,7 +252,7 @@
 'sb3be08d826f659c3': `Aún no hay grupos. Cree uno para organizar su flota.`,
 'sb52f6b2e5a4bc127': `Faltantes`,
 'sb64127e4e4f0b575': `Cerrar sesión`,
-'sb730f38dec076dc2': `Agregar por dirección de cartera`,
+'sb730f38dec076dc2': `Agregar por dirección de Wallet 0x`,
 'sb82063ff4133ae44': `Cargando vehículos asignados…`,
 'sb85774dc5d18ff0f': `Confirmar`,
 'sb971debc37bf0b54': `Propietario`,

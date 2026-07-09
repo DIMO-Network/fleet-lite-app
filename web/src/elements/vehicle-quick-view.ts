@@ -33,6 +33,8 @@ export class VehicleQuickView extends LitElement {
     /** Real-time: when on, re-poll this vehicle's signals + location on an
      * interval. Off by default, reset whenever the selected vehicle changes. */
     @state() private realtimeOn = false;
+    @state() private vinCopied = false;
+    private vinCopiedTimer: number | null = null;
     private rtTimer: number | null = null;
     private static readonly REALTIME_INTERVAL_MS = 20 * 1000;
 
@@ -60,9 +62,10 @@ export class VehicleQuickView extends LitElement {
 
     willUpdate(changed: Map<string, unknown>) {
         if (changed.has('vehicle')) {
-            // Switching (or closing) the vehicle resets real-time and any
-            // selected trip route — the toggle is opt-in per vehicle.
+            // Switching (or closing) the vehicle resets real-time, the VIN-copied
+            // flash, and any selected trip route — the toggle is opt-in per vehicle.
             this.stopRealtime();
+            this.vinCopied = false;
             if (this.vehicle) {
                 this.clearTripSelection();
                 void this.loadSignals();
@@ -97,6 +100,18 @@ export class VehicleQuickView extends LitElement {
         } finally {
             if (!quiet && this.vehicle?.tokenId === tokenId) this.loading = false;
         }
+    }
+
+    /** Copy the VIN to the clipboard, flashing the icon as feedback. */
+    private async copyVin(vin: string) {
+        try {
+            await navigator.clipboard.writeText(vin);
+        } catch {
+            return; // clipboard unavailable (permissions/insecure context) — no feedback
+        }
+        this.vinCopied = true;
+        if (this.vinCopiedTimer) window.clearTimeout(this.vinCopiedTimer);
+        this.vinCopiedTimer = window.setTimeout(() => { this.vinCopied = false; }, 1500);
     }
 
     /** Toggle real-time updates for this vehicle (off by default). */
@@ -271,7 +286,7 @@ export class VehicleQuickView extends LitElement {
                 gap: 12px;
                 padding: 16px 16px 12px;
             }
-            header .identity { min-width: 0; }
+            header .identity { min-width: 0; flex: 1; }
             header h3 {
                 display: flex;
                 align-items: center;
@@ -283,7 +298,15 @@ export class VehicleQuickView extends LitElement {
                 text-overflow: ellipsis;
                 white-space: nowrap;
             }
-            header h3 .favorite-star { color: #f5c84b; font-size: 18px; }
+            /* The span (not the flex h3) truncates, so a long title ellipsizes
+               instead of running under its neighbors. */
+            header h3 .title-text {
+                min-width: 0;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            header h3 .favorite-star { color: #f5c84b; font-size: 18px; flex-shrink: 0; }
             header h3 .status-dot {
                 width: 10px;
                 height: 10px;
@@ -294,10 +317,42 @@ export class VehicleQuickView extends LitElement {
             .status-amber { background: #f5c84b; }
             .status-red   { background: var(--error, #e57373); }
             header .sub {
-                margin-top: 4px;
                 font: var(--type-body-sm);
                 color: var(--on-surface-variant);
             }
+            /* Token # on the left, the real-time toggle on the right — its own
+               row so the pill can never sit on top of the title. */
+            header .sub-row {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 8px;
+                margin-top: 4px;
+            }
+            header .vin-row {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                margin-top: 2px;
+            }
+            header .vin-row .vin-text {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            .copy-btn {
+                background: none;
+                border: none;
+                color: var(--on-surface-variant);
+                padding: 2px;
+                border-radius: var(--radius-sm);
+                cursor: pointer;
+                display: inline-flex;
+                flex-shrink: 0;
+                transition: color 0.15s ease;
+            }
+            .copy-btn:hover { color: var(--primary); }
+            .copy-btn .material-symbols-outlined { font-size: 14px; }
             .identifiers {
                 display: flex;
                 flex-wrap: wrap;
@@ -319,13 +374,8 @@ export class VehicleQuickView extends LitElement {
                 white-space: nowrap;
             }
             .plate-pill .material-symbols-outlined { font-size: 14px; }
-            .vin-pill {
-                font-family: var(--font-mono);
-                font-size: 11px;
-                color: var(--on-surface-variant);
-                white-space: nowrap;
-            }
             .close-btn {
+                margin-top: -2px;
                 background: none;
                 border: none;
                 color: var(--on-surface-variant);
@@ -338,12 +388,6 @@ export class VehicleQuickView extends LitElement {
             }
             .close-btn:hover { background: var(--surface-container-high); color: var(--primary); }
 
-            .header-actions {
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                flex-shrink: 0;
-            }
             .rt-btn {
                 display: inline-flex;
                 align-items: center;
@@ -603,37 +647,40 @@ export class VehicleQuickView extends LitElement {
                         <h3>
                             <span class="status-dot ${statusClass}"></span>
                             ${v.isFavorite ? html`<span class="material-symbols-outlined favorite-star" title="${msg('Favorite')}">star</span>` : ''}
-                            <span>${v.title}</span>
+                            <span class="title-text" title=${v.title}>${v.title}</span>
                         </h3>
-                        <div class="sub">${v.seenAt}</div>
+                        <div class="sub-row">
+                            <div class="sub">${v.seenAt}</div>
+                            <button
+                                class="rt-btn ${this.realtimeOn ? 'active' : ''}"
+                                title=${this.realtimeOn ? msg('Stop real-time updates') : msg('Start real-time updates')}
+                                aria-pressed=${this.realtimeOn}
+                                @click=${this.toggleRealtime}>
+                                ${this.realtimeOn
+                                    ? html`<span class="rt-dot"></span>`
+                                    : html`<span class="material-symbols-outlined">sync</span>`}
+                                <span class="rt-label">${msg('Real-time')} · 20s</span>
+                            </button>
+                        </div>
+                        ${v.vin ? html`
+                            <div class="sub vin-row">
+                                <span class="vin-text">${v.vin}</span>
+                                <button class="copy-btn" title="${msg('Copy VIN')}" @click=${() => this.copyVin(v.vin!)}>
+                                    <span class="material-symbols-outlined">${this.vinCopied ? 'check' : 'content_copy'}</span>
+                                </button>
+                            </div>
+                        ` : nothing}
                     </div>
-                    <div class="header-actions">
-                        <button
-                            class="rt-btn ${this.realtimeOn ? 'active' : ''}"
-                            title=${this.realtimeOn ? msg('Stop real-time updates') : msg('Start real-time updates')}
-                            aria-pressed=${this.realtimeOn}
-                            @click=${this.toggleRealtime}>
-                            ${this.realtimeOn
-                                ? html`<span class="rt-dot"></span>`
-                                : html`<span class="material-symbols-outlined">sync</span>`}
-                            <span class="rt-label">${msg('Real-time')} · 20s</span>
-                        </button>
-                        <button class="close-btn" title="${msg('Close')}" @click=${this.close}>
-                            <span class="material-symbols-outlined">close</span>
-                        </button>
-                    </div>
+                    <button class="close-btn" title="${msg('Close')}" @click=${this.close}>
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
                 </header>
 
-                ${v.licensePlate || v.vin ? html`
+                ${v.licensePlate ? html`
                     <div class="identifiers">
-                        ${v.licensePlate ? html`
-                            <span class="plate-pill">
-                                <span class="material-symbols-outlined">directions_car</span>${v.licensePlate}
-                            </span>
-                        ` : nothing}
-                        ${v.vin ? html`
-                            <span class="vin-pill">${v.vin}</span>
-                        ` : nothing}
+                        <span class="plate-pill">
+                            <span class="material-symbols-outlined">directions_car</span>${v.licensePlate}
+                        </span>
                     </div>
                 ` : nothing}
 
