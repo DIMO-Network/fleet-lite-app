@@ -398,10 +398,6 @@
   <source>List View</source>
   <target>Vista de Lista</target>
 </trans-unit>
-<trans-unit id="s25bebd009ff852a4">
-  <source>Live Tracking</source>
-  <target>Seguimiento en Vivo</target>
-</trans-unit>
 <trans-unit id="s4ccb84efe836feac">
   <source>Fit all vehicles</source>
   <target>Ajustar todos los vehículos</target>
@@ -1111,14 +1107,6 @@
 <trans-unit id="s34444d528d6c041d">
   <source>Hide vehicle</source>
         <target>Ocultar vehículo</target>
-</trans-unit>
-<trans-unit id="s8652720463582db6">
-  <source>Stop auto-refresh</source>
-        <target>Detener actualización automática</target>
-</trans-unit>
-<trans-unit id="sd11b62914720d468">
-  <source>Start auto-refresh</source>
-        <target>Iniciar actualización automática</target>
 </trans-unit>
 <trans-unit id="sa7758cec045bda64">
   <source>Hide hidden vehicles</source>

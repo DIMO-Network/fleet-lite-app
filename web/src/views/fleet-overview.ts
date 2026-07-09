@@ -62,9 +62,6 @@ export class FleetOverviewView extends LitElement {
     @state() private denseCards = false;
     @state() private searchOpen = false;
     @state() private refreshing = false;
-    @state() private autoRefresh = false;
-    @state() private countdown = 60;
-    private countdownTimer: number | null = null;
     @state() private hiddenVehicles = new Set<string>();
     @state() private showHidden = false;
     private unsubscribeHidden: (() => void) | null = null;
@@ -338,6 +335,7 @@ export class FleetOverviewView extends LitElement {
      * vehicle details and back doesn't re-trigger the loading state or refetch.
      */
     private async loadVehicleData(force = false) {
+        let paintedFromPersist = false;
         if (!force) {
             const cached = FleetCache.get(this.tenantId);
             if (cached) {
@@ -346,6 +344,20 @@ export class FleetOverviewView extends LitElement {
                 this.loading = false;
                 this.placeMarkers();
                 return;
+            }
+            // Cold load (hard reload / new tab): paint instantly from the last
+            // persisted snapshot while the /vehicles fetch below revalidates.
+            // Paint-only — execution always continues to the network, and the
+            // fresh response replaces everything painted here.
+            const tid = this.tenantId;
+            const persisted = await FleetCache.loadPersisted(tid);
+            if (persisted && tid === this.tenantId) {
+                this.vehicles = persisted.vehicles;
+                this.lastLocations = persisted.locations;
+                this.loading = false;
+                paintedFromPersist = true;
+                this.placeMarkers();
+                this.centerMap();
             }
         }
 
@@ -373,10 +385,13 @@ export class FleetOverviewView extends LitElement {
         }
         // Sync map markers to the updated vehicle list immediately: remove any
         // marker for a vehicle that's no longer in the fleet (e.g. a shared
-        // vehicle that was revoked). New vehicles get markers as locations stream
-        // in below; existing vehicles keep their current markers until the final
-        // placeMarkers() call rebuilds everything at full fidelity.
-        if (force) {
+        // vehicle that was revoked). Needed after a force refresh and after a
+        // persisted-snapshot paint, both of which can have drawn markers for
+        // vehicles the fresh /vehicles response no longer contains. New
+        // vehicles get markers as locations stream in below; existing vehicles
+        // keep their current markers until the final placeMarkers() call
+        // rebuilds everything at full fidelity.
+        if (force || paintedFromPersist) {
             const currentIds = new Set(this.vehicles.map((v) => v.tokenId));
             for (const [tokenId, marker] of this.markers) {
                 if (!currentIds.has(tokenId)) {
@@ -436,33 +451,12 @@ export class FleetOverviewView extends LitElement {
 
     private async refreshVehicles() {
         if (this.refreshing) return;
-        if (this.autoRefresh) this.countdown = 60;
         this.refreshing = true;
         this.errorMessage = null;
         try {
             await this.loadVehicleData(true);
         } finally {
             this.refreshing = false;
-        }
-    }
-
-    private toggleAutoRefresh() {
-        if (this.autoRefresh) {
-            this.autoRefresh = false;
-            if (this.countdownTimer !== null) {
-                clearInterval(this.countdownTimer);
-                this.countdownTimer = null;
-            }
-        } else {
-            this.autoRefresh = true;
-            this.countdown = 60;
-            this.countdownTimer = window.setInterval(() => {
-                this.countdown--;
-                if (this.countdown <= 0) {
-                    this.countdown = 60;
-                    this.refreshVehicles();
-                }
-            }, 1000);
         }
     }
 
@@ -503,8 +497,10 @@ export class FleetOverviewView extends LitElement {
         this.updateMinZoom();
 
         // Cached data may have already been loaded into `this.vehicles` /
-        // `this.lastLocations` before the map existed — place markers now.
+        // `this.lastLocations` before the map existed — place markers now and
+        // frame them (a persisted-snapshot paint can beat map creation).
         this.placeMarkers();
+        if (this.markers.size > 0) this.centerMap();
     }
 
     override disconnectedCallback() {
@@ -512,10 +508,6 @@ export class FleetOverviewView extends LitElement {
         this.unsubscribeHidden = null;
         window.removeEventListener('theme-change', this.boundOnThemeChange);
         super.disconnectedCallback();
-        if (this.countdownTimer !== null) {
-            clearInterval(this.countdownTimer);
-            this.countdownTimer = null;
-        }
         this.resizeObserver?.disconnect();
         this.resizeObserver = null;
         this.markers.clear();
@@ -610,38 +602,6 @@ export class FleetOverviewView extends LitElement {
                 border-bottom: 2px solid var(--primary);
             }
             header.top-bar .right { display: flex; align-items: center; gap: 16px; }
-            header.top-bar .live-tracking {
-                background: transparent;
-                color: var(--on-surface-variant);
-                border: 1px solid var(--outline-variant);
-                padding: 8px 16px;
-                border-radius: var(--radius-md);
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                cursor: pointer;
-                transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
-            }
-            header.top-bar .live-tracking.active {
-                background: var(--primary);
-                color: var(--on-primary);
-                border-color: var(--primary);
-            }
-            header.top-bar .live-dot {
-                width: 7px;
-                height: 7px;
-                border-radius: 50%;
-                background: currentColor;
-                animation: live-pulse 1.4s ease-in-out infinite;
-                flex-shrink: 0;
-            }
-            @keyframes live-pulse {
-                0%, 100% { opacity: 1; transform: scale(1); }
-                50% { opacity: 0.35; transform: scale(0.65); }
-            }
             header.top-bar .icon-btn {
                 color: var(--on-surface-variant);
                 background: none;
@@ -692,12 +652,6 @@ export class FleetOverviewView extends LitElement {
                 border-color: var(--primary);
             }
             .map-controls button.active:hover { background: var(--primary-container); }
-            .countdown-text {
-                font-size: 13px;
-                font-weight: 600;
-                font-variant-numeric: tabular-nums;
-                letter-spacing: 0;
-            }
 
             .map-legend {
                 position: absolute;
@@ -1473,14 +1427,6 @@ export class FleetOverviewView extends LitElement {
                 </div>
                 <div class="right">
                     <tenant-switcher .currentTenantId=${this.tenantId}></tenant-switcher>
-                    <button
-                        class="live-tracking ${this.autoRefresh ? 'active' : ''}"
-                        title=${this.autoRefresh ? msg('Stop auto-refresh') : msg('Start auto-refresh')}
-                        @click=${() => this.toggleAutoRefresh()}
-                    >
-                        ${this.autoRefresh ? html`<span class="live-dot"></span>` : ''}
-                        ${msg('Live Tracking')}
-                    </button>
                     <button class="icon-btn"><span class="material-symbols-outlined">notifications</span></button>
                     <button class="icon-btn"><span class="material-symbols-outlined">account_circle</span></button>
                 </div>
@@ -1519,15 +1465,6 @@ export class FleetOverviewView extends LitElement {
                     @click=${() => this.refreshVehicles()}
                 >
                     <span class="material-symbols-outlined">refresh</span>
-                </button>
-                <button
-                    class=${this.autoRefresh ? 'active' : ''}
-                    title=${this.autoRefresh ? msg('Stop auto-refresh') : msg('Start auto-refresh')}
-                    @click=${() => this.toggleAutoRefresh()}
-                >
-                    ${this.autoRefresh
-                        ? html`<span class="countdown-text">${this.countdown}</span>`
-                        : html`<span class="material-symbols-outlined">timer</span>`}
                 </button>
             </div>
 
