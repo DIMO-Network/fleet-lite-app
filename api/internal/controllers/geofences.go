@@ -25,8 +25,8 @@ import (
 // (subject = vehicle DID) on assignment changes. The DB is the source of truth;
 // a publish failure never fails the request (mirrors fleet groups).
 type GeofencesController struct {
-	logger    *zerolog.Logger
-	geofences *service.GeofenceService
+	logger     *zerolog.Logger
+	geofences  *service.GeofenceService
 	attest     service.AttestService
 	detection  *service.GeofenceDetectionService
 	vehicleSvc *service.VehicleService
