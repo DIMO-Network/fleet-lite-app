@@ -10,6 +10,7 @@ import (
 	"github.com/DIMO-Network/fleet-lite-app/internal/gateway"
 	"github.com/DIMO-Network/fleet-lite-app/internal/service"
 	"github.com/DIMO-Network/shared/pkg/db"
+	"github.com/aarondl/sqlboiler/v4/queries/qm"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/subcommands"
 	_ "github.com/lib/pq"
@@ -36,6 +37,7 @@ type importGroupAttestationsCmd struct {
 	dryRun   bool
 	warmOnly bool
 	warmDays int
+	vinOnly  bool
 }
 
 func (*importGroupAttestationsCmd) Name() string { return "import-group-attestations" }
@@ -43,13 +45,15 @@ func (*importGroupAttestationsCmd) Synopsis() string {
 	return "pull vehicle group attestations from fetch-api and merge them into the DB (additive, de-duplicated)"
 }
 func (*importGroupAttestationsCmd) Usage() string {
-	return `import-group-attestations [-tenant-id ID] [-token-id N] [-warm-only] [-warm-days N] [-dry-run]:
+	return `import-group-attestations [-tenant-id ID] [-token-id N] [-warm-only] [-warm-days N] [-vin-only] [-dry-run]:
 	Pulls dimo.document.vehicle.groups attestations per vehicle (latest per
 	producer) and adds any group membership not already present in
 	vehicle_fleet_groups. Additive only — never removes; de-duplicated by primary
 	key. Unknown groups are auto-created. -warm-only limits the run to tenants with
-	a member login within -warm-days days (default 7). -dry-run logs changes
-	without writing.
+	a member login within -warm-days days (default 7). -vin-only skips the group
+	and registration-document sync and only backfills vehicles.vin from the DIMO
+	VIN VC, restricted to vehicles with no VIN yet (see docs/VIN_SYNC_PLAN.md).
+	-dry-run logs changes without writing.
   `
 }
 
@@ -59,6 +63,7 @@ func (p *importGroupAttestationsCmd) SetFlags(f *flag.FlagSet) {
 	f.BoolVar(&p.dryRun, "dry-run", false, "log what would change without writing")
 	f.BoolVar(&p.warmOnly, "warm-only", false, "only tenants with a recent member login (see -warm-days)")
 	f.IntVar(&p.warmDays, "warm-days", 7, "login-recency window (days) that makes a tenant warm")
+	f.BoolVar(&p.vinOnly, "vin-only", false, "only backfill vehicles.vin from the DIMO VIN VC (vehicles without a VIN)")
 }
 
 func (p *importGroupAttestationsCmd) Execute(ctx context.Context, _ *flag.FlagSet, _ ...interface{}) subcommands.ExitStatus {
@@ -70,7 +75,8 @@ func (p *importGroupAttestationsCmd) Execute(ctx context.Context, _ *flag.FlagSe
 	authProvider := gateway.NewDimoAuthProvider(p.logger, &p.settings)
 	fetchAPI := gateway.NewFetchAPI(p.logger, &p.settings, authProvider)
 	groupSync := service.NewGroupSyncService(&p.logger, &p.pdb, fetchAPI, authProvider)
-	plateSync := service.NewLicensePlateSyncService(&p.logger, &p.pdb, fetchAPI, authProvider)
+	telemetryAPI := service.NewTelemetryAPIService(p.logger, &p.settings, authProvider)
+	plateSync := service.NewLicensePlateSyncService(&p.logger, &p.pdb, fetchAPI, authProvider, telemetryAPI)
 
 	// Resolve tenants to process.
 	var dbTenants dbmodels.TenantSlice
@@ -111,16 +117,17 @@ func (p *importGroupAttestationsCmd) Execute(ctx context.Context, _ *flag.FlagSe
 			continue
 		}
 
-		// Vehicles for this tenant (optionally one token id).
-		var vehicles dbmodels.VehicleSlice
+		// Vehicles for this tenant (optionally one token id). The vin-only
+		// backfill restricts to vehicles with no VIN yet — pull-once: a filled
+		// vehicle never costs another telemetry query.
+		mods := []qm.QueryMod{dbmodels.VehicleWhere.TenantID.EQ(dt.ID)}
 		if p.tokenID != 0 {
-			vehicles, err = dbmodels.Vehicles(
-				dbmodels.VehicleWhere.TenantID.EQ(dt.ID),
-				dbmodels.VehicleWhere.TokenID.EQ(p.tokenID),
-			).All(ctx, p.pdb.DBS().Reader)
-		} else {
-			vehicles, err = dbmodels.Vehicles(dbmodels.VehicleWhere.TenantID.EQ(dt.ID)).All(ctx, p.pdb.DBS().Reader)
+			mods = append(mods, dbmodels.VehicleWhere.TokenID.EQ(p.tokenID))
 		}
+		if p.vinOnly {
+			mods = append(mods, qm.Where("(vin IS NULL OR vin = '')"))
+		}
+		vehicles, err := dbmodels.Vehicles(mods...).All(ctx, p.pdb.DBS().Reader)
 		if err != nil {
 			p.logger.Err(err).Str("tenant_id", dt.ID).Msg("list vehicles, skipping tenant")
 			continue
@@ -128,6 +135,20 @@ func (p *importGroupAttestationsCmd) Execute(ctx context.Context, _ *flag.FlagSe
 
 		for _, v := range vehicles {
 			checked++
+
+			// vin-only: just the VIN VC read, no group or registration-doc pull.
+			if p.vinOnly {
+				pres, perr := plateSync.SyncVINOnly(ctx, *tenant, v.TokenID, p.dryRun)
+				if perr != nil {
+					p.logger.Debug().Err(perr).Int64("token_id", v.TokenID).Msg("vin vc sync, skipping")
+				} else if pres.VINChanged {
+					vinsChanged++
+					p.logger.Info().Str("tenant_id", dt.ID).Int64("token_id", v.TokenID).
+						Str("vin", pres.VIN).Bool("dry_run", p.dryRun).Msg("cached vin from vc")
+				}
+				continue
+			}
+
 			res, serr := groupSync.SyncVehicle(ctx, *tenant, v.TokenID, service.SyncOpts{DryRun: p.dryRun})
 			if serr != nil {
 				p.logger.Debug().Err(serr).Int64("token_id", v.TokenID).Msg("sync vehicle, skipping")
