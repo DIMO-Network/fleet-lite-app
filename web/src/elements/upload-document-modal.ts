@@ -5,7 +5,7 @@ import { sharedStyles } from '../global-styles.ts';
 import { DocumentService, fileToBase64 } from '../services/document-service.ts';
 import { ExtractResult } from '../types/document.ts';
 import { Vehicle } from '../types/vehicle.ts';
-import { UPLOAD_CATEGORIES, categoryLabel } from '../utils/document-categories.ts';
+import { UPLOAD_CATEGORIES, categoryLabel, COST_ELIGIBLE_CATEGORIES } from '../utils/document-categories.ts';
 
 type Step = 'pick' | 'review' | 'submitting' | 'done' | 'error';
 
@@ -34,6 +34,7 @@ export class UploadDocumentModal extends LitElement {
     @state() private extractResult: ExtractResult | null = null;
     @state() private selectedTokenId: number | null = null;
     @state() private selectedCategory: string = 'dimo.document.unknown';
+    @state() private amount: string = '';
     @state() private errorMessage = '';
 
     static styles = [
@@ -220,6 +221,19 @@ export class UploadDocumentModal extends LitElement {
         }
     }
 
+    private buildParsedData(): Record<string, unknown> {
+        const base = { ...(this.extractResult?.fields || {}) };
+        const trimmed = this.amount.trim();
+        if (COST_ELIGIBLE_CATEGORIES.has(this.selectedCategory) && trimmed !== '') {
+            const parsed = Number(trimmed);
+            if (!Number.isNaN(parsed)) {
+                base.amount = parsed;
+                base.currency = 'USD';
+            }
+        }
+        return base;
+    }
+
     private async onConfirm() {
         if (!this.file || !this.selectedTokenId) return;
         this.step = 'submitting';
@@ -232,7 +246,7 @@ export class UploadDocumentModal extends LitElement {
                 fileBase64,
                 mimeType: this.file.type || 'application/octet-stream',
                 fileName: this.file.name,
-                parsedData: this.extractResult?.fields || {},
+                parsedData: this.buildParsedData(),
             });
             this.step = 'done';
             this.dispatchEvent(new CustomEvent('uploaded', {
@@ -314,6 +328,20 @@ export class UploadDocumentModal extends LitElement {
                     `)}
                 </select>
             </div>
+
+            ${COST_ELIGIBLE_CATEGORIES.has(this.selectedCategory) ? html`
+                <div class="field">
+                    <label for="amount">${msg('Amount (optional)')}</label>
+                    <input
+                        id="amount"
+                        type="text"
+                        inputmode="decimal"
+                        placeholder="0.00"
+                        .value=${this.amount}
+                        @input=${(e: Event) => { this.amount = (e.target as HTMLInputElement).value; }}
+                    />
+                </div>
+            ` : nothing}
 
             ${this.errorMessage ? html`<div class="error-text">${this.errorMessage}</div>` : nothing}
 

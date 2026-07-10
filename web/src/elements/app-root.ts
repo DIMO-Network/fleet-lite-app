@@ -15,8 +15,9 @@ import '../views/onboard-tenant.ts';
 import '../views/groups-management.ts';
 import '../views/geofences-management.ts';
 import '../views/fleet-list-view.ts';
+import '../views/tco-view.ts';
 
-type NavKey = 'vehicles' | 'stats' | 'groups' | 'geofences' | 'glovebox' | 'settings';
+type NavKey = 'vehicles' | 'stats' | 'groups' | 'geofences' | 'glovebox' | 'tco' | 'settings';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -69,6 +70,7 @@ export class AppRoot extends LitElement {
             { path: '/:tenantId/geofences',           render: () => html`<geofences-management-view .tenantId=${this.tenantId}></geofences-management-view>` },
             { path: '/:tenantId/glovebox/:tokenId',   render: ({ tokenId }) => html`<glovebox-view .tenantId=${this.tenantId} .initialTokenId=${tokenId}></glovebox-view>` },
             { path: '/:tenantId/glovebox',            render: () => html`<glovebox-view .tenantId=${this.tenantId}></glovebox-view>` },
+            { path: '/:tenantId/tco',                 render: () => html`<tco-view .tenantId=${this.tenantId}></tco-view>` },
             { path: '/:tenantId/settings',            render: () => html`<account-settings-view .tenantId=${this.tenantId}></account-settings-view>` },
             { path: '/:tenantId/stats',               render: () => html`<fleet-list-view .tenantId=${this.tenantId}></fleet-list-view>` },
         ]);
@@ -155,6 +157,7 @@ export class AppRoot extends LitElement {
         if (path.startsWith('/groups')) return 'groups';
         if (path.startsWith('/geofences')) return 'geofences';
         if (path.startsWith('/glovebox')) return 'glovebox';
+        if (path.startsWith('/tco')) return 'tco';
         if (path.startsWith('/settings')) return 'settings';
         return 'vehicles';
     }

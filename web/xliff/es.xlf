@@ -1456,6 +1456,102 @@
   <source>Invited as <x id="0" equiv-text="${i.role}"/> · <x id="1" equiv-text="${this.accessLabel(i.allowedGroupIds)}"/> · expires <x id="2" equiv-text="${expires.toLocaleDateString()}"/></source>
   <target>Invitado como <x id="0" equiv-text="${i.role}"/> · <x id="1" equiv-text="${this.accessLabel(i.allowedGroupIds)}"/> · vence <x id="2" equiv-text="${expires.toLocaleDateString()}"/></target>
 </trans-unit>
+<trans-unit id="s6c6cb319e19e97fd">
+  <source>TCO</source>
+</trans-unit>
+<trans-unit id="s73cddee970a10604">
+  <source>Amount (optional)</source>
+</trans-unit>
+<trans-unit id="s48bab881332d164c">
+  <source>Failed to load vehicle detail</source>
+</trans-unit>
+<trans-unit id="sf345ddcc2e10c7ba">
+  <source>Failed to save</source>
+</trans-unit>
+<trans-unit id="s1d6b1bc152eb6e81">
+  <source>Enter an amount greater than 0</source>
+</trans-unit>
+<trans-unit id="s4d5a15b20f0dd5b6">
+  <source>DIMO permissions required to read this vehicle’s documents</source>
+</trans-unit>
+<trans-unit id="sb83d6c0b89001488">
+  <source>No access</source>
+</trans-unit>
+<trans-unit id="s48ce58ef9178285d">
+  <source>All vehicles on this account are hidden.</source>
+</trans-unit>
+<trans-unit id="se78b336d8a6f6c3d">
+  <source>Operating cost</source>
+</trans-unit>
+<trans-unit id="sda845aa996d5d504">
+  <source>Acquisition</source>
+</trans-unit>
+<trans-unit id="s4718bce90803b027">
+  <source>Depreciation to date</source>
+</trans-unit>
+<trans-unit id="s2723579f71ec1e23">
+  <source>Total TCO</source>
+</trans-unit>
+<trans-unit id="s5c3e8af8729be9e5">
+  <source>Fleet total</source>
+</trans-unit>
+<trans-unit id="se6f09b190519daa4">
+  <source>all</source>
+</trans-unit>
+<trans-unit id="s40664bffa760c01c">
+  <source>Showing</source>
+</trans-unit>
+<trans-unit id="s08b06007b5567108">
+  <source>of</source>
+</trans-unit>
+<trans-unit id="s830486d6803c1dab">
+  <source>Back to fleet</source>
+</trans-unit>
+<trans-unit id="sd5e67ee988f58e19">
+  <source>Exporting…</source>
+</trans-unit>
+<trans-unit id="s8b409dc1f261b173">
+  <source>Export CSV</source>
+</trans-unit>
+<trans-unit id="sbbd1f5edf6ff8df8">
+  <source>Grant DIMO permissions to this vehicle to include its documents in operating cost. Acquisition and depreciation below are unaffected.</source>
+</trans-unit>
+<trans-unit id="s0f485ae78a8ee23b">
+  <source>Acquisition &amp; depreciation</source>
+</trans-unit>
+<trans-unit id="sb2bd6a3049d96b37">
+  <source>Purchase price</source>
+</trans-unit>
+<trans-unit id="s59775f70a95321b2">
+  <source>Purchase date</source>
+</trans-unit>
+<trans-unit id="sc281195c481f85de">
+  <source>Useful life (years)</source>
+</trans-unit>
+<trans-unit id="seb30df772c5df3ee">
+  <source>Missing amounts</source>
+</trans-unit>
+<trans-unit id="sfd8205687425cedd">
+  <source>These documents don’t have a cost amount on file. Add one to include them in this vehicle’s totals.</source>
+</trans-unit>
+<trans-unit id="sac8252732f2edb19">
+  <source>Date</source>
+</trans-unit>
+<trans-unit id="s63d894b1ddb06289">
+  <source>Description</source>
+</trans-unit>
+<trans-unit id="sba98a7152d80b949">
+  <source>Amount</source>
+</trans-unit>
+<trans-unit id="sbf782021bf42916f">
+  <source>Line items</source>
+</trans-unit>
+<trans-unit id="s0d2ba7a853a4934b">
+  <source>No cost documents on file for this vehicle yet.</source>
+</trans-unit>
+<trans-unit id="s22d5fa291f2d7672">
+  <source>Total Cost of Ownership</source>
+</trans-unit>
 </body>
 </file>
 </xliff>

@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"strconv"
@@ -223,28 +222,7 @@ func (d *DocumentsController) ListDocuments(c *fiber.Ctx) error {
 	}
 
 	// Build tombstoned-id set so we hide deleted docs.
-	tombstoned := map[string]struct{}{}
-	for _, e := range entries {
-		if e.Type != "dimo.tombstone" {
-			continue
-		}
-		// data: {voidsId, rawReferenceId?} — attest API renamed referenceId→voidsId;
-		// parse both so existing tombstones stored under the old name still work.
-		var d struct {
-			VoidsID        string `json:"voidsId"`
-			ReferenceID    string `json:"referenceId"`
-			RawReferenceID string `json:"rawReferenceId"`
-		}
-		_ = jsonUnmarshal(e.Data, &d)
-		if d.VoidsID != "" {
-			tombstoned[d.VoidsID] = struct{}{}
-		} else if d.ReferenceID != "" {
-			tombstoned[d.ReferenceID] = struct{}{}
-		}
-		if d.RawReferenceID != "" {
-			tombstoned[d.RawReferenceID] = struct{}{}
-		}
-	}
+	tombstoned := gateway.TombstonedIDs(entries)
 
 	// rawByHash: filehash -> raw ID, so we can include raw IDs alongside parsed
 	// (for delete path; download uses filehash directly).
@@ -364,14 +342,6 @@ func (d *DocumentsController) DeleteDocument(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadGateway, "tombstone failed: "+err.Error())
 	}
 	return c.JSON(result)
-}
-
-// jsonUnmarshal is a tiny wrapper that no-ops on nil input.
-func jsonUnmarshal(raw []byte, dst interface{}) error {
-	if len(raw) == 0 {
-		return nil
-	}
-	return json.Unmarshal(raw, dst)
 }
 
 func isAllowedMime(m string) bool {

@@ -87,29 +87,32 @@ var TenantWhere = struct {
 
 // TenantRels is where relationship names are stored.
 var TenantRels = struct {
-	FleetGroups      string
-	Geofences        string
-	Invitations      string
-	TenantUsers      string
-	VehicleFavorites string
-	Vehicles         string
+	FleetGroups        string
+	Geofences          string
+	Invitations        string
+	TenantUsers        string
+	VehicleFavorites   string
+	VehicleTcoSettings string
+	Vehicles           string
 }{
-	FleetGroups:      "FleetGroups",
-	Geofences:        "Geofences",
-	Invitations:      "Invitations",
-	TenantUsers:      "TenantUsers",
-	VehicleFavorites: "VehicleFavorites",
-	Vehicles:         "Vehicles",
+	FleetGroups:        "FleetGroups",
+	Geofences:          "Geofences",
+	Invitations:        "Invitations",
+	TenantUsers:        "TenantUsers",
+	VehicleFavorites:   "VehicleFavorites",
+	VehicleTcoSettings: "VehicleTcoSettings",
+	Vehicles:           "Vehicles",
 }
 
 // tenantR is where relationships are stored.
 type tenantR struct {
-	FleetGroups      FleetGroupSlice      `boil:"FleetGroups" json:"FleetGroups" toml:"FleetGroups" yaml:"FleetGroups"`
-	Geofences        GeofenceSlice        `boil:"Geofences" json:"Geofences" toml:"Geofences" yaml:"Geofences"`
-	Invitations      InvitationSlice      `boil:"Invitations" json:"Invitations" toml:"Invitations" yaml:"Invitations"`
-	TenantUsers      TenantUserSlice      `boil:"TenantUsers" json:"TenantUsers" toml:"TenantUsers" yaml:"TenantUsers"`
-	VehicleFavorites VehicleFavoriteSlice `boil:"VehicleFavorites" json:"VehicleFavorites" toml:"VehicleFavorites" yaml:"VehicleFavorites"`
-	Vehicles         VehicleSlice         `boil:"Vehicles" json:"Vehicles" toml:"Vehicles" yaml:"Vehicles"`
+	FleetGroups        FleetGroupSlice        `boil:"FleetGroups" json:"FleetGroups" toml:"FleetGroups" yaml:"FleetGroups"`
+	Geofences          GeofenceSlice          `boil:"Geofences" json:"Geofences" toml:"Geofences" yaml:"Geofences"`
+	Invitations        InvitationSlice        `boil:"Invitations" json:"Invitations" toml:"Invitations" yaml:"Invitations"`
+	TenantUsers        TenantUserSlice        `boil:"TenantUsers" json:"TenantUsers" toml:"TenantUsers" yaml:"TenantUsers"`
+	VehicleFavorites   VehicleFavoriteSlice   `boil:"VehicleFavorites" json:"VehicleFavorites" toml:"VehicleFavorites" yaml:"VehicleFavorites"`
+	VehicleTcoSettings VehicleTcoSettingSlice `boil:"VehicleTcoSettings" json:"VehicleTcoSettings" toml:"VehicleTcoSettings" yaml:"VehicleTcoSettings"`
+	Vehicles           VehicleSlice           `boil:"Vehicles" json:"Vehicles" toml:"Vehicles" yaml:"Vehicles"`
 }
 
 // NewStruct creates a new relationship struct
@@ -195,6 +198,22 @@ func (r *tenantR) GetVehicleFavorites() VehicleFavoriteSlice {
 	}
 
 	return r.VehicleFavorites
+}
+
+func (o *Tenant) GetVehicleTcoSettings() VehicleTcoSettingSlice {
+	if o == nil {
+		return nil
+	}
+
+	return o.R.GetVehicleTcoSettings()
+}
+
+func (r *tenantR) GetVehicleTcoSettings() VehicleTcoSettingSlice {
+	if r == nil {
+		return nil
+	}
+
+	return r.VehicleTcoSettings
 }
 
 func (o *Tenant) GetVehicles() VehicleSlice {
@@ -597,6 +616,20 @@ func (o *Tenant) VehicleFavorites(mods ...qm.QueryMod) vehicleFavoriteQuery {
 	)
 
 	return VehicleFavorites(queryMods...)
+}
+
+// VehicleTcoSettings retrieves all the vehicle_tco_setting's VehicleTcoSettings with an executor.
+func (o *Tenant) VehicleTcoSettings(mods ...qm.QueryMod) vehicleTcoSettingQuery {
+	var queryMods []qm.QueryMod
+	if len(mods) != 0 {
+		queryMods = append(queryMods, mods...)
+	}
+
+	queryMods = append(queryMods,
+		qm.Where("\"vehicle_tco_settings\".\"tenant_id\"=?", o.ID),
+	)
+
+	return VehicleTcoSettings(queryMods...)
 }
 
 // Vehicles retrieves all the vehicle's Vehicles with an executor.
@@ -1178,6 +1211,119 @@ func (tenantL) LoadVehicleFavorites(ctx context.Context, e boil.ContextExecutor,
 	return nil
 }
 
+// LoadVehicleTcoSettings allows an eager lookup of values, cached into the
+// loaded structs of the objects. This is for a 1-M or N-M relationship.
+func (tenantL) LoadVehicleTcoSettings(ctx context.Context, e boil.ContextExecutor, singular bool, maybeTenant any, mods queries.Applicator) error {
+	var slice []*Tenant
+	var object *Tenant
+
+	if singular {
+		var ok bool
+		object, ok = maybeTenant.(*Tenant)
+		if !ok {
+			object = new(Tenant)
+			ok = queries.SetFromEmbeddedStruct(&object, &maybeTenant)
+			if !ok {
+				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", object, maybeTenant))
+			}
+		}
+	} else {
+		s, ok := maybeTenant.(*[]*Tenant)
+		if ok {
+			slice = *s
+		} else {
+			ok = queries.SetFromEmbeddedStruct(&slice, maybeTenant)
+			if !ok {
+				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", slice, maybeTenant))
+			}
+		}
+	}
+
+	args := make(map[any]struct{})
+	if singular {
+		if object.R == nil {
+			object.R = &tenantR{}
+		}
+		args[object.ID] = struct{}{}
+	} else {
+		for _, obj := range slice {
+			if obj.R == nil {
+				obj.R = &tenantR{}
+			}
+			args[obj.ID] = struct{}{}
+		}
+	}
+
+	if len(args) == 0 {
+		return nil
+	}
+
+	argsSlice := make([]any, len(args))
+	i := 0
+	for arg := range args {
+		argsSlice[i] = arg
+		i++
+	}
+
+	query := NewQuery(
+		qm.From(`vehicle_tco_settings`),
+		qm.WhereIn(`vehicle_tco_settings.tenant_id in ?`, argsSlice...),
+	)
+	if mods != nil {
+		mods.Apply(query)
+	}
+
+	results, err := query.QueryContext(ctx, e)
+	if err != nil {
+		return errors.Wrap(err, "failed to eager load vehicle_tco_settings")
+	}
+
+	var resultSlice []*VehicleTcoSetting
+	if err = queries.Bind(results, &resultSlice); err != nil {
+		return errors.Wrap(err, "failed to bind eager loaded slice vehicle_tco_settings")
+	}
+
+	if err = results.Close(); err != nil {
+		return errors.Wrap(err, "failed to close results in eager load on vehicle_tco_settings")
+	}
+	if err = results.Err(); err != nil {
+		return errors.Wrap(err, "error occurred during iteration of eager loaded relations for vehicle_tco_settings")
+	}
+
+	if len(vehicleTcoSettingAfterSelectHooks) != 0 {
+		for _, obj := range resultSlice {
+			if err := obj.doAfterSelectHooks(ctx, e); err != nil {
+				return err
+			}
+		}
+	}
+	if singular {
+		object.R.VehicleTcoSettings = resultSlice
+		for _, foreign := range resultSlice {
+			if foreign.R == nil {
+				foreign.R = &vehicleTcoSettingR{}
+			}
+			foreign.R.Tenant = object
+		}
+		return nil
+	}
+
+	for _, foreign := range resultSlice {
+		for _, local := range slice {
+			if local.ID == foreign.TenantID {
+				local.R.VehicleTcoSettings = append(local.R.VehicleTcoSettings, foreign)
+				if foreign.R == nil {
+					foreign.R = &vehicleTcoSettingR{}
+				}
+				foreign.R.Tenant = local
+				break
+			}
+		}
+	}
+
+	return nil
+}
+
 // LoadVehicles allows an eager lookup of values, cached into the
 // loaded structs of the objects. This is for a 1-M or N-M relationship.
 func (tenantL) LoadVehicles(ctx context.Context, e boil.ContextExecutor, singular bool, maybeTenant any, mods queries.Applicator) error {
@@ -1547,6 +1693,59 @@ func (o *Tenant) AddVehicleFavorites(ctx context.Context, exec boil.ContextExecu
 	for _, rel := range related {
 		if rel.R == nil {
 			rel.R = &vehicleFavoriteR{
+				Tenant: o,
+			}
+		} else {
+			rel.R.Tenant = o
+		}
+	}
+	return nil
+}
+
+// AddVehicleTcoSettings adds the given related objects to the existing relationships
+// of the tenant, optionally inserting them as new records.
+// Appends related to o.R.VehicleTcoSettings.
+// Sets related.R.Tenant appropriately.
+func (o *Tenant) AddVehicleTcoSettings(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*VehicleTcoSetting) error {
+	var err error
+	for _, rel := range related {
+		if insert {
+			rel.TenantID = o.ID
+			if err = rel.Insert(ctx, exec, boil.Infer()); err != nil {
+				return errors.Wrap(err, "failed to insert into foreign table")
+			}
+		} else {
+			updateQuery := fmt.Sprintf(
+				"UPDATE \"vehicle_tco_settings\" SET %s WHERE %s",
+				strmangle.SetParamNames("\"", "\"", 1, []string{"tenant_id"}),
+				strmangle.WhereClause("\"", "\"", 2, vehicleTcoSettingPrimaryKeyColumns),
+			)
+			values := []any{o.ID, rel.TenantID, rel.TokenID}
+
+			if boil.IsDebug(ctx) {
+				writer := boil.DebugWriterFrom(ctx)
+				fmt.Fprintln(writer, updateQuery)
+				fmt.Fprintln(writer, values)
+			}
+			if _, err = exec.ExecContext(ctx, updateQuery, values...); err != nil {
+				return errors.Wrap(err, "failed to update foreign table")
+			}
+
+			rel.TenantID = o.ID
+		}
+	}
+
+	if o.R == nil {
+		o.R = &tenantR{
+			VehicleTcoSettings: related,
+		}
+	} else {
+		o.R.VehicleTcoSettings = append(o.R.VehicleTcoSettings, related...)
+	}
+
+	for _, rel := range related {
+		if rel.R == nil {
+			rel.R = &vehicleTcoSettingR{
 				Tenant: o,
 			}
 		} else {
@@ -1972,7 +2171,7 @@ func (o *Tenant) Upsert(ctx context.Context, exec boil.ContextExecutor, updateOn
 
 	value := reflect.Indirect(reflect.ValueOf(o))
 	vals := queries.ValuesFromMapping(value, cache.valueMapping)
-	var returns []interface{}
+	var returns []any
 	if len(cache.retMapping) != 0 {
 		returns = queries.PtrsFromMapping(value, cache.retMapping)
 	}

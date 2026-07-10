@@ -14,6 +14,7 @@ export const CE_TYPE_TO_LABEL: Record<string, string> = {
     'dimo.document.vehicle.note':            'Note',
     'dimo.document.vehicle.expense':         'Other',
     'dimo.document.vehicle.condition':       'Other',
+    'dimo.document.vehicle.fuel':            'Fuel',
     'dimo.document.unknown':                 'Uncategorized',
 };
 
@@ -26,6 +27,7 @@ export const UPLOAD_CATEGORIES: Array<{ ceType: string; label: string }> = [
     { ceType: 'dimo.document.vehicle.registration',    label: 'Registration' },
     { ceType: 'dimo.document.vehicle.inspection',      label: 'Inspection' },
     { ceType: 'dimo.document.vehicle.service.invoice', label: 'Service & parts' },
+    { ceType: 'dimo.document.vehicle.fuel',            label: 'Fuel' },
     { ceType: 'dimo.document.vehicle.title',           label: 'Title' },
     { ceType: 'dimo.document.vehicle.finance',         label: 'Finance' },
     { ceType: 'dimo.document.vehicle.regulatory.other',label: 'Other regulatory' },
@@ -42,6 +44,23 @@ export const EXPECTED_CE_TYPES: string[] = [
     'dimo.document.vehicle.registration',
     'dimo.document.vehicle.inspection',
 ];
+
+/**
+ * CE types eligible to carry a cost amount, and to count toward TCO operating
+ * costs. Mirrors the backend's CostEligibleCETypes (api/internal/service/tco_service.go).
+ * Everything except Note/Condition/Title.
+ */
+export const COST_ELIGIBLE_CATEGORIES = new Set<string>([
+    'dimo.document.vehicle.service.invoice',
+    'dimo.document.vehicle.insurance',
+    'dimo.document.vehicle.registration',
+    'dimo.document.vehicle.inspection',
+    'dimo.document.vehicle.finance',
+    'dimo.document.vehicle.regulatory.other',
+    'dimo.document.vehicle.maintenance',
+    'dimo.document.vehicle.expense',
+    'dimo.document.vehicle.fuel',
+]);
 
 export function categoryLabel(ceType: string): string {
     return CE_TYPE_TO_LABEL[ceType] ?? 'Other';
