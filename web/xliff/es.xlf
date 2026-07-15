@@ -546,10 +546,6 @@
   <source>Loading groups…</source>
   <target>Cargando grupos…</target>
 </trans-unit>
-<trans-unit id="sb3be08d826f659c3">
-  <source>No groups yet. Create one to organize your fleet.</source>
-  <target>Aún no hay grupos. Cree uno para organizar su flota.</target>
-</trans-unit>
 <trans-unit id="sfddc1a3e571e109e">
   <source>Client ID and API key are required.</source>
   <target>Se requieren Client ID y API key.</target>
@@ -1551,6 +1547,42 @@
 </trans-unit>
 <trans-unit id="s22d5fa291f2d7672">
   <source>Total Cost of Ownership</source>
+</trans-unit>
+<trans-unit id="s832e2e28af85e714">
+  <source>Sync failed. Please try again.</source>
+  <target>La sincronización falló. Inténtelo de nuevo.</target>
+</trans-unit>
+<trans-unit id="se9497503835e30b2">
+  <source>Sync complete — <x id="0" equiv-text="${changed}"/> updates applied.</source>
+  <target>Sincronización completa: <x id="0" equiv-text="${changed}"/> actualizaciones aplicadas.</target>
+</trans-unit>
+<trans-unit id="s3e9105950ab7818b">
+  <source>Groups are up to date.</source>
+  <target>Los grupos están actualizados.</target>
+</trans-unit>
+<trans-unit id="s43ea5c6a04adc158">
+  <source>Failed to sync groups</source>
+  <target>Error al sincronizar los grupos</target>
+</trans-unit>
+<trans-unit id="s11cfee3bed2f8460">
+  <source>Sync groups from your vehicle attestations</source>
+  <target>Sincronizar grupos desde las certificaciones de sus vehículos</target>
+</trans-unit>
+<trans-unit id="s9cd4984f1a746b40">
+  <source>Syncing…</source>
+  <target>Sincronizando…</target>
+</trans-unit>
+<trans-unit id="s05073d2537b45d1a">
+  <source>Sync</source>
+  <target>Sincronizar</target>
+</trans-unit>
+<trans-unit id="saf7ce4165a1025f6">
+  <source>Sync groups</source>
+  <target>Sincronizar grupos</target>
+</trans-unit>
+<trans-unit id="s6d53701cf7439d95">
+  <source>No groups yet. Create one to organize your fleet, or sync them from your vehicle attestations.</source>
+  <target>Aún no hay grupos. Cree uno para organizar su flota, o sincronícelos desde las certificaciones de sus vehículos.</target>
 </trans-unit>
 </body>
 </file>

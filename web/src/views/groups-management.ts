@@ -30,6 +30,10 @@ export class GroupsManagementView extends LitElement {
     @state() private searchQuery = '';
     /** True for limited members: the view is a read-only list of their groups. */
     @state() private readOnly = false;
+    /** True while a tenant-wide group sync is fanning out over the vehicles. */
+    @state() private syncing = false;
+    /** Transient result line shown after a sync completes. */
+    @state() private syncMessage: string | null = null;
 
     connectedCallback() {
         super.connectedCallback();
@@ -58,6 +62,49 @@ export class GroupsManagementView extends LitElement {
             this.errorMessage = e instanceof Error ? e.message : msg('Failed to load groups');
         } finally {
             this.loading = false;
+        }
+    }
+
+    /**
+     * Tenant-wide group sync. Reuses the per-vehicle lazy-sync endpoint (option 2)
+     * by fanning out over every vehicle with a bounded concurrency; the endpoint is
+     * cooldown-gated server-side so repeated clicks are cheap. Aggregates the
+     * added/removed counts, then reloads the groups so counts reflect the merge.
+     */
+    private async syncAll() {
+        if (this.syncing) return;
+        this.syncing = true;
+        this.syncMessage = null;
+        try {
+            const svc = FleetGroupService.getInstance();
+            const tokenIds = this.vehicles.map((v) => v.tokenId);
+            let changed = 0;
+            let failed = 0;
+            const concurrency = 5;
+            for (let i = 0; i < tokenIds.length; i += concurrency) {
+                const batch = tokenIds.slice(i, i + concurrency);
+                const results = await Promise.allSettled(batch.map((id) => svc.syncGroups(id)));
+                for (const r of results) {
+                    if (r.status === 'fulfilled') {
+                        changed += r.value.added + r.value.removed;
+                    } else {
+                        failed += 1;
+                    }
+                }
+            }
+            await this.load();
+            if (failed > 0 && failed === tokenIds.length) {
+                this.syncMessage = msg('Sync failed. Please try again.');
+            } else if (changed > 0) {
+                this.syncMessage = msg(str`Sync complete — ${changed} updates applied.`);
+            } else {
+                this.syncMessage = msg('Groups are up to date.');
+            }
+        } catch (e) {
+            console.error('Failed to sync groups', e);
+            this.syncMessage = e instanceof Error ? e.message : msg('Failed to sync groups');
+        } finally {
+            this.syncing = false;
         }
     }
 
@@ -94,6 +141,14 @@ export class GroupsManagementView extends LitElement {
             }
             .canvas { flex: 1; width: 100%; max-width: 880px; margin: 0 auto; padding: var(--stack-lg) var(--gutter); box-sizing: border-box; }
 
+            /* Search + sync live on one row above the grid. */
+            .toolbar {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                flex-wrap: wrap;
+                margin-bottom: var(--stack-md);
+            }
             /* Same search treatment as the fleet list view. */
             .search-wrap {
                 display: flex;
@@ -103,9 +158,23 @@ export class GroupsManagementView extends LitElement {
                 border: 1px solid var(--outline-variant);
                 border-radius: var(--radius-md);
                 padding: 8px 12px;
+                flex: 1;
                 max-width: 360px;
-                margin-bottom: var(--stack-md);
             }
+            .sync-btn {
+                display: flex; align-items: center; gap: 8px;
+                background: transparent; color: var(--on-surface-variant);
+                border: 1px solid var(--outline-variant); border-radius: var(--radius-md);
+                padding: 9px 14px; font: var(--type-label-caps); letter-spacing: 0.04em;
+                text-transform: uppercase; font-weight: 700; cursor: pointer;
+                transition: color 0.15s ease, border-color 0.15s ease;
+            }
+            .sync-btn:hover:not(:disabled) { color: var(--primary); border-color: var(--primary); }
+            .sync-btn:disabled { opacity: 0.6; cursor: default; }
+            .sync-btn .material-symbols-outlined { font-size: 18px; }
+            .sync-status { font: var(--type-body-sm); color: var(--on-surface-variant); }
+            .spinning { animation: spin 1s linear infinite; }
+            @keyframes spin { to { transform: rotate(360deg); } }
             .search-wrap .material-symbols-outlined { font-size: 18px; color: var(--on-surface-variant); }
             .search-wrap input {
                 background: none;
@@ -159,6 +228,16 @@ export class GroupsManagementView extends LitElement {
             .empty-state { color: var(--on-surface-variant); font: var(--type-body-md); padding: 48px 24px; text-align: center; }
             .empty-state.error { color: var(--error); }
             .empty-state .material-symbols-outlined { font-size: 40px; display: block; margin-bottom: 12px; opacity: 0.6; }
+            /* Prominent call-to-action sync button shown in the empty states. */
+            .cta-sync {
+                display: inline-flex; align-items: center; gap: 10px; margin-top: 20px;
+                background: var(--primary); color: var(--on-primary);
+                border: none; border-radius: var(--radius-md);
+                padding: 14px 24px; font: var(--type-label-caps); letter-spacing: 0.05em;
+                text-transform: uppercase; font-weight: 700; cursor: pointer;
+            }
+            .cta-sync:disabled { opacity: 0.6; cursor: default; }
+            .cta-sync .material-symbols-outlined { font-size: 20px; display: inline; margin: 0; opacity: 1; }
         `,
     ];
 
@@ -200,6 +279,33 @@ export class GroupsManagementView extends LitElement {
         `;
     }
 
+    /** Compact sync button for the toolbar next to the search bar. */
+    private renderSyncButton() {
+        return html`
+            <button
+                class="sync-btn"
+                ?disabled=${this.syncing}
+                title="${msg('Sync groups from your vehicle attestations')}"
+                @click=${() => this.syncAll()}
+            >
+                <span class="material-symbols-outlined ${this.syncing ? 'spinning' : ''}">sync</span>
+                ${this.syncing ? msg('Syncing…') : msg('Sync')}
+            </button>
+        `;
+    }
+
+    /** Prominent call-to-action sync button for the empty states. */
+    private renderCtaSync() {
+        return html`
+            <div>
+                <button class="cta-sync" ?disabled=${this.syncing} @click=${() => this.syncAll()}>
+                    <span class="material-symbols-outlined ${this.syncing ? 'spinning' : ''}">sync</span>
+                    ${this.syncing ? msg('Syncing…') : msg('Sync groups')}
+                </button>
+            </div>
+        `;
+    }
+
     render() {
         return html`
             <header class="top-bar">
@@ -214,19 +320,23 @@ export class GroupsManagementView extends LitElement {
             <div class="canvas">
                 ${this.groups.length > 0
                     ? html`
-                        <div class="search-wrap">
-                            <span class="material-symbols-outlined">search</span>
-                            <input
-                                type="search"
-                                placeholder="${msg('Search groups…')}"
-                                .value=${this.searchQuery}
-                                @input=${(e: Event) => { this.searchQuery = (e.target as HTMLInputElement).value; }}
-                            />
-                            ${this.searchQuery ? html`
-                                <button class="clear-btn" @click=${() => { this.searchQuery = ''; }}>
-                                    <span class="material-symbols-outlined">close</span>
-                                </button>
-                            ` : nothing}
+                        <div class="toolbar">
+                            <div class="search-wrap">
+                                <span class="material-symbols-outlined">search</span>
+                                <input
+                                    type="search"
+                                    placeholder="${msg('Search groups…')}"
+                                    .value=${this.searchQuery}
+                                    @input=${(e: Event) => { this.searchQuery = (e.target as HTMLInputElement).value; }}
+                                />
+                                ${this.searchQuery ? html`
+                                    <button class="clear-btn" @click=${() => { this.searchQuery = ''; }}>
+                                        <span class="material-symbols-outlined">close</span>
+                                    </button>
+                                ` : nothing}
+                            </div>
+                            ${this.renderSyncButton()}
+                            ${this.syncMessage ? html`<span class="sync-status">${this.syncMessage}</span>` : nothing}
                         </div>
                       `
                     : nothing}
@@ -237,10 +347,16 @@ export class GroupsManagementView extends LitElement {
                         : this.groups.length === 0
                             ? html`<div class="empty-state">
                                 <span class="material-symbols-outlined">workspaces</span>
-                                ${msg('No groups yet. Create one to organize your fleet.')}
+                                ${msg('No groups yet. Create one to organize your fleet, or sync them from your vehicle attestations.')}
+                                ${this.renderCtaSync()}
+                                ${this.syncMessage ? html`<div class="sync-status" style="margin-top:12px">${this.syncMessage}</div>` : nothing}
                             </div>`
                             : this.visibleGroups.length === 0
-                                ? html`<p class="empty-state">${msg('No groups match your search.')}</p>`
+                                ? html`<div class="empty-state">
+                                    <span class="material-symbols-outlined">search_off</span>
+                                    ${msg('No groups match your search.')}
+                                    ${this.renderCtaSync()}
+                                </div>`
                                 : html`<div class="grid">${this.visibleGroups.map((g) => this.renderCard(g))}</div>`}
             </div>
 
