@@ -133,6 +133,13 @@ export class GroupsManagementView extends LitElement {
                 background: var(--background); border-bottom: 1px solid var(--outline-variant);
             }
             header.top-bar h2 { font: var(--type-headline-md); color: var(--primary); }
+            .header-actions { display: flex; align-items: center; gap: 20px; }
+            .group-total { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+            .group-total .num { font: var(--type-body-lg); font-weight: 700; color: var(--primary); }
+            .group-total .lbl {
+                font: var(--type-label-caps); letter-spacing: 0.05em; text-transform: uppercase;
+                color: var(--on-surface-variant);
+            }
             .new-btn {
                 display: flex; align-items: center; gap: 8px;
                 background: var(--primary); color: var(--on-primary);
@@ -310,11 +317,19 @@ export class GroupsManagementView extends LitElement {
         return html`
             <header class="top-bar">
                 <h2>${msg('Fleet Groups')}</h2>
-                ${!this.readOnly
-                    ? html`<button class="new-btn" @click=${() => { this.creating = true; }}>
-                        <span class="material-symbols-outlined">add</span> ${msg('New group')}
-                    </button>`
-                    : nothing}
+                <div class="header-actions">
+                    ${this.loading
+                        ? nothing
+                        : html`<span class="group-total">
+                            <span class="num">${this.groups.length}</span>
+                            <span class="lbl">${this.groups.length === 1 ? msg('group total') : msg('groups total')}</span>
+                        </span>`}
+                    ${!this.readOnly
+                        ? html`<button class="new-btn" @click=${() => { this.creating = true; }}>
+                            <span class="material-symbols-outlined">add</span> ${msg('New group')}
+                        </button>`
+                        : nothing}
+                </div>
             </header>
 
             <div class="canvas">
