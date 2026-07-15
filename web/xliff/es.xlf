@@ -1584,6 +1584,14 @@
   <source>No groups yet. Create one to organize your fleet, or sync them from your vehicle attestations.</source>
   <target>Aún no hay grupos. Cree uno para organizar su flota, o sincronícelos desde las certificaciones de sus vehículos.</target>
 </trans-unit>
+<trans-unit id="s7eb4925fb142e286">
+  <source>group total</source>
+  <target>grupo en total</target>
+</trans-unit>
+<trans-unit id="sc50f99dff44f882f">
+  <source>groups total</source>
+  <target>grupos en total</target>
+</trans-unit>
 </body>
 </file>
 </xliff>
