@@ -64,6 +64,7 @@ func main() {
 		subcommands.Register(subcommands.CommandsCommand(), "")
 		subcommands.Register(&migrateDBCmd{logger: logger, settings: settings}, "database")
 		subcommands.Register(&importGroupAttestationsCmd{logger: logger, settings: settings}, "attestations")
+		subcommands.Register(&syncVehiclesCmd{logger: logger, settings: settings}, "vehicles")
 		subcommands.Register(&pruneUnsharedVehiclesCmd{logger: logger, settings: settings}, "vehicles")
 		subcommands.Register(&pushPostmarkTemplatesCmd{logger: logger, settings: settings}, "email")
 		subcommands.Register(&configurePostmarkWebhookCmd{logger: logger, settings: settings}, "email")
