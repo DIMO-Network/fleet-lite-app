@@ -2,7 +2,7 @@ replicaCount: 1
 image:
   repository: dimozone/fleet-lite-app
   pullPolicy: IfNotPresent
-  tag: ff316b5
+  tag: e2cb498
 imagePullSecrets: []
 nameOverride: ''
 fullnameOverride: ''
@@ -87,25 +87,6 @@ serviceMonitor:
   port: mon-http
   interval: 30s
 cronJobs:
-  # Refresh each tenant's vehicles from Identity (privileged/SACD-shared set) so
-  # newly minted/shared vehicles land locally. Runs before the group-attestation
-  # imports below (which iterate the local vehicle list) so groups aren't starved
-  # by a stale vehicle table. Additive only — never deletes.
-  - name: sync-vehicles
-    enabled: true
-    schedule: 0 3 * * *
-    command:
-      - /bin/sh
-      - '-c'
-      - |
-        /fleet-lite-app sync-vehicles; exit $?
-    resources:
-      requests:
-        cpu: 50m
-        memory: 128Mi
-      limits:
-        cpu: 500m
-        memory: 256Mi
   - name: import-group-attestations-warm
     enabled: true
     schedule: 0 6 * * *
