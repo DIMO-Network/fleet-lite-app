@@ -101,7 +101,11 @@ export class AppRoot extends LitElement {
     }
 
     private async onHashChange() {
-        const path = location.hash.slice(1) || '/';
+        // Strip any query string (e.g. `?group=...`) before routing — the route
+        // patterns match the path only; views read their own params from the hash.
+        const raw = location.hash.slice(1) || '/';
+        const qi = raw.indexOf('?');
+        const path = qi >= 0 ? raw.slice(0, qi) : raw;
 
         // Onboarding has no tenant.
         if (path === '/onboard') {

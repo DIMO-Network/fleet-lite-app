@@ -348,6 +348,7 @@
 'sf993bb199fefbe04': `Todos`,
 'sf9de3ded9625c0d1': `Copiar VIN`,
 'sfad9715041e583af': `vehículo`,
+'sfb2e1968a962356a': str`Ver vehículos en ${0}`,
 'sfc73e619cc0f1e56': `Últimas 2 semanas`,
 'sfd6d1a6564abd0e8': `Voltaje de la batería`,
 'sfddc1a3e571e109e': `Se requieren Client ID y API key.`,

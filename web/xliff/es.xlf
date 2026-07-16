@@ -1592,6 +1592,10 @@
   <source>groups total</source>
   <target>grupos en total</target>
 </trans-unit>
+<trans-unit id="sfb2e1968a962356a">
+  <source>View vehicles in <x id="0" equiv-text="${g.name}"/></source>
+  <target>Ver vehículos en <x id="0" equiv-text="${g.name}"/></target>
+</trans-unit>
 </body>
 </file>
 </xliff>
