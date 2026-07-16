@@ -405,6 +405,44 @@ export class VehicleDetailsView extends LitElement {
                 background: var(--outline-variant);
             }
 
+            /* Group-membership chips, each tinted with its own group color
+               (--gc, set inline). Neutral text keeps every color legible in
+               both themes; the dot + tint carry the color. */
+            .hero-groups {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 8px;
+                margin: -16px 0 32px;
+            }
+            .hero-groups .group-chip {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                padding: 5px 12px 5px 10px;
+                border-radius: var(--radius-full);
+                background: color-mix(in srgb, var(--gc) 14%, var(--surface-container-high));
+                border: 1px solid color-mix(in srgb, var(--gc) 45%, var(--outline-variant));
+                color: var(--on-surface);
+                font: var(--type-body-sm);
+                font-weight: 500;
+                white-space: nowrap;
+                text-decoration: none;
+                cursor: pointer;
+                transition: background 0.15s ease, border-color 0.15s ease;
+            }
+            .hero-groups .group-chip:hover {
+                background: color-mix(in srgb, var(--gc) 24%, var(--surface-container-high));
+                border-color: color-mix(in srgb, var(--gc) 70%, var(--outline-variant));
+            }
+            .hero-groups .group-chip .dot {
+                width: 10px;
+                height: 10px;
+                border-radius: var(--radius-full);
+                background: var(--gc);
+                flex-shrink: 0;
+            }
+
             .grid {
                 display: grid;
                 grid-template-columns: repeat(12, 1fr);
@@ -947,6 +985,18 @@ export class VehicleDetailsView extends LitElement {
                         ${this.vehicle?.isFavorite ? msg('Remove from Favorites') : msg('Make Favorite')}
                     </button>
                 </div>
+
+                ${this.vehicle?.groups && this.vehicle.groups.length > 0
+                    ? html`<div class="hero-groups">
+                        ${this.vehicle.groups.map((g) => html`
+                            <a class="group-chip" style="--gc:${g.color}"
+                               href="#/${this.tenantId}/stats?group=${encodeURIComponent(g.id)}"
+                               title=${msg(str`View vehicles in ${g.name}`)}>
+                                <span class="dot"></span>${g.name}
+                            </a>
+                        `)}
+                    </div>`
+                    : nothing}
 
                 <div class="grid">
                     <!-- Trips: live mini-map + period picker + detected trips -->

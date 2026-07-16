@@ -185,8 +185,21 @@ export class FleetListView extends LitElement {
         }
     }
 
+    /**
+     * Preset the group filter from a `?group=<id>` query param on the hash route,
+     * so links like the vehicle-detail group chips land here pre-filtered.
+     */
+    private applyGroupFromHash() {
+        const hash = location.hash;
+        const qi = hash.indexOf('?');
+        if (qi < 0) return;
+        const group = new URLSearchParams(hash.slice(qi + 1)).get('group');
+        if (group) this.selectedGroupId = group;
+    }
+
     async connectedCallback() {
         super.connectedCallback();
+        this.applyGroupFromHash();
         this.hiddenVehicles = hiddenVehiclesService.getHidden(this.tenantId);
         this.unsubscribeHidden = hiddenVehiclesService.subscribe(() => {
             this.hiddenVehicles = hiddenVehiclesService.getHidden(this.tenantId);
