@@ -2,7 +2,7 @@ replicaCount: 1
 image:
   repository: dimozone/fleet-lite-app
   pullPolicy: IfNotPresent
-  tag: e2cb498
+  tag: 3af8714
 imagePullSecrets: []
 nameOverride: ''
 fullnameOverride: ''
@@ -87,6 +87,21 @@ serviceMonitor:
   port: mon-http
   interval: 30s
 cronJobs:
+  - name: sync-vehicles
+    enabled: true
+    schedule: 0 3 * * *
+    command:
+      - /bin/sh
+      - '-c'
+      - |
+        /fleet-lite-app sync-vehicles; exit $?
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
   - name: import-group-attestations-warm
     enabled: true
     schedule: 0 6 * * *
