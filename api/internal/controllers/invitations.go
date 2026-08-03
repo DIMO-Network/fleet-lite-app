@@ -65,6 +65,14 @@ type invitationJSON struct {
 	// invitation actually bound to, which may differ from the emailed address's
 	// expected owner (e.g. a shared session consumed the link).
 	InviteeWallet *string `json:"inviteeWallet,omitempty"`
+	// Email-delivery tracking, stamped on send and upgraded by the Postmark
+	// webhook (see docs/POSTMARK_WEBHOOK_PLAN.md). EmailStatus is one of
+	// sent | delivered | opened | bounced; absent means the email never
+	// dispatched — the send failed, or sending is disabled (local dev).
+	// Detail carries the bounce reason. Owner-only, like the rest of this shape.
+	EmailStatus       *string `json:"emailStatus,omitempty"`
+	EmailStatusAt     *string `json:"emailStatusAt,omitempty"`
+	EmailStatusDetail *string `json:"emailStatusDetail,omitempty"`
 	// EmailSent is set only on create/resend responses (true = the email
 	// dispatched, false = saved but delivery failed). Omitted when listing.
 	EmailSent *bool `json:"emailSent,omitempty"`
@@ -210,6 +218,18 @@ func toInvitationJSON(r *dbmodels.Invitation) invitationJSON {
 	if r.InviteeWallet.Valid && r.InviteeWallet.String != "" {
 		w := r.InviteeWallet.String
 		out.InviteeWallet = &w
+	}
+	if r.EmailStatus.Valid && r.EmailStatus.String != "" {
+		s := r.EmailStatus.String
+		out.EmailStatus = &s
+	}
+	if r.EmailStatusAt.Valid {
+		s := r.EmailStatusAt.Time.UTC().Format(time.RFC3339)
+		out.EmailStatusAt = &s
+	}
+	if r.EmailStatusDetail.Valid && r.EmailStatusDetail.String != "" {
+		s := r.EmailStatusDetail.String
+		out.EmailStatusDetail = &s
 	}
 	out.AllowedGroupIDs = r.AllowedGroupIds
 	return out

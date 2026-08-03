@@ -263,8 +263,19 @@ func (s *InvitationService) Resend(ctx context.Context, tenantID, invitationID, 
 	inv.TokenHash = hash
 	inv.ExpiresAt = time.Now().Add(s.expiry())
 	inv.UpdatedAt = time.Now()
-	if _, err := inv.Update(ctx, s.pdb.DBS().Writer,
-		boil.Whitelist("token_hash", "expires_at", "updated_at")); err != nil {
+	// Clear email tracking: a resend is a *new* message, and the previous one's
+	// delivery state doesn't describe it. Without this a resend whose send fails
+	// would keep showing the old "Delivered" badge to the owner. markEmailSent
+	// re-stamps below on success; on failure the invite reads "Not sent", which
+	// is what actually happened.
+	inv.PostmarkMessageID = null.String{}
+	inv.EmailStatus = null.String{}
+	inv.EmailStatusAt = null.Time{}
+	inv.EmailStatusDetail = null.String{}
+	if _, err := inv.Update(ctx, s.pdb.DBS().Writer, boil.Whitelist(
+		"token_hash", "expires_at", "updated_at",
+		"postmark_message_id", "email_status", "email_status_at", "email_status_detail",
+	)); err != nil {
 		return fmt.Errorf("refresh invitation token: %w", err)
 	}
 	s.logger.Info().Str("invitation", inv.ID).Str("tenant", tenantID).Str("email", inv.Email).

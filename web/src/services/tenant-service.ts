@@ -48,7 +48,20 @@ export interface Invitation {
     inviteeWallet?: string;
     /** Fleet-group ids the invitee will be limited to; absent = all groups. */
     allowedGroupIds?: string[];
+    /**
+     * Email-delivery state from Postmark: sent | delivered | opened | bounced.
+     * Absent means the email never dispatched (send failed, or sending is
+     * disabled in local dev) — the invite is still usable via Resend.
+     */
+    emailStatus?: EmailStatus;
+    /** ISO timestamp the email reached `emailStatus`. */
+    emailStatusAt?: string;
+    /** Bounce reason, when `emailStatus` is `bounced`. */
+    emailStatusDetail?: string;
 }
+
+/** Postmark delivery states, in the order they escalate (bounced beats all). */
+export type EmailStatus = 'sent' | 'delivered' | 'opened' | 'bounced';
 
 interface InvitationsResponse {
     invitations: Invitation[];

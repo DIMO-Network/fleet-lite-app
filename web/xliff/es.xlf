@@ -1596,6 +1596,70 @@
   <source>View vehicles in <x id="0" equiv-text="${g.name}"/></source>
   <target>Ver vehículos en <x id="0" equiv-text="${g.name}"/></target>
 </trans-unit>
+<trans-unit id="sce6a3502c71baa60">
+  <source>Opened</source>
+  <target>Abierto</target>
+</trans-unit>
+<trans-unit id="s8ca3b021833cbf6f">
+  <source>Delivered</source>
+  <target>Entregado</target>
+</trans-unit>
+<trans-unit id="s3620ac092b82ce7b">
+  <source>Bounced</source>
+  <target>Rebotado</target>
+</trans-unit>
+<trans-unit id="s57ade424d57c6edf">
+  <source>Sent</source>
+  <target>Enviado</target>
+</trans-unit>
+<trans-unit id="s739264aa3476b5b4">
+  <source>Not sent</source>
+  <target>No enviado</target>
+</trans-unit>
+<trans-unit id="sc4310f55eaf0bc1a">
+  <source>Email opened <x id="0" equiv-text="${when}"/></source>
+  <target>Correo abierto <x id="0" equiv-text="${when}"/></target>
+</trans-unit>
+<trans-unit id="s19764666db3b8400">
+  <source>Email opened</source>
+  <target>Correo abierto</target>
+</trans-unit>
+<trans-unit id="sf5fb699732b4acd9">
+  <source>Email delivered <x id="0" equiv-text="${when}"/></source>
+  <target>Correo entregado <x id="0" equiv-text="${when}"/></target>
+</trans-unit>
+<trans-unit id="sd010e4d57061108f">
+  <source>Email delivered</source>
+  <target>Correo entregado</target>
+</trans-unit>
+<trans-unit id="s6b04e3219b1255ed">
+  <source>Email bounced <x id="0" equiv-text="${when}"/></source>
+  <target>Correo rebotado <x id="0" equiv-text="${when}"/></target>
+</trans-unit>
+<trans-unit id="s35536643db5f149b">
+  <source>Email bounced</source>
+  <target>Correo rebotado</target>
+</trans-unit>
+<trans-unit id="sb3cfb42e4f5396be">
+  <source>The address may be wrong or unreachable — fix it and invite again.</source>
+  <target>La dirección puede ser incorrecta o inaccesible: corrígela e invita de nuevo.</target>
+</trans-unit>
+<trans-unit id="s8c8bc7355bbcf869">
+  <source>Email sent <x id="0" equiv-text="${when}"/></source>
+  <target>Correo enviado <x id="0" equiv-text="${when}"/></target>
+</trans-unit>
+<trans-unit id="sa266303caf1bd27f">
+  <source>Email sent</source>
+  <target>Correo enviado</target>
+</trans-unit>
+<trans-unit id="sd3504474f65aa791">
+  <source>Not confirmed delivered yet.</source>
+  <target>Aún no se confirma la entrega.</target>
+</trans-unit>
+<trans-unit id="s45c535495627f524">
+  <source>The invitation email was never sent. Use Resend to try again.</source>
+  <target>El correo de invitación nunca se envió. Usa Reenviar para intentarlo de nuevo.</target>
+</trans-unit>
 </body>
 </file>
 </xliff>
