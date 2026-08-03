@@ -5,6 +5,7 @@ import { sharedStyles } from '../global-styles.ts';
 import { getTokenClaims } from '../utils/token.ts';
 import { ApiError } from '../services/api-service.ts';
 import { TenantService, Member, Invitation, MyAccess, ROLE_OWNER } from '../services/tenant-service.ts';
+import { deliveryLabel, deliveryDetail, deliveryIcon, deliveryTone } from '../utils/invite-delivery.ts';
 import { FleetGroupService } from '../services/fleet-group-service.ts';
 import { FleetGroup } from '../types/group.ts';
 import './invite-member-modal.ts';
@@ -219,6 +220,20 @@ export class TenantMembers extends LitElement {
             }
             .invite-btn .material-symbols-outlined { font-size: 18px; }
             .badge.access { text-transform: none; letter-spacing: normal; }
+
+            /* Email-delivery badge on a pending invite. Tone maps to the
+               Postmark status: delivered/opened good, bounced bad, never-sent
+               warn, sent neutral (the default .badge look). */
+            .badge.delivery {
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                cursor: help;
+            }
+            .badge.delivery .material-symbols-outlined { font-size: 14px; }
+            .badge.delivery.good { color: var(--tertiary-container); border-color: var(--tertiary-container); }
+            .badge.delivery.bad { color: var(--error); border-color: var(--error); }
+            .badge.delivery.warn { color: var(--secondary); border-color: var(--secondary); }
             .access-panel { display: flex; gap: 14px; padding: 16px; align-items: flex-start; }
             .access-text { display: flex; flex-direction: column; gap: 8px; font: var(--type-body-md); color: var(--on-surface); }
             .access-chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -599,6 +614,21 @@ export class TenantMembers extends LitElement {
         `;
     }
 
+    /**
+     * Email-delivery badge for a pending invite — sent / delivered / opened /
+     * bounced, or "Not sent" when the email never dispatched. Tooltip carries
+     * the timestamp and the bounce reason. Without this, a pending row looks
+     * identical whether the invite landed in an inbox or never left the server.
+     */
+    private renderDelivery(i: Invitation) {
+        return html`
+            <span class="badge delivery ${deliveryTone(i)}" title=${deliveryDetail(i)}>
+                <span class="material-symbols-outlined">${deliveryIcon(i)}</span>
+                ${deliveryLabel(i)}
+            </span>
+        `;
+    }
+
     private renderInvite(i: Invitation) {
         const busy = this.busyInviteId === i.id;
         const expires = new Date(i.expiresAt);
@@ -612,6 +642,7 @@ export class TenantMembers extends LitElement {
                     </div>
                 </div>
                 <div class="right-group">
+                    ${this.renderDelivery(i)}
                     <button
                         class="text-btn"
                         ?disabled=${busy}

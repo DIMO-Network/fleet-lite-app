@@ -91,13 +91,26 @@ resets to `sent` with the new `MessageID`.
   (`invite flow: email delivered/opened/bounced`). Unknown/unmatched → log + 200.
 - Ignore `Click`/`SpamComplaint`/etc. for now (200, no-op).
 
-### UI (`tenant-members.ts`)
+### UI (`tenant-members.ts`) — shipped
 
-- Pending invite row meta line gains the email status:
-  `Invited as member · expires 7/15 · Delivered` (or `Opened`, or red `Bounced —
-  address not found`). Tooltip shows `email_status_at`.
-- No polling needed initially — status refreshes on the existing `load()` whenever the
-  members view is opened. (Live updates would need SSE/poll; not worth it yet.)
+Built as a **badge in the row's right group** rather than appended to the meta line
+(the planned `… · expires 7/15 · Delivered`): the row already carries badges for role
+and access, colour is what makes a bounce scannable, and the meta line was getting
+long. Presentation lives in `web/src/utils/invite-delivery.ts`.
+
+- Icon + label per status: `Sent` (neutral), `Delivered` / `Opened` (green),
+  `Bounced` (red), and — the case the API can't express as a status —
+  **`Not sent`** (amber) when `email_status` is null, i.e. the send failed or
+  sending is disabled in local dev. Without it, a pending invite that never left
+  the server is indistinguishable from a healthy one.
+- Tooltip carries `email_status_at` and the bounce reason (`email_status_detail`).
+- **Resend clears the tracking columns** before minting the new token
+  (`InvitationService.Resend`) — a resend is a new message, so the old message's
+  `Delivered` must not linger over a resend whose send failed.
+- No polling — status refreshes on the existing `load()` whenever the members view is
+  opened. (Live updates would need SSE/poll; not worth it yet.)
+- Shown on **pending** rows only. Expired rows under "Past invitations" still show no
+  delivery state; a bounced-then-expired invite is the case for adding it there too.
 
 ### Postmark configuration (one-time, manual)
 
@@ -113,7 +126,8 @@ resets to `sent` with the new `MessageID`.
    `POSTMARK_WEBHOOK_SECRET`) + chart secret + `make configure-postmark-webhook`
    (idempotent create/update via the Postmark Webhooks API — no dashboard step).
    After deploy: create the AWS secret, then run the configure command per env.
-3. UI status on pending invites.
+3. ✅ UI status on pending invites — `emailStatus`/`emailStatusAt`/`emailStatusDetail`
+   on the owner-only invitation JSON, rendered as a delivery badge.
 
 ## Open questions
 
