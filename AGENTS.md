@@ -9,6 +9,35 @@ here.
 See [`docs/PLAN.md`](docs/PLAN.md) for the implementation plan and what's been
 built so far.
 
+## Tenancy — read this before touching tenants, members or vehicle access
+
+This repo's `tenants` / `tenant_users` tables are **being superseded** by a
+shared tenancy service, and the product is moving to an operator-managed model:
+an operator configures customer tenants from `b2b-fleet-mgr-app`, and this app is
+the end-customer product.
+
+Read [`docs/operator-tenancy/`](docs/operator-tenancy/) before changing anything
+in `internal/app/tenant.go`, `internal/service/tenant.go`,
+`internal/controllers/tenants.go`, `internal/controllers/invitations.go`,
+`internal/service/vehicle.go` (sync), or fleet-group ids.
+
+Things an agent will otherwise get wrong:
+
+- **Vehicle access is not "whatever the tenant's own dev license is privileged
+  on"** in the target model. Customer tenants share the *operator's* license and
+  are scoped by a web2 entitlement set. Isolation is enforced in our code — never
+  call a DIMO gateway with a token id that didn't come from an
+  entitlement-filtered query.
+- **Fleet group ids are changing** to `<tenant-uuid>_<slug>`. The current bare
+  slug is a global PK and collides across tenants — that's a live bug, not a
+  hypothetical.
+- **No impersonation.** Operator staff are b2b-only; `GET /tenants` returns
+  direct memberships only.
+- **`role` stops being an authorization input.** The five owner-gates here
+  (`AddMember`, `RemoveMember`, `UpdateMemberAccess`, invitations,
+  `UpdateSettings`) become capability checks — `manage_members` and
+  `manage_settings`. `role` remains only as a display label and a preset.
+
 ## Layout
 
 ```
