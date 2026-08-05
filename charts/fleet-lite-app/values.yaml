@@ -19,6 +19,10 @@ env:
   API_PORT: '8084'
   MONITORING_PORT: '8085'
   LOG_LEVEL: info
+  # TEMPORARY — lets decryption fall back to the legacy sha256("") key for
+  # rows written while TENANT_SECRET_ENC_KEY was unset. Set true only for the
+  # re-encryption window, then back to false. See docs/TENANT_SECRET_ROTATION.md.
+  ALLOW_LEGACY_EMPTY_ENC_KEY: "false"
   SERVICE_NAME: fleet-lite-app
   DB_NAME: fleets_lite
   JWT_KEY_SET_URL: https://auth.dev.dimo.zone/keys
