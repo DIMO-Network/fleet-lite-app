@@ -49,6 +49,13 @@ func main() {
 		logger = logger.Level(lvl)
 	}
 
+	// Refuse to start rather than silently encrypt tenant credentials under
+	// sha256("") — see config.Settings.Validate. Checked before subcommands so
+	// the CLI paths are covered too.
+	if err := settings.Validate(); err != nil {
+		logger.Fatal().Err(err).Msg("invalid settings")
+	}
+
 	// stop unregisters the handler; it is called again right after the first
 	// signal (in runFiber) so a second Ctrl-C falls through to the OS default
 	// and force-kills instead of being swallowed while shutdown drains.
@@ -63,6 +70,7 @@ func main() {
 		subcommands.Register(subcommands.FlagsCommand(), "")
 		subcommands.Register(subcommands.CommandsCommand(), "")
 		subcommands.Register(&migrateDBCmd{logger: logger, settings: settings}, "database")
+		subcommands.Register(&reencryptTenantSecretsCmd{logger: logger, settings: settings}, "database")
 		subcommands.Register(&importGroupAttestationsCmd{logger: logger, settings: settings}, "attestations")
 		subcommands.Register(&syncVehiclesCmd{logger: logger, settings: settings}, "vehicles")
 		subcommands.Register(&pruneUnsharedVehiclesCmd{logger: logger, settings: settings}, "vehicles")

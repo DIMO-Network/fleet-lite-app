@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"net/url"
 
 	"github.com/DIMO-Network/shared/pkg/db"
@@ -32,7 +33,20 @@ type Settings struct {
 	AllowedOrigins string `yaml:"ALLOWED_ORIGINS"`
 
 	// Multi-tenancy: key used to AES-256-GCM encrypt tenant DIMO API keys at rest. // secret
+	//
+	// MUST be set outside local — see Validate. An empty value is not "no
+	// encryption", it is encryption under sha256(""), which is a valid AES-256
+	// key that anybody can compute. Nothing errors and nothing logs.
 	TenantSecretEncKey string `yaml:"TENANT_SECRET_ENC_KEY"`
+
+	// AllowLegacyEmptyEncKey lets decryption fall back to the sha256("") key for
+	// rows written while TENANT_SECRET_ENC_KEY was unset.
+	//
+	// TEMPORARY. Enable it only for the rollout window: set the real key, deploy,
+	// run `reencrypt-tenant-secrets`, then set this back to false and redeploy.
+	// Leaving it on indefinitely keeps the weak key a valid way to read every
+	// credential. Grep for it when the migration is done and delete the shim.
+	AllowLegacyEmptyEncKey bool `yaml:"ALLOW_LEGACY_EMPTY_ENC_KEY"`
 
 	// DIMO Identity API
 	IdentityAPIEndpoint url.URL `yaml:"IDENTITY_API_ENDPOINT"`
@@ -74,4 +88,20 @@ func (s *Settings) IsProduction() bool {
 
 func (s *Settings) IsLocal() bool {
 	return s.Environment == "local"
+}
+
+// Validate rejects configurations that would silently do the wrong thing.
+//
+// The empty-encryption-key case is the reason this exists. sha256("") is a
+// valid AES-256 key, so encryptSecret succeeds, the ciphertext looks fine, and
+// every tenant's DIMO developer-license private key is protected by a constant
+// that is public knowledge. There is no error and no log line — it can only be
+// caught here. This reached production; the check is why it cannot again.
+func (s *Settings) Validate() error {
+	if s.TenantSecretEncKey == "" && !s.IsLocal() {
+		return fmt.Errorf("TENANT_SECRET_ENC_KEY is empty in environment %q: tenant "+
+			"credentials would be encrypted with sha256(\"\"), a publicly known key",
+			s.Environment)
+	}
+	return nil
 }

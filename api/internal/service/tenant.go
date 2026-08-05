@@ -258,9 +258,24 @@ func (s *TenantService) HasAPIKey(ctx context.Context, tenantID string) (bool, e
 	return t.DimoAPIKeyEnc.Valid && t.DimoAPIKeyEnc.String != "", nil
 }
 
+// EncryptSecretWith encrypts plaintext with AES-256-GCM keyed by sha256(passphrase).
+// Exported for the reencrypt-tenant-secrets command.
+func EncryptSecretWith(passphrase, plaintext string) (string, error) {
+	return encryptWith(passphrase, plaintext)
+}
+
+// DecryptSecretWith is the read side of EncryptSecretWith.
+func DecryptSecretWith(passphrase, encB64 string) (string, error) {
+	return decryptWith(passphrase, encB64)
+}
+
 // encryptSecret encrypts plaintext with AES-256-GCM keyed by sha256(TENANT_SECRET_ENC_KEY).
 func (s *TenantService) encryptSecret(plaintext string) (string, error) {
-	keyHash := sha256.Sum256([]byte(s.settings.TenantSecretEncKey))
+	return encryptWith(s.settings.TenantSecretEncKey, plaintext)
+}
+
+func encryptWith(passphrase, plaintext string) (string, error) {
+	keyHash := sha256.Sum256([]byte(passphrase))
 	block, err := aes.NewCipher(keyHash[:])
 	if err != nil {
 		return "", err
@@ -278,16 +293,44 @@ func (s *TenantService) encryptSecret(plaintext string) (string, error) {
 	return base64.StdEncoding.EncodeToString(combined), nil
 }
 
-// decryptSecret reverses encryptSecret.
+// decryptSecret reverses encryptSecret, trying the configured key first and
+// falling back to the legacy empty key when AllowLegacyEmptyEncKey is set.
+//
+// The fallback exists only to migrate rows written while TENANT_SECRET_ENC_KEY
+// was unset. GCM authenticates, so a successful Open is proof the key was right
+// — there is no risk of silently returning garbage from the wrong key. Remove
+// the fallback once reencrypt-tenant-secrets has run everywhere.
 func (s *TenantService) decryptSecret(encB64 string) (string, error) {
 	if encB64 == "" {
 		return "", nil
 	}
+	plaintext, err := decryptWith(s.settings.TenantSecretEncKey, encB64)
+	if err == nil {
+		return plaintext, nil
+	}
+	if !s.settings.AllowLegacyEmptyEncKey || s.settings.TenantSecretEncKey == "" {
+		return "", err
+	}
+	// Legacy row: written under sha256("").
+	plaintext, legacyErr := decryptWith("", encB64)
+	if legacyErr != nil {
+		// Report the primary-key failure — the legacy attempt is a fallback, not
+		// the expected path, so its error is the less useful one.
+		return "", err
+	}
+	s.logger.Warn().Msg("tenant secret decrypted with the legacy empty key; " +
+		"run reencrypt-tenant-secrets")
+	return plaintext, nil
+}
+
+// decryptWith opens an AES-256-GCM payload produced by encryptSecret using a
+// key derived from the given passphrase.
+func decryptWith(passphrase, encB64 string) (string, error) {
 	raw, err := base64.StdEncoding.DecodeString(encB64)
 	if err != nil {
 		return "", err
 	}
-	keyHash := sha256.Sum256([]byte(s.settings.TenantSecretEncKey))
+	keyHash := sha256.Sum256([]byte(passphrase))
 	block, err := aes.NewCipher(keyHash[:])
 	if err != nil {
 		return "", err
