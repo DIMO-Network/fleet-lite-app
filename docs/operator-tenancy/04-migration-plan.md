@@ -19,10 +19,20 @@ That means:
   both frontends. No client change, no dual-header period.
 - Rollback at any phase is "stop calling tenancy-api", not "restore the ids".
 
-The one collision case is a company that exists as a tenant in *both* databases
-(an operator whose own tenant also has a fleet-lite tenant). Enumerate these
-before starting — there are few enough to handle by hand — and pick one id,
-mapping the other in the app that has to change.
+**The collision case is real and already enumerated (2026-08-05).** Exactly one:
+"Kaufmann" exists in both, with different uuids —
+`7be1ab9e-9286-4a8f-b45f-15f25ee4da77` in kaufmann_oracle,
+`9708b213-21fe-41da-bded-c3026d16b85c` in fleets_lite. Every other tenant is
+unique to one database (5 in fleet-lite, 11 in kaufmann).
+
+Resolve by keeping **kaufmann's** uuid — it's the operator tenant and carries the
+credentials, signer and vins — and re-keying fleet-lite's Kaufmann tenant to
+match. Bounded: 576 vehicles, 82 groups, 10 members, 13 invitations, 4 geofences.
+
+This is not optional housekeeping. Until those ids are one, tenant-matching on
+group attestations drops kaufmann's assertions for fleet-lite's entire group
+structure — see
+[07-r1-group-id-migration.md](07-r1-group-id-migration.md#the-sequencing-constraint-this-creates).
 
 ## Phase 0 — Stand up the service, no cutover
 

@@ -54,36 +54,81 @@ whenever `allowRemove` is open — which `removalAllowed` opens when
 
 So a naive rollout deletes real data on the first sync after deploy.
 
-### Find out who's affected
+### Measured in production (2026-08-05)
 
-Auto-created groups have a signature — `ensureGroup` defaults name to the id and
-color to `#808080`:
+An earlier draft proposed detecting auto-created groups by their `#808080`
+default colour. **That query is wrong and returns zero.** `ensureGroup` only
+falls back to grey when the CloudEvent carries no name/colour — and kaufmann's
+CEs carry both, so synced groups are indistinguishable from hand-made ones by
+colour.
+
+The correct test is comparing id sets across the two databases. Run against
+prod, read-only:
 
 ```sql
-SELECT fg.tenant_id, fg.id, fg.name, count(vfg.token_id) AS vehicles
-FROM fleet_groups fg
-LEFT JOIN vehicle_fleet_groups vfg ON vfg.fleet_group_id = fg.id
-WHERE fg.color = '#808080' AND fg.name = fg.id
-GROUP BY 1, 2, 3;
+-- fleet-lite
+SELECT id FROM fleet_groups ORDER BY 1;
+-- kaufmann
+SELECT id FROM kaufmann_oracle.fleet_groups ORDER BY 1;
 ```
 
-Empty → no exposure, though the ordering below is still the safe way to ship.
-Non-empty → those rows are what a naive rollout would delete.
+`comm -12` the two lists. What that actually returned:
 
-### The fix: republish before dropping
+| Measure | Value |
+|---|---|
+| fleet-lite groups | 82 |
+| kaufmann groups | 79 |
+| **ids present in both** | **76** |
+| fleet-lite-only ids | 6 |
+| memberships on shared-id groups | **370 of 378 (98%)** |
+| grouped vehicles | 287 |
+| …ever edited locally in fleet-lite (`groups_updated_at`) | **0** |
+| …ever synced from a CE (`last_group_sync_at`) | **287** |
 
-Run fleet-lite's own republish **first**, so every locally-held group lands in
-fleet-lite's own CE. After that, `desired` contains them via fleet-lite's
-producer and nothing is removed when foreign ids stop being accepted.
+**fleet-lite's entire production group structure came from kaufmann's
+CloudEvents.** Not one group has ever been mutated in fleet-lite, so
+`AttestVehicleGroups` has never fired for these vehicles and fleet-lite's own
+producer has published nothing. Everything on screen is kaufmann's assertions.
 
-Concretely: **foreign-tenant drop ships behind a flag, default off**, and is
-flipped on only after the republish is verified. See §6.
+And because no vehicle has `groups_updated_at` set, `removalAllowed` is **open
+for all 287** — there is no freshness gate standing in the way.
 
-The already-auto-created groups then simply become the customer's own — the
-migration prefixes them with the customer's tenant uuid, fleet-lite republishes
-them under its own producer, and the customer can edit them like any other
-group. The accidental flow effectively hands them over rather than deleting
-them, which is the right outcome.
+So enabling `dropForeign` without a republish would delete 370 of 378
+memberships: the production fleet's entire group structure, on the next sync.
+
+## The sequencing constraint this creates
+
+The two "Kaufmann" tenants are **different uuids for the same company**:
+
+| | tenant id |
+|---|---|
+| `kaufmann_oracle.tenants` "Kaufmann" | `7be1ab9e-9286-4a8f-b45f-15f25ee4da77` |
+| `fleets_lite.tenants` "Kaufmann" | `9708b213-21fe-41da-bded-c3026d16b85c` |
+
+This is precisely the collision case [04-migration-plan.md](04-migration-plan.md)
+flagged ("a company that exists as a tenant in *both* databases"), and it lands
+on the main production tenant.
+
+After R1, kaufmann publishes `7be1ab9e-…_east` while fleet-lite's tenant is
+`9708b213-…`. The prefixes don't match, so tenant-matching drops everything.
+
+> **`dropForeign` must not be enabled until the two tenants share one uuid.**
+
+That unification is Phase 0's backfill. Until then the flag stays off and the
+transitional adopt-into-own-namespace branch keeps today's behaviour exactly.
+
+This also clarifies what fleet-lite's "Kaufmann" tenant *is*: not a customer, but
+**the operator viewing its own fleet in fleet-lite** — the `fleet_lite_enabled`
+case from D6. Groups flowing from b2b into that view is correct and desirable,
+which is exactly what tenant-matching delivers once the ids are one. The design
+holds; only the sequencing was wrong.
+
+### Revised dependency
+
+R1's migration, tolerance and republish ship standalone and are safe.
+**Step 6 (enforce tenant-matching) moves out of R1 and into Phase 0**, gated on
+tenant-uuid unification. R1 no longer blocks on it, and Phase 2 gets the
+attribution it needs from the id format alone.
 
 ## 1. Full reference map
 
@@ -380,16 +425,17 @@ Two constraints drive the ordering, and both are about never destroying data:
 | 3 | Deploy §4.1 id construction, both repos | New groups get the new format |
 | 4 | **fleet-lite republish (§5)** | Every locally-held group now appears in fleet-lite's own CE. This is the step that makes step 6 safe |
 | 5 | kaufmann republish (§5) | Operator CEs converge on the new format |
-| 6 | Flip `dropForeign = true`, fleet-lite | Tenant-matching now enforced. Nothing is removed, because step 4 put it all in our own CE |
+| 6 | *Phase 0, not here:* flip `dropForeign = true` | **Blocked until the two Kaufmann tenants share one uuid** — see the sequencing constraint above. Also requires step 4 to have landed |
 | 7 | *Later:* delete the flag and the legacy branch | Once no bare-slug CE is inside the retention window |
 
 Steps 2 and 3 can share a deploy per repo — migrations run at startup, before
 traffic. Steps 1, 4 and 6 must be distinct, and **step 6 must not ship in the
 same release as step 4**: verify the republish landed before enforcing.
 
-Verify between 4 and 6 by re-running the `#808080` query and confirming those
-groups now appear in fleet-lite's own published CEs for their vehicles. If any
-vehicle is missing, the republish didn't cover it and step 6 would delete it.
+Verify before step 6 by confirming fleet-lite's own producer now asserts every
+shared-id group for every one of the 287 grouped vehicles. Any vehicle the
+republish missed is a vehicle step 6 would strip. Given 0 of 287 have ever been
+locally edited, assume nothing is published until the republish proves otherwise.
 
 Repo order doesn't matter. A mixed fleet — one repo migrated, one not — is
 exactly the legacy case tolerance was written for.
