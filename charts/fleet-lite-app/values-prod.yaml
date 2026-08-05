@@ -22,7 +22,12 @@ env:
   # TEMPORARY — lets decryption fall back to the legacy sha256("") key for
   # rows written while TENANT_SECRET_ENC_KEY was unset. Set true only for the
   # re-encryption window, then back to false. See docs/TENANT_SECRET_ROTATION.md.
-  ALLOW_LEGACY_EMPTY_ENC_KEY: "false"
+  # ROLLOUT WINDOW — must be "true" for the first deploy that carries
+  # TENANT_SECRET_ENC_KEY, otherwise the pre-existing rows (written under
+  # sha256("")) cannot be decrypted and every tenant breaks. Set back to
+  # "false" after running reencrypt-tenant-secrets.
+  # See docs/TENANT_SECRET_ROTATION.md.
+  ALLOW_LEGACY_EMPTY_ENC_KEY: "true"
   SERVICE_NAME: fleet-lite-app
   DB_PORT: '5432'
   DB_NAME: fleets_lite
