@@ -41,10 +41,18 @@ type GroupSyncService struct {
 	pdb          *db.Store
 	fetchAPI     *gateway.FetchAPI
 	authProvider *gateway.DimoAuthProvider
+
+	// dropForeignTenantGroups enforces tenant-matching on incoming group
+	// CloudEvents. MUST stay false until every tenant uuid is unified across
+	// fleet-lite and the oracle — see normaliseGroupID.
+	dropForeignTenantGroups bool
 }
 
-func NewGroupSyncService(logger *zerolog.Logger, pdb *db.Store, fetchAPI *gateway.FetchAPI, authProvider *gateway.DimoAuthProvider) *GroupSyncService {
-	return &GroupSyncService{logger: logger, pdb: pdb, fetchAPI: fetchAPI, authProvider: authProvider}
+func NewGroupSyncService(logger *zerolog.Logger, pdb *db.Store, fetchAPI *gateway.FetchAPI, authProvider *gateway.DimoAuthProvider, dropForeignTenantGroups bool) *GroupSyncService {
+	return &GroupSyncService{
+		logger: logger, pdb: pdb, fetchAPI: fetchAPI, authProvider: authProvider,
+		dropForeignTenantGroups: dropForeignTenantGroups,
+	}
 }
 
 // SyncOpts tunes a single vehicle sync.
@@ -101,7 +109,7 @@ func (s *GroupSyncService) SyncVehicle(ctx context.Context, tenant models.Tenant
 		return SyncResult{}, fmt.Errorf("fetch group attestations: %w", err)
 	}
 
-	desired := desiredGroups(entries, *s.logger, tokenID)
+	desired := desiredGroups(entries, *s.logger, tokenID, tenant.ID, s.dropForeignTenantGroups)
 	// Removals are honored only when the gate is open AND the fetch actually
 	// returned CEs — a successful-but-empty read must never wipe local groups.
 	allowRemove := len(entries) > 0 && removalAllowed(entries, v.GroupsUpdatedAt)
@@ -163,7 +171,44 @@ func (s *GroupSyncService) touchLastGroupSyncAt(ctx context.Context, tenantID st
 // producer wallet — not the source — is what distinguishes one app's view from
 // a sibling's. Each producer's most-recent attestation contributes its groups,
 // which respects a producer's own removals while still merging in siblings.
-func desiredGroups(entries []gateway.AttestationEntry, logger zerolog.Logger, tokenID int64) []models.GroupRef {
+// normaliseGroupID maps a CloudEvent group id into the tenant being reconciled,
+// reporting whether the group should be accepted at all.
+//
+// The rule is tenant-matching, NOT producer-matching: a group belongs to the
+// tenant whose uuid prefixes its id, whoever published the CloudEvent. So an
+// operator tenant viewed in fleet-lite sees the groups b2b created for it, while
+// a customer tenant never sees the operator's. Nothing keys off which app wrote
+// the CE — under a shared operator developer license they all share a `source`.
+//
+// Legacy ids are bare slugs written before the tenant-prefix migration. They are
+// safe to adopt: reconcile always runs for one known vehicle in one known tenant,
+// so a bare slug is unambiguous in that context.
+//
+// dropForeign gates the only behaviour change users can see. It MUST stay false
+// until the two systems agree on tenant uuids — today kaufmann's "Kaufmann"
+// tenant and fleet-lite's are different uuids for the same company, so enforcing
+// the match would drop every group kaufmann asserts, and reconcile would then
+// remove the memberships that depend on them. Turning it on before fleet-lite has
+// republished its own groups is data loss, not a policy change.
+// See docs/operator-tenancy/07-r1-group-id-migration.md.
+func normaliseGroupID(tenantID, id string, dropForeign bool) (string, bool) {
+	i := strings.Index(id, GroupIDSeparator)
+	if i <= 0 {
+		return tenantID + GroupIDSeparator + id, true // legacy bare slug
+	}
+	if id[:i] == tenantID {
+		return id, true
+	}
+	if dropForeign {
+		return "", false
+	}
+	// Transitional: adopt a foreign-tenant group into our own namespace, which
+	// is exactly what happened implicitly before ids carried a tenant. Removed
+	// with the flag once every tenant uuid is unified.
+	return tenantID + GroupIDSeparator + id[i+1:], true
+}
+
+func desiredGroups(entries []gateway.AttestationEntry, logger zerolog.Logger, tokenID int64, tenantID string, dropForeign bool) []models.GroupRef {
 	// Latest group attestation per producer (falling back to source when a CE
 	// carries no producer).
 	producerKey := func(e *gateway.AttestationEntry) string {
@@ -202,7 +247,14 @@ func desiredGroups(entries []gateway.AttestationEntry, logger zerolog.Logger, to
 			if g.ID == "" {
 				continue
 			}
-			if _, ok := byID[g.ID]; !ok {
+			normID, ok := normaliseGroupID(tenantID, g.ID, dropForeign)
+			if !ok {
+				logger.Debug().Int64("token_id", tokenID).Str("group_id", g.ID).
+					Str("tenant_id", tenantID).Msg("dropping group from another tenant")
+				continue
+			}
+			g.ID = normID
+			if _, seen := byID[g.ID]; !seen {
 				byID[g.ID] = g
 			}
 		}

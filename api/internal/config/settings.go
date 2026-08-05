@@ -39,6 +39,17 @@ type Settings struct {
 	// key that anybody can compute. Nothing errors and nothing logs.
 	TenantSecretEncKey string `yaml:"TENANT_SECRET_ENC_KEY"`
 
+	// DropForeignTenantGroups enforces tenant-matching on incoming group
+	// attestations: a group is accepted only when its id is prefixed with the
+	// tenant being reconciled.
+	//
+	// MUST stay false until fleet-lite and the oracle agree on tenant uuids and
+	// fleet-lite has republished its own groups. Today the same company has a
+	// different uuid on each side, so enforcing the match drops every group the
+	// oracle asserts — and reconcile then removes the memberships that depend on
+	// them. See docs/operator-tenancy/07-r1-group-id-migration.md.
+	DropForeignTenantGroups bool `yaml:"DROP_FOREIGN_TENANT_GROUPS"`
+
 	// AllowLegacyEmptyEncKey lets decryption fall back to the sha256("") key for
 	// rows written while TENANT_SECRET_ENC_KEY was unset.
 	//
