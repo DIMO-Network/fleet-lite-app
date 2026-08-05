@@ -52,8 +52,13 @@ deploy — but it means **the order below is not optional**.
 openssl rand -base64 32
 ```
 
-Store at `prod/fleet-lite-app/tenant_secret_enc_key` (and `dev/...` for dev).
-**Keep a copy** — losing it means losing every tenant's stored credential.
+Store at `prod/fleet-lite-app/tenant_secret_enc_key`. **Keep a copy** — losing it
+means losing every tenant's stored credential.
+
+> fleet-lite-app deploys to the **`prod` namespace only** — there is no dev
+> deployment. The ExternalSecret key is namespace-scoped
+> (`{{ .Release.Namespace }}/fleet-lite-app/...`), so `prod/...` is the only
+> entry that needs to exist. ✅ created 2026-08-05.
 
 Verify the ExternalSecret picks it up before going further:
 
@@ -65,7 +70,7 @@ kubectl get secret fleet-lite-app-secret -n prod \
 
 ### 2. Deploy with the legacy fallback on
 
-Set in the deployed values:
+Set in `charts/fleet-lite-app/values-prod.yaml`:
 
 ```yaml
 ALLOW_LEGACY_EMPTY_ENC_KEY: "true"
@@ -110,13 +115,13 @@ already readable under the current key are skipped.
 ALLOW_LEGACY_EMPTY_ENC_KEY: "false"
 ```
 
-Redeploy. The weak key stops being a valid way to read anything. The "legacy
+Redeploy (`values-prod.yaml`). The weak key stops being a valid way to read anything. The "legacy
 empty key" warnings should be gone; if any appear, a row was missed — turn the
 fallback back on and re-run step 3.
 
 ### 5. Clean up
 
-Once every environment is through step 4, delete the shim: the
+Once prod is through step 4, delete the shim: the
 `AllowLegacyEmptyEncKey` field, the fallback branch in `decryptSecret`, and its
 tests. Grep for `AllowLegacyEmptyEncKey` — it exists only for this migration.
 
