@@ -91,11 +91,8 @@ cronJobs:
   - name: sync-vehicles
     enabled: true
     schedule: 0 3 * * *
-    command:
-      - /bin/sh
-      - '-c'
-      - |
-        /fleet-lite-app sync-vehicles; exit $?
+    script: |
+      /fleet-lite-app sync-vehicles
     resources:
       requests:
         cpu: 50m
@@ -106,11 +103,8 @@ cronJobs:
   - name: import-group-attestations-warm
     enabled: true
     schedule: 0 6 * * *
-    command:
-      - /bin/sh
-      - '-c'
-      - |
-        /fleet-lite-app import-group-attestations -warm-only; exit $?
+    script: |
+      /fleet-lite-app import-group-attestations -warm-only
     resources:
       requests:
         cpu: 50m
@@ -122,11 +116,8 @@ cronJobs:
     enabled: true
     schedule: 0 4 * * 0
     activeDeadlineSeconds: 3600
-    command:
-      - /bin/sh
-      - '-c'
-      - |
-        /fleet-lite-app import-group-attestations; exit $?
+    script: |
+      /fleet-lite-app import-group-attestations
     resources:
       requests:
         cpu: 50m

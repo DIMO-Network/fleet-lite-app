@@ -92,7 +92,16 @@ func (p *importGroupAttestationsCmd) Execute(ctx context.Context, _ *flag.FlagSe
 
 	warmWindow := time.Duration(p.warmDays) * 24 * time.Hour
 
+	// syncAttempted/syncFailed exist to make a systemic failure visible. Per-
+	// vehicle errors are logged at debug and skipped, which is right for a
+	// best-effort convergence pass — but it also meant this command could fail
+	// on every single vehicle and still exit 0. It did exactly that in
+	// production for as long as the cronjob ran unmeshed: identity-api 403s an
+	// unmeshed caller, so no developer JWT could be minted and every vehicle
+	// failed, nightly, green. See the linkerd note in charts/.../cronjobs.yaml.
 	var checked, changed, platesChanged, vinsChanged, skippedTenants int
+	var syncAttempted, syncFailed int
+	var firstSyncErr error
 	for _, dt := range dbTenants {
 		// Activity tiering: skip cold tenants on the warm pass.
 		if p.warmOnly {
@@ -149,8 +158,13 @@ func (p *importGroupAttestationsCmd) Execute(ctx context.Context, _ *flag.FlagSe
 				continue
 			}
 
+			syncAttempted++
 			res, serr := groupSync.SyncVehicle(ctx, *tenant, v.TokenID, service.SyncOpts{DryRun: p.dryRun})
 			if serr != nil {
+				syncFailed++
+				if firstSyncErr == nil {
+					firstSyncErr = serr
+				}
 				p.logger.Debug().Err(serr).Int64("token_id", v.TokenID).Msg("sync vehicle, skipping")
 				continue
 			}
@@ -182,10 +196,30 @@ func (p *importGroupAttestationsCmd) Execute(ctx context.Context, _ *flag.FlagSe
 		}
 	}
 
-	p.logger.Info().Int("checked", checked).Int("changed", changed).
+	// Every attempted vehicle failing is not a bad night — it is a broken
+	// deployment. Nothing else distinguishes "converged, no changes" from
+	// "could not talk to anything", because both report changed=0.
+	//
+	// Deliberately only the group-sync path: -vin-only reads a VIN VC that many
+	// vehicles legitimately do not have, so 100% "failure" is a normal outcome
+	// there and would make the job cry wolf.
+	totalFailure := syncAttempted > 0 && syncFailed == syncAttempted
+
+	ev := p.logger.Info()
+	if totalFailure {
+		ev = p.logger.Error().Err(firstSyncErr)
+	}
+	ev.Int("checked", checked).Int("changed", changed).
 		Int("plates_changed", platesChanged).
 		Int("vins_changed", vinsChanged).
+		Int("sync_attempted", syncAttempted).Int("sync_failed", syncFailed).
 		Int("skipped_tenants", skippedTenants).Bool("warm_only", p.warmOnly).
 		Bool("dry_run", p.dryRun).Msg("import-group-attestations complete")
+
+	if totalFailure {
+		p.logger.Error().Int("vehicles", syncAttempted).
+			Msg("every vehicle failed to sync — treating as a failed run, not an empty one")
+		return subcommands.ExitFailure
+	}
 	return subcommands.ExitSuccess
 }
