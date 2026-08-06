@@ -20,6 +20,7 @@ env:
   MONITORING_PORT: '8085'
   LOG_LEVEL: info
   ALLOW_LEGACY_EMPTY_ENC_KEY: 'false'
+  DROP_FOREIGN_TENANT_GROUPS: 'true'
   SERVICE_NAME: fleet-lite-app
   DB_PORT: '5432'
   DB_NAME: fleets_lite
