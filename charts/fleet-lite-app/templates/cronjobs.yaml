@@ -24,12 +24,23 @@ spec:
             {{- include "fleet-lite-app.selectorLabels" $ | nindent 12 }}
             cronjob: {{ .name }}
           annotations:
-            # Job pods must NOT be meshed: the namespace has linkerd injection
-            # enabled, and an injected linkerd-proxy sidecar outlives the main
-            # container, so the pod never terminates, the job never completes,
-            # and activeDeadlineSeconds kills it as Failed even though the work
-            # succeeded (daily KubeJob alerts). Same fix as ingest-tesla-restarter.
-            linkerd.io/inject: disabled
+            # Job pods MUST be meshed, and must then shut the proxy down by hand
+            # (see the container command below).
+            #
+            # This was `disabled` for a long time, for a real reason: an injected
+            # proxy outlives the main container, so the pod never terminates and
+            # activeDeadlineSeconds kills the job as Failed even when the work
+            # succeeded. But unmeshed is worse, and silently so — identity-api
+            # authorizes on mesh identity and returns 403 to an unmeshed caller,
+            # so the developer-license lookup fails, DIMORedirectURI is never
+            # resolved, and every developer-JWT call dies with "Unregistered
+            # redirect_uri". import-group-attestations logged those at debug and
+            # exited 0 anyway, so it ran green nightly while doing nothing:
+            # measured 18s and zero changes unmeshed, versus 243s and 22 plates
+            # plus 17 VINs meshed.
+            #
+            # So: mesh it, and terminate the proxy explicitly.
+            linkerd.io/inject: enabled
             {{- with $.Values.podAnnotations }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -49,8 +60,18 @@ spec:
                 {{- toYaml $.Values.securityContext | nindent 16 }}
               image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag | default $.Chart.AppVersion }}"
               imagePullPolicy: {{ $.Values.image.pullPolicy }}
+              # The proxy shutdown lives here, not in values, so a cronjob added
+              # later cannot forget it and reintroduce the hang. values supplies
+              # `script`; this wraps it and preserves the real exit code.
+              # busybox wget is in the image; the proxy admin server is on :4191.
               command:
-                {{- toYaml .command | nindent 16 }}
+                - /bin/sh
+                - -c
+                - |
+                  {{- .script | trim | nindent 18 }}
+                  code=$?
+                  wget -q -O- --post-data='' http://localhost:4191/shutdown >/dev/null 2>&1 || true
+                  exit $code
               envFrom:
                 - configMapRef:
                     name: {{ include "fleet-lite-app.fullname" $ }}-config
