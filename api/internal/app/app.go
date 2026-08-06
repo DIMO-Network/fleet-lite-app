@@ -73,7 +73,7 @@ func App(
 	// Controllers
 	identityCtrl := controllers.NewIdentityController(settings, logger)
 	vehiclesCtrl := controllers.NewVehiclesController(settings, logger, vehicleSvc, groupSvc)
-	groupSyncSvc := service.NewGroupSyncService(logger, pdb, fetchAPI, authProvider)
+	groupSyncSvc := service.NewGroupSyncService(logger, pdb, fetchAPI, authProvider, settings.DropForeignTenantGroups)
 	fleetGroupsCtrl := controllers.NewFleetGroupsController(logger, groupSvc, groupSyncSvc, attestSvc)
 	geofenceSvc := service.NewGeofenceService(logger, pdb)
 	geofenceDetectionSvc := service.NewGeofenceDetectionService(logger, pdb, telemetryAPI, geofenceSvc)

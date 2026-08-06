@@ -74,7 +74,7 @@ func (p *importGroupAttestationsCmd) Execute(ctx context.Context, _ *flag.FlagSe
 	tenantSvc := service.NewTenantService(&p.logger, &p.pdb, &p.settings, identityService)
 	authProvider := gateway.NewDimoAuthProvider(p.logger, &p.settings)
 	fetchAPI := gateway.NewFetchAPI(p.logger, &p.settings, authProvider)
-	groupSync := service.NewGroupSyncService(&p.logger, &p.pdb, fetchAPI, authProvider)
+	groupSync := service.NewGroupSyncService(&p.logger, &p.pdb, fetchAPI, authProvider, p.settings.DropForeignTenantGroups)
 	telemetryAPI := service.NewTelemetryAPIService(p.logger, &p.settings, authProvider)
 	plateSync := service.NewLicensePlateSyncService(&p.logger, &p.pdb, fetchAPI, authProvider, telemetryAPI)
 

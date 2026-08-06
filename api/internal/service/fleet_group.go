@@ -63,6 +63,38 @@ func slug(name string) string {
 	return strings.Trim(s, "-")
 }
 
+// GroupIDSeparator divides the tenant uuid from the slug in a fleet group id.
+//
+// '_' is unambiguous: slug() collapses every non-alphanumeric run to '-', so a
+// slug never contains '_', and a uuid contains '-' but never '_'. A tenant-scoped
+// id therefore holds exactly one '_' and a legacy (pre-migration) id holds none,
+// which is what lets normaliseGroupID tell them apart without a lookup.
+const GroupIDSeparator = "_"
+
+// GroupID builds a tenant-scoped fleet group id: <tenant-uuid>_<slug>.
+//
+// The tenant prefix does two jobs. It makes ids globally unique, fixing a live
+// collision where the second tenant to create "Vans" was told the name was taken
+// by a group in another tenant. And it makes the id self-attributing: under a
+// shared operator developer license every producer's group CloudEvents carry the
+// same `source`, so data.groups[].id is the only field that can tell two
+// tenants' groups apart.
+func GroupID(tenantID, name string) string {
+	s := slug(name)
+	if s == "" {
+		return ""
+	}
+	return tenantID + GroupIDSeparator + s
+}
+
+// TenantOwnsGroupID reports whether a group id belongs to the given tenant.
+// Legacy bare-slug ids (no separator) carry no tenant and return false — callers
+// decide whether to adopt them; see normaliseGroupID.
+func TenantOwnsGroupID(tenantID, groupID string) bool {
+	i := strings.Index(groupID, GroupIDSeparator)
+	return i > 0 && groupID[:i] == tenantID
+}
+
 // ListGroups returns the tenant's groups with member counts, ordered by name.
 func (s *FleetGroupService) ListGroups(ctx context.Context, tenantID string) ([]GroupWithCount, error) {
 	var rows []struct {
@@ -135,7 +167,7 @@ func (s *FleetGroupService) GetGroup(ctx context.Context, tenantID, groupID stri
 // Returns ErrGroupNameExists on a (tenant_id, name) collision.
 func (s *FleetGroupService) CreateGroup(ctx context.Context, tenantID, name, color string) (*dbmodels.FleetGroup, error) {
 	g := &dbmodels.FleetGroup{
-		ID:       slug(name),
+		ID:       GroupID(tenantID, name),
 		Name:     name,
 		Color:    color,
 		TenantID: tenantID,
