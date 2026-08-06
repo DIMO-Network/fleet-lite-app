@@ -228,7 +228,7 @@ func (p *republishGroupAttestationsCmd) republishTenant(
 		select {
 		case <-ctx.Done():
 			mu.Lock()
-			failed += 1
+			failed++
 			mu.Unlock()
 			continue
 		case sem <- struct{}{}:

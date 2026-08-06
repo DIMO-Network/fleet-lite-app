@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 
 	"github.com/DIMO-Network/fleet-lite-app/internal/config"
 	dbmodels "github.com/DIMO-Network/fleet-lite-app/internal/db/models"
@@ -172,7 +171,6 @@ func (p *reencryptTenantSecretsCmd) Execute(ctx context.Context, _ *flag.FlagSet
 		return subcommands.ExitFailure
 	}
 
-	p.logger.Info().Int("reencrypted", len(todo)).Msg(fmt.Sprintf(
-		"done — now set ALLOW_LEGACY_EMPTY_ENC_KEY=false and redeploy"))
+	p.logger.Info().Int("reencrypted", len(todo)).Msg("done — now set ALLOW_LEGACY_EMPTY_ENC_KEY=false and redeploy")
 	return subcommands.ExitSuccess
 }
