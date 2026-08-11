@@ -40,7 +40,7 @@ env:
   ATTEST_API_URL: http://dis-prod-attest.prod.svc.cluster.local:8080
   TELEMETRY_API_URL: http://telemetry-api-prod.prod.svc.cluster.local:8080/query
   TENANCY_API_URL: http://fleet-tenancy-api.prod.svc.cluster.local:8084
-  TENANCY_AUTHZ_ENABLED: 'false'
+  TENANCY_AUTHZ_ENABLED: 'true'
   CHAIN_ID: '137'
   VEHICLE_NFT_ADDRESS: '0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF'
   INVITATION_FROM_EMAIL: no-reply@dimo.co
