@@ -76,16 +76,6 @@ type Settings struct {
 	TenancyAPIURL url.URL `yaml:"TENANCY_API_URL"`
 	TenancyAPIKey string  `yaml:"TENANCY_API_KEY"` // secret
 
-	// TenancyAuthzEnabled makes NewTenantMiddleware authorize from
-	// fleet-tenancy-api instead of this app's own tenant_users table.
-	//
-	// TEMPORARY. It exists so the switch is reversible without a rollback
-	// build, and for no other reason. Once the tenancy path has run in
-	// production, delete this flag and the local path together: leaving both
-	// means two answers to one question, which is the condition the shared
-	// service exists to end. Grep for it when cutover is confirmed.
-	TenancyAuthzEnabled bool `yaml:"TENANCY_AUTHZ_ENABLED"`
-
 	// DIMO Identity API
 	IdentityAPIEndpoint url.URL `yaml:"IDENTITY_API_ENDPOINT"`
 
