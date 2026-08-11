@@ -1,34 +1,34 @@
 package app
 
 import (
-	"github.com/DIMO-Network/fleet-lite-app/internal/config"
+	"database/sql"
+	"errors"
+
 	"github.com/DIMO-Network/fleet-lite-app/internal/controllers"
 	"github.com/DIMO-Network/fleet-lite-app/internal/gateway"
 	"github.com/DIMO-Network/fleet-lite-app/internal/service"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
 )
 
 // NewTenantMiddleware resolves and authorizes the current tenant for a request.
-// It reads the `Tenant-Id` header, verifies the JWT wallet may act in that
-// tenant, loads the tenant (with decrypted DIMO credentials), and stashes it at
+// It reads the `Tenant-Id` header, asks fleet-tenancy-api whether the JWT's
+// wallet may act in that tenant, and stashes the resolved tenant at
 // c.Locals(controllers.TenantLocalsKey) for downstream handlers.
 //
-// Two implementations, selected by Settings.TenancyAuthzEnabled:
-//
-//   - fleet-tenancy-api (`authorizeViaTenancy`) — the shared source of truth.
-//   - this app's own tenant_users table (`authorizeLocally`) — what shipped
-//     before, kept only so the flag can be turned back off.
-//
-// The flag exists to make the switch reversible without a rollback build. Once
-// the tenancy path has run in production, delete the flag and the local path
-// together — leaving both means two answers to one question, which is the
+// fleet-tenancy-api is the only source of this answer. This app's own
+// tenant_users table is no longer consulted for authorization — it was read
+// here until cutover, and both the flag and that path were removed once the
+// tenancy path had run in production. Two answers to one question is the
 // condition the shared service exists to end.
+//
+// tenant_users still exists and is still written (invitations, member
+// management), and the backfill re-reads it; it simply no longer decides
+// access. Anything that reintroduces a local authorization read here should
+// instead be a capability in the shared model.
 func NewTenantMiddleware(
 	tenantSvc *service.TenantService,
 	tenancyAPI *gateway.TenancyAPI,
-	settings *config.Settings,
 	logger *zerolog.Logger,
 ) fiber.Handler {
 	return func(c *fiber.Ctx) error {
@@ -42,63 +42,54 @@ func NewTenantMiddleware(
 			return fiber.NewError(fiber.StatusBadRequest, "Tenant-Id header is required")
 		}
 
-		if settings.TenancyAuthzEnabled {
-			return authorizeViaTenancy(c, tenantSvc, tenancyAPI, logger, tenantID, wallet)
+		// The tenant loads before the authorization check because asking the
+		// tenancy service requires authenticating as the tenant being asked
+		// about, so its credentials are needed before the question can be put.
+		//
+		// That means credentials are decrypted for a caller not yet known to be
+		// a member. Nothing leaves the process — the client sends a minted JWT,
+		// never the key — but it is work done on an unauthenticated caller's
+		// behalf, so a bad Tenant-Id costs a decrypt.
+		tenant, err := tenantSvc.GetTenantByID(c.Context(), tenantID)
+		if err != nil {
+			// An unknown tenant is the caller naming something that does not
+			// exist, not a fault here. 403 rather than 404 for the same reason
+			// the tenancy service uses it: a 404 would let a caller probe which
+			// tenant ids are real.
+			if errors.Is(err, sql.ErrNoRows) {
+				return fiber.NewError(fiber.StatusForbidden, "no access to tenant")
+			}
+			logger.Err(err).Str("tenant_id", tenantID).Msg("load tenant")
+			return fiber.NewError(fiber.StatusInternalServerError, "failed to load tenant")
 		}
-		return authorizeLocally(c, tenantSvc, logger, tenantID, wallet)
-	}
-}
 
-// authorizeViaTenancy asks fleet-tenancy-api what this wallet may do here.
-func authorizeViaTenancy(
-	c *fiber.Ctx,
-	tenantSvc *service.TenantService,
-	tenancyAPI *gateway.TenancyAPI,
-	logger *zerolog.Logger,
-	tenantID string,
-	wallet common.Address,
-) error {
-	// The tenant loads first here, where the local path loads it last. Asking
-	// the tenancy service requires authenticating as the tenant being asked
-	// about, so its credentials are needed before the question can be put.
-	//
-	// That means credentials are decrypted for a caller not yet known to be a
-	// member. Nothing leaves the process — the tenancy client sends a minted
-	// JWT, never the key — but it is work done on an unauthenticated caller's
-	// behalf, so a bad Tenant-Id costs a decrypt. Acceptable; unavoidable
-	// without a second, unauthenticated lookup path.
-	tenant, err := tenantSvc.GetTenantByID(c.Context(), tenantID)
-	if err != nil {
-		logger.Err(err).Str("tenant_id", tenantID).Msg("load tenant")
-		return fiber.NewError(fiber.StatusInternalServerError, "failed to load tenant")
-	}
-
-	res, err := tenancyAPI.Authz(c.Context(), *tenant, wallet.Hex())
-	if err != nil {
-		// Fail closed. Falling back to the local table on error would mean the
-		// two sources silently swap under load, and every disagreement between
-		// them would surface only during an incident — the worst moment to
-		// discover one. 503 rather than 403: this is our failure, not theirs.
-		logger.Err(err).Str("tenant_id", tenantID).Str("wallet", wallet.Hex()).
-			Msg("tenancy authorization unavailable")
-		return fiber.NewError(fiber.StatusServiceUnavailable, "authorization service unavailable")
-	}
-
-	decision := decideTenancyAccess(res)
-	if !decision.Allowed {
-		if decision.Delegated {
-			logger.Warn().Str("tenant_id", tenantID).Str("wallet", wallet.Hex()).
-				Msg("refusing delegated access to a fleet-lite session")
+		res, err := tenancyAPI.Authz(c.Context(), *tenant, wallet.Hex())
+		if err != nil {
+			// Fail closed. There is deliberately no local fallback: a second
+			// source consulted only during an incident is a second source
+			// nobody has verified. 503 rather than 403 — this is our failure,
+			// not the caller's.
+			logger.Err(err).Str("tenant_id", tenantID).Str("wallet", wallet.Hex()).
+				Msg("tenancy authorization unavailable")
+			return fiber.NewError(fiber.StatusServiceUnavailable, "authorization service unavailable")
 		}
-		return fiber.NewError(fiber.StatusForbidden, "no access to tenant")
-	}
 
-	c.Locals(controllers.TenantLocalsKey, *tenant)
-	c.Locals(controllers.RoleLocalsKey, decision.Role)
-	if decision.Limited {
-		c.Locals(controllers.AllowedGroupsLocalsKey, decision.ScopeGroups)
+		decision := decideTenancyAccess(res)
+		if !decision.Allowed {
+			if decision.Delegated {
+				logger.Warn().Str("tenant_id", tenantID).Str("wallet", wallet.Hex()).
+					Msg("refusing delegated access to a fleet-lite session")
+			}
+			return fiber.NewError(fiber.StatusForbidden, "no access to tenant")
+		}
+
+		c.Locals(controllers.TenantLocalsKey, *tenant)
+		c.Locals(controllers.RoleLocalsKey, decision.Role)
+		if decision.Limited {
+			c.Locals(controllers.AllowedGroupsLocalsKey, decision.ScopeGroups)
+		}
+		return c.Next()
 	}
-	return c.Next()
 }
 
 // accessVia mirrors the tenancy service's models.AccessVia values.
@@ -151,34 +142,4 @@ func decideTenancyAccess(res *gateway.AuthzResult) tenancyDecision {
 		d.ScopeGroups = res.ScopeGroupIDs
 	}
 	return d
-}
-
-// authorizeLocally is the pre-cutover path, reading this app's own
-// tenant_users table. Delete it with the flag.
-func authorizeLocally(
-	c *fiber.Ctx,
-	tenantSvc *service.TenantService,
-	logger *zerolog.Logger,
-	tenantID string,
-	wallet common.Address,
-) error {
-	membership, err := tenantSvc.GetMembership(c.Context(), tenantID, wallet.Hex())
-	if err != nil || membership.Role == "" {
-		return fiber.NewError(fiber.StatusForbidden, "no access to tenant")
-	}
-
-	tenant, err := tenantSvc.GetTenantByID(c.Context(), tenantID)
-	if err != nil {
-		logger.Err(err).Str("tenant_id", tenantID).Msg("load tenant")
-		return fiber.NewError(fiber.StatusInternalServerError, "failed to load tenant")
-	}
-
-	c.Locals(controllers.TenantLocalsKey, *tenant)
-	c.Locals(controllers.RoleLocalsKey, membership.Role)
-	// Limited members carry their allowed group ids; owners and full-access
-	// members (NULL column) get no entry = unrestricted. See GROUP_ACCESS_PLAN.md.
-	if membership.Role != service.RoleOwner && membership.AllowedGroupIds != nil {
-		c.Locals(controllers.AllowedGroupsLocalsKey, []string(membership.AllowedGroupIds))
-	}
-	return c.Next()
 }

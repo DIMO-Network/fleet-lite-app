@@ -51,9 +51,6 @@ TELEMETRY_API_URL: https://telemetry-api.dimo.zone/query
 ## TRUSTED_CALLER_KEYS. Empty is fine until something actually calls it.
 TENANCY_API_URL: 'http://localhost:3010'
 TENANCY_API_KEY: ''
-## Authorize from the tenancy service instead of the local tenant_users table.
-## TEMPORARY — delete this flag and the local path once cutover is confirmed.
-TENANCY_AUTHZ_ENABLED: false
 
 ## Chain config (polygon mainnet)
 CHAIN_ID: 137
