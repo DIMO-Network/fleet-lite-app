@@ -59,6 +59,23 @@ type Settings struct {
 	// credential. Grep for it when the migration is done and delete the shim.
 	AllowLegacyEmptyEncKey bool `yaml:"ALLOW_LEGACY_EMPTY_ENC_KEY"`
 
+	// fleet-tenancy-api — the shared source of truth for tenants, users,
+	// memberships and entitlements. Cluster-internal only; its chart publishes
+	// no ingress, so TenancyAPIURL is a .svc.cluster.local address.
+	//
+	// Every /v1 request carries two headers answering two different questions:
+	// TenancyAPIKey as X-Tenancy-Key ("is this a trusted application?"), and a
+	// per-tenant developer-license JWT as Authorization ("which tenant is it
+	// acting as?"). Holding the key is not authority to act for a tenant — see
+	// gateway.TenancyAPI.
+	//
+	// Empty values are not a boot failure here, unlike TENANT_SECRET_ENC_KEY: a
+	// missing key costs a 401 on a call this app does not yet make, whereas a
+	// missing encryption key silently encrypts under a public constant. The
+	// client reports the misconfiguration when a call is actually attempted.
+	TenancyAPIURL url.URL `yaml:"TENANCY_API_URL"`
+	TenancyAPIKey string  `yaml:"TENANCY_API_KEY"` // secret
+
 	// DIMO Identity API
 	IdentityAPIEndpoint url.URL `yaml:"IDENTITY_API_ENDPOINT"`
 

@@ -45,6 +45,13 @@ ATTEST_API_URL:  https://attest.dimo.zone
 ## Telemetry (vehicle-details charts)
 TELEMETRY_API_URL: https://telemetry-api.dimo.zone/query
 
+## fleet-tenancy-api — shared tenants/users/memberships service.
+## Cluster-internal in prod (no ingress); locally, run it on :3010.
+## TENANCY_API_KEY must match this app's entry in the service's
+## TRUSTED_CALLER_KEYS. Empty is fine until something actually calls it.
+TENANCY_API_URL: 'http://localhost:3010'
+TENANCY_API_KEY: ''
+
 ## Chain config (polygon mainnet)
 CHAIN_ID: 137
 VEHICLE_NFT_ADDRESS: '0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF'
