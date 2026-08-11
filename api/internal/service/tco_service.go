@@ -155,7 +155,7 @@ func (s *TCOService) GetSettings(ctx context.Context, tenantID string, tokenID i
 	}
 	out := TCOSettings{VehicleTokenID: tokenID, Currency: row.Currency}
 	if row.PurchasePrice.Big != nil {
-		if f, ok := row.PurchasePrice.Big.Float64(); ok {
+		if f, ok := row.PurchasePrice.Float64(); ok {
 			out.PurchasePrice = &f
 		}
 	}
