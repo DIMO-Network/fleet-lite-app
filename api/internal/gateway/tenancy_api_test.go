@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/DIMO-Network/fleet-lite-app/internal/config"
 	"github.com/DIMO-Network/fleet-lite-app/internal/models"
@@ -228,4 +229,74 @@ func TestTenancyAPI_TrimsTrailingSlash(t *testing.T) {
 	_, err = api.Authz(context.Background(), testTenant, "0xabc")
 	require.NoError(t, err)
 	assert.Equal(t, "/v1/authz", gotPath)
+}
+
+// The middleware asks on every request, so a miss-per-request would hand the
+// tenancy service this app's entire request rate.
+func TestTenancyAPI_CachesSuccessfulAnswers(t *testing.T) {
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		_, _ = w.Write([]byte(`{"via":"direct","member":true,"role":"owner","cacheTtlSeconds":60}`))
+	}))
+	defer srv.Close()
+
+	api := newTestTenancyAPI(t, srv, "k")
+	for i := 0; i < 3; i++ {
+		res, err := api.Authz(context.Background(), testTenant, "0xabc")
+		require.NoError(t, err)
+		assert.True(t, res.Member)
+	}
+	assert.Equal(t, 1, calls, "expected the answer to be reused")
+
+	// Wallet casing differs between the two source systems; one person must not
+	// occupy two entries that could answer differently.
+	_, err := api.Authz(context.Background(), testTenant, "0xABC")
+	require.NoError(t, err)
+	assert.Equal(t, 1, calls, "casing must not split the cache")
+
+	// A different tenant is a different question.
+	other := models.Tenant{ID: "other-tenant", ClientID: "0xdef"}
+	_, err = api.Authz(context.Background(), other, "0xabc")
+	require.NoError(t, err)
+	assert.Equal(t, 2, calls)
+
+	// Reconciliation wants the service's current answer, not a remembered one.
+	_, err = api.AuthzFresh(context.Background(), testTenant, "0xabc")
+	require.NoError(t, err)
+	assert.Equal(t, 3, calls)
+}
+
+// Caching a rejection would outlive its own cause: a stale key or a brief
+// outage would keep failing after being fixed.
+func TestTenancyAPI_DoesNotCacheFailures(t *testing.T) {
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		if calls < 3 {
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"code":401,"message":"invalid X-Tenancy-Key"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"via":"direct","member":true}`))
+	}))
+	defer srv.Close()
+
+	api := newTestTenancyAPI(t, srv, "k")
+	_, err := api.Authz(context.Background(), testTenant, "0xabc")
+	require.Error(t, err)
+	_, err = api.Authz(context.Background(), testTenant, "0xabc")
+	require.Error(t, err)
+
+	res, err := api.Authz(context.Background(), testTenant, "0xabc")
+	require.NoError(t, err, "a recovered service must be reachable immediately")
+	assert.True(t, res.Member)
+	assert.Equal(t, 3, calls)
+}
+
+// A zero or negative TTL from the wire must not become "cache forever".
+func TestAuthzTTL(t *testing.T) {
+	assert.Equal(t, defaultAuthzTTL, authzTTL(0))
+	assert.Equal(t, defaultAuthzTTL, authzTTL(-5))
+	assert.Equal(t, 30*time.Second, authzTTL(30))
 }
