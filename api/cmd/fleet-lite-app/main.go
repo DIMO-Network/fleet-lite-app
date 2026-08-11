@@ -76,6 +76,7 @@ func main() {
 		subcommands.Register(&syncVehiclesCmd{logger: logger, settings: settings}, "vehicles")
 		subcommands.Register(&pruneUnsharedVehiclesCmd{logger: logger, settings: settings}, "vehicles")
 		subcommands.Register(&tenancyCheckCmd{logger: logger, settings: settings}, "tenancy")
+		subcommands.Register(&tenancyDiffCmd{logger: logger, settings: settings}, "tenancy")
 		subcommands.Register(&pushPostmarkTemplatesCmd{logger: logger, settings: settings}, "email")
 		subcommands.Register(&configurePostmarkWebhookCmd{logger: logger, settings: settings}, "email")
 		flag.Parse()
