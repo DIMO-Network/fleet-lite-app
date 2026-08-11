@@ -286,7 +286,7 @@ func (p *tenancyDiffCmd) Execute(ctx context.Context, _ *flag.FlagSet, _ ...inte
 			// checksum before asking so one person is one question.
 			wallet := common.HexToAddress(m.Wallet).Hex()
 
-			remote, aerr := tenancyAPI.Authz(ctx, *tenant, wallet)
+			remote, aerr := tenancyAPI.AuthzFresh(ctx, *tenant, wallet)
 			if aerr != nil {
 				p.logger.Err(aerr).Str("tenant_id", t.ID).Str("wallet", wallet).Msg("authz call failed")
 				return subcommands.ExitFailure

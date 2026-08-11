@@ -38,6 +38,7 @@ func App(
 	vehicleSvc *service.VehicleService,
 	groupSvc *service.FleetGroupService,
 	invitationSvc *service.InvitationService,
+	tenancyAPI *gateway.TenancyAPI,
 ) *fiber.App {
 	appCommitHash = commitHash
 
@@ -130,7 +131,7 @@ func App(
 	authApp.Post("/invitations/accept", invitationsCtrl.AcceptInvitation)
 
 	// Tenant-scoped data routes (JWT + Tenant-Id header membership check).
-	tenantApp := authApp.Group("", NewTenantMiddleware(tenantSvc, logger))
+	tenantApp := authApp.Group("", NewTenantMiddleware(tenantSvc, tenancyAPI, settings, logger))
 
 	// The caller's own role + group scope for the current tenant (drives
 	// role/scope-aware UI). See docs/GROUP_ACCESS_PLAN.md.

@@ -13,6 +13,7 @@ import (
 
 	"github.com/DIMO-Network/fleet-lite-app/internal/config"
 	"github.com/DIMO-Network/fleet-lite-app/internal/models"
+	"github.com/patrickmn/go-cache"
 	"github.com/rs/zerolog"
 )
 
@@ -46,7 +47,22 @@ type TenancyAPI struct {
 	baseURL      string
 	apiKey       string
 	client       *http.Client
+
+	// authzCache holds answers for the lifetime the service says they are good
+	// for. NewTenantMiddleware asks on every request, so without this the
+	// tenancy service takes this app's entire request rate.
+	//
+	// The cost is that revocation is eventually consistent by up to that window:
+	// remove a member and they keep their access for the remainder of it. The
+	// service sets the window and documents the same tradeoff; it is stated here
+	// too because this is where someone debugging "I removed them and they could
+	// still get in" will end up.
+	authzCache *cache.Cache
 }
+
+// defaultAuthzTTL is used when the service does not say. It matches the
+// service's own DefaultAuthzCacheTTLSeconds.
+const defaultAuthzTTL = 60 * time.Second
 
 // developerJWTProvider is the slice of DimoAuthProvider this client needs. Kept
 // as an interface so the header and error-classification behaviour is testable
@@ -161,7 +177,16 @@ func NewTenancyAPI(logger zerolog.Logger, settings *config.Settings, authProvide
 		baseURL:      strings.TrimSuffix(settings.TenancyAPIURL.String(), "/"),
 		apiKey:       settings.TenancyAPIKey,
 		client:       &http.Client{Timeout: tenancyTimeout},
+		authzCache:   cache.New(defaultAuthzTTL, 2*defaultAuthzTTL),
 	}
+}
+
+// authzCacheKey identifies one answer. The wallet is lowercased because the
+// question "may this wallet act in this tenant" does not depend on casing, and
+// the two source systems disagree about it — one person must not occupy two
+// cache entries with potentially different answers.
+func authzCacheKey(tenantID, wallet string) string {
+	return tenantID + ":" + strings.ToLower(wallet)
 }
 
 // Configured reports whether both the URL and the key are set. Call sites that
@@ -180,6 +205,12 @@ func (t *TenancyAPI) Authz(ctx context.Context, tenant models.Tenant, wallet str
 	if wallet == "" {
 		return nil, fmt.Errorf("wallet is required")
 	}
+
+	key := authzCacheKey(tenant.ID, wallet)
+	if cached, found := t.authzCache.Get(key); found {
+		return cached.(*AuthzResult), nil
+	}
+
 	q := url.Values{}
 	q.Set("wallet", wallet)
 	q.Set("tenant_id", tenant.ID)
@@ -188,7 +219,28 @@ func (t *TenancyAPI) Authz(ctx context.Context, tenant models.Tenant, wallet str
 	if err := t.get(ctx, tenant, "/v1/authz?"+q.Encode(), &res); err != nil {
 		return nil, err
 	}
+
+	// Only successes are cached. Caching a rejection would extend an outage or
+	// a stale key past its cause — the failure would outlive the fix.
+	t.authzCache.Set(key, &res, authzTTL(res.CacheTTLSeconds))
 	return &res, nil
+}
+
+// AuthzFresh bypasses the cache. Reconciliation wants the service's current
+// answer, not one this process happened to read a minute ago.
+func (t *TenancyAPI) AuthzFresh(ctx context.Context, tenant models.Tenant, wallet string) (*AuthzResult, error) {
+	t.authzCache.Delete(authzCacheKey(tenant.ID, wallet))
+	return t.Authz(ctx, tenant, wallet)
+}
+
+// authzTTL converts the service's advertised lifetime into a duration, falling
+// back when it is absent or nonsensical. A zero or negative value from the wire
+// must not become "cache forever".
+func authzTTL(seconds int) time.Duration {
+	if seconds <= 0 {
+		return defaultAuthzTTL
+	}
+	return time.Duration(seconds) * time.Second
 }
 
 // get performs an authenticated GET and decodes the JSON body into out.
