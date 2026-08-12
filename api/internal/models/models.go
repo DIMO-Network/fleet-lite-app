@@ -19,6 +19,16 @@ type GroupRef struct {
 	ID    string `json:"id"`
 	Name  string `json:"name"`
 	Color string `json:"color"`
+
+	// AttestedAt is the time of the CloudEvent this reference was read from.
+	// Not part of the wire document — it is stamped by the reader.
+	//
+	// It exists because group metadata is carried redundantly on every member
+	// vehicle's attestation, so two vehicles in the same group can disagree
+	// about its name: one attested before a rename, one after. Without a
+	// timestamp there is no way to tell which is current, and the last vehicle
+	// processed wins — which is to say the name is decided by iteration order.
+	AttestedAt time.Time `json:"-"`
 }
 
 // Vehicle is the slim view of an identity-api vehicle node that fleet-lite-app cares about.
