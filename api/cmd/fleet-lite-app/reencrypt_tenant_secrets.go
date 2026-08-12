@@ -24,17 +24,20 @@ import (
 // perfectly valid AES-256 key that anyone can compute. Every stored credential
 // was protected by a public constant, with nothing errored and nothing logged.
 //
-// Rollout (no downtime, no window where the app can't read its own data):
+// That migration is complete, and the runtime fallback that read legacy rows
+// (ALLOW_LEGACY_EMPTY_ENC_KEY) has been removed — keeping it left the weak key
+// a valid way to read every credential. This command remains as the recovery
+// path and as the tool for ordinary key rotation.
 //
-//  1. Set TENANT_SECRET_ENC_KEY to a real key and ALLOW_LEGACY_EMPTY_ENC_KEY
-//     to true, and deploy. Reads try the new key, fall back to the old empty
-//     one; writes use the new key.
-//  2. Run this command. Every row is rewritten under the new key.
-//  3. Set ALLOW_LEGACY_EMPTY_ENC_KEY back to false and redeploy. The weak key
-//     stops being a valid way to read anything.
+// If a straggler row written under the empty key ever turns up, it now fails to
+// decrypt at runtime rather than being silently readable. Recover it with
+// `-from-empty-key`, which reads through DecryptSecretWith directly and does not
+// depend on any app setting.
 //
-// Doing it in the other order — rewriting before the app knows the new key —
-// breaks every tenant immediately.
+// For a real rotation (old key -> new key), the order matters: set
+// TENANT_SECRET_ENC_KEY to the new key and deploy first, then run this with
+// `-from-key <old>`. Rewriting before the app knows the new key breaks every
+// tenant immediately.
 type reencryptTenantSecretsCmd struct {
 	logger   zerolog.Logger
 	settings config.Settings
@@ -171,6 +174,6 @@ func (p *reencryptTenantSecretsCmd) Execute(ctx context.Context, _ *flag.FlagSet
 		return subcommands.ExitFailure
 	}
 
-	p.logger.Info().Int("reencrypted", len(todo)).Msg("done — now set ALLOW_LEGACY_EMPTY_ENC_KEY=false and redeploy")
+	p.logger.Info().Int("reencrypted", len(todo)).Msg("done — every row now reads under TENANT_SECRET_ENC_KEY")
 	return subcommands.ExitSuccess
 }

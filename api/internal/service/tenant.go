@@ -293,34 +293,23 @@ func encryptWith(passphrase, plaintext string) (string, error) {
 	return base64.StdEncoding.EncodeToString(combined), nil
 }
 
-// decryptSecret reverses encryptSecret, trying the configured key first and
-// falling back to the legacy empty key when AllowLegacyEmptyEncKey is set.
+// decryptSecret reverses encryptSecret.
 //
-// The fallback exists only to migrate rows written while TENANT_SECRET_ENC_KEY
-// was unset. GCM authenticates, so a successful Open is proof the key was right
-// — there is no risk of silently returning garbage from the wrong key. Remove
-// the fallback once reencrypt-tenant-secrets has run everywhere.
+// There is deliberately no fallback key. One existed to migrate rows written
+// while TENANT_SECRET_ENC_KEY was unset — those were encrypted under sha256(""),
+// a constant anyone can compute — and it was removed once the re-encryption had
+// run everywhere, because keeping it left the weak key a valid way to read every
+// credential.
+//
+// If a straggler row ever turns up, recovery does not need this code back:
+// `reencrypt-tenant-secrets -from-empty-key` reads it through DecryptSecretWith
+// and rewrites it under the real key. GCM authenticates, so a wrong key errors
+// rather than returning garbage.
 func (s *TenantService) decryptSecret(encB64 string) (string, error) {
 	if encB64 == "" {
 		return "", nil
 	}
-	plaintext, err := decryptWith(s.settings.TenantSecretEncKey, encB64)
-	if err == nil {
-		return plaintext, nil
-	}
-	if !s.settings.AllowLegacyEmptyEncKey || s.settings.TenantSecretEncKey == "" {
-		return "", err
-	}
-	// Legacy row: written under sha256("").
-	plaintext, legacyErr := decryptWith("", encB64)
-	if legacyErr != nil {
-		// Report the primary-key failure — the legacy attempt is a fallback, not
-		// the expected path, so its error is the less useful one.
-		return "", err
-	}
-	s.logger.Warn().Msg("tenant secret decrypted with the legacy empty key; " +
-		"run reencrypt-tenant-secrets")
-	return plaintext, nil
+	return decryptWith(s.settings.TenantSecretEncKey, encB64)
 }
 
 // decryptWith opens an AES-256-GCM payload produced by encryptSecret using a

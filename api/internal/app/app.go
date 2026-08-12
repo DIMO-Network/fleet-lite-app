@@ -235,6 +235,17 @@ func loadStaticIndex(ctx *fiber.Ctx) error {
 }
 
 // ErrorHandler logs the recovered error and returns JSON instead of a plain string.
+//
+// Client errors log at warn, server errors at error. The level is the point:
+// since authorization moved to fleet-tenancy-api, a 403 is the ordinary answer
+// for a wallet that is not a member of the requested tenant, and a 401 is the
+// ordinary answer to an expired session. Logging those at error level makes
+// routine enforcement indistinguishable from the app being broken, and feeds
+// any error-rate alerting built on this stream.
+//
+// The rejection is still recorded, at a level that says "this happened" rather
+// than "something is wrong". 404 stays silent: an unrouted path is neither a
+// fault nor worth a line per scan.
 func ErrorHandler(c *fiber.Ctx, err error, logger *zerolog.Logger) error {
 	code := fiber.StatusInternalServerError
 	var e *fiber.Error
@@ -243,7 +254,11 @@ func ErrorHandler(c *fiber.Ctx, err error, logger *zerolog.Logger) error {
 	}
 	c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
 	if code != fiber.StatusNotFound {
-		logger.Err(err).
+		ev := logger.Warn()
+		if code >= fiber.StatusInternalServerError {
+			ev = logger.Error()
+		}
+		ev.Err(err).
 			Str("httpStatusCode", strconv.Itoa(code)).
 			Str("httpMethod", c.Method()).
 			Str("httpPath", c.Path()).
