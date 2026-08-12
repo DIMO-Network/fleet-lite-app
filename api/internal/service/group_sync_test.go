@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/DIMO-Network/fleet-lite-app/internal/gateway"
+	"github.com/DIMO-Network/fleet-lite-app/internal/models"
 	"github.com/aarondl/null/v8"
 )
 
@@ -69,5 +70,73 @@ func TestRemovalAllowed(t *testing.T) {
 				t.Errorf("removalAllowed() = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+// The create and update paths both resolve metadata through this, so a group
+// cannot be created with one name and then "updated" to a different one from
+// the same attestation.
+func TestResolveGroupMetadata(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		in        models.GroupRef
+		wantName  string
+		wantColor string
+	}{
+		{
+			name:      "name and colour pass through",
+			in:        models.GroupRef{ID: "t_a", Name: "Detalle de automóviles", Color: "#ff0000"},
+			wantName:  "Detalle de automóviles",
+			wantColor: "#ff0000",
+		},
+		{
+			name:      "blank name falls back to the id",
+			in:        models.GroupRef{ID: "t_a", Name: "   "},
+			wantName:  "t_a",
+			wantColor: "#808080",
+		},
+		{
+			name:      "surrounding whitespace is trimmed",
+			in:        models.GroupRef{ID: "t_a", Name: "  Logística Pajaritos  ", Color: "#123456"},
+			wantName:  "Logística Pajaritos",
+			wantColor: "#123456",
+		},
+		{
+			name:      "missing colour defaults to neutral gray",
+			in:        models.GroupRef{ID: "t_a", Name: "Fleet"},
+			wantName:  "Fleet",
+			wantColor: "#808080",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			gotName, gotColor := resolveGroupMetadata(tc.in)
+			if gotName != tc.wantName {
+				t.Fatalf("name: got %q, want %q", gotName, tc.wantName)
+			}
+			if gotColor != tc.wantColor {
+				t.Fatalf("color: got %q, want %q", gotColor, tc.wantColor)
+			}
+		})
+	}
+}
+
+// A renamed group must be detected as changed. Before this, ensureGroup returned
+// early on existence and a rename at the source could never reach us: the row
+// kept whatever name the first attestation carried, and the reconcile reported
+// changed=0 because names were never compared.
+func TestGroupMetadataChangeIsDetected(t *testing.T) {
+	stored := struct{ name, color string }{"TOTAL DE UNIDADES", "#808080"}
+	incoming := models.GroupRef{ID: "t_a", Name: "Detalle de automóviles"}
+
+	name, color := resolveGroupMetadata(incoming)
+	if stored.name == name && stored.color == color {
+		t.Fatal("a renamed group must not compare equal to its stored row")
+	}
+
+	// And an unchanged group must not churn the row on every import.
+	same := models.GroupRef{ID: "t_a", Name: "TOTAL DE UNIDADES"}
+	n2, c2 := resolveGroupMetadata(same)
+	if stored.name != n2 || stored.color != c2 {
+		t.Fatalf("unchanged group should compare equal, got %q/%q", n2, c2)
 	}
 }

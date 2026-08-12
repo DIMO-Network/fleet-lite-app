@@ -351,35 +351,82 @@ func (s *GroupSyncService) reconcile(ctx context.Context, tenantID string, token
 	return added, removed, nil
 }
 
-// ensureGroup creates the fleet group if it does not already exist for the
-// tenant. Name defaults to the id, color to a neutral gray. A (tenant_id, name)
-// collision with a different id surfaces as an error so the caller can skip the
-// membership.
+// ensureGroup creates the fleet group for the tenant, or brings an existing
+// one's name and colour into line with the attestation. Name defaults to the
+// id, colour to a neutral gray. A (tenant_id, name) collision with a different
+// id surfaces as an error so the caller can skip the membership.
+//
+// THE ATTESTATION WINS on metadata. This used to be create-only, which meant a
+// group renamed at its source kept its original name here forever: the row was
+// written once from whatever attestation happened to be read first, and no
+// later import could correct it. A production group sat misnamed for a day
+// that way, and re-running the import could never have fixed it — the reconcile
+// reported "changed=0" because memberships were already correct and names were
+// never compared at all.
+//
+// The tradeoff, which is deliberate: a group renamed *here* is reverted on the
+// next import. fleet-lite's own PATCH republishes the group document, so in the
+// steady state the two converge on whichever side published last — but a local
+// rename made while the producer is silent will not stick. Group identity
+// already belongs to the producer (the id carries its tenant prefix, and
+// membership is reconciled from its attestations); letting metadata follow the
+// same owner keeps one source of truth rather than two that silently disagree.
 func (s *GroupSyncService) ensureGroup(ctx context.Context, tenantID string, g models.GroupRef, dryRun bool) error {
-	exists, err := dbmodels.FleetGroups(
+	name, color := resolveGroupMetadata(g)
+
+	existing, err := dbmodels.FleetGroups(
 		dbmodels.FleetGroupWhere.ID.EQ(g.ID),
 		dbmodels.FleetGroupWhere.TenantID.EQ(tenantID),
-	).Exists(ctx, s.pdb.DBS().Reader)
-	if err != nil {
+	).One(ctx, s.pdb.DBS().Reader)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
-	if exists {
-		return nil
+
+	if existing != nil {
+		if existing.Name == name && existing.Color == color {
+			return nil
+		}
+		if dryRun {
+			s.logger.Info().Str("tenant_id", tenantID).Str("group_id", g.ID).
+				Str("from_name", existing.Name).Str("to_name", name).
+				Str("from_color", existing.Color).Str("to_color", color).
+				Msg("would update group metadata")
+			return nil
+		}
+		s.logger.Info().Str("tenant_id", tenantID).Str("group_id", g.ID).
+			Str("from_name", existing.Name).Str("to_name", name).
+			Msg("updating group metadata from attestation")
+		existing.Name = name
+		existing.Color = color
+		_, uerr := existing.Update(ctx, s.pdb.DBS().Writer, boil.Whitelist("name", "color", "updated_at"))
+		return uerr
 	}
+
 	if dryRun {
-		s.logger.Info().Str("tenant_id", tenantID).Str("group_id", g.ID).Str("name", g.Name).
+		s.logger.Info().Str("tenant_id", tenantID).Str("group_id", g.ID).Str("name", name).
 			Msg("would create group")
 		return nil
 	}
 
-	name := strings.TrimSpace(g.Name)
+	group := &dbmodels.FleetGroup{ID: g.ID, Name: name, Color: color, TenantID: tenantID}
+	return group.Insert(ctx, s.pdb.DBS().Writer, boil.Infer())
+}
+
+// resolveGroupMetadata is what an attestation's group metadata becomes once
+// stored: the name falls back to the id and the colour to a neutral gray.
+//
+// Pure and separate from ensureGroup so the fallbacks can be asserted without a
+// database — and so the create and update paths cannot drift apart, which is how
+// a group could otherwise be created with one name and updated to another from
+// the same input.
+func resolveGroupMetadata(g models.GroupRef) (name, color string) {
+	name = strings.TrimSpace(g.Name)
 	if name == "" {
 		name = g.ID
 	}
-	color := g.Color
+	color = g.Color
 	if color == "" {
 		color = "#808080"
 	}
-	group := &dbmodels.FleetGroup{ID: g.ID, Name: name, Color: color, TenantID: tenantID}
-	return group.Insert(ctx, s.pdb.DBS().Writer, boil.Infer())
+	return name, color
 }
