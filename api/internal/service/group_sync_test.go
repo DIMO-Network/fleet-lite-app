@@ -7,6 +7,7 @@ import (
 	"github.com/DIMO-Network/fleet-lite-app/internal/gateway"
 	"github.com/DIMO-Network/fleet-lite-app/internal/models"
 	"github.com/aarondl/null/v8"
+	"github.com/rs/zerolog"
 )
 
 func TestRemovalAllowed(t *testing.T) {
@@ -138,5 +139,39 @@ func TestGroupMetadataChangeIsDetected(t *testing.T) {
 	n2, c2 := resolveGroupMetadata(same)
 	if stored.name != n2 || stored.color != c2 {
 		t.Fatalf("unchanged group should compare equal, got %q/%q", n2, c2)
+	}
+}
+
+// Group metadata rides on every member vehicle's attestation, so members
+// attested before and after a rename disagree. desiredGroups must surface the
+// newest, not whichever producer the map happened to yield last — otherwise the
+// stored name becomes a function of iteration order.
+func TestDesiredGroupsPrefersNewerAttestationForMetadata(t *testing.T) {
+	older := `{"groups":[{"id":"t_a","name":"TOTAL DE UNIDADES","color":"#808080"}]}`
+	newer := `{"groups":[{"id":"t_a","name":"Detalle de automóviles","color":"#808080"}]}`
+
+	entries := []gateway.AttestationEntry{
+		{Type: VehicleGroupsCloudEventType, Producer: "p1", Source: "p1",
+			Time: "2026-08-11T19:01:00Z", Data: []byte(older)},
+		{Type: VehicleGroupsCloudEventType, Producer: "p2", Source: "p2",
+			Time: "2026-08-12T11:18:00Z", Data: []byte(newer)},
+	}
+
+	got := desiredGroups(entries, zerolog.Nop(), 1, "t", false)
+	if len(got) != 1 {
+		t.Fatalf("expected one group, got %d", len(got))
+	}
+	if got[0].Name != "Detalle de automóviles" {
+		t.Fatalf("newer attestation must win, got %q", got[0].Name)
+	}
+	if got[0].AttestedAt.IsZero() {
+		t.Fatal("AttestedAt must be stamped so ensureGroup can compare against the row")
+	}
+
+	// Order of entries must not change the answer.
+	entries[0], entries[1] = entries[1], entries[0]
+	got = desiredGroups(entries, zerolog.Nop(), 1, "t", false)
+	if got[0].Name != "Detalle de automóviles" {
+		t.Fatalf("result must not depend on iteration order, got %q", got[0].Name)
 	}
 }

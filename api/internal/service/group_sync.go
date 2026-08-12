@@ -254,7 +254,10 @@ func desiredGroups(entries []gateway.AttestationEntry, logger zerolog.Logger, to
 				continue
 			}
 			g.ID = normID
-			if _, seen := byID[g.ID]; !seen {
+			// Stamp the CE's own time so ensureGroup can tell a current name
+			// from one attested before a rename.
+			g.AttestedAt = latestTime[producerKey(e)]
+			if prev, seen := byID[g.ID]; !seen || g.AttestedAt.After(prev.AttestedAt) {
 				byID[g.ID] = g
 			}
 		}
@@ -386,6 +389,25 @@ func (s *GroupSyncService) ensureGroup(ctx context.Context, tenantID string, g m
 		if existing.Name == name && existing.Color == color {
 			return nil
 		}
+		// Only a *newer* attestation may rewrite metadata.
+		//
+		// Group metadata is carried redundantly on every member vehicle's
+		// attestation, so members attested before a rename and after it
+		// disagree. Adopting whichever was read last makes the stored name a
+		// function of iteration order: a single import would rewrite the row
+		// once per member, and the surviving value was whichever vehicle
+		// happened to come last. Comparing against the row's own updated_at
+		// makes it monotonic — a rename at the source is newer and wins, a
+		// stale sibling is older and is ignored.
+		//
+		// This also protects a rename made here: the local write bumps
+		// updated_at, so only a genuinely later attestation supersedes it.
+		if !g.AttestedAt.After(existing.UpdatedAt) {
+			s.logger.Debug().Str("tenant_id", tenantID).Str("group_id", g.ID).
+				Time("attested_at", g.AttestedAt).Time("group_updated_at", existing.UpdatedAt).
+				Str("stale_name", name).Msg("ignoring group metadata older than the stored row")
+			return nil
+		}
 		if dryRun {
 			s.logger.Info().Str("tenant_id", tenantID).Str("group_id", g.ID).
 				Str("from_name", existing.Name).Str("to_name", name).
@@ -395,7 +417,8 @@ func (s *GroupSyncService) ensureGroup(ctx context.Context, tenantID string, g m
 		}
 		s.logger.Info().Str("tenant_id", tenantID).Str("group_id", g.ID).
 			Str("from_name", existing.Name).Str("to_name", name).
-			Msg("updating group metadata from attestation")
+			Time("attested_at", g.AttestedAt).
+			Msg("updating group metadata from a newer attestation")
 		existing.Name = name
 		existing.Color = color
 		_, uerr := existing.Update(ctx, s.pdb.DBS().Writer, boil.Whitelist("name", "color", "updated_at"))
