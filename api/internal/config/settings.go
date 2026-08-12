@@ -50,15 +50,6 @@ type Settings struct {
 	// them. See docs/operator-tenancy/07-r1-group-id-migration.md.
 	DropForeignTenantGroups bool `yaml:"DROP_FOREIGN_TENANT_GROUPS"`
 
-	// AllowLegacyEmptyEncKey lets decryption fall back to the sha256("") key for
-	// rows written while TENANT_SECRET_ENC_KEY was unset.
-	//
-	// TEMPORARY. Enable it only for the rollout window: set the real key, deploy,
-	// run `reencrypt-tenant-secrets`, then set this back to false and redeploy.
-	// Leaving it on indefinitely keeps the weak key a valid way to read every
-	// credential. Grep for it when the migration is done and delete the shim.
-	AllowLegacyEmptyEncKey bool `yaml:"ALLOW_LEGACY_EMPTY_ENC_KEY"`
-
 	// fleet-tenancy-api — the shared source of truth for tenants, users,
 	// memberships and entitlements. Cluster-internal only; its chart publishes
 	// no ingress, so TenancyAPIURL is a .svc.cluster.local address.
