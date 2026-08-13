@@ -1,10 +1,12 @@
 package controllers
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 
 	"github.com/DIMO-Network/fleet-lite-app/internal/models"
+	"github.com/DIMO-Network/fleet-lite-app/internal/service"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
@@ -36,6 +38,20 @@ func GetTenantRole(c *fiber.Ctx) string {
 func GetAllowedGroups(c *fiber.Ctx) (ids []string, limited bool) {
 	ids, limited = c.Locals(AllowedGroupsLocalsKey).([]string)
 	return ids, limited
+}
+
+// ScopeUnavailable maps a failure to resolve a limited member's fleet groups
+// into a 503, or returns nil if err is something else.
+//
+// 503 and not 403/404/500: the group structure comes from fleet-tenancy-api and
+// this mirrors NewTenantMiddleware's treatment of an unavailable authz answer —
+// our failure, not the caller's. Never recover by dropping the scope filter; an
+// unscoped answer here is the whole fleet.
+func ScopeUnavailable(err error) error {
+	if errors.Is(err, service.ErrGroupScopeUnavailable) {
+		return fiber.NewError(fiber.StatusServiceUnavailable, "authorization service unavailable")
+	}
+	return nil
 }
 
 // toSet builds a membership set from a slice of ids.

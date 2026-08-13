@@ -102,7 +102,7 @@ func (gc *GeofencesController) GetGeofences(c *fiber.Ctx) error {
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	rows, err := gc.geofences.ListGeofences(c.Context(), tenant.ID)
+	rows, err := gc.geofences.ListGeofences(c.Context(), tenant)
 	if err != nil {
 		gc.logger.Err(err).Str("tenant", tenant.ID).Msg("list geofences")
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to list geofences")
@@ -114,13 +114,27 @@ func (gc *GeofencesController) GetGeofences(c *fiber.Ctx) error {
 	// Limited members see counts over their accessible vehicles only. Geofence
 	// panels are small, so per-geofence recount is fine.
 	if allowed, limited := GetAllowedGroups(c); limited {
-		accessible, aerr := gc.vehicleSvc.AccessibleTokenIDs(c.Context(), tenant.ID, allowed)
+		accessible, aerr := gc.vehicleSvc.AccessibleTokenIDs(c.Context(), tenant, allowed)
 		if aerr != nil {
+			// The counts are per-member, so an unresolvable scope cannot be
+			// papered over with the tenant-wide numbers already in `out`.
+			if serr := ScopeUnavailable(aerr); serr != nil {
+				gc.logger.Err(aerr).Str("tenant", tenant.ID).Msg("fleet group scope unavailable")
+				return serr
+			}
 			gc.logger.Err(aerr).Str("tenant", tenant.ID).Msg("resolve accessible token ids for geofence counts")
 		} else {
 			for i, g := range rows {
-				ids, ierr := gc.geofences.EffectiveTokenIDs(c.Context(), tenant.ID, g.Geofence)
+				ids, ierr := gc.geofences.EffectiveTokenIDs(c.Context(), tenant, g.Geofence)
 				if ierr != nil {
+					if serr := ScopeUnavailable(ierr); serr != nil {
+						return serr
+					}
+					// Fail closed rather than `continue`: leaving the entry alone
+					// would show this limited member the tenant-wide count that
+					// out[i] still holds.
+					gc.logger.Err(ierr).Str("geofence", g.Geofence.ID).Msg("recount geofence vehicles for member")
+					out[i].VehicleCount = 0
 					continue
 				}
 				n := 0
@@ -146,11 +160,19 @@ func (gc *GeofencesController) GetGeofence(c *fiber.Ctx) error {
 	if err != nil {
 		return gc.mapServiceError(err, "get geofence")
 	}
-	ids, err := gc.geofences.EffectiveTokenIDs(c.Context(), tenant.ID, g)
+	ids, err := gc.geofences.EffectiveTokenIDs(c.Context(), tenant, g)
 	if err != nil {
+		if serr := ScopeUnavailable(err); serr != nil {
+			return serr
+		}
 		gc.logger.Err(err).Str("geofence", g.ID).Msg("count geofence vehicles")
 	}
-	if restricted, rerr := gc.restrictToAccessible(c, tenant.ID, ids); rerr == nil {
+	restricted, rerr := gc.restrictToAccessible(c, tenant, ids)
+	if rerr != nil {
+		if serr := ScopeUnavailable(rerr); serr != nil {
+			return serr
+		}
+	} else {
 		ids = restricted
 	}
 	return c.JSON(toGeofenceResponse(g, len(ids)))
@@ -170,13 +192,19 @@ func (gc *GeofencesController) GetGeofenceVehicles(c *fiber.Ctx) error {
 	if err != nil {
 		return gc.mapServiceError(err, "get geofence")
 	}
-	ids, err := gc.geofences.EffectiveTokenIDs(c.Context(), tenant.ID, g)
+	ids, err := gc.geofences.EffectiveTokenIDs(c.Context(), tenant, g)
 	if err != nil {
+		if serr := ScopeUnavailable(err); serr != nil {
+			return serr
+		}
 		gc.logger.Err(err).Str("geofence", g.ID).Msg("geofence vehicles")
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to load geofence vehicles")
 	}
-	ids, err = gc.restrictToAccessible(c, tenant.ID, ids)
+	ids, err = gc.restrictToAccessible(c, tenant, ids)
 	if err != nil {
+		if serr := ScopeUnavailable(err); serr != nil {
+			return serr
+		}
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to load geofence vehicles")
 	}
 	if ids == nil {
@@ -211,7 +239,7 @@ func (gc *GeofencesController) CreateGeofence(c *fiber.Ctx) error {
 	if len(req.Geometry) == 0 {
 		return fiber.NewError(fiber.StatusBadRequest, "geometry is required")
 	}
-	g, err := gc.geofences.CreateGeofence(c.Context(), tenant.ID, createdBy.Hex(), service.GeofenceInput{
+	g, err := gc.geofences.CreateGeofence(c.Context(), tenant, createdBy.Hex(), service.GeofenceInput{
 		Name:          req.Name,
 		Color:         req.Color,
 		Geometry:      req.Geometry,
@@ -242,7 +270,7 @@ func (gc *GeofencesController) UpdateGeofence(c *fiber.Ctx) error {
 	if req.Color != nil && *req.Color != "" && !hexColorRe.MatchString(*req.Color) {
 		return fiber.NewError(fiber.StatusBadRequest, "color must be a #RRGGBB hex value")
 	}
-	g, dropped, err := gc.geofences.UpdateGeofence(c.Context(), tenant.ID, c.Params("id"), service.GeofencePatch{
+	g, dropped, err := gc.geofences.UpdateGeofence(c.Context(), tenant, c.Params("id"), service.GeofencePatch{
 		Name:          req.Name,
 		Color:         req.Color,
 		Geometry:      req.Geometry,
@@ -257,7 +285,7 @@ func (gc *GeofencesController) UpdateGeofence(c *fiber.Ctx) error {
 	// dropped (scope moved off manual) get their per-vehicle CE republished too.
 	gc.republishCatalog(tenant)
 	gc.republishVehicles(tenant, dropped)
-	ids, _ := gc.geofences.EffectiveTokenIDs(c.Context(), tenant.ID, g)
+	ids, _ := gc.geofences.EffectiveTokenIDs(c.Context(), tenant, g)
 	return c.JSON(toGeofenceResponse(g, len(ids)))
 }
 
@@ -426,7 +454,10 @@ func (gc *GeofencesController) GetTripGeofences(c *fiber.Ctx) error {
 	}
 
 	if allowed, limited := GetAllowedGroups(c); limited {
-		if _, verr := gc.vehicleSvc.GetVehicle(c.Context(), tenant.ID, int64(tokenID), allowed); verr != nil {
+		if _, verr := gc.vehicleSvc.GetVehicle(c.Context(), tenant, int64(tokenID), allowed); verr != nil {
+			if serr := ScopeUnavailable(verr); serr != nil {
+				return serr
+			}
 			return fiber.NewError(fiber.StatusNotFound, "vehicle not found")
 		}
 	}
@@ -459,8 +490,11 @@ func (gc *GeofencesController) GetGeofenceScanTargets(c *fiber.Ctx) error {
 		return gc.mapServiceError(err, "geofence scan targets")
 	}
 	if _, limited := GetAllowedGroups(c); limited {
-		ids, err = gc.restrictToAccessible(c, tenant.ID, ids)
+		ids, err = gc.restrictToAccessible(c, tenant, ids)
 		if err != nil {
+			if serr := ScopeUnavailable(err); serr != nil {
+				return serr
+			}
 			return fiber.NewError(fiber.StatusInternalServerError, "failed to load scan targets")
 		}
 		// The member's effective scan set is what they can see, not the full fleet.
@@ -504,8 +538,11 @@ func (gc *GeofencesController) GetGeofencePasses(c *fiber.Ctx) error {
 		}
 	}
 
-	ids, err = gc.restrictToAccessible(c, tenant.ID, ids)
+	ids, err = gc.restrictToAccessible(c, tenant, ids)
 	if err != nil {
+		if serr := ScopeUnavailable(err); serr != nil {
+			return serr
+		}
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to load geofence passes")
 	}
 
@@ -521,14 +558,16 @@ func (gc *GeofencesController) GetGeofencePasses(c *fiber.Ctx) error {
 
 // restrictToAccessible intersects token ids with the vehicles a limited member
 // may see (union of their allowed groups). Unrestricted callers pass through.
-func (gc *GeofencesController) restrictToAccessible(c *fiber.Ctx, tenantID string, ids []int64) ([]int64, error) {
+func (gc *GeofencesController) restrictToAccessible(c *fiber.Ctx, tenant models.Tenant, ids []int64) ([]int64, error) {
 	allowed, limited := GetAllowedGroups(c)
 	if !limited || len(ids) == 0 {
 		return ids, nil
 	}
-	accessible, err := gc.vehicleSvc.AccessibleTokenIDs(c.Context(), tenantID, allowed)
+	accessible, err := gc.vehicleSvc.AccessibleTokenIDs(c.Context(), tenant, allowed)
 	if err != nil {
-		gc.logger.Err(err).Str("tenant", tenantID).Msg("resolve accessible token ids")
+		// Never return ids unfiltered on failure — that is the whole geofence's
+		// vehicle set handed to a member scoped to part of it.
+		gc.logger.Err(err).Str("tenant", tenant.ID).Msg("resolve accessible token ids")
 		return nil, err
 	}
 	kept := ids[:0:0]
@@ -543,6 +582,11 @@ func (gc *GeofencesController) restrictToAccessible(c *fiber.Ctx, tenantID strin
 // mapServiceError translates geofence service sentinel errors into HTTP errors.
 func (gc *GeofencesController) mapServiceError(err error, msg string) error {
 	switch {
+	case errors.Is(err, service.ErrGroupScopeUnavailable):
+		// A group-scoped geofence could not be validated or resolved against
+		// fleet-tenancy-api. Our failure, so 503 — and never a silent "no groups".
+		gc.logger.Err(err).Msg(msg)
+		return fiber.NewError(fiber.StatusServiceUnavailable, "authorization service unavailable")
 	case errors.Is(err, service.ErrGeofenceNotFound):
 		return fiber.NewError(fiber.StatusNotFound, "geofence not found")
 	case errors.Is(err, service.ErrVehicleNotFound):

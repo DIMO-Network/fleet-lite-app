@@ -21,13 +21,29 @@ import (
 // AccessibleTokenIDs returns the set of vehicle token ids a limited member may
 // touch (union of their allowed groups). Callers with unrestricted access
 // should not call this — pass-through their full sets instead.
-func (s *VehicleService) AccessibleTokenIDs(ctx context.Context, tenantID string, allowedGroupIDs []string) (map[int64]bool, error) {
+//
+// An empty result means "reaches nothing". There is no value of
+// allowedGroupIDs for which it means "reaches everything", and every caller
+// intersects against it rather than skipping the intersection when it is empty.
+func (s *VehicleService) AccessibleTokenIDs(ctx context.Context, tenant models.Tenant, allowedGroupIDs []string) (map[int64]bool, error) {
+	if s.groupsIndexed() {
+		idx, err := s.groups.groupIndex(ctx, tenant)
+		if err != nil {
+			return nil, err
+		}
+		ids := idx.TokenIDsForGroups(allowedGroupIDs)
+		out := make(map[int64]bool, len(ids))
+		for _, id := range ids {
+			out[id] = true
+		}
+		return out, nil
+	}
 	var rows []struct {
 		TokenID int64 `boil:"token_id"`
 	}
 	if err := queries.Raw(
 		`SELECT DISTINCT token_id FROM vehicle_fleet_groups WHERE tenant_id = $1 AND fleet_group_id = ANY($2)`,
-		tenantID, pq.Array(allowedGroupIDs),
+		tenant.ID, pq.Array(allowedGroupIDs),
 	).Bind(ctx, s.pdb.DBS().Reader, &rows); err != nil {
 		return nil, fmt.Errorf("accessible token ids: %w", err)
 	}
@@ -39,14 +55,28 @@ func (s *VehicleService) AccessibleTokenIDs(ctx context.Context, tenantID string
 }
 
 // allowedGroupsFilter restricts a vehicles query to tokens inside any of the
-// caller's allowed fleet groups. Only applied for limited members (non-nil
-// allowedGroupIDs) — ungrouped vehicles are deliberately invisible to them.
-// See docs/GROUP_ACCESS_PLAN.md.
+// caller's allowed fleet groups, via the local mirror. Only applied for limited
+// members (non-nil allowedGroupIDs) — ungrouped vehicles are deliberately
+// invisible to them. See docs/GROUP_ACCESS_PLAN.md.
 func allowedGroupsFilter(tenantID string, allowedGroupIDs []string) qm.QueryMod {
 	return qm.Where(
 		"token_id IN (SELECT token_id FROM vehicle_fleet_groups WHERE tenant_id = ? AND fleet_group_id = ANY(?))",
 		tenantID, pq.Array(allowedGroupIDs),
 	)
+}
+
+// allowedTokensFilter is allowedGroupsFilter's index-fed form: group membership
+// has already been resolved to a token-id set, so the filter is a plain
+// membership test.
+//
+// It is `= ANY(?)` and NOT `if len(tokenIDs) > 0 { apply }`. AN EMPTY SET MUST
+// MATCH ZERO VEHICLES. Postgres evaluates `token_id = ANY('{}')` to false for
+// every row, which is the answer; skipping the filter on an empty set would
+// hand a member scoped to empty (or vehicle-less) groups the entire fleet —
+// the inversion that gave 131 memberships a 524-vehicle fleet during the
+// backfill. TokenIDsForGroups never returns nil for the same reason.
+func allowedTokensFilter(tokenIDs []int64) qm.QueryMod {
+	return qm.Where("token_id = ANY(?)", pq.Array(tokenIDs))
 }
 
 // VehicleService syncs a tenant's privileged vehicles from identity-api into the
@@ -55,10 +85,38 @@ type VehicleService struct {
 	logger      *zerolog.Logger
 	pdb         *db.Store
 	identityAPI gateway.IdentityAPI
+
+	// groups resolves a limited member's fleet groups to token ids. nil (the
+	// sync-only construction in cmd/) or an unflagged source keeps every scope
+	// read on the local mirror.
+	groups groupIndexSource
 }
 
 func NewVehicleService(logger *zerolog.Logger, pdb *db.Store, identityAPI gateway.IdentityAPI) *VehicleService {
 	return &VehicleService{logger: logger, pdb: pdb, identityAPI: identityAPI}
+}
+
+// UseGroupIndex wires the group index that scopes limited members. Without it
+// the scope filters read the local mirror.
+func (s *VehicleService) UseGroupIndex(src groupIndexSource) { s.groups = src }
+
+func (s *VehicleService) groupsIndexed() bool { return s.groups != nil && s.groups.groupsIndexed() }
+
+// scopeFilter builds the limited-member vehicle filter for whichever read path
+// is active.
+//
+// A tenancy failure propagates as ErrGroupScopeUnavailable; it must never
+// degrade into an unfiltered query. Call this only when the caller is limited —
+// nil allowedGroupIDs means unrestricted and no filter at all.
+func (s *VehicleService) scopeFilter(ctx context.Context, tenant models.Tenant, allowedGroupIDs []string) (qm.QueryMod, error) {
+	if !s.groupsIndexed() {
+		return allowedGroupsFilter(tenant.ID, allowedGroupIDs), nil
+	}
+	idx, err := s.groups.groupIndex(ctx, tenant)
+	if err != nil {
+		return nil, err
+	}
+	return allowedTokensFilter(idx.TokenIDsForGroups(allowedGroupIDs)), nil
 }
 
 // SyncVehicles fetches the vehicles privileged to the tenant's developer-license
@@ -108,25 +166,32 @@ func (s *VehicleService) SyncVehicles(ctx context.Context, tenant *models.Tenant
 }
 
 // ListVehicles returns the tenant's synced vehicles in identity-api Vehicle
-// shape, with IsFavorite populated from the tenant's favorites. A non-nil
-// allowedGroupIDs limits the result to vehicles in those fleet groups (limited
-// members); nil means unrestricted.
-func (s *VehicleService) ListVehicles(ctx context.Context, tenantID string, allowedGroupIDs []string) ([]models.Vehicle, error) {
+// shape, with IsFavorite populated from the tenant's favorites.
+//
+// allowedGroupIDs carries the nil-vs-empty distinction from GetAllowedGroups
+// intact: nil is unrestricted and skips filtering entirely, non-nil is a
+// limited member and is ALWAYS filtered — an empty slice is a member who sees
+// nothing, not a member who sees everything.
+func (s *VehicleService) ListVehicles(ctx context.Context, tenant models.Tenant, allowedGroupIDs []string) ([]models.Vehicle, error) {
 	mods := []qm.QueryMod{
-		qm.Where("tenant_id = ?", tenantID),
+		qm.Where("tenant_id = ?", tenant.ID),
 		// Most-recently-seen first (the composite idx_vehicles_tenant_last_seen
 		// serves this filter+sort); never-seen vehicles sort last, token_id as a
 		// stable tiebreaker. Favourites are pinned to the top client-side.
 		qm.OrderBy("last_seen DESC NULLS LAST, token_id"),
 	}
 	if allowedGroupIDs != nil {
-		mods = append(mods, allowedGroupsFilter(tenantID, allowedGroupIDs))
+		filter, err := s.scopeFilter(ctx, tenant, allowedGroupIDs)
+		if err != nil {
+			return nil, err
+		}
+		mods = append(mods, filter)
 	}
 	rows, err := dbmodels.Vehicles(mods...).All(ctx, s.pdb.DBS().Reader)
 	if err != nil {
 		return nil, err
 	}
-	favorites, err := s.favoriteSet(ctx, tenantID)
+	favorites, err := s.favoriteSet(ctx, tenant.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -146,20 +211,24 @@ func (s *VehicleService) ListVehicles(ctx context.Context, tenantID string, allo
 // found. A non-nil allowedGroupIDs additionally requires the vehicle to be in
 // one of those groups — out-of-scope vehicles error exactly like nonexistent
 // ones, so limited members can't probe what exists.
-func (s *VehicleService) GetVehicle(ctx context.Context, tenantID string, tokenID int64, allowedGroupIDs []string) (*models.Vehicle, error) {
+func (s *VehicleService) GetVehicle(ctx context.Context, tenant models.Tenant, tokenID int64, allowedGroupIDs []string) (*models.Vehicle, error) {
 	mods := []qm.QueryMod{
-		qm.Where("tenant_id = ?", tenantID),
+		qm.Where("tenant_id = ?", tenant.ID),
 		qm.And("token_id = ?", tokenID),
 	}
 	if allowedGroupIDs != nil {
-		mods = append(mods, allowedGroupsFilter(tenantID, allowedGroupIDs))
+		filter, ferr := s.scopeFilter(ctx, tenant, allowedGroupIDs)
+		if ferr != nil {
+			return nil, ferr
+		}
+		mods = append(mods, filter)
 	}
 	r, err := dbmodels.Vehicles(mods...).One(ctx, s.pdb.DBS().Reader)
 	if err != nil {
 		return nil, err
 	}
 	v := rowToVehicle(r)
-	v.IsFavorite, err = s.IsFavorite(ctx, tenantID, tokenID)
+	v.IsFavorite, err = s.IsFavorite(ctx, tenant.ID, tokenID)
 	if err != nil {
 		return nil, err
 	}

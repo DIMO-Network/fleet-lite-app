@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/DIMO-Network/fleet-lite-app/internal/config"
+	"github.com/DIMO-Network/fleet-lite-app/internal/models"
 	"github.com/DIMO-Network/fleet-lite-app/internal/service"
 	"github.com/gofiber/fiber/v2"
 	"github.com/patrickmn/go-cache"
@@ -51,12 +52,22 @@ func NewTelemetryController(
 	}
 }
 
-// vehicleInTenant reports whether the tokenID is one of the tenant's synced
-// vehicles — and, for limited members, inside their allowed groups.
-func (t *TelemetryController) vehicleInTenant(c *fiber.Ctx, tenantID string, tokenID uint64) bool {
+// vehicleInTenant checks that the tokenID is one of the tenant's synced
+// vehicles — and, for limited members, inside their allowed groups. It returns
+// the fiber error to send, or nil when the vehicle is in scope.
+//
+// It returns an error rather than a bool so an unresolvable group scope can
+// surface as 503 instead of being flattened into "not part of this tenant".
+// Either way the caller is refused: this never opens up on failure.
+func (t *TelemetryController) vehicleInTenant(c *fiber.Ctx, tenant models.Tenant, tokenID uint64) error {
 	allowed, _ := GetAllowedGroups(c)
-	_, err := t.vehicleSvc.GetVehicle(c.Context(), tenantID, int64(tokenID), allowed)
-	return err == nil
+	if _, err := t.vehicleSvc.GetVehicle(c.Context(), tenant, int64(tokenID), allowed); err != nil {
+		if serr := ScopeUnavailable(err); serr != nil {
+			return serr
+		}
+		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
+	}
+	return nil
 }
 
 // isPermissionError matches authorization failures from either token-exchange-api
@@ -86,8 +97,8 @@ func (t *TelemetryController) GetLatest(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	if !t.vehicleInTenant(c, tenant.ID, tokenID) {
-		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
+	if err := t.vehicleInTenant(c, tenant, tokenID); err != nil {
+		return err
 	}
 
 	latest, err := t.telemetry.Latest(tenant, tokenID, curatedLatestSignals)
@@ -119,8 +130,11 @@ func (t *TelemetryController) GetFleetLocations(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 	allowed, _ := GetAllowedGroups(c)
-	vehicles, err := t.vehicleSvc.ListVehicles(c.Context(), tenant.ID, allowed)
+	vehicles, err := t.vehicleSvc.ListVehicles(c.Context(), tenant, allowed)
 	if err != nil {
+		if serr := ScopeUnavailable(err); serr != nil {
+			return serr
+		}
 		return fiber.NewError(fiber.StatusInternalServerError, "list vehicles: "+err.Error())
 	}
 	tokenIDs := make([]uint64, 0, len(vehicles))
@@ -200,8 +214,8 @@ func (t *TelemetryController) GetTimeSeries(c *fiber.Ctx) error {
 	if signal == "" || from == "" || to == "" {
 		return fiber.NewError(fiber.StatusBadRequest, "signal, from, to query params are required")
 	}
-	if !t.vehicleInTenant(c, tenant.ID, tokenID) {
-		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
+	if err := t.vehicleInTenant(c, tenant, tokenID); err != nil {
+		return err
 	}
 
 	buckets, err := t.telemetry.TimeSeries(tenant, tokenID, signal, from, to, interval)
@@ -243,8 +257,11 @@ func (t *TelemetryController) GetSegments(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "from, to query params are required")
 	}
 	allowedGroups, _ := GetAllowedGroups(c)
-	vehicle, verr := t.vehicleSvc.GetVehicle(c.Context(), tenant.ID, int64(tokenID), allowedGroups)
+	vehicle, verr := t.vehicleSvc.GetVehicle(c.Context(), tenant, int64(tokenID), allowedGroups)
 	if verr != nil {
+		if serr := ScopeUnavailable(verr); serr != nil {
+			return serr
+		}
 		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
 	}
 
@@ -304,8 +321,8 @@ func (t *TelemetryController) GetTripRoute(c *fiber.Ctx) error {
 	if from == "" || to == "" {
 		return fiber.NewError(fiber.StatusBadRequest, "from, to query params are required")
 	}
-	if !t.vehicleInTenant(c, tenant.ID, tokenID) {
-		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
+	if err := t.vehicleInTenant(c, tenant, tokenID); err != nil {
+		return err
 	}
 
 	points, err := t.telemetry.RoutePoints(tenant, tokenID, from, to)
@@ -336,8 +353,8 @@ func (t *TelemetryController) GetTripReplay(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	if !t.vehicleInTenant(c, tenant.ID, tokenID) {
-		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
+	if err := t.vehicleInTenant(c, tenant, tokenID); err != nil {
+		return err
 	}
 
 	from := c.Query("from")

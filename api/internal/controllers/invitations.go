@@ -108,6 +108,10 @@ func (ic *InvitationsController) CreateInvitation(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusCreated).JSON(toInvitationJSONWithEmail(inv, false))
 		}
 		// Nothing persisted — a real failure.
+		if serr := ScopeUnavailable(err); serr != nil {
+			ic.logger.Err(err).Str("tenant", c.Params("id")).Msg("fleet group scope unavailable")
+			return serr
+		}
 		ic.logger.Err(err).Str("tenant", c.Params("id")).Msg("create invitation")
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to create invitation")
 	}

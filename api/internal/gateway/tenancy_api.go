@@ -235,11 +235,14 @@ func (t *TenancyAPI) Authz(ctx context.Context, tenant models.Tenant, wallet str
 // VehicleGroups returns the tenant's whole fleet-group structure — every group
 // with its member token ids — from GET /v1/tenants/{id}/vehicle-groups.
 //
-// This is the P3 read path of the groups move: when GROUPS_FROM_TENANCY is on,
-// FleetGroupService serves its read surface from this call. Deliberately
-// uncached, unlike Authz: group reads are screen-shaped rather than
-// per-request, and a stale answer here would hide exactly the divergence the
-// P3 window exists to observe.
+// This is the read path of the groups move: when GROUPS_FROM_TENANCY is on,
+// FleetGroupService serves its whole read surface from this call.
+//
+// Uncached HERE, unlike Authz — but no longer uncached. Through P3 the premise
+// was that group reads are screen-shaped rather than per-request; P5 put the
+// vehicle scope filter on them, so they are per-request now, and
+// FleetGroupService caches the derived index. The cache is there rather than
+// here because only that service sees the group writes that must bust it.
 func (t *TenancyAPI) VehicleGroups(ctx context.Context, tenant models.Tenant) ([]models.RemoteFleetGroup, error) {
 	var res struct {
 		Groups []models.RemoteFleetGroup `json:"groups"`

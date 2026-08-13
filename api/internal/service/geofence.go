@@ -9,6 +9,7 @@ import (
 	"math"
 
 	dbmodels "github.com/DIMO-Network/fleet-lite-app/internal/db/models"
+	"github.com/DIMO-Network/fleet-lite-app/internal/models"
 	"github.com/DIMO-Network/shared/pkg/db"
 	"github.com/aarondl/null/v8"
 	"github.com/aarondl/sqlboiler/v4/boil"
@@ -114,10 +115,22 @@ func toGeofenceDef(g *dbmodels.Geofence) GeofenceDef {
 type GeofenceService struct {
 	logger *zerolog.Logger
 	pdb    *db.Store
+
+	// groups resolves a group-scoped geofence's groups to token ids, and
+	// validates group ids on write. nil (or an unflagged source) keeps both on
+	// the local mirror.
+	groups groupIndexSource
 }
 
 func NewGeofenceService(logger *zerolog.Logger, pdb *db.Store) *GeofenceService {
 	return &GeofenceService{logger: logger, pdb: pdb}
+}
+
+// UseGroupIndex wires the group index that resolves the "group" scope.
+func (s *GeofenceService) UseGroupIndex(src groupIndexSource) { s.groups = src }
+
+func (s *GeofenceService) groupsIndexed() bool {
+	return s.groups != nil && s.groups.groupsIndexed()
 }
 
 func validScope(s string) bool {
@@ -131,9 +144,9 @@ func validScope(s string) bool {
 
 // ListGeofences returns the tenant's geofences with effective vehicle counts,
 // ordered by name.
-func (s *GeofenceService) ListGeofences(ctx context.Context, tenantID string) ([]GeofenceWithCount, error) {
+func (s *GeofenceService) ListGeofences(ctx context.Context, tenant models.Tenant) ([]GeofenceWithCount, error) {
 	rows, err := dbmodels.Geofences(
-		dbmodels.GeofenceWhere.TenantID.EQ(tenantID),
+		dbmodels.GeofenceWhere.TenantID.EQ(tenant.ID),
 		qm.OrderBy("name"),
 	).All(ctx, s.pdb.DBS().Reader)
 	if err != nil {
@@ -141,7 +154,7 @@ func (s *GeofenceService) ListGeofences(ctx context.Context, tenantID string) ([
 	}
 	out := make([]GeofenceWithCount, len(rows))
 	for i, g := range rows {
-		count, cerr := s.vehicleCount(ctx, tenantID, g)
+		count, cerr := s.vehicleCount(ctx, tenant, g)
 		if cerr != nil {
 			s.logger.Warn().Err(cerr).Str("geofence", g.ID).Msg("count geofence vehicles")
 		}
@@ -167,7 +180,7 @@ func (s *GeofenceService) GetGeofence(ctx context.Context, tenantID, id string) 
 
 // CreateGeofence creates a tenant-scoped geofence with a slug id derived from
 // the name. Validates scope/groups/geometry and computes the geodesic area.
-func (s *GeofenceService) CreateGeofence(ctx context.Context, tenantID, createdBy string, in GeofenceInput) (*dbmodels.Geofence, error) {
+func (s *GeofenceService) CreateGeofence(ctx context.Context, tenant models.Tenant, createdBy string, in GeofenceInput) (*dbmodels.Geofence, error) {
 	scope := in.Scope
 	if scope == "" {
 		scope = GeofenceScopeAll
@@ -176,7 +189,7 @@ func (s *GeofenceService) CreateGeofence(ctx context.Context, tenantID, createdB
 		return nil, ErrInvalidScope
 	}
 
-	groupIDs, err := s.normalizeGroups(ctx, tenantID, scope, in.GroupIDs)
+	groupIDs, err := s.normalizeGroups(ctx, tenant, scope, in.GroupIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +206,7 @@ func (s *GeofenceService) CreateGeofence(ctx context.Context, tenantID, createdB
 
 	g := &dbmodels.Geofence{
 		ID:            id,
-		TenantID:      tenantID,
+		TenantID:      tenant.ID,
 		Name:          in.Name,
 		Color:         in.Color,
 		Geometry:      types.JSON(in.Geometry),
@@ -218,8 +231,8 @@ func (s *GeofenceService) CreateGeofence(ctx context.Context, tenantID, createdB
 // The returned token-id slice is the set of vehicles whose manual assignment
 // was dropped because the scope moved away from manual — the caller republishes
 // their per-vehicle attestation (which no longer includes this geofence).
-func (s *GeofenceService) UpdateGeofence(ctx context.Context, tenantID, id string, p GeofencePatch) (*dbmodels.Geofence, []int64, error) {
-	g, err := s.GetGeofence(ctx, tenantID, id)
+func (s *GeofenceService) UpdateGeofence(ctx context.Context, tenant models.Tenant, id string, p GeofencePatch) (*dbmodels.Geofence, []int64, error) {
+	g, err := s.GetGeofence(ctx, tenant.ID, id)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -260,7 +273,7 @@ func (s *GeofenceService) UpdateGeofence(ctx context.Context, tenantID, id strin
 	if p.GroupIDs != nil {
 		newGroups = p.GroupIDs
 	}
-	normGroups, err := s.normalizeGroups(ctx, tenantID, newScope, newGroups)
+	normGroups, err := s.normalizeGroups(ctx, tenant, newScope, newGroups)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -283,9 +296,9 @@ func (s *GeofenceService) UpdateGeofence(ctx context.Context, tenantID, id strin
 	// affected vehicles first so the caller can republish their per-vehicle CE.
 	var dropped []int64
 	if g.Scope != GeofenceScopeManual {
-		dropped, _ = s.manualMemberTokenIDs(ctx, tenantID, g.ID)
+		dropped, _ = s.manualMemberTokenIDs(ctx, tenant.ID, g.ID)
 		if _, derr := dbmodels.VehicleGeofences(
-			dbmodels.VehicleGeofenceWhere.TenantID.EQ(tenantID),
+			dbmodels.VehicleGeofenceWhere.TenantID.EQ(tenant.ID),
 			dbmodels.VehicleGeofenceWhere.GeofenceID.EQ(g.ID),
 		).DeleteAll(ctx, s.pdb.DBS().Writer); derr != nil {
 			s.logger.Warn().Err(derr).Str("geofence", g.ID).Msg("drop stale manual assignments")
@@ -389,23 +402,32 @@ func (s *GeofenceService) RemoveVehicle(ctx context.Context, tenantID string, to
 // EffectiveTokenIDs resolves a geofence's scope to the set of vehicle token ids
 // it currently applies to (tenant-scoped). Shared by the management UI counts
 // and the future write-path attestation fan-out.
-func (s *GeofenceService) EffectiveTokenIDs(ctx context.Context, tenantID string, g *dbmodels.Geofence) ([]int64, error) {
+// A group-scoped geofence with no member vehicles resolves to an empty set, and
+// callers intersect against it — never treat empty as "every vehicle".
+func (s *GeofenceService) EffectiveTokenIDs(ctx context.Context, tenant models.Tenant, g *dbmodels.Geofence) ([]int64, error) {
 	var q string
 	var args []interface{}
 	switch g.Scope {
 	case GeofenceScopeManual:
 		q = `SELECT token_id FROM vehicle_geofences WHERE tenant_id = $1 AND geofence_id = $2 ORDER BY token_id`
-		args = []interface{}{tenantID, g.ID}
+		args = []interface{}{tenant.ID, g.ID}
 	case GeofenceScopeGroup:
 		if len(g.GroupIds) == 0 {
 			return []int64{}, nil
 		}
+		if s.groupsIndexed() {
+			idx, ierr := s.groups.groupIndex(ctx, tenant)
+			if ierr != nil {
+				return nil, ierr
+			}
+			return idx.TokenIDsForGroups([]string(g.GroupIds)), nil
+		}
 		q = `SELECT DISTINCT token_id FROM vehicle_fleet_groups
 		     WHERE tenant_id = $1 AND fleet_group_id = ANY($2) ORDER BY token_id`
-		args = []interface{}{tenantID, pq.Array([]string(g.GroupIds))}
+		args = []interface{}{tenant.ID, pq.Array([]string(g.GroupIds))}
 	default: // all
 		q = `SELECT token_id FROM vehicles WHERE tenant_id = $1 ORDER BY token_id`
-		args = []interface{}{tenantID}
+		args = []interface{}{tenant.ID}
 	}
 	var rows []struct {
 		TokenID int64 `boil:"token_id"`
@@ -458,11 +480,11 @@ func (s *GeofenceService) VehicleManualGeofenceIDs(ctx context.Context, tenantID
 
 // vehicleCount returns the effective vehicle count for a geofence without
 // materialising the id list (cheaper for the "all" scope on large fleets).
-func (s *GeofenceService) vehicleCount(ctx context.Context, tenantID string, g *dbmodels.Geofence) (int, error) {
+func (s *GeofenceService) vehicleCount(ctx context.Context, tenant models.Tenant, g *dbmodels.Geofence) (int, error) {
 	switch g.Scope {
 	case GeofenceScopeManual:
 		n, err := dbmodels.VehicleGeofences(
-			dbmodels.VehicleGeofenceWhere.TenantID.EQ(tenantID),
+			dbmodels.VehicleGeofenceWhere.TenantID.EQ(tenant.ID),
 			dbmodels.VehicleGeofenceWhere.GeofenceID.EQ(g.ID),
 		).Count(ctx, s.pdb.DBS().Reader)
 		return int(n), err
@@ -470,17 +492,24 @@ func (s *GeofenceService) vehicleCount(ctx context.Context, tenantID string, g *
 		if len(g.GroupIds) == 0 {
 			return 0, nil
 		}
+		if s.groupsIndexed() {
+			idx, err := s.groups.groupIndex(ctx, tenant)
+			if err != nil {
+				return 0, err
+			}
+			return idx.CountForGroups([]string(g.GroupIds)), nil
+		}
 		var row struct {
 			C int `boil:"c"`
 		}
 		err := queries.Raw(
 			`SELECT COUNT(DISTINCT token_id) AS c FROM vehicle_fleet_groups
 			 WHERE tenant_id = $1 AND fleet_group_id = ANY($2)`,
-			tenantID, pq.Array([]string(g.GroupIds)),
+			tenant.ID, pq.Array([]string(g.GroupIds)),
 		).Bind(ctx, s.pdb.DBS().Reader, &row)
 		return row.C, err
 	default: // all
-		n, err := dbmodels.Vehicles(dbmodels.VehicleWhere.TenantID.EQ(tenantID)).Count(ctx, s.pdb.DBS().Reader)
+		n, err := dbmodels.Vehicles(dbmodels.VehicleWhere.TenantID.EQ(tenant.ID)).Count(ctx, s.pdb.DBS().Reader)
 		return int(n), err
 	}
 }
@@ -488,7 +517,7 @@ func (s *GeofenceService) vehicleCount(ctx context.Context, tenantID string, g *
 // normalizeGroups validates and normalizes group ids against a scope: for the
 // group scope they must be non-empty and all belong to the tenant; for any
 // other scope the list is cleared to nil.
-func (s *GeofenceService) normalizeGroups(ctx context.Context, tenantID, scope string, groupIDs []string) ([]string, error) {
+func (s *GeofenceService) normalizeGroups(ctx context.Context, tenant models.Tenant, scope string, groupIDs []string) ([]string, error) {
 	if scope != GeofenceScopeGroup {
 		// Non-nil empty slice: the group_ids column is NOT NULL, and a nil
 		// types.StringArray marshals to SQL NULL (a nil slice violates the
@@ -499,8 +528,18 @@ func (s *GeofenceService) normalizeGroups(ctx context.Context, tenantID, scope s
 	if len(uniq) == 0 {
 		return nil, ErrGroupScopeNeedsGroups
 	}
+	if s.groupsIndexed() {
+		idx, err := s.groups.groupIndex(ctx, tenant)
+		if err != nil {
+			return nil, err
+		}
+		if !idx.AllExist(uniq) {
+			return nil, ErrUnknownGroup
+		}
+		return uniq, nil
+	}
 	n, err := dbmodels.FleetGroups(
-		dbmodels.FleetGroupWhere.TenantID.EQ(tenantID),
+		dbmodels.FleetGroupWhere.TenantID.EQ(tenant.ID),
 		dbmodels.FleetGroupWhere.ID.IN(uniq),
 	).Count(ctx, s.pdb.DBS().Reader)
 	if err != nil {
