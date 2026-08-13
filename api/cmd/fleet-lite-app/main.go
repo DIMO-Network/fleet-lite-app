@@ -102,8 +102,10 @@ func main() {
 	postmarkAPI := gateway.NewPostmarkAPI(logger, &settings)
 	invitationSvc := service.NewInvitationService(&logger, &pdb, &settings, tenantSvc, postmarkAPI)
 	tenancyAPI := gateway.NewTenancyAPI(logger, &settings, authProvider)
+	// Group writes go through tenancy unconditionally since P4; the flag only
+	// chooses where the display reads come from.
+	groupSvc.UseTenancy(tenancyAPI, settings.GroupsFromTenancy)
 	if settings.GroupsFromTenancy {
-		groupSvc.UseTenancyReads(tenancyAPI)
 		logger.Info().Msg("GROUPS_FROM_TENANCY is on — fleet-group reads served from fleet-tenancy-api")
 	}
 

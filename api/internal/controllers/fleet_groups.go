@@ -134,7 +134,7 @@ func (fc *FleetGroupsController) CreateGroup(c *fiber.Ctx) error {
 	if !hexColorRe.MatchString(req.Color) {
 		return fiber.NewError(fiber.StatusBadRequest, "color must be a #RRGGBB hex value")
 	}
-	g, err := fc.groups.CreateGroup(c.Context(), tenant.ID, req.Name, req.Color)
+	g, err := fc.groups.CreateGroup(c.Context(), tenant, req.Name, req.Color)
 	if err != nil {
 		return fc.mapServiceError(err, "create fleet group")
 	}
@@ -157,7 +157,7 @@ func (fc *FleetGroupsController) UpdateGroup(c *fiber.Ctx) error {
 	if req.Color != nil && *req.Color != "" && !hexColorRe.MatchString(*req.Color) {
 		return fiber.NewError(fiber.StatusBadRequest, "color must be a #RRGGBB hex value")
 	}
-	g, err := fc.groups.UpdateGroup(c.Context(), tenant.ID, c.Params("id"), req.Name, req.Color)
+	g, err := fc.groups.UpdateGroup(c.Context(), tenant, c.Params("id"), req.Name, req.Color)
 	if err != nil {
 		return fc.mapServiceError(err, "update fleet group")
 	}
@@ -182,7 +182,7 @@ func (fc *FleetGroupsController) DeleteGroup(c *fiber.Ctx) error {
 	if err != nil {
 		fc.logger.Err(err).Str("group", groupID).Msg("load members before delete")
 	}
-	if err := fc.groups.DeleteGroup(c.Context(), tenant.ID, groupID); err != nil {
+	if err := fc.groups.DeleteGroup(c.Context(), tenant, groupID); err != nil {
 		return fc.mapServiceError(err, "delete fleet group")
 	}
 	// Re-publish each former member without this group (LoadVehicleGroups now
@@ -205,7 +205,7 @@ func (fc *FleetGroupsController) AddVehicleToGroup(c *fiber.Ctx) error {
 		return err
 	}
 	groupID := c.Params("groupID")
-	if _, err := fc.groups.AddVehicle(c.Context(), tenant.ID, int64(tokenID), groupID); err != nil {
+	if _, err := fc.groups.AddVehicle(c.Context(), tenant, int64(tokenID), groupID); err != nil {
 		return fc.mapServiceError(err, "add vehicle to group")
 	}
 	fc.republishVehicle(tenant, int64(tokenID))
@@ -226,7 +226,7 @@ func (fc *FleetGroupsController) RemoveVehicleFromGroup(c *fiber.Ctx) error {
 		return err
 	}
 	groupID := c.Params("groupID")
-	if _, err := fc.groups.RemoveVehicle(c.Context(), tenant.ID, int64(tokenID), groupID); err != nil {
+	if _, err := fc.groups.RemoveVehicle(c.Context(), tenant, int64(tokenID), groupID); err != nil {
 		return fc.mapServiceError(err, "remove vehicle from group")
 	}
 	fc.republishVehicle(tenant, int64(tokenID))
