@@ -67,6 +67,17 @@ type Settings struct {
 	TenancyAPIURL url.URL `yaml:"TENANCY_API_URL"`
 	TenancyAPIKey string  `yaml:"TENANCY_API_KEY"` // secret
 
+	// GroupsFromTenancy flips fleet-group READS to fleet-tenancy-api — P3 of
+	// the groups move (fleet-tenancy-api docs/plans/01-groups-into-tenancy.md).
+	// Writes and the attestation sync stay local either way; they move in P4.
+	//
+	// TEMPORARY, like TENANCY_AUTHZ_ENABLED was: it exists so the read path can
+	// be proven (and reverted) independently of the write cutover, and is
+	// deleted in P4 when the local tables stop being written. While it is on,
+	// a local group write is served back only after the next backfill-groups
+	// run — `groups-diff` is what watches that gap.
+	GroupsFromTenancy bool `yaml:"GROUPS_FROM_TENANCY"`
+
 	// DIMO Identity API
 	IdentityAPIEndpoint url.URL `yaml:"IDENTITY_API_ENDPOINT"`
 

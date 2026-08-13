@@ -300,3 +300,42 @@ func TestAuthzTTL(t *testing.T) {
 	assert.Equal(t, defaultAuthzTTL, authzTTL(-5))
 	assert.Equal(t, 30*time.Second, authzTTL(30))
 }
+
+// VehicleGroups drives the P3 flagged read path, so what matters is the URL it
+// builds and that the member arrays survive decoding intact.
+func TestTenancyAPI_VehicleGroups(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v1/tenants/"+testTenant.ID+"/vehicle-groups", r.URL.Path)
+		assert.Equal(t, "psk-123", r.Header.Get(TenancyKeyHeader))
+		assert.Equal(t, "Bearer dev.jwt.token", r.Header.Get("Authorization"))
+		_, _ = w.Write([]byte(`{"groups":[
+			{"id":"` + testTenant.ID + `_vans","name":"Vans","color":"#112233","vehicleCount":2,"tokenIds":[7,9]},
+			{"id":"` + testTenant.ID + `_empty","name":"Empty","color":"#000000","vehicleCount":0,"tokenIds":[]}
+		]}`))
+	}))
+	defer srv.Close()
+
+	api := newTestTenancyAPI(t, srv, "psk-123")
+	groups, err := api.VehicleGroups(context.Background(), testTenant)
+	require.NoError(t, err)
+	require.Len(t, groups, 2)
+	assert.Equal(t, []int64{7, 9}, groups[0].TokenIDs)
+	assert.Equal(t, "Vans", groups[0].Name)
+	assert.Empty(t, groups[1].TokenIDs, "a memberless group still arrives, with an empty set")
+}
+
+// A rejected vehicle-groups call classifies its layer exactly like authz — the
+// flagged read path reports which credential failed, not just "403".
+func TestTenancyAPI_VehicleGroupsClassifiesRejections(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"code":403,"message":"caller may not act on this tenant"}`))
+	}))
+	defer srv.Close()
+
+	api := newTestTenancyAPI(t, srv, "psk-123")
+	_, err := api.VehicleGroups(context.Background(), testTenant)
+	var terr *TenancyError
+	require.ErrorAs(t, err, &terr)
+	assert.Equal(t, LayerCallerScope, terr.Layer)
+}

@@ -77,6 +77,7 @@ func main() {
 		subcommands.Register(&pruneUnsharedVehiclesCmd{logger: logger, settings: settings}, "vehicles")
 		subcommands.Register(&tenancyCheckCmd{logger: logger, settings: settings}, "tenancy")
 		subcommands.Register(&tenancyDiffCmd{logger: logger, settings: settings}, "tenancy")
+		subcommands.Register(&groupsDiffCmd{logger: logger, settings: settings}, "tenancy")
 		subcommands.Register(&pushPostmarkTemplatesCmd{logger: logger, settings: settings}, "email")
 		subcommands.Register(&configurePostmarkWebhookCmd{logger: logger, settings: settings}, "email")
 		flag.Parse()
@@ -101,6 +102,10 @@ func main() {
 	postmarkAPI := gateway.NewPostmarkAPI(logger, &settings)
 	invitationSvc := service.NewInvitationService(&logger, &pdb, &settings, tenantSvc, postmarkAPI)
 	tenancyAPI := gateway.NewTenancyAPI(logger, &settings, authProvider)
+	if settings.GroupsFromTenancy {
+		groupSvc.UseTenancyReads(tenancyAPI)
+		logger.Info().Msg("GROUPS_FROM_TENANCY is on — fleet-group reads served from fleet-tenancy-api")
+	}
 
 	monApp := createMonitoringServer()
 	group, gCtx := errgroup.WithContext(ctx)

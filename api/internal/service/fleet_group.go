@@ -48,10 +48,29 @@ type GroupWithCount struct {
 type FleetGroupService struct {
 	logger *zerolog.Logger
 	pdb    *db.Store
+
+	// remote, when set, serves the *View read methods from fleet-tenancy-api
+	// instead of the local tables — P3 of the groups move, behind
+	// GROUPS_FROM_TENANCY. Everything else stays local: writes and the
+	// attestation sync move in P4, and the scope-filtering SQL joins
+	// (vehicle.go, geofence.go) follow when the local tables are retired.
+	remote remoteGroupSource
+}
+
+// remoteGroupSource is the slice of gateway.TenancyAPI the read path needs.
+// An interface so the view methods are testable without a live service.
+type remoteGroupSource interface {
+	VehicleGroups(ctx context.Context, tenant models.Tenant) ([]models.RemoteFleetGroup, error)
 }
 
 func NewFleetGroupService(logger *zerolog.Logger, pdb *db.Store) *FleetGroupService {
 	return &FleetGroupService{logger: logger, pdb: pdb}
+}
+
+// UseTenancyReads flips the *View methods to the remote source. Called from
+// main when GROUPS_FROM_TENANCY is set; never called means fully local.
+func (s *FleetGroupService) UseTenancyReads(remote remoteGroupSource) {
+	s.remote = remote
 }
 
 var slugNonAlphanum = regexp.MustCompile(`[^a-z0-9]+`)
@@ -370,6 +389,89 @@ func (s *FleetGroupService) GroupMemberTokenIDs(ctx context.Context, tenantID, g
 		ids[i] = m.TokenID
 	}
 	return ids, nil
+}
+
+// ----- The flagged read surface (P3 of the groups move) -----
+//
+// The *View methods are what the read-only controller paths call. Local they
+// are exactly the old queries; with GROUPS_FROM_TENANCY they are served from
+// fleet-tenancy-api, authenticated as the tenant being read. A remote failure
+// is surfaced, not silently downgraded to the local tables — a fallback nobody
+// watches is how a broken read path stays broken, and the flag itself is the
+// way back.
+//
+// The write methods and LoadVehicleGroups stay local on purpose: writes still
+// land in the local tables until P4, and the attestation publisher must
+// describe what was actually written, not what tenancy currently mirrors.
+
+// ListGroupsView is ListGroups for the read-only management surface.
+func (s *FleetGroupService) ListGroupsView(ctx context.Context, tenant models.Tenant) ([]GroupWithCount, error) {
+	if s.remote == nil {
+		return s.ListGroups(ctx, tenant.ID)
+	}
+	groups, err := s.remote.VehicleGroups(ctx, tenant)
+	if err != nil {
+		return nil, fmt.Errorf("list fleet groups from tenancy: %w", err)
+	}
+	out := make([]GroupWithCount, len(groups))
+	for i, g := range groups {
+		out[i] = GroupWithCount{
+			Group: &dbmodels.FleetGroup{ID: g.ID, Name: g.Name, Color: g.Color,
+				TenantID: tenant.ID, CreatedAt: g.CreatedAt, UpdatedAt: g.UpdatedAt},
+			VehicleCount: g.VehicleCount,
+		}
+	}
+	return out, nil
+}
+
+// GetGroupView returns one group and its member token ids.
+func (s *FleetGroupService) GetGroupView(ctx context.Context, tenant models.Tenant, groupID string) (*dbmodels.FleetGroup, []int64, error) {
+	if s.remote == nil {
+		g, err := s.GetGroup(ctx, tenant.ID, groupID)
+		if err != nil {
+			return nil, nil, err
+		}
+		members, err := s.GroupMemberTokenIDs(ctx, tenant.ID, groupID)
+		if err != nil {
+			// Preserves the old controller behaviour: the group renders, the
+			// count is best-effort.
+			s.logger.Err(err).Str("group", groupID).Msg("count members")
+			members = nil
+		}
+		return g, members, nil
+	}
+	groups, err := s.remote.VehicleGroups(ctx, tenant)
+	if err != nil {
+		return nil, nil, fmt.Errorf("get fleet group from tenancy: %w", err)
+	}
+	for _, g := range groups {
+		if g.ID == groupID {
+			return &dbmodels.FleetGroup{ID: g.ID, Name: g.Name, Color: g.Color,
+				TenantID: tenant.ID, CreatedAt: g.CreatedAt, UpdatedAt: g.UpdatedAt}, g.TokenIDs, nil
+		}
+	}
+	return nil, nil, ErrGroupNotFound
+}
+
+// VehicleGroupsMapView is VehicleGroupsMap for the /vehicles list.
+func (s *FleetGroupService) VehicleGroupsMapView(ctx context.Context, tenant models.Tenant) (map[int64][]GroupRef, error) {
+	if s.remote == nil {
+		return s.VehicleGroupsMap(ctx, tenant.ID)
+	}
+	groups, err := s.remote.VehicleGroups(ctx, tenant)
+	if err != nil {
+		return nil, fmt.Errorf("load tenant vehicle groups from tenancy: %w", err)
+	}
+	// The endpoint orders groups by name, so appending in order preserves the
+	// per-vehicle name ordering the local query produced.
+	out := make(map[int64][]GroupRef)
+	for _, g := range groups {
+		ref := GroupRef{ID: g.ID, Name: g.Name, Color: g.Color}
+		for _, tokenID := range g.TokenIDs {
+			out[tokenID] = append(out[tokenID], ref)
+		}
+	}
+	return out, nil
 }
 
 // isUniqueViolation reports whether err is a Postgres unique-constraint error.
