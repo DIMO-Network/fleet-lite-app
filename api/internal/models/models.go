@@ -31,6 +31,20 @@ type GroupRef struct {
 	AttestedAt time.Time `json:"-"`
 }
 
+// RemoteFleetGroup is one fleet group as fleet-tenancy-api serves it from
+// GET /v1/tenants/{id}/vehicle-groups: the group plus its full member set.
+// Keep it in step with that service's models.FleetGroupVehicles.
+type RemoteFleetGroup struct {
+	ID           string    `json:"id"`
+	TenantID     string    `json:"tenantId"`
+	Name         string    `json:"name"`
+	Color        string    `json:"color"`
+	VehicleCount int       `json:"vehicleCount"`
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
+	TokenIDs     []int64   `json:"tokenIds"`
+}
+
 // Vehicle is the slim view of an identity-api vehicle node that fleet-lite-app cares about.
 type Vehicle struct {
 	ID                string             `json:"id"`

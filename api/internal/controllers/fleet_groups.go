@@ -75,7 +75,7 @@ func (fc *FleetGroupsController) GetGroups(c *fiber.Ctx) error {
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	groups, err := fc.groups.ListGroups(c.Context(), tenant.ID)
+	groups, err := fc.groups.ListGroupsView(c.Context(), tenant)
 	if err != nil {
 		fc.logger.Err(err).Str("tenant", tenant.ID).Msg("list fleet groups")
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to list fleet groups")
@@ -108,13 +108,9 @@ func (fc *FleetGroupsController) GetGroup(c *fiber.Ctx) error {
 	if allowed, limited := GetAllowedGroups(c); limited && !toSet(allowed)[c.Params("id")] {
 		return fiber.NewError(fiber.StatusNotFound, "fleet group not found")
 	}
-	g, err := fc.groups.GetGroup(c.Context(), tenant.ID, c.Params("id"))
+	g, members, err := fc.groups.GetGroupView(c.Context(), tenant, c.Params("id"))
 	if err != nil {
 		return fc.mapServiceError(err, "get fleet group")
-	}
-	members, err := fc.groups.GroupMemberTokenIDs(c.Context(), tenant.ID, g.ID)
-	if err != nil {
-		fc.logger.Err(err).Str("group", g.ID).Msg("count members")
 	}
 	return c.JSON(toFleetGroupResponse(g, len(members)))
 }

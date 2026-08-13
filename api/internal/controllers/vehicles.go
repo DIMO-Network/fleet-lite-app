@@ -42,7 +42,7 @@ func (v *VehiclesController) GetVehicles(c *fiber.Ctx) error {
 	// Attach group membership for the fleet-overview map/list filter. Best-effort:
 	// a failure here shouldn't blank the vehicle list. Each vehicle always carries
 	// a (possibly empty) groups slice.
-	groupsByToken, err := v.groupSvc.VehicleGroupsMap(c.Context(), tenant.ID)
+	groupsByToken, err := v.groupSvc.VehicleGroupsMapView(c.Context(), tenant)
 	if err != nil {
 		v.logger.Err(err).Str("tenant", tenant.ID).Msg("failed to load vehicle groups")
 		groupsByToken = nil
