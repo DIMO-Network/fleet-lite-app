@@ -13,6 +13,7 @@ import (
 
 	"github.com/DIMO-Network/fleet-lite-app/internal/config"
 	"github.com/DIMO-Network/fleet-lite-app/internal/gateway"
+	"github.com/DIMO-Network/fleet-lite-app/internal/models"
 	"github.com/DIMO-Network/fleet-lite-app/internal/service"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
@@ -51,12 +52,22 @@ func NewDocumentsController(
 	}
 }
 
-// vehicleInTenant reports whether the tokenID is one of the tenant's synced
-// vehicles — and, for limited members, inside their allowed groups.
-func (d *DocumentsController) vehicleInTenant(c *fiber.Ctx, tenantID string, tokenID uint64) bool {
+// vehicleInTenant checks that the tokenID is one of the tenant's synced
+// vehicles — and, for limited members, inside their allowed groups. It returns
+// the fiber error to send, or nil when the vehicle is in scope.
+//
+// It returns an error rather than a bool so an unresolvable group scope can
+// surface as 503 instead of being flattened into "not part of this tenant".
+// Either way the caller is refused: this never opens up on failure.
+func (d *DocumentsController) vehicleInTenant(c *fiber.Ctx, tenant models.Tenant, tokenID uint64) error {
 	allowed, _ := GetAllowedGroups(c)
-	_, err := d.vehicleSvc.GetVehicle(c.Context(), tenantID, int64(tokenID), allowed)
-	return err == nil
+	if _, err := d.vehicleSvc.GetVehicle(c.Context(), tenant, int64(tokenID), allowed); err != nil {
+		if serr := ScopeUnavailable(err); serr != nil {
+			return serr
+		}
+		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
+	}
+	return nil
 }
 
 // ExtractDocument — POST /documents/extract (multipart file).
@@ -146,8 +157,8 @@ func (d *DocumentsController) AttestDocument(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "tokenId, category, fileBase64 are required")
 	}
 
-	if !d.vehicleInTenant(c, tenant.ID, uint64(req.TokenID)) {
-		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
+	if err := d.vehicleInTenant(c, tenant, uint64(req.TokenID)); err != nil {
+		return err
 	}
 
 	fileBytes, err := base64.StdEncoding.DecodeString(req.FileBase64)
@@ -197,8 +208,8 @@ func (d *DocumentsController) ListDocuments(c *fiber.Ctx) error {
 	if err != nil || tokenID == 0 {
 		return fiber.NewError(fiber.StatusBadRequest, "valid tokenId query param required")
 	}
-	if !d.vehicleInTenant(c, tenant.ID, tokenID) {
-		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
+	if err := d.vehicleInTenant(c, tenant, tokenID); err != nil {
+		return err
 	}
 
 	tokenDID := d.authProvider.BuildVehicleDID(tokenID)
@@ -273,8 +284,8 @@ func (d *DocumentsController) DownloadDocument(c *fiber.Ctx) error {
 	if fileHash == "" {
 		return fiber.NewError(fiber.StatusBadRequest, "filehash query param required")
 	}
-	if !d.vehicleInTenant(c, tenant.ID, tokenID) {
-		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
+	if err := d.vehicleInTenant(c, tenant, tokenID); err != nil {
+		return err
 	}
 
 	tokenDID := d.authProvider.BuildVehicleDID(tokenID)
@@ -315,8 +326,8 @@ func (d *DocumentsController) DeleteDocument(c *fiber.Ctx) error {
 	if err != nil || tokenID == 0 {
 		return fiber.NewError(fiber.StatusBadRequest, "valid tokenId query param required")
 	}
-	if !d.vehicleInTenant(c, tenant.ID, tokenID) {
-		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
+	if err := d.vehicleInTenant(c, tenant, tokenID); err != nil {
+		return err
 	}
 
 	// Look up the paired raw id by filehash (best-effort — if we don't find

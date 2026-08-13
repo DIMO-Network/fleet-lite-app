@@ -33,8 +33,14 @@ func (v *VehiclesController) GetVehicles(c *fiber.Ctx) error {
 	}
 
 	allowed, limited := GetAllowedGroups(c)
-	vehicles, err := v.vehicleSvc.ListVehicles(c.Context(), tenant.ID, allowed)
+	vehicles, err := v.vehicleSvc.ListVehicles(c.Context(), tenant, allowed)
 	if err != nil {
+		// A scope that could not be resolved fails the request. Returning the
+		// list unscoped would hand a limited member the whole fleet.
+		if serr := ScopeUnavailable(err); serr != nil {
+			v.logger.Err(err).Str("tenant", tenant.ID).Msg("fleet group scope unavailable")
+			return serr
+		}
 		v.logger.Err(err).Str("tenant", tenant.ID).Msg("failed to list tenant vehicles")
 		return fiber.NewError(fiber.StatusBadGateway, "failed to fetch vehicles")
 	}
@@ -82,8 +88,13 @@ func (v *VehiclesController) GetVehicle(c *fiber.Ctx) error {
 		return err
 	}
 	allowed, _ := GetAllowedGroups(c)
-	vehicle, err := v.vehicleSvc.GetVehicle(c.Context(), tenant.ID, int64(tokenID), allowed)
+	vehicle, err := v.vehicleSvc.GetVehicle(c.Context(), tenant, int64(tokenID), allowed)
 	if err != nil {
+		// 503, not the usual 404: "we could not check" is not "it isn't there".
+		if serr := ScopeUnavailable(err); serr != nil {
+			v.logger.Err(err).Str("tenant", tenant.ID).Msg("fleet group scope unavailable")
+			return serr
+		}
 		v.logger.Err(err).Uint64("tokenID", tokenID).Str("tenant", tenant.ID).Msg("failed to fetch vehicle")
 		return fiber.NewError(fiber.StatusNotFound, "vehicle not found")
 	}
@@ -103,7 +114,10 @@ func (v *VehiclesController) AddFavorite(c *fiber.Ctx) error {
 		return err
 	}
 	if allowed, limited := GetAllowedGroups(c); limited {
-		if _, err := v.vehicleSvc.GetVehicle(c.Context(), tenant.ID, int64(tokenID), allowed); err != nil {
+		if _, err := v.vehicleSvc.GetVehicle(c.Context(), tenant, int64(tokenID), allowed); err != nil {
+			if serr := ScopeUnavailable(err); serr != nil {
+				return serr
+			}
 			return fiber.NewError(fiber.StatusNotFound, "vehicle not found")
 		}
 	}
@@ -126,7 +140,10 @@ func (v *VehiclesController) RemoveFavorite(c *fiber.Ctx) error {
 		return err
 	}
 	if allowed, limited := GetAllowedGroups(c); limited {
-		if _, err := v.vehicleSvc.GetVehicle(c.Context(), tenant.ID, int64(tokenID), allowed); err != nil {
+		if _, err := v.vehicleSvc.GetVehicle(c.Context(), tenant, int64(tokenID), allowed); err != nil {
+			if serr := ScopeUnavailable(err); serr != nil {
+				return serr
+			}
 			return fiber.NewError(fiber.StatusNotFound, "vehicle not found")
 		}
 	}

@@ -362,7 +362,7 @@ func (s *GeofenceDetectionService) ScanTargets(ctx context.Context, tenant model
 	if err != nil {
 		return nil, 0, false, err
 	}
-	ids, err = s.geofences.EffectiveTokenIDs(ctx, tenant.ID, g)
+	ids, err = s.geofences.EffectiveTokenIDs(ctx, tenant, g)
 	if err != nil {
 		return nil, 0, false, err
 	}
@@ -388,7 +388,7 @@ func (s *GeofenceDetectionService) WindowScan(ctx context.Context, tenant models
 	if err != nil {
 		return nil, err
 	}
-	eff, err := s.geofences.EffectiveTokenIDs(ctx, tenant.ID, g)
+	eff, err := s.geofences.EffectiveTokenIDs(ctx, tenant, g)
 	if err != nil {
 		return nil, err
 	}

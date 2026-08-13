@@ -329,7 +329,7 @@ func costAmendments(entries []gateway.AttestationEntry, tombstoned map[string]st
 // allowedGroupIDs scopes the lookup to a limited member's accessible groups
 // (nil for owners/full-access members); see VehicleService.GetVehicle.
 func (s *TCOService) VehicleSummary(ctx context.Context, tenant models.Tenant, tokenID int64, allowedGroupIDs []string) (*VehicleTCOSummary, error) {
-	vehicle, err := s.vehicleSvc.GetVehicle(ctx, tenant.ID, tokenID, allowedGroupIDs)
+	vehicle, err := s.vehicleSvc.GetVehicle(ctx, tenant, tokenID, allowedGroupIDs)
 	if err != nil {
 		return nil, fmt.Errorf("get vehicle: %w", err)
 	}
@@ -433,7 +433,7 @@ func (s *TCOService) BackfillAmount(tenant models.Tenant, tokenID int64, documen
 // allowedGroupIDs scopes the vehicle list to a limited member's accessible
 // groups (nil for owners/full-access members); see VehicleService.ListVehicles.
 func (s *TCOService) FleetSummary(ctx context.Context, tenant models.Tenant, allowedGroupIDs []string) (*FleetTCOSummary, error) {
-	vehicles, err := s.vehicleSvc.ListVehicles(ctx, tenant.ID, allowedGroupIDs)
+	vehicles, err := s.vehicleSvc.ListVehicles(ctx, tenant, allowedGroupIDs)
 	if err != nil {
 		return nil, fmt.Errorf("list vehicles: %w", err)
 	}

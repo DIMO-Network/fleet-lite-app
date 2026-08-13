@@ -76,6 +76,13 @@ func App(
 	vehiclesCtrl := controllers.NewVehiclesController(settings, logger, vehicleSvc, groupSvc)
 	fleetGroupsCtrl := controllers.NewFleetGroupsController(logger, groupSvc)
 	geofenceSvc := service.NewGeofenceService(logger, pdb)
+	// P5: every group-scoped read — the vehicle scope filter, a group-scoped
+	// geofence, an invite's group list — resolves through the FleetGroupService
+	// index instead of the local fleet_groups tables. It is a no-op while
+	// GROUPS_FROM_TENANCY is off, which is the revert path.
+	vehicleSvc.UseGroupIndex(groupSvc)
+	geofenceSvc.UseGroupIndex(groupSvc)
+	invitationSvc.UseGroupIndex(groupSvc)
 	geofenceDetectionSvc := service.NewGeofenceDetectionService(logger, pdb, telemetryAPI, geofenceSvc)
 	geofencesCtrl := controllers.NewGeofencesController(logger, geofenceSvc, attestSvc, geofenceDetectionSvc, vehicleSvc)
 	settingsCtrl := controllers.NewSettingsController(settings, logger)

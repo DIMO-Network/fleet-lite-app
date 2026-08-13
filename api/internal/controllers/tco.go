@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/DIMO-Network/fleet-lite-app/internal/models"
 	"github.com/DIMO-Network/fleet-lite-app/internal/service"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
@@ -20,12 +21,22 @@ func NewTCOController(logger *zerolog.Logger, tcoSvc *service.TCOService, vehicl
 	return &TCOController{logger: logger, tcoSvc: tcoSvc, vehicleSvc: vehicleSvc}
 }
 
-// vehicleInTenant reports whether the tokenID is one of the tenant's synced
-// vehicles — and, for limited members, inside their allowed groups.
-func (t *TCOController) vehicleInTenant(c *fiber.Ctx, tenantID string, tokenID int64) bool {
+// vehicleInTenant checks that the tokenID is one of the tenant's synced
+// vehicles — and, for limited members, inside their allowed groups. It returns
+// the fiber error to send, or nil when the vehicle is in scope.
+//
+// It returns an error rather than a bool so an unresolvable group scope can
+// surface as 503 instead of being flattened into "not part of this tenant".
+// Either way the caller is refused: this never opens up on failure.
+func (t *TCOController) vehicleInTenant(c *fiber.Ctx, tenant models.Tenant, tokenID int64) error {
 	allowed, _ := GetAllowedGroups(c)
-	_, err := t.vehicleSvc.GetVehicle(c.Context(), tenantID, tokenID, allowed)
-	return err == nil
+	if _, err := t.vehicleSvc.GetVehicle(c.Context(), tenant, tokenID, allowed); err != nil {
+		if serr := ScopeUnavailable(err); serr != nil {
+			return serr
+		}
+		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
+	}
+	return nil
 }
 
 // GetSettings — GET /tco/settings?tokenId=N.
@@ -38,8 +49,8 @@ func (t *TCOController) GetSettings(c *fiber.Ctx) error {
 	if err != nil || tokenID == 0 {
 		return fiber.NewError(fiber.StatusBadRequest, "valid tokenId query param required")
 	}
-	if !t.vehicleInTenant(c, tenant.ID, tokenID) {
-		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
+	if err := t.vehicleInTenant(c, tenant, tokenID); err != nil {
+		return err
 	}
 	settings, err := t.tcoSvc.GetSettings(c.Context(), tenant.ID, tokenID)
 	if err != nil {
@@ -70,8 +81,8 @@ func (t *TCOController) PutSettings(c *fiber.Ctx) error {
 	if req.TokenID == 0 {
 		return fiber.NewError(fiber.StatusBadRequest, "tokenId is required")
 	}
-	if !t.vehicleInTenant(c, tenant.ID, req.TokenID) {
-		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
+	if err := t.vehicleInTenant(c, tenant, req.TokenID); err != nil {
+		return err
 	}
 	currency := req.Currency
 	if currency == "" {
@@ -99,6 +110,9 @@ func (t *TCOController) GetSummary(c *fiber.Ctx) error {
 	allowed, _ := GetAllowedGroups(c)
 	summary, err := t.tcoSvc.FleetSummary(c.Context(), tenant, allowed)
 	if err != nil {
+		if serr := ScopeUnavailable(err); serr != nil {
+			return serr
+		}
 		return fiber.NewError(fiber.StatusInternalServerError, "tco summary: "+err.Error())
 	}
 	return c.JSON(summary)
@@ -114,12 +128,15 @@ func (t *TCOController) GetVehicleDetail(c *fiber.Ctx) error {
 	if err != nil || tokenID == 0 {
 		return fiber.NewError(fiber.StatusBadRequest, "valid tokenId path param required")
 	}
-	if !t.vehicleInTenant(c, tenant.ID, tokenID) {
-		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
+	if err := t.vehicleInTenant(c, tenant, tokenID); err != nil {
+		return err
 	}
 	allowed, _ := GetAllowedGroups(c)
 	summary, err := t.tcoSvc.VehicleSummary(c.Context(), tenant, tokenID, allowed)
 	if err != nil {
+		if serr := ScopeUnavailable(err); serr != nil {
+			return serr
+		}
 		return fiber.NewError(fiber.StatusInternalServerError, "tco vehicle summary: "+err.Error())
 	}
 	return c.JSON(summary)
@@ -147,8 +164,8 @@ func (t *TCOController) BackfillAmount(c *fiber.Ctx) error {
 	if documentID == "" {
 		return fiber.NewError(fiber.StatusBadRequest, "documentId path param required")
 	}
-	if !t.vehicleInTenant(c, tenant.ID, tokenID) {
-		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
+	if err := t.vehicleInTenant(c, tenant, tokenID); err != nil {
+		return err
 	}
 	var req BackfillAmountRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -181,12 +198,15 @@ func (t *TCOController) ExportCSV(c *fiber.Ctx) error {
 		if err != nil || tokenID == 0 {
 			return fiber.NewError(fiber.StatusBadRequest, "invalid tokenId")
 		}
-		if !t.vehicleInTenant(c, tenant.ID, tokenID) {
-			return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
+		if err := t.vehicleInTenant(c, tenant, tokenID); err != nil {
+			return err
 		}
 		allowed, _ := GetAllowedGroups(c)
 		summary, err := t.tcoSvc.VehicleSummary(c.Context(), tenant, tokenID, allowed)
 		if err != nil {
+			if serr := ScopeUnavailable(err); serr != nil {
+				return serr
+			}
 			return fiber.NewError(fiber.StatusInternalServerError, "tco vehicle summary: "+err.Error())
 		}
 		summaries = []service.VehicleTCOSummary{*summary}
@@ -195,6 +215,9 @@ func (t *TCOController) ExportCSV(c *fiber.Ctx) error {
 		allowed, _ := GetAllowedGroups(c)
 		fleet, err := t.tcoSvc.FleetSummary(c.Context(), tenant, allowed)
 		if err != nil {
+			if serr := ScopeUnavailable(err); serr != nil {
+				return serr
+			}
 			return fiber.NewError(fiber.StatusInternalServerError, "tco summary: "+err.Error())
 		}
 		summaries = fleet.Vehicles

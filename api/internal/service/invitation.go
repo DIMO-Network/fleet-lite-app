@@ -70,7 +70,14 @@ type InvitationService struct {
 	settings  *config.Settings
 	tenantSvc *TenantService
 	postmark  postmarkSender
+
+	// groups validates the allowed-group ids an invite carries. nil (or an
+	// unflagged source) keeps that validation on the local mirror.
+	groups groupIndexSource
 }
+
+// UseGroupIndex wires the group index used to validate an invite's group scope.
+func (s *InvitationService) UseGroupIndex(src groupIndexSource) { s.groups = src }
 
 func NewInvitationService(logger *zerolog.Logger, pdb *db.Store, settings *config.Settings, tenantSvc *TenantService, postmark postmarkSender) *InvitationService {
 	return &InvitationService{
@@ -295,8 +302,27 @@ func (s *InvitationService) Resend(ctx context.Context, tenantID, invitationID, 
 // validateGroupIDs verifies every id names one of the tenant's fleet groups.
 // nil (full access) passes trivially; an empty non-nil slice also passes (a
 // member with access to nothing — the UI prevents it, the API tolerates it).
+//
+// The tenant is loaded here rather than threaded down from the controller: the
+// invitation routes are JWT-only and authorize against the :id path param, so
+// they never run behind the tenant middleware and have no resolved tenant to
+// pass. Issuing an invite is rare enough that the extra load costs nothing.
 func (s *InvitationService) validateGroupIDs(ctx context.Context, tenantID string, groupIDs []string) error {
 	if len(groupIDs) == 0 {
+		return nil
+	}
+	if s.groups != nil && s.groups.groupsIndexed() {
+		tenant, err := s.tenantSvc.GetTenantByID(ctx, tenantID)
+		if err != nil {
+			return fmt.Errorf("%w: load tenant to validate group ids: %w", ErrGroupScopeUnavailable, err)
+		}
+		idx, err := s.groups.groupIndex(ctx, *tenant)
+		if err != nil {
+			return err
+		}
+		if !idx.AllExist(uniqueStrings(groupIDs)) {
+			return fmt.Errorf("one or more group ids do not exist in this tenant")
+		}
 		return nil
 	}
 	n, err := dbmodels.FleetGroups(

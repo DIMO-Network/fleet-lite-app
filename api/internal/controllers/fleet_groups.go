@@ -66,6 +66,9 @@ func (fc *FleetGroupsController) GetGroups(c *fiber.Ctx) error {
 	}
 	groups, err := fc.groups.ListGroupsView(c.Context(), tenant)
 	if err != nil {
+		if serr := ScopeUnavailable(err); serr != nil {
+			return serr
+		}
 		fc.logger.Err(err).Str("tenant", tenant.ID).Msg("list fleet groups")
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to list fleet groups")
 	}
@@ -150,7 +153,7 @@ func (fc *FleetGroupsController) UpdateGroup(c *fiber.Ctx) error {
 	if err != nil {
 		return fc.mapServiceError(err, "update fleet group")
 	}
-	members, _ := fc.groups.GroupMemberTokenIDs(c.Context(), tenant.ID, g.ID)
+	members, _ := fc.groups.GroupMemberTokenIDs(c.Context(), tenant, g.ID)
 	return c.JSON(toFleetGroupResponse(g, len(members)))
 }
 
@@ -229,14 +232,23 @@ func (fc *FleetGroupsController) SyncVehicleGroups(c *fiber.Ctx) error {
 	// out-of-scope vehicles look nonexistent).
 	allowed, limited := GetAllowedGroups(c)
 	if limited {
-		ok, aerr := fc.groups.VehicleInGroups(c.Context(), tenant.ID, int64(tokenID), allowed)
-		if aerr != nil || !ok {
+		ok, aerr := fc.groups.VehicleInGroups(c.Context(), tenant, int64(tokenID), allowed)
+		if aerr != nil {
+			if serr := ScopeUnavailable(aerr); serr != nil {
+				return serr
+			}
+			return fiber.NewError(fiber.StatusNotFound, "vehicle not found")
+		}
+		if !ok {
 			return fiber.NewError(fiber.StatusNotFound, "vehicle not found")
 		}
 	}
 
-	groups, err := fc.groups.VehicleGroups(c.Context(), tenant.ID, int64(tokenID))
+	groups, err := fc.groups.VehicleGroups(c.Context(), tenant, int64(tokenID))
 	if err != nil {
+		if serr := ScopeUnavailable(err); serr != nil {
+			return serr
+		}
 		fc.logger.Err(err).Str("tenant", tenant.ID).Int64("token_id", int64(tokenID)).
 			Msg("load vehicle groups")
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to load vehicle groups")
@@ -261,6 +273,9 @@ func (fc *FleetGroupsController) SyncVehicleGroups(c *fiber.Ctx) error {
 // mapServiceError translates service sentinel errors into HTTP errors.
 func (fc *FleetGroupsController) mapServiceError(err error, msg string) error {
 	switch {
+	case errors.Is(err, service.ErrGroupScopeUnavailable):
+		fc.logger.Err(err).Msg(msg)
+		return fiber.NewError(fiber.StatusServiceUnavailable, "authorization service unavailable")
 	case errors.Is(err, service.ErrGroupNotFound):
 		return fiber.NewError(fiber.StatusNotFound, "fleet group not found")
 	case errors.Is(err, service.ErrVehicleNotFound):
