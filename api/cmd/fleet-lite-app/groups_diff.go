@@ -13,6 +13,7 @@ import (
 	"github.com/DIMO-Network/fleet-lite-app/internal/service"
 	"github.com/DIMO-Network/shared/pkg/db"
 	"github.com/aarondl/null/v8"
+	"github.com/aarondl/sqlboiler/v4/boil"
 	"github.com/aarondl/sqlboiler/v4/queries"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
 	"github.com/google/subcommands"
@@ -210,7 +211,7 @@ func (p *groupsDiffCmd) Execute(ctx context.Context, _ *flag.FlagSet, _ ...inter
 			return subcommands.ExitFailure
 		}
 
-		local, lerr := p.readLocalGroups(ctx, t.ID)
+		local, lerr := readLocalGroupState(ctx, p.pdb.DBS().Reader, t.ID)
 		if lerr != nil {
 			p.logger.Err(lerr).Str("tenant_id", t.ID).Msg("read local groups")
 			return subcommands.ExitFailure
@@ -257,13 +258,13 @@ func (p *groupsDiffCmd) Execute(ctx context.Context, _ *flag.FlagSet, _ ...inter
 	return subcommands.ExitSuccess
 }
 
-// readLocalGroups loads one tenant's groups and member sets from the local
-// tables — always local, whatever GROUPS_FROM_TENANCY says, because the local
-// side IS one side of the comparison.
-func (p *groupsDiffCmd) readLocalGroups(ctx context.Context, tenantID string) (map[string]localGroupState, error) {
+// readLocalGroupState loads one tenant's groups and member sets from the local
+// tables — always local, whatever GROUPS_FROM_TENANCY says, because for both
+// groups-diff and mirror-groups the local side IS one side of the comparison.
+func readLocalGroupState(ctx context.Context, exec boil.ContextExecutor, tenantID string) (map[string]localGroupState, error) {
 	groups, err := dbmodels.FleetGroups(
 		dbmodels.FleetGroupWhere.TenantID.EQ(tenantID),
-	).All(ctx, p.pdb.DBS().Reader)
+	).All(ctx, exec)
 	if err != nil {
 		return nil, fmt.Errorf("list local groups: %w", err)
 	}
@@ -279,13 +280,13 @@ func (p *groupsDiffCmd) readLocalGroups(ctx context.Context, tenantID string) (m
 	}
 	if err := queries.Raw(`
 		SELECT fleet_group_id, token_id FROM vehicle_fleet_groups
-		WHERE tenant_id = $1`, tenantID).Bind(ctx, p.pdb.DBS().Reader, &rows); err != nil {
+		WHERE tenant_id = $1`, tenantID).Bind(ctx, exec, &rows); err != nil {
 		return nil, fmt.Errorf("list local memberships: %w", err)
 	}
 	for _, r := range rows {
 		s, ok := out[r.FleetGroupID]
 		if !ok {
-			// FK-impossible, but a diff tool must report rather than drop.
+			// FK-impossible, but a convergence tool must report rather than drop.
 			return nil, fmt.Errorf("membership references unknown local group %s", r.FleetGroupID)
 		}
 		s.TokenIDs = append(s.TokenIDs, r.TokenID)

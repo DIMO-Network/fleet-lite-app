@@ -99,24 +99,11 @@ cronJobs:
       limits:
         cpu: 500m
         memory: 256Mi
-  - name: import-group-attestations-warm
+  - name: mirror-groups
     enabled: true
-    schedule: 0 6 * * *
+    schedule: 15 6 * * *
     script: |
-      /fleet-lite-app import-group-attestations -warm-only
-    resources:
-      requests:
-        cpu: 50m
-        memory: 128Mi
-      limits:
-        cpu: 500m
-        memory: 256Mi
-  - name: import-group-attestations-full
-    enabled: true
-    schedule: 0 4 * * 0
-    activeDeadlineSeconds: 3600
-    script: |
-      /fleet-lite-app import-group-attestations
+      /fleet-lite-app mirror-groups
     resources:
       requests:
         cpu: 50m

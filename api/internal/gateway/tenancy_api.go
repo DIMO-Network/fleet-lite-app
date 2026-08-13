@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -113,6 +115,10 @@ type TenancyError struct {
 	Message    string
 	Layer      AccessLayer
 }
+
+// HTTPStatus exposes the status code behind an interface the service layer can
+// errors.As against without importing this package's concrete type.
+func (e *TenancyError) HTTPStatus() int { return e.StatusCode }
 
 func (e *TenancyError) Error() string {
 	if e.Layer != LayerNone {
@@ -244,6 +250,55 @@ func (t *TenancyAPI) VehicleGroups(ctx context.Context, tenant models.Tenant) ([
 	return res.Groups, nil
 }
 
+// ----- Group writes (P4 of the groups move) -----
+//
+// Every group mutation writes through to fleet-tenancy-api, which owns the
+// record; the local tables are a synchronously-maintained mirror until P5
+// drops them. Status mapping is left to the caller via TenancyError — the
+// service layer decides what a 409 or 404 means for its own idempotency rules.
+
+// CreateGroup creates a group; the service mints the id from the name with the
+// same slug rules this app uses, so both sides land on one id.
+func (t *TenancyAPI) CreateGroup(ctx context.Context, tenant models.Tenant, name, color string) error {
+	return t.do(ctx, tenant, http.MethodPost,
+		"/v1/tenants/"+url.PathEscape(tenant.ID)+"/groups",
+		map[string]string{"name": name, "color": color}, nil)
+}
+
+// UpdateGroup renames and/or recolours. Nil fields stay untouched.
+func (t *TenancyAPI) UpdateGroup(ctx context.Context, tenant models.Tenant, groupID string, name, color *string) error {
+	body := map[string]string{}
+	if name != nil && *name != "" {
+		body["name"] = *name
+	}
+	if color != nil && *color != "" {
+		body["color"] = *color
+	}
+	return t.do(ctx, tenant, http.MethodPatch,
+		"/v1/tenants/"+url.PathEscape(tenant.ID)+"/groups/"+url.PathEscape(groupID), body, nil)
+}
+
+// DeleteGroup deletes a group; memberships cascade on the service side.
+func (t *TenancyAPI) DeleteGroup(ctx context.Context, tenant models.Tenant, groupID string) error {
+	return t.do(ctx, tenant, http.MethodDelete,
+		"/v1/tenants/"+url.PathEscape(tenant.ID)+"/groups/"+url.PathEscape(groupID), nil, nil)
+}
+
+// AddGroupVehicles adds token ids to a group. Idempotent on the service side.
+func (t *TenancyAPI) AddGroupVehicles(ctx context.Context, tenant models.Tenant, groupID string, tokenIDs []int64) error {
+	return t.do(ctx, tenant, http.MethodPost,
+		"/v1/tenants/"+url.PathEscape(tenant.ID)+"/groups/"+url.PathEscape(groupID)+"/vehicles",
+		map[string][]int64{"tokenIds": tokenIDs}, nil)
+}
+
+// RemoveGroupVehicle removes one token id from a group. Removing one already
+// gone succeeds on the service side.
+func (t *TenancyAPI) RemoveGroupVehicle(ctx context.Context, tenant models.Tenant, groupID string, tokenID int64) error {
+	return t.do(ctx, tenant, http.MethodDelete,
+		"/v1/tenants/"+url.PathEscape(tenant.ID)+"/groups/"+url.PathEscape(groupID)+
+			"/vehicles/"+strconv.FormatInt(tokenID, 10), nil, nil)
+}
+
 // AuthzFresh bypasses the cache. Reconciliation wants the service's current
 // answer, not one this process happened to read a minute ago.
 func (t *TenancyAPI) AuthzFresh(ctx context.Context, tenant models.Tenant, wallet string) (*AuthzResult, error) {
@@ -263,6 +318,14 @@ func authzTTL(seconds int) time.Duration {
 
 // get performs an authenticated GET and decodes the JSON body into out.
 func (t *TenancyAPI) get(ctx context.Context, tenant models.Tenant, path string, out any) error {
+	return t.do(ctx, tenant, http.MethodGet, path, nil, out)
+}
+
+// do performs one authenticated request. payload, when non-nil, is sent as
+// JSON; out, when non-nil, receives the decoded response body. Both
+// credentials go on every call — reads and writes share this on purpose, so
+// two copies can never disagree about one of them.
+func (t *TenancyAPI) do(ctx context.Context, tenant models.Tenant, method, path string, payload, out any) error {
 	if !t.Configured() {
 		return fmt.Errorf("%w: url=%q key set=%t", ErrTenancyNotConfigured, t.baseURL, t.apiKey != "")
 	}
@@ -275,11 +338,22 @@ func (t *TenancyAPI) get(ctx context.Context, tenant models.Tenant, path string,
 		return fmt.Errorf("developer JWT for tenant %s: %w", tenant.ID, err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, t.baseURL+path, nil)
+	var reader io.Reader
+	if payload != nil {
+		body, merr := json.Marshal(payload)
+		if merr != nil {
+			return fmt.Errorf("encode tenancy request: %w", merr)
+		}
+		reader = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, t.baseURL+path, reader)
 	if err != nil {
 		return fmt.Errorf("build tenancy request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
+	if payload != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	req.Header.Set(TenancyKeyHeader, t.apiKey)
 	req.Header.Set("Authorization", "Bearer "+developerJWT)
 
@@ -296,8 +370,10 @@ func (t *TenancyAPI) get(ctx context.Context, tenant models.Tenant, path string,
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return newTenancyError(resp.StatusCode, body)
 	}
-	if err := json.Unmarshal(body, out); err != nil {
-		return fmt.Errorf("parse tenancy response: %w", err)
+	if out != nil {
+		if err := json.Unmarshal(body, out); err != nil {
+			return fmt.Errorf("parse tenancy response: %w", err)
+		}
 	}
 	return nil
 }

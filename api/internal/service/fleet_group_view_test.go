@@ -15,6 +15,10 @@ type fakeRemoteGroups struct {
 	groups []models.RemoteFleetGroup
 	err    error
 	calls  int
+
+	// writeErr is returned by every write method, so a test can make the
+	// remote authority reject a mutation.
+	writeErr error
 }
 
 func (f *fakeRemoteGroups) VehicleGroups(context.Context, models.Tenant) ([]models.RemoteFleetGroup, error) {
@@ -22,10 +26,30 @@ func (f *fakeRemoteGroups) VehicleGroups(context.Context, models.Tenant) ([]mode
 	return f.groups, f.err
 }
 
+func (f *fakeRemoteGroups) CreateGroup(context.Context, models.Tenant, string, string) error {
+	return f.writeErr
+}
+
+func (f *fakeRemoteGroups) UpdateGroup(context.Context, models.Tenant, string, *string, *string) error {
+	return f.writeErr
+}
+
+func (f *fakeRemoteGroups) DeleteGroup(context.Context, models.Tenant, string) error {
+	return f.writeErr
+}
+
+func (f *fakeRemoteGroups) AddGroupVehicles(context.Context, models.Tenant, string, []int64) error {
+	return f.writeErr
+}
+
+func (f *fakeRemoteGroups) RemoveGroupVehicle(context.Context, models.Tenant, string, int64) error {
+	return f.writeErr
+}
+
 func remoteViewFixture(remote *fakeRemoteGroups) *FleetGroupService {
 	l := zerolog.Nop()
 	s := NewFleetGroupService(&l, nil) // nil store: the remote branch must never touch it
-	s.UseTenancyReads(remote)
+	s.UseTenancy(remote, true)
 	return s
 }
 
@@ -84,5 +108,28 @@ func TestViewMethodsSurfaceRemoteFailures(t *testing.T) {
 	_, _, err = s.GetGroupView(ctx, viewTenant, "x")
 	assert.ErrorContains(t, err, "tenancy api 503")
 	_, err = s.VehicleGroupsMapView(ctx, viewTenant)
+	assert.ErrorContains(t, err, "tenancy api 503")
+}
+
+// A rejected remote write surfaces to the caller and leaves no local mirror
+// row. The nil store is the proof: these writes call tenancy BEFORE any local
+// statement, so a mutation that survived the remote failure and touched the
+// mirror would panic here instead of failing the assertion politely.
+func TestWriteFailuresSurfaceBeforeAnyLocalWrite(t *testing.T) {
+	remote := &fakeRemoteGroups{writeErr: errors.New("tenancy api 503")}
+	s := remoteViewFixture(remote)
+	ctx := context.Background()
+
+	_, err := s.CreateGroup(ctx, viewTenant, "Vans", "#112233")
+	assert.ErrorContains(t, err, "tenancy api 503")
+
+	name := "Trucks"
+	_, err = s.UpdateGroup(ctx, viewTenant, viewTenant.ID+"_vans", &name, nil)
+	assert.ErrorContains(t, err, "tenancy api 503")
+
+	err = s.DeleteGroup(ctx, viewTenant, viewTenant.ID+"_vans")
+	assert.ErrorContains(t, err, "tenancy api 503")
+
+	_, err = s.RemoveVehicle(ctx, viewTenant, 7, viewTenant.ID+"_vans")
 	assert.ErrorContains(t, err, "tenancy api 503")
 }
