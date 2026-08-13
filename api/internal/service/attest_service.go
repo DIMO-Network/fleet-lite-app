@@ -30,7 +30,6 @@ import (
 type AttestService interface {
 	AttestDocumentPair(tenant models.Tenant, input AttestInput) (*AttestResult, error)
 	Tombstone(tenant models.Tenant, parsedID, rawID, tokenDID string) (*AttestResult, error)
-	AttestVehicleGroups(tenant models.Tenant, tokenID uint64, groups []GroupRef) (string, error)
 	// AttestTenantGeofences publishes the tenant's geofence catalog as a single
 	// CE whose subject is the tenant client-id DID (see docs/GEOFENCES_PLAN.md).
 	AttestTenantGeofences(tenant models.Tenant, geofences []GeofenceDef) (string, error)
@@ -50,16 +49,12 @@ type AttestService interface {
 const CostAmendmentCloudEventType = "dimo.document.vehicle.cost-amendment"
 
 // TCOAttestationProducer stamps our app's cost-amendment CEs, mirroring
-// GroupAttestationProducer/GeofenceAttestationProducer.
+// GeofenceAttestationProducer.
 const TCOAttestationProducer = "fleet-lite-app"
 
-// VehicleGroupsCloudEventType is the CE type for a vehicle's group-membership
-// document. fetch-api admits it via its dimo.document.* prefix filter.
-const VehicleGroupsCloudEventType = "dimo.document.vehicle.groups"
-
 // Geofence CE types + producer. The tenant catalog is attested at the client-id
-// DID; per-vehicle manual membership at the vehicle DID. Both stamped with the
-// same producer as groups so sync can attribute our app's assertions.
+// DID; per-vehicle manual membership at the vehicle DID. Both stamped with a
+// stable producer so consumers can attribute our app's assertions.
 const (
 	TenantGeofencesCloudEventType  = "dimo.document.fleet.geofence"
 	VehicleGeofencesCloudEventType = "dimo.document.vehicle.geofence"
@@ -102,12 +97,6 @@ type signedCloudEvent struct {
 	Signature       string                 `json:"signature"`
 	FileHash        string                 `json:"filehash"`
 }
-
-// GroupAttestationProducer is the stable identifier we stamp as the CE `producer`
-// on vehicle-group attestations, so the sync can distinguish our app's
-// assertions from sibling/foreign apps that share the org's dimo_client_id
-// (which is the CE `source`). SPIKE: verifying the Attest API persists this.
-const GroupAttestationProducer = "fleet-lite-app"
 
 // signedRawCloudEvent — raw/binary attestation.
 type signedRawCloudEvent struct {
@@ -333,55 +322,10 @@ func (s *attestService) Tombstone(tenant models.Tenant, parsedID, rawID, tokenDI
 	}, nil
 }
 
-// AttestVehicleGroups publishes the vehicle's current group membership as a
-// single signed, parsed CloudEvent (no raw pair). The subject is the vehicle
-// DID; data is {"groups":[{id,name,color},...]}. An empty groups slice is valid
-// and represents "in no groups". Returns the new event id.
-//
-// The signature is computed over the JSON of the data map, matching the parsed
-// CE convention in AttestDocumentPair so fetch-api/verifiers can re-derive it.
-func (s *attestService) AttestVehicleGroups(tenant models.Tenant, tokenID uint64, groups []GroupRef) (string, error) {
-	if groups == nil {
-		groups = []GroupRef{}
-	}
-	developerJWT, err := s.authProvider.GetDeveloperJWT(tenant)
-	if err != nil {
-		return "", fmt.Errorf("developer JWT: %w", err)
-	}
-
-	dataMap := map[string]interface{}{"groups": groups}
-	dataBytes, err := json.Marshal(dataMap)
-	if err != nil {
-		return "", fmt.Errorf("marshal groups data: %w", err)
-	}
-	sig, err := signDataSecp256k1(dataBytes, tenant.DIMOPrivateKey)
-	if err != nil {
-		return "", fmt.Errorf("sign groups data: %w", err)
-	}
-
-	ev := signedCloudEvent{
-		SpecVersion:     "1.0",
-		ID:              uuid.New().String(),
-		Source:          tenant.ClientID,
-		Producer:        GroupAttestationProducer,
-		Type:            VehicleGroupsCloudEventType,
-		Subject:         s.authProvider.BuildVehicleDID(tokenID),
-		Time:            time.Now().UTC().Format(time.RFC3339),
-		DataContentType: "application/json",
-		Data:            dataMap,
-		Signature:       sig,
-	}
-	s.logger.Info().Uint64("tokenID", tokenID).Int("groups", len(groups)).Msg("Submitting vehicle groups cloud event")
-	if err := s.submitCloudEvent(ev, developerJWT); err != nil {
-		return "", fmt.Errorf("submit vehicle groups cloud event: %w", err)
-	}
-	return ev.ID, nil
-}
-
 // AttestTenantGeofences publishes the tenant's full geofence catalog as a single
 // parsed CloudEvent. The subject is the tenant client-id DID
 // (BuildTenantDID); data is {"geofences":[{id,name,color,geometry,…},…]}. An
-// empty slice is valid ("no geofences"). Mirrors AttestVehicleGroups' signing.
+// empty slice is valid ("no geofences").
 func (s *attestService) AttestTenantGeofences(tenant models.Tenant, geofences []GeofenceDef) (string, error) {
 	if geofences == nil {
 		geofences = []GeofenceDef{}
@@ -463,8 +407,10 @@ func (s *attestService) AttestVehicleGeofences(tenant models.Tenant, tokenID uin
 // re-attesting the original (CEs on DIS are immutable). Subject is the
 // vehicle DID; data is {"documentId","amount","currency"}. TCOService reads
 // these back and overlays the amount onto documentId's line item wherever
-// the original document itself has no amount. Mirrors AttestVehicleGroups'
-// signing.
+// the original document itself has no amount.
+//
+// The signature is computed over the JSON of the data map, matching the parsed
+// CE convention in AttestDocumentPair so fetch-api/verifiers can re-derive it.
 func (s *attestService) AttestCostAmendment(tenant models.Tenant, tokenID uint64, documentID string, amount float64, currency string) (string, error) {
 	if documentID == "" {
 		return "", fmt.Errorf("documentID is required")

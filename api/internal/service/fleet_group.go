@@ -18,9 +18,9 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// GroupRef is the slim group reference used by the attestation publisher, the
-// import command, and the /vehicles filter payload. Aliased to the models type
-// so the same shape flows through the whole feature.
+// GroupRef is the slim group reference embedded in the /vehicles filter
+// payload and the per-vehicle groups endpoint. Aliased to the models type so
+// the same shape flows through the whole feature.
 type GroupRef = models.GroupRef
 
 // ErrGroupNameExists is returned by CreateGroup when a group with the same name
@@ -98,7 +98,7 @@ func slug(name string) string {
 // '_' is unambiguous: slug() collapses every non-alphanumeric run to '-', so a
 // slug never contains '_', and a uuid contains '-' but never '_'. A tenant-scoped
 // id therefore holds exactly one '_' and a legacy (pre-migration) id holds none,
-// which is what lets normaliseGroupID tell them apart without a lookup.
+// which is what lets TenantOwnsGroupID tell them apart without a lookup.
 const GroupIDSeparator = "_"
 
 // GroupID builds a tenant-scoped fleet group id: <tenant-uuid>_<slug>.
@@ -118,8 +118,7 @@ func GroupID(tenantID, name string) string {
 }
 
 // TenantOwnsGroupID reports whether a group id belongs to the given tenant.
-// Legacy bare-slug ids (no separator) carry no tenant and return false — callers
-// decide whether to adopt them; see normaliseGroupID.
+// Legacy bare-slug ids (no separator) carry no tenant and return false.
 func TenantOwnsGroupID(tenantID, groupID string) bool {
 	i := strings.Index(groupID, GroupIDSeparator)
 	return i > 0 && groupID[:i] == tenantID
@@ -373,8 +372,7 @@ func (s *FleetGroupService) RemoveVehicle(ctx context.Context, tenant models.Ten
 
 // LoadVehicleGroups returns the groups a vehicle currently belongs to (tenant-
 // scoped), ordered by name. An empty result is valid — the vehicle is in no
-// groups. Shared by the /vehicles payload, the attest publisher, and the import
-// command; takes an explicit executor so it can run inside a transaction.
+// groups. Takes an explicit executor so it can run inside a transaction.
 func (s *FleetGroupService) LoadVehicleGroups(ctx context.Context, exec boil.ContextExecutor, tenantID string, tokenID int64) ([]GroupRef, error) {
 	var rows []struct {
 		ID    string `boil:"id"`
@@ -397,9 +395,8 @@ func (s *FleetGroupService) LoadVehicleGroups(ctx context.Context, exec boil.Con
 	return groups, nil
 }
 
-// VehicleGroups loads a single vehicle's current groups using the service's own
-// reader. Convenience for the write-path attestation goroutine, which runs on a
-// background context (the request context is gone by then).
+// VehicleGroups loads a single vehicle's current groups using the service's
+// own reader.
 func (s *FleetGroupService) VehicleGroups(ctx context.Context, tenantID string, tokenID int64) ([]GroupRef, error) {
 	return s.LoadVehicleGroups(ctx, s.pdb.DBS().Reader, tenantID, tokenID)
 }
@@ -457,9 +454,9 @@ func (s *FleetGroupService) GroupMemberTokenIDs(ctx context.Context, tenantID, g
 // watches is how a broken read path stays broken, and the flag itself is the
 // way back.
 //
-// The write methods and LoadVehicleGroups stay local on purpose: writes still
-// land in the local tables until P4, and the attestation publisher must
-// describe what was actually written, not what tenancy currently mirrors.
+// LoadVehicleGroups stays on the local mirror on purpose: it serves the same
+// per-vehicle view the scope-filtering SQL joins against, and both read the
+// mirror until P5 drops the local tables.
 
 // ListGroupsView is ListGroups for the read-only management surface.
 func (s *FleetGroupService) ListGroupsView(ctx context.Context, tenant models.Tenant) ([]GroupWithCount, error) {

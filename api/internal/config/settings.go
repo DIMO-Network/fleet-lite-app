@@ -39,17 +39,6 @@ type Settings struct {
 	// key that anybody can compute. Nothing errors and nothing logs.
 	TenantSecretEncKey string `yaml:"TENANT_SECRET_ENC_KEY"`
 
-	// DropForeignTenantGroups enforces tenant-matching on incoming group
-	// attestations: a group is accepted only when its id is prefixed with the
-	// tenant being reconciled.
-	//
-	// MUST stay false until fleet-lite and the oracle agree on tenant uuids and
-	// fleet-lite has republished its own groups. Today the same company has a
-	// different uuid on each side, so enforcing the match drops every group the
-	// oracle asserts — and reconcile then removes the memberships that depend on
-	// them. See docs/operator-tenancy/07-r1-group-id-migration.md.
-	DropForeignTenantGroups bool `yaml:"DROP_FOREIGN_TENANT_GROUPS"`
-
 	// fleet-tenancy-api — the shared source of truth for tenants, users,
 	// memberships and entitlements. Cluster-internal only; its chart publishes
 	// no ingress, so TenancyAPIURL is a .svc.cluster.local address.
@@ -67,15 +56,12 @@ type Settings struct {
 	TenancyAPIURL url.URL `yaml:"TENANCY_API_URL"`
 	TenancyAPIKey string  `yaml:"TENANCY_API_KEY"` // secret
 
-	// GroupsFromTenancy flips fleet-group READS to fleet-tenancy-api — P3 of
-	// the groups move (fleet-tenancy-api docs/plans/01-groups-into-tenancy.md).
-	// Writes and the attestation sync stay local either way; they move in P4.
+	// GroupsFromTenancy only chooses where the display READS come from —
+	// fleet-tenancy-api when on, the local mirror tables when off. Writes go
+	// to tenancy unconditionally since P4; it owns the record either way.
 	//
-	// TEMPORARY, like TENANCY_AUTHZ_ENABLED was: it exists so the read path can
-	// be proven (and reverted) independently of the write cutover, and is
-	// deleted in P4 when the local tables stop being written. While it is on,
-	// a local group write is served back only after the next backfill-groups
-	// run — `groups-diff` is what watches that gap.
+	// TEMPORARY: both the flag and the local tables go away in P5, when the
+	// scope-filtering SQL stops joining against the mirror.
 	GroupsFromTenancy bool `yaml:"GROUPS_FROM_TENANCY"`
 
 	// DIMO Identity API

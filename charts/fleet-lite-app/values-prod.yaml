@@ -19,7 +19,6 @@ env:
   API_PORT: '8084'
   MONITORING_PORT: '8085'
   LOG_LEVEL: info
-  DROP_FOREIGN_TENANT_GROUPS: 'true'
   SERVICE_NAME: fleet-lite-app
   DB_PORT: '5432'
   DB_NAME: fleets_lite

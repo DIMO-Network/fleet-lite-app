@@ -51,8 +51,8 @@ TELEMETRY_API_URL: https://telemetry-api.dimo.zone/query
 ## TRUSTED_CALLER_KEYS. Empty is fine until something actually calls it.
 TENANCY_API_URL: 'http://localhost:3010'
 TENANCY_API_KEY: ''
-## P3 of the groups move: serve fleet-group READS from the tenancy service.
-## Writes and the attestation sync stay local until P4. Temporary flag.
+## Serve fleet-group display READS from the tenancy service (writes always go
+## there since P4). The flag and the local mirror tables go away in P5.
 GROUPS_FROM_TENANCY: false
 
 ## Chain config (polygon mainnet)

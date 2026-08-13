@@ -39,13 +39,25 @@ var (
 // fields may be nested, mirroring the wrapper shape the extract API uses.
 var registrationWrapperKeys = []string{"data", "fields", "result", "document"}
 
+// DefaultFetchLimit bounds how many recent CEs we pull per vehicle when looking
+// for the latest value-bearing document.
+const DefaultFetchLimit = 50
+
+// SyncOpts tunes a single vehicle sync.
+type SyncOpts struct {
+	// DryRun logs the changes that would be made without writing.
+	DryRun bool
+	// Limit overrides how many recent CEs to pull (DefaultFetchLimit when 0).
+	Limit int
+}
+
 // LicensePlateSyncService is the read/cache half of the vehicle-registration
 // feature: it reads a vehicle's latest dimo.document.vehicle.registration
 // attestation and caches the registration fields we surface — license_plate and
 // vin — into vehicles.license_plate / vehicles.vin. It is a pure consumer —
-// there is no publish path here (mirrors GroupSyncService's pull, but these are
-// single scalars so there is no membership reconcile). The
-// import-group-attestations cron drives it per vehicle alongside the group sync.
+// there is no publish path here, and these are single scalars so there is no
+// membership-style reconcile. The documents controller drives it lazily after
+// a registration document is attested.
 type LicensePlateSyncService struct {
 	logger       *zerolog.Logger
 	pdb          *db.Store
