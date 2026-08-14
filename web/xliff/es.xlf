@@ -334,10 +334,6 @@
   <source>Language</source>
   <target>Idioma</target>
 </trans-unit>
-<trans-unit id="s21b06c38fc4164db">
-  <source>Advanced</source>
-  <target>Avanzado</target>
-</trans-unit>
 <trans-unit id="s7217759ddfc4c5e0">
   <source>Measurement Units</source>
   <target>Unidades de Medida</target>
@@ -1631,6 +1627,78 @@
 <trans-unit id="s47d06425d5d89344">
   <source>Search by name, VIN, plate or token…</source>
   <target>Buscar por nombre, VIN, placa o token…</target>
+</trans-unit>
+<trans-unit id="s644b4e3cd4845bbe">
+  <source>Memberships</source>
+        <target>Membresías</target>
+</trans-unit>
+<trans-unit id="sa74976c6604e644a">
+  <source>1 month</source>
+        <target>1 mes</target>
+</trans-unit>
+<trans-unit id="scfdf6a9c76e5e2cc">
+  <source><x id="0" equiv-text="${months}"/> months</source>
+        <target><x id="0" equiv-text="${months}"/> meses</target>
+</trans-unit>
+<trans-unit id="s7b54d70b8a0574f5">
+  <source>Could not load your memberships.</source>
+        <target>No se pudieron cargar sus membresías.</target>
+</trans-unit>
+<trans-unit id="sa45a194b58837e4f">
+  <source>Active</source>
+        <target>Activa</target>
+</trans-unit>
+<trans-unit id="s86959994f28077dc">
+  <source>Expiring soon</source>
+        <target>Por vencer</target>
+</trans-unit>
+<trans-unit id="s3bb786d3b55ba37c">
+  <source>Cancelled</source>
+        <target>Cancelada</target>
+</trans-unit>
+<trans-unit id="sf08e316352742c78">
+  <source>expired <x id="0" equiv-text="${formatDate(m.expiresAt)}"/></source>
+        <target>venció el <x id="0" equiv-text="${formatDate(m.expiresAt)}"/></target>
+</trans-unit>
+<trans-unit id="sdbea9101dfaf8dc1">
+  <source>renews <x id="0" equiv-text="${formatDate(m.expiresAt)}"/></source>
+        <target>se renueva el <x id="0" equiv-text="${formatDate(m.expiresAt)}"/></target>
+</trans-unit>
+<trans-unit id="s04f96936f818222f">
+  <source>Loading your memberships…</source>
+        <target>Cargando sus membresías…</target>
+</trans-unit>
+<trans-unit id="s35776d3111320f2b">
+  <source>Memberships aren’t switched on yet</source>
+        <target>Las membresías aún no están activadas</target>
+</trans-unit>
+<trans-unit id="sac325c8a98470f60">
+  <source>When they are, everything your fleet has paid for will be listed here.</source>
+        <target>Cuando lo estén, aquí aparecerá todo lo que su flota haya pagado.</target>
+</trans-unit>
+<trans-unit id="s8601fc44d6199b21">
+  <source>No memberships yet</source>
+        <target>Aún no hay membresías</target>
+</trans-unit>
+<trans-unit id="s6405e0406369e373">
+  <source>Memberships are arranged through your fleet operator. Once they add one for a vehicle, it appears here.</source>
+        <target>Las membresías se gestionan a través del operador de su flota. Cuando agreguen una para un vehículo, aparecerá aquí.</target>
+</trans-unit>
+<trans-unit id="s0074b1b0f3f42d40">
+  <source>Back to account</source>
+        <target>Volver a la cuenta</target>
+</trans-unit>
+<trans-unit id="sccf5b713307c1067">
+  <source>Only vehicles with an active membership appear in your fleet. If a vehicle you expect is missing, its membership has run out — your fleet operator can renew it or move it to another vehicle.</source>
+        <target>Solo los vehículos con una membresía activa aparecen en su flota. Si falta un vehículo que espera ver, su membresía se ha agotado: el operador de su flota puede renovarla o moverla a otro vehículo.</target>
+</trans-unit>
+<trans-unit id="se7c93795b8b16780">
+  <source>One membership expires within 30 days. Your fleet operator renews it.</source>
+        <target>Una membresía vence en 30 días o menos. El operador de su flota la renueva.</target>
+</trans-unit>
+<trans-unit id="sf0aae90b8bda45bf">
+  <source><x id="0" equiv-text="${expiring}"/> memberships expire within 30 days. Your fleet operator renews them.</source>
+        <target><x id="0" equiv-text="${expiring}"/> membresías vencen en 30 días o menos. El operador de su flota las renueva.</target>
 </trans-unit>
 </body>
 </file>

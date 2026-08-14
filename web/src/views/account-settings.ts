@@ -8,7 +8,8 @@ import { setLocale } from '../localization.ts';
 import { unitsLabel } from '../utils/units.ts';
 import '../elements/tenant-members.ts';
 
-interface Row { icon: string; label: string; trailing?: string; onClick?: () => void; }
+// A row is either a navigation link (href) or an in-place action (onClick).
+interface Row { icon: string; label: string; trailing?: string; onClick?: () => void; href?: string; }
 
 @customElement('account-settings-view')
 export class AccountSettingsView extends LitElement {
@@ -48,7 +49,14 @@ export class AccountSettingsView extends LitElement {
                     setLocale(next).then(() => window.location.reload());
                 },
             },
-            { icon: 'developer_mode', label: msg('Advanced') },
+            // Replaces a dead 'Advanced' placeholder. What a customer actually
+            // needs from here is the answer to "what have I paid for, and why
+            // is a vehicle missing" — which is the memberships page.
+            {
+                icon: 'card_membership',
+                label: msg('Memberships'),
+                href: `#/${this.tenantId}/memberships`,
+            },
             {
                 icon: 'straighten',
                 label: msg('Measurement Units'),
@@ -204,11 +212,13 @@ export class AccountSettingsView extends LitElement {
     ];
 
     private renderRow(r: Row) {
+        // A row with an href navigates natively (hash routing picks it up); a
+        // row with an onClick acts in place and must not move the page.
         const onClick = r.onClick
             ? (e: Event) => { e.preventDefault(); r.onClick?.(); }
             : undefined;
         return html`
-            <a class="row" href="#" @click=${onClick}>
+            <a class="row" href=${r.href ?? '#'} @click=${onClick}>
                 <div class="left-group">
                     <span class="material-symbols-outlined muted">${r.icon}</span>
                     <span class="label">${r.label}</span>
