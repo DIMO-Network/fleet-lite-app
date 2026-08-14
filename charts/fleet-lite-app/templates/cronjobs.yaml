@@ -1,4 +1,11 @@
 {{- range .Values.cronJobs }}
+{{- /*
+  Numeric overrides are read with hasKey rather than `default`. Helm's `default`
+  treats 0 as empty, so an explicit 0 — backoffLimit: 0 to stop a deterministic
+  failure being retried, ttlSecondsAfterFinished: 0 to bin a pod immediately —
+  was silently replaced by the fallback, with nothing to indicate the value had
+  been ignored.
+*/}}
 {{- if .enabled }}
 ---
 apiVersion: batch/v1
@@ -11,13 +18,13 @@ metadata:
 spec:
   schedule: {{ .schedule | quote }}
   concurrencyPolicy: {{ .concurrencyPolicy | default "Forbid" }}
-  successfulJobsHistoryLimit: {{ .successfulJobsHistoryLimit | default 3 }}
-  failedJobsHistoryLimit: {{ .failedJobsHistoryLimit | default 3 }}
+  successfulJobsHistoryLimit: {{ if hasKey . "successfulJobsHistoryLimit" }}{{ .successfulJobsHistoryLimit }}{{ else }}3{{ end }}
+  failedJobsHistoryLimit: {{ if hasKey . "failedJobsHistoryLimit" }}{{ .failedJobsHistoryLimit }}{{ else }}3{{ end }}
   jobTemplate:
     spec:
-      backoffLimit: {{ .backoffLimit | default 1 }}
-      activeDeadlineSeconds: {{ .activeDeadlineSeconds | default 1800 }}
-      ttlSecondsAfterFinished: {{ .ttlSecondsAfterFinished | default 3600 }}
+      backoffLimit: {{ if hasKey . "backoffLimit" }}{{ .backoffLimit }}{{ else }}1{{ end }}
+      activeDeadlineSeconds: {{ if hasKey . "activeDeadlineSeconds" }}{{ .activeDeadlineSeconds }}{{ else }}1800{{ end }}
+      ttlSecondsAfterFinished: {{ if hasKey . "ttlSecondsAfterFinished" }}{{ .ttlSecondsAfterFinished }}{{ else }}3600{{ end }}
       template:
         metadata:
           labels:
@@ -53,7 +60,7 @@ spec:
           securityContext:
             {{- toYaml $.Values.podSecurityContext | nindent 12 }}
           restartPolicy: {{ .restartPolicy | default "Never" }}
-          terminationGracePeriodSeconds: {{ .terminationGracePeriodSeconds | default 30 }}
+          terminationGracePeriodSeconds: {{ if hasKey . "terminationGracePeriodSeconds" }}{{ .terminationGracePeriodSeconds }}{{ else }}30{{ end }}
           containers:
             - name: {{ .name }}
               securityContext:

@@ -99,6 +99,29 @@ cronJobs:
       limits:
         cpu: 500m
         memory: 256Mi
+  # Runs after mirror-groups so it measures the mirrored state, not a race with
+  # it. Exits non-zero on differ or missing-remote, and backoffLimit 0 keeps
+  # that as one clear failed job: the verdict is deterministic, so a retry only
+  # produces a second identical failure to read.
+  #
+  # This exists because the result was going stale. groups-diff is one of the
+  # two commands the P5b soak is judged by, and it was manual — so the last
+  # "differ=0" predated the P5a read-path rewrite and had to be re-run by hand
+  # to mean anything. Evidence nobody is keeping is not evidence.
+  - name: groups-diff
+    enabled: true
+    schedule: 45 6 * * *
+    backoffLimit: 0
+    ttlSecondsAfterFinished: 259200
+    script: |
+      /fleet-lite-app groups-diff
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
   - name: mirror-groups
     enabled: true
     schedule: 15 6 * * *
