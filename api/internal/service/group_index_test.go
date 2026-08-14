@@ -251,6 +251,64 @@ func TestGroupIndexCacheServesRepeatedReadsFromOneRemoteCall(t *testing.T) {
 	assert.Equal(t, 2, remote.calls)
 }
 
+// invalidateGroupIndex only reaches the process that handled the write, and this
+// app runs more than one replica. So a group mutation served by pod A leaves pod
+// B's index stale until the TTL, and the operator watching the management screen
+// sees their change fail to land on whichever loads the balancer sends to B.
+//
+// The management reads therefore have to go to tenancy rather than trust the
+// cache. The fake standing still while its data changes underneath is exactly
+// what a sibling pod's write looks like from here.
+func TestManagementViewsDoNotServeAnotherPodsStaleIndex(t *testing.T) {
+	remote := &fakeRemoteGroups{groups: indexFixture()}
+	s := remoteViewFixture(remote)
+	ctx := context.Background()
+
+	// Warm this pod's cache, as any earlier request on it would have.
+	_, err := s.groupIndex(ctx, viewTenant)
+	require.NoError(t, err)
+	require.Equal(t, 1, remote.calls)
+
+	// A sibling pod adds a vehicle to a group. Tenancy now says something new;
+	// this pod was never told.
+	grown := make([]models.RemoteFleetGroup, len(remote.groups))
+	copy(grown, remote.groups)
+	grown[0].VehicleCount++
+	grown[0].TokenIDs = append(append([]int64{}, grown[0].TokenIDs...), 4242)
+	remote.groups = grown
+
+	t.Run("ListGroupsView shows the new count", func(t *testing.T) {
+		got, err := s.ListGroupsView(ctx, viewTenant)
+		require.NoError(t, err)
+		// By id, not position: the view is name-ordered, the fixture isn't.
+		var found *GroupWithCount
+		for i := range got {
+			if got[i].Group.ID == grown[0].ID {
+				found = &got[i]
+			}
+		}
+		require.NotNil(t, found, "the grown group should still be listed")
+		assert.Equal(t, grown[0].VehicleCount, found.VehicleCount,
+			"the operator just made this change; the count has to move")
+	})
+
+	t.Run("GetGroupView shows the new member", func(t *testing.T) {
+		_, members, err := s.GetGroupView(ctx, viewTenant, grown[0].ID)
+		require.NoError(t, err)
+		assert.Contains(t, members, int64(4242))
+	})
+
+	// The fresh read repairs the entry rather than bypassing it, so the scope
+	// filter — the reason the cache exists — is now correct too, and still free.
+	t.Run("the repaired cache serves the scope filter without another call", func(t *testing.T) {
+		before := remote.calls
+		idx, err := s.groupIndex(ctx, viewTenant)
+		require.NoError(t, err)
+		assert.Equal(t, before, remote.calls, "scope filter must stay a cache read")
+		assert.Contains(t, idx.MemberTokenIDs(grown[0].ID), int64(4242))
+	})
+}
+
 func TestGroupIndexCacheIsBustedByEveryWrite(t *testing.T) {
 	name := "Trucks"
 	// AddVehicle is absent on purpose: it validates the token id against this

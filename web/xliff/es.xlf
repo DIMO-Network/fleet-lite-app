@@ -1628,6 +1628,10 @@
   <source>No groups yet. Create one to organize your fleet.</source>
   <target>Aún no hay grupos. Cree uno para organizar su flota.</target>
 </trans-unit>
+<trans-unit id="s47d06425d5d89344">
+  <source>Search by name, VIN, plate or token…</source>
+  <target>Buscar por nombre, VIN, placa o token…</target>
+</trans-unit>
 </body>
 </file>
 </xliff>
