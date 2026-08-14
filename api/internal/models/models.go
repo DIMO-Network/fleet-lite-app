@@ -45,6 +45,37 @@ type RemoteFleetGroup struct {
 	TokenIDs     []int64   `json:"tokenIds"`
 }
 
+// RemoteActiveMemberships is the gate read from
+// GET /v1/tenants/{id}/active-vehicle-memberships: whether membership
+// enforcement is on for this tenant, and the token ids currently paid for.
+// Both in one response, deliberately — two calls could straddle a toggle.
+// Keep it in step with that endpoint's envelope.
+type RemoteActiveMemberships struct {
+	Enforced bool    `json:"enforced"`
+	TokenIDs []int64 `json:"tokenIds"`
+}
+
+// RemoteMembership is one vehicle membership as fleet-tenancy-api serves it
+// from GET /v1/tenants/{id}/vehicle-memberships. Token id only — VIN, plate
+// and model are joined from this app's own vehicle list, which owns them.
+// Keep it in step with that service's models.VehicleMembership.
+type RemoteMembership struct {
+	ID             string  `json:"id"`
+	VehicleTokenID int64   `json:"vehicleTokenId"`
+	TermMonths     int     `json:"termMonths"`
+	StartsAt       string  `json:"startsAt"`
+	ExpiresAt      string  `json:"expiresAt"`
+	CanceledAt     *string `json:"canceledAt"`
+	Status         string  `json:"status"`
+}
+
+// RemoteMembershipList is the display list for the memberships page, enforced
+// flag riding along for the same straddle reason as RemoteActiveMemberships.
+type RemoteMembershipList struct {
+	Enforced    bool               `json:"enforced"`
+	Memberships []RemoteMembership `json:"memberships"`
+}
+
 // Vehicle is the slim view of an identity-api vehicle node that fleet-lite-app cares about.
 type Vehicle struct {
 	ID                string             `json:"id"`

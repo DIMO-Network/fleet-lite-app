@@ -253,6 +253,29 @@ func (t *TenancyAPI) VehicleGroups(ctx context.Context, tenant models.Tenant) ([
 	return res.Groups, nil
 }
 
+// ActiveVehicleMemberships is the membership gate read: whether enforcement is
+// on for this tenant, and the token ids currently paid for. On the vehicle-list
+// hot path once enforcement is live, so it is cached by MembershipService —
+// there rather than here for the same reason the group index cache lives in
+// FleetGroupService.
+func (t *TenancyAPI) ActiveVehicleMemberships(ctx context.Context, tenant models.Tenant) (*models.RemoteActiveMemberships, error) {
+	var res models.RemoteActiveMemberships
+	if err := t.get(ctx, tenant, "/v1/tenants/"+url.PathEscape(tenant.ID)+"/active-vehicle-memberships", &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+// VehicleMemberships is the display list for the memberships page —
+// screen-shaped, so uncached.
+func (t *TenancyAPI) VehicleMemberships(ctx context.Context, tenant models.Tenant) (*models.RemoteMembershipList, error) {
+	var res models.RemoteMembershipList
+	if err := t.get(ctx, tenant, "/v1/tenants/"+url.PathEscape(tenant.ID)+"/vehicle-memberships", &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
 // ----- Group writes (P4 of the groups move) -----
 //
 // Every group mutation writes through to fleet-tenancy-api, which owns the

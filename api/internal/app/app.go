@@ -83,10 +83,19 @@ func App(
 	vehicleSvc.UseGroupIndex(groupSvc)
 	geofenceSvc.UseGroupIndex(groupSvc)
 	invitationSvc.UseGroupIndex(groupSvc)
+	// Vehicle memberships (plan 02, step 6): the commercial gate. Wired only
+	// when a tenancy client exists; a no-op for every tenant until an operator
+	// flips memberships_enforced, which is what makes this safe to ship dark.
+	var membershipSvc *service.MembershipService
+	if tenancyAPI != nil && tenancyAPI.Configured() {
+		membershipSvc = service.NewMembershipService(logger, tenancyAPI)
+		vehicleSvc.UseMemberships(membershipSvc)
+	}
+	membershipsCtrl := controllers.NewMembershipsController(logger, membershipSvc)
 	geofenceDetectionSvc := service.NewGeofenceDetectionService(logger, pdb, telemetryAPI, geofenceSvc)
 	geofencesCtrl := controllers.NewGeofencesController(logger, geofenceSvc, attestSvc, geofenceDetectionSvc, vehicleSvc)
 	settingsCtrl := controllers.NewSettingsController(settings, logger)
-	tenantsCtrl := controllers.NewTenantsController(logger, settings, tenantSvc, vehicleSvc, identity, authProvider)
+	tenantsCtrl := controllers.NewTenantsController(logger, settings, tenantSvc, vehicleSvc, identity, authProvider, membershipSvc)
 	invitationsCtrl := controllers.NewInvitationsController(logger, tenantSvc, invitationSvc)
 	webhooksCtrl := controllers.NewWebhooksController(logger, settings, invitationSvc)
 	userPrefsSvc := service.NewUserPrefsService(logger, pdb)
@@ -142,6 +151,10 @@ func App(
 	// The caller's own role + group scope for the current tenant (drives
 	// role/scope-aware UI). See docs/GROUP_ACCESS_PLAN.md.
 	tenantApp.Get("/me/access", tenantsCtrl.GetMyAccess)
+	// Read-only: memberships are bought and administered through the operator.
+	// 404s when no tenancy client is configured, which the frontend renders as
+	// "not switched on yet".
+	tenantApp.Get("/memberships", membershipsCtrl.GetMemberships)
 
 	tenantApp.Get("/vehicles", vehiclesCtrl.GetVehicles)
 	tenantApp.Get("/vehicles/:tokenID", vehiclesCtrl.GetVehicle)

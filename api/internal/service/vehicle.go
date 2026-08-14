@@ -26,32 +26,66 @@ import (
 // allowedGroupIDs for which it means "reaches everything", and every caller
 // intersects against it rather than skipping the intersection when it is empty.
 func (s *VehicleService) AccessibleTokenIDs(ctx context.Context, tenant models.Tenant, allowedGroupIDs []string) (map[int64]bool, error) {
+	var out map[int64]bool
 	if s.groupsIndexed() {
 		idx, err := s.groups.groupIndex(ctx, tenant)
 		if err != nil {
 			return nil, err
 		}
 		ids := idx.TokenIDsForGroups(allowedGroupIDs)
-		out := make(map[int64]bool, len(ids))
+		out = make(map[int64]bool, len(ids))
 		for _, id := range ids {
 			out[id] = true
 		}
-		return out, nil
+	} else {
+		var rows []struct {
+			TokenID int64 `boil:"token_id"`
+		}
+		if err := queries.Raw(
+			`SELECT DISTINCT token_id FROM vehicle_fleet_groups WHERE tenant_id = $1 AND fleet_group_id = ANY($2)`,
+			tenant.ID, pq.Array(allowedGroupIDs),
+		).Bind(ctx, s.pdb.DBS().Reader, &rows); err != nil {
+			return nil, fmt.Errorf("accessible token ids: %w", err)
+		}
+		out = make(map[int64]bool, len(rows))
+		for _, r := range rows {
+			out[r.TokenID] = true
+		}
 	}
-	var rows []struct {
-		TokenID int64 `boil:"token_id"`
-	}
-	if err := queries.Raw(
-		`SELECT DISTINCT token_id FROM vehicle_fleet_groups WHERE tenant_id = $1 AND fleet_group_id = ANY($2)`,
-		tenant.ID, pq.Array(allowedGroupIDs),
-	).Bind(ctx, s.pdb.DBS().Reader, &rows); err != nil {
-		return nil, fmt.Errorf("accessible token ids: %w", err)
-	}
-	out := make(map[int64]bool, len(rows))
-	for _, r := range rows {
-		out[r.TokenID] = true
+	// Membership gate: with enforcement on, group scope only reaches the paid
+	// subset. Geofence counts read this set, so skipping the intersection here
+	// would leave those screens counting vehicles the fleet no longer shows.
+	if err := s.intersectActiveMemberships(ctx, tenant, out); err != nil {
+		return nil, err
 	}
 	return out, nil
+}
+
+// intersectActiveMemberships narrows a token-id set to the actively-membered
+// subset when enforcement is on for the tenant. No-op when unenforced or when
+// no membership gate is wired; an unavailable answer propagates rather than
+// passing the set through unfiltered.
+func (s *VehicleService) intersectActiveMemberships(ctx context.Context, tenant models.Tenant, set map[int64]bool) error {
+	if s.memberships == nil {
+		return nil
+	}
+	enforced, tokenIDs, err := s.memberships.ActiveTokens(ctx, tenant)
+	if err != nil {
+		return err
+	}
+	if !enforced {
+		return nil
+	}
+	active := make(map[int64]bool, len(tokenIDs))
+	for _, id := range tokenIDs {
+		active[id] = true
+	}
+	for id := range set {
+		if !active[id] {
+			delete(set, id)
+		}
+	}
+	return nil
 }
 
 // allowedGroupsFilter restricts a vehicles query to tokens inside any of the
@@ -90,6 +124,16 @@ type VehicleService struct {
 	// sync-only construction in cmd/) or an unflagged source keeps every scope
 	// read on the local mirror.
 	groups groupIndexSource
+
+	// memberships answers "which vehicles are paid for". nil (the sync-only
+	// construction in cmd/, or a deployment without a tenancy client) means no
+	// membership filtering at all.
+	memberships membershipGate
+}
+
+// membershipGate is the slice of MembershipService the vehicle filters need.
+type membershipGate interface {
+	ActiveTokens(ctx context.Context, tenant models.Tenant) (enforced bool, tokenIDs []int64, err error)
 }
 
 func NewVehicleService(logger *zerolog.Logger, pdb *db.Store, identityAPI gateway.IdentityAPI) *VehicleService {
@@ -99,6 +143,43 @@ func NewVehicleService(logger *zerolog.Logger, pdb *db.Store, identityAPI gatewa
 // UseGroupIndex wires the group index that scopes limited members. Without it
 // the scope filters read the local mirror.
 func (s *VehicleService) UseGroupIndex(src groupIndexSource) { s.groups = src }
+
+// UseMemberships wires the membership gate. Without it (sync-only builds, or
+// no tenancy client) no membership filtering happens — which is also the
+// correct behaviour for every tenant until an operator flips enforcement on.
+func (s *VehicleService) UseMemberships(m membershipGate) { s.memberships = m }
+
+// membershipFilter restricts a vehicles query to tokens with an active
+// membership, when this tenant's operator has enforcement turned on.
+//
+// UNLIKE scopeFilter THIS APPLIES TO OWNERS TOO. scopeFilter runs only for
+// limited members (allowedGroupIDs != nil); enforcement is per tenant and
+// gates everyone, so this is appended unconditionally by its callers. Folding
+// it into scopeFilter would silently exempt every unrestricted member — an
+// owner-account test would pass and the feature would be half-off in
+// production.
+//
+// AN EMPTY SET MUST MATCH ZERO VEHICLES. `token_id = ANY('{}')` is false for
+// every row, which is the correct answer for a tenant with enforcement on and
+// no active memberships — that customer has paid for nothing. Do not rewrite
+// this as `if len(tokenIDs) > 0 { apply }`; see allowedTokensFilter above for
+// what that inversion did during the backfill.
+//
+// A tenancy failure propagates as ErrMembershipScopeUnavailable and must never
+// degrade into an unfiltered query, mirroring ErrGroupScopeUnavailable.
+func (s *VehicleService) membershipFilter(ctx context.Context, tenant models.Tenant) (qm.QueryMod, error) {
+	if s.memberships == nil {
+		return nil, nil
+	}
+	enforced, tokenIDs, err := s.memberships.ActiveTokens(ctx, tenant)
+	if err != nil {
+		return nil, err
+	}
+	if !enforced {
+		return nil, nil
+	}
+	return qm.Where("token_id = ANY(?)", pq.Array(tokenIDs)), nil
+}
 
 func (s *VehicleService) groupsIndexed() bool { return s.groups != nil && s.groups.groupsIndexed() }
 
@@ -180,6 +261,13 @@ func (s *VehicleService) ListVehicles(ctx context.Context, tenant models.Tenant,
 		// stable tiebreaker. Favourites are pinned to the top client-side.
 		qm.OrderBy("last_seen DESC NULLS LAST, token_id"),
 	}
+	// Membership gate first, unconditionally — it applies to owners too, which
+	// is exactly what makes it not foldable into the limited-member block below.
+	if mfilter, err := s.membershipFilter(ctx, tenant); err != nil {
+		return nil, err
+	} else if mfilter != nil {
+		mods = append(mods, mfilter)
+	}
 	if allowedGroupIDs != nil {
 		filter, err := s.scopeFilter(ctx, tenant, allowedGroupIDs)
 		if err != nil {
@@ -215,6 +303,14 @@ func (s *VehicleService) GetVehicle(ctx context.Context, tenant models.Tenant, t
 	mods := []qm.QueryMod{
 		qm.Where("tenant_id = ?", tenant.ID),
 		qm.And("token_id = ?", tokenID),
+	}
+	// Membership gate, owners included. An unmembered vehicle misses this
+	// filter and returns the same error a nonexistent one does — the existing
+	// 404-not-403 convention, so nobody can probe what exists.
+	if mfilter, err := s.membershipFilter(ctx, tenant); err != nil {
+		return nil, err
+	} else if mfilter != nil {
+		mods = append(mods, mfilter)
 	}
 	if allowedGroupIDs != nil {
 		filter, ferr := s.scopeFilter(ctx, tenant, allowedGroupIDs)
