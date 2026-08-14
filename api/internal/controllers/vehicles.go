@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"github.com/DIMO-Network/fleet-lite-app/internal/config"
-	"github.com/DIMO-Network/fleet-lite-app/internal/models"
 	"github.com/DIMO-Network/fleet-lite-app/internal/service"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
@@ -53,25 +52,8 @@ func (v *VehiclesController) GetVehicles(c *fiber.Ctx) error {
 		v.logger.Err(err).Str("tenant", tenant.ID).Msg("failed to load vehicle groups")
 		groupsByToken = nil
 	}
-	allowedSet := toSet(allowed)
 	for i := range vehicles {
-		g := groupsByToken[vehicles[i].TokenID]
-		// Limited members shouldn't see refs to groups outside their scope even
-		// on vehicles they can access via another (allowed) group.
-		if limited && g != nil {
-			kept := g[:0:0]
-			for _, ref := range g {
-				if allowedSet[ref.ID] {
-					kept = append(kept, ref)
-				}
-			}
-			g = kept
-		}
-		if g != nil {
-			vehicles[i].Groups = g
-		} else {
-			vehicles[i].Groups = []models.GroupRef{}
-		}
+		vehicles[i].Groups = scopeGroupRefs(groupsByToken[vehicles[i].TokenID], limited, allowed)
 	}
 	return c.JSON(fiber.Map{"vehicles": vehicles})
 }
@@ -87,7 +69,7 @@ func (v *VehiclesController) GetVehicle(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	allowed, _ := GetAllowedGroups(c)
+	allowed, limited := GetAllowedGroups(c)
 	vehicle, err := v.vehicleSvc.GetVehicle(c.Context(), tenant, int64(tokenID), allowed)
 	if err != nil {
 		// 503, not the usual 404: "we could not check" is not "it isn't there".
@@ -98,6 +80,18 @@ func (v *VehiclesController) GetVehicle(c *fiber.Ctx) error {
 		v.logger.Err(err).Uint64("tokenID", tokenID).Str("tenant", tenant.ID).Msg("failed to fetch vehicle")
 		return fiber.NewError(fiber.StatusNotFound, "vehicle not found")
 	}
+
+	// Attach group membership, same as the list endpoint — the detail view needs
+	// it too, and this is the only place it can come from. Best-effort for the
+	// same reason: a group-load failure shouldn't 500 an otherwise-good vehicle.
+	// Failing to an empty slice only ever narrows what's shown, never widens it.
+	groups, gerr := v.groupSvc.VehicleGroups(c.Context(), tenant, int64(tokenID))
+	if gerr != nil {
+		v.logger.Err(gerr).Uint64("tokenID", tokenID).Str("tenant", tenant.ID).Msg("failed to load vehicle groups")
+		groups = nil
+	}
+	vehicle.Groups = scopeGroupRefs(groups, limited, allowed)
+
 	return c.JSON(vehicle)
 }
 

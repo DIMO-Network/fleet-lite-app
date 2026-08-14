@@ -63,6 +63,31 @@ func toSet(ids []string) map[string]bool {
 	return set
 }
 
+// scopeGroupRefs narrows a vehicle's group refs to a limited member's allowed
+// groups. A vehicle is reachable via any one of its groups, so a limited member
+// can legitimately hold a vehicle that also belongs to groups they can't see —
+// returning those refs would leak the names of groups outside their scope.
+//
+// Callers get a non-nil slice back, so the JSON is always `[]` and never `null`.
+// A nil `groups` (the group load failed) narrows to empty rather than widening
+// to everything: showing no groups is wrong but safe, showing all of them isn't.
+func scopeGroupRefs(groups []models.GroupRef, limited bool, allowed []string) []models.GroupRef {
+	if groups == nil {
+		return []models.GroupRef{}
+	}
+	if !limited {
+		return groups
+	}
+	allowedSet := toSet(allowed)
+	kept := groups[:0:0]
+	for _, ref := range groups {
+		if allowedSet[ref.ID] {
+			kept = append(kept, ref)
+		}
+	}
+	return kept
+}
+
 // RequireFullAccess rejects limited members. Management mutations (fleet-group
 // and geofence CRUD) are reserved for owners and full-access members.
 func RequireFullAccess(c *fiber.Ctx) error {
