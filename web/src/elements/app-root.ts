@@ -16,6 +16,7 @@ import '../views/groups-management.ts';
 import '../views/geofences-management.ts';
 import '../views/fleet-list-view.ts';
 import '../views/tco-view.ts';
+import '../views/memberships-view.ts';
 
 type NavKey = 'vehicles' | 'stats' | 'groups' | 'geofences' | 'glovebox' | 'tco' | 'settings';
 
@@ -72,6 +73,7 @@ export class AppRoot extends LitElement {
             { path: '/:tenantId/glovebox',            render: () => html`<glovebox-view .tenantId=${this.tenantId}></glovebox-view>` },
             { path: '/:tenantId/tco',                 render: () => html`<tco-view .tenantId=${this.tenantId}></tco-view>` },
             { path: '/:tenantId/settings',            render: () => html`<account-settings-view .tenantId=${this.tenantId}></account-settings-view>` },
+            { path: '/:tenantId/memberships',         render: () => html`<memberships-view .tenantId=${this.tenantId}></memberships-view>` },
             { path: '/:tenantId/stats',               render: () => html`<fleet-list-view .tenantId=${this.tenantId}></fleet-list-view>` },
         ]);
     }
@@ -163,6 +165,9 @@ export class AppRoot extends LitElement {
         if (path.startsWith('/glovebox')) return 'glovebox';
         if (path.startsWith('/tco')) return 'tco';
         if (path.startsWith('/settings')) return 'settings';
+        // Memberships is reached from the account page and has no nav entry of
+        // its own, so it keeps Account highlighted rather than clearing the nav.
+        if (path.startsWith('/memberships')) return 'settings';
         return 'vehicles';
     }
 
