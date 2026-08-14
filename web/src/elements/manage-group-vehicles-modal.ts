@@ -85,7 +85,13 @@ export class ManageGroupVehiclesModal extends LitElement {
             }
             .row .meta { flex: 1; min-width: 0; }
             .row .meta .title { font: var(--type-body-md); color: var(--primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-            .row .meta .sub2 { font: var(--type-label-caps); letter-spacing: 0.05em; text-transform: uppercase; color: var(--on-surface-variant); margin-top: 2px; }
+            /* Token · VIN · plate can outrun the row, so it clips rather than wraps
+               the card wider — the search box is how you find a specific one. */
+            .row .meta .sub2 {
+                font: var(--type-label-caps); letter-spacing: 0.05em; text-transform: uppercase;
+                color: var(--on-surface-variant); margin-top: 2px;
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            }
 
             .toggle {
                 width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
@@ -114,6 +120,25 @@ export class ManageGroupVehiclesModal extends LitElement {
         const d = v.definition;
         const parts = [d.year ? String(d.year) : '', d.make, d.model].filter(Boolean);
         return parts.length ? parts.join(' ') : msg(str`Vehicle #${v.tokenId}`);
+    }
+
+    /**
+     * The identifiers an operator actually recognises a vehicle by. Token id is
+     * always there; VIN and plate come from the registration attestation and are
+     * absent when unknown, so they are dropped rather than rendered blank.
+     */
+    private vehicleIdentifiers(v: Vehicle): string {
+        return [msg(str`Token #${v.tokenId}`), v.vin, v.licensePlate]
+            .filter(Boolean)
+            .join(' · ');
+    }
+
+    /** The same fields the row shows, lowercased for substring matching. */
+    private searchHaystack(v: Vehicle): string {
+        return [this.vehicleTitle(v), String(v.tokenId), v.vin, v.licensePlate]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
     }
 
     private dispatchClose() {
@@ -154,7 +179,7 @@ export class ManageGroupVehiclesModal extends LitElement {
     render() {
         const q = this.query.trim().toLowerCase();
         const filtered = q
-            ? this.vehicles.filter((v) => this.vehicleTitle(v).toLowerCase().includes(q) || String(v.tokenId).includes(q))
+            ? this.vehicles.filter((v) => this.searchHaystack(v).includes(q))
             : this.vehicles;
 
         return html`
@@ -168,7 +193,7 @@ export class ManageGroupVehiclesModal extends LitElement {
                 <div class="search">
                     <input
                         type="text"
-                        placeholder="${msg('Search vehicles…')}"
+                        placeholder="${msg('Search by name, VIN, plate or token…')}"
                         .value=${this.query}
                         @input=${(e: Event) => { this.query = (e.target as HTMLInputElement).value; }}
                     />
@@ -183,7 +208,7 @@ export class ManageGroupVehiclesModal extends LitElement {
                                 <div class="row">
                                     <div class="meta">
                                         <div class="title">${this.vehicleTitle(v)}</div>
-                                        <div class="sub2">${msg(str`Token #${v.tokenId}`)}</div>
+                                        <div class="sub2">${this.vehicleIdentifiers(v)}</div>
                                     </div>
                                     <button
                                         class=${member ? 'toggle member' : 'toggle'}

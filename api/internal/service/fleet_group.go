@@ -304,9 +304,38 @@ func (s *FleetGroupService) groupIndex(ctx context.Context, tenant models.Tenant
 	return idx, nil
 }
 
+// groupIndexFresh loads the tenant's index from tenancy, ignoring any cached
+// entry, and stores the result so the rest of this pod stops being stale too.
+//
+// It exists because invalidateGroupIndex only reaches the process that handled
+// the write. This app runs more than one replica, so a group mutation served by
+// one pod leaves every other pod's index stale for up to the TTL — from a
+// cache's point of view a sibling pod is an "other writer" exactly like an
+// operator in b2b-fleet-mgr-app. The management screens are the surfaces where
+// that shows: the operator makes a change and the count doesn't move, on
+// whichever fraction of loads the load balancer sends to a pod that missed the
+// invalidation.
+//
+// Only the screen-shaped reads pay for this. The per-request scope filter, which
+// is why the cache exists at all, still reads through groupIndex.
+func (s *FleetGroupService) groupIndexFresh(ctx context.Context, tenant models.Tenant) (*GroupIndex, error) {
+	if s.tenancy == nil {
+		return nil, fmt.Errorf("%w: tenancy client is not configured", ErrGroupScopeUnavailable)
+	}
+	groups, err := s.tenancy.VehicleGroups(ctx, tenant)
+	if err != nil {
+		return nil, fmt.Errorf("%w: load fleet groups from tenancy: %w", ErrGroupScopeUnavailable, err)
+	}
+	idx := NewGroupIndex(groups)
+	s.indexCache.Set(tenant.ID, idx, cache.DefaultExpiration)
+	return idx, nil
+}
+
 // invalidateGroupIndex drops a tenant's cached index. Called after every
 // successful remote write, which is strictly better than waiting out the TTL
 // and is the reason the cache sits on this service at all.
+//
+// In-process only: see groupIndexFresh for what that costs and who pays it.
 func (s *FleetGroupService) invalidateGroupIndex(tenantID string) {
 	s.indexCache.Delete(tenantID)
 }
@@ -760,11 +789,16 @@ func (s *FleetGroupService) GroupMemberTokenIDs(ctx context.Context, tenant mode
 // tenancy service once rather than twice.
 
 // ListGroupsView is ListGroups for the read-only management surface.
+//
+// Reads fresh rather than cached: this is the list the operator is looking at
+// when they add a vehicle to a group, so it has to show the write they just
+// made even when another pod handled it. Screen-shaped and low-rate, so the
+// extra tenancy call is affordable in a way it wouldn't be on the scope filter.
 func (s *FleetGroupService) ListGroupsView(ctx context.Context, tenant models.Tenant) ([]GroupWithCount, error) {
 	if !s.groupsIndexed() {
 		return s.ListGroups(ctx, tenant.ID)
 	}
-	idx, err := s.groupIndex(ctx, tenant)
+	idx, err := s.groupIndexFresh(ctx, tenant)
 	if err != nil {
 		return nil, err
 	}
@@ -796,7 +830,8 @@ func (s *FleetGroupService) GetGroupView(ctx context.Context, tenant models.Tena
 		}
 		return g, members, nil
 	}
-	idx, err := s.groupIndex(ctx, tenant)
+	// Fresh for the same reason as ListGroupsView — it backs the same screens.
+	idx, err := s.groupIndexFresh(ctx, tenant)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -119,6 +119,7 @@
 's45c535495627f524': `El correo de invitación nunca se envió. Usa Reenviar para intentarlo de nuevo.`,
 's467b030b9a34b3c8': `Promedio`,
 's46dd424bdc97f7b9': `Tiempo de conducción`,
+'s47d06425d5d89344': `Buscar por nombre, VIN, placa o token…`,
 's47f4637aaa012055': `Grupos de Flota`,
 's48cb998b9f54d836': `Firmando y almacenando su documento de forma segura con DIMO.`,
 's49b99bd09dbcc27a': `No se pudieron cargar los vehículos asignados`,
