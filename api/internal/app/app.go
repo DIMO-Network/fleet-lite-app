@@ -156,7 +156,6 @@ func App(
 	tenantApp.Delete("/fleet/groups/:id", fleetGroupsCtrl.DeleteGroup)
 	tenantApp.Post("/fleet/vehicles/:tokenID/group/:groupID", fleetGroupsCtrl.AddVehicleToGroup)
 	tenantApp.Delete("/fleet/vehicles/:tokenID/group/:groupID", fleetGroupsCtrl.RemoveVehicleFromGroup)
-	tenantApp.Post("/fleet/vehicles/:tokenID/groups/sync", fleetGroupsCtrl.SyncVehicleGroups)
 
 	// Geofences (tenant-scoped CRUD + manual vehicle assignment). Definitions are
 	// attested at the tenant client-id level in a later phase; see GEOFENCES_PLAN.md.
