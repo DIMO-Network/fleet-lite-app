@@ -2,7 +2,7 @@ replicaCount: 1
 image:
   repository: dimozone/fleet-lite-app
   pullPolicy: IfNotPresent
-  tag: 981a4c9
+  tag: 8c0be91
 imagePullSecrets: []
 nameOverride: ''
 fullnameOverride: ''
@@ -102,11 +102,6 @@ cronJobs:
   - name: mirror-groups
     enabled: true
     schedule: 15 6 * * *
-    # Three days, not the chart's 1h default. This job's output is the evidence
-    # for the P5b soak — "zero removals" is the safety property being watched —
-    # and at 1h the pod was garbage-collected before anyone read it, leaving
-    # only exitStatus. Matches kaufmann's mirror-groups. Drop back to the
-    # default once the local tables are gone and nothing needs auditing.
     ttlSecondsAfterFinished: 259200
     script: |
       /fleet-lite-app mirror-groups
