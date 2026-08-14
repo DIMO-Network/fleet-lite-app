@@ -62,4 +62,34 @@ export const FleetCache = {
         }
         cached = null;
     },
+
+    /**
+     * Records the tenant's membership-enforcement state and invalidates the
+     * cache when it changes. Called from every code path that learns the state
+     * (/me/access, /memberships), so a toggle flip clears cached vehicle lists
+     * the next time the app hears about it — otherwise a cached list keeps
+     * showing vehicles the operator has switched off, which undermines the
+     * feature the toggle exists for.
+     *
+     * Persisted per tenant so the comparison survives reloads: the IndexedDB
+     * snapshot lives 24h, and an in-memory-only note would forget the old
+     * state exactly when the stale snapshot needs catching.
+     */
+    noteMembershipsEnforced(tenantId: string, enforced: boolean): void {
+        if (!tenantId) return;
+        const key = `membershipsEnforced:${tenantId}`;
+        let previous: string | null = null;
+        try {
+            previous = localStorage.getItem(key);
+            localStorage.setItem(key, String(enforced));
+        } catch {
+            // Storage unavailable (private mode, quota): fall through to the
+            // conservative path below with previous === null.
+        }
+        // Unknown previous state counts as a change: cheaper to drop one warm
+        // cache than to trust a snapshot from before we tracked this.
+        if (previous !== String(enforced)) {
+            this.invalidate();
+        }
+    },
 };

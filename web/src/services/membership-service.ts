@@ -1,4 +1,6 @@
 import { ApiError, ApiService } from './api-service.ts';
+import { FleetCache } from './fleet-cache.ts';
+import { currentTenantIdFromHash } from './tenant-service.ts';
 import { Membership, MembershipsResponse, MembershipsView } from '../types/membership.ts';
 import { Vehicle, VehiclesResponse } from '../types/vehicle.ts';
 
@@ -51,6 +53,11 @@ export class MembershipService {
             }
             throw e;
         }
+
+        // Same funnel as /me/access: this response also carries the enforcement
+        // state, and hearing about a flip from either source must invalidate
+        // cached vehicle lists.
+        FleetCache.noteMembershipsEnforced(currentTenantIdFromHash(), res.enforced ?? false);
 
         return {
             available: true,

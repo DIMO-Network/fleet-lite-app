@@ -1,4 +1,5 @@
 import { ApiService } from './api-service.ts';
+import { FleetCache } from './fleet-cache.ts';
 import { getLocale } from '../localization.ts';
 
 export interface Tenant {
@@ -27,6 +28,12 @@ export interface MyAccess {
     role: string;
     /** null = unrestricted (owner or full-access member). */
     allowedGroupIds: string[] | null;
+    /**
+     * Whether the operator is currently hiding unmembered vehicles. Lets a
+     * view explain an empty garage instead of looking broken. Optional so an
+     * older backend's response still parses.
+     */
+    membershipsEnforced?: boolean;
 }
 
 interface MembersResponse {
@@ -198,7 +205,14 @@ export class TenantService {
 
     /** GET /me/access — the caller's own role + group scope in the current tenant. */
     public async fetchMyAccess(): Promise<MyAccess> {
-        return ApiService.getInstance().get<MyAccess>('/me/access');
+        const access = await ApiService.getInstance().get<MyAccess>('/me/access');
+        // Funnel the enforcement state into the fleet cache: a toggle flip must
+        // invalidate cached vehicle lists, or they keep showing vehicles the
+        // operator switched off.
+        if (access.membershipsEnforced !== undefined) {
+            FleetCache.noteMembershipsEnforced(currentTenantIdFromHash(), access.membershipsEnforced);
+        }
+        return access;
     }
 
     /** DELETE /tenants/:id/invitations/:invId — owner-only; revoke a pending invite. */

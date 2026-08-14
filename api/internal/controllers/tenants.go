@@ -18,6 +18,9 @@ type TenantsController struct {
 	vehicleSvc   *service.VehicleService
 	identity     gateway.IdentityAPI
 	authProvider *gateway.DimoAuthProvider
+	// memberships answers whether enforcement is on, for /me/access. nil means
+	// the feature does not exist on this deployment and reads as "off".
+	memberships *service.MembershipService
 }
 
 func NewTenantsController(
@@ -27,6 +30,7 @@ func NewTenantsController(
 	vehicleSvc *service.VehicleService,
 	identity gateway.IdentityAPI,
 	authProvider *gateway.DimoAuthProvider,
+	memberships *service.MembershipService,
 ) *TenantsController {
 	return &TenantsController{
 		logger:       logger,
@@ -35,6 +39,7 @@ func NewTenantsController(
 		vehicleSvc:   vehicleSvc,
 		identity:     identity,
 		authProvider: authProvider,
+		memberships:  memberships,
 	}
 }
 
@@ -271,13 +276,35 @@ func (t *TenantsController) UpdateMemberAccess(c *fiber.Ctx) error {
 // GetMyAccess — GET /me/access (tenant-scoped). Returns the caller's own role
 // and group scope so any view can cheaply render/gate by it.
 // allowedGroupIds is null for unrestricted callers (owners, full members).
+//
+// membershipsEnforced rides along so the frontend can explain an empty garage
+// — "your operator has memberships switched on and none are active" — instead
+// of looking broken. Best-effort, defaulting to FALSE on failure: this field
+// only ever softens the message, never gates access, and the vehicle list
+// itself fails closed through membershipFilter. Reporting false while the
+// list 503s is a stale caption; reporting a 500 here would break every view
+// that loads access state.
 func (t *TenantsController) GetMyAccess(c *fiber.Ctx) error {
 	role := GetTenantRole(c)
+
+	enforced := false
+	if t.memberships != nil && t.memberships.Configured() {
+		if tenant, terr := GetTenant(c); terr == nil {
+			e, _, merr := t.memberships.ActiveTokens(c.Context(), tenant)
+			if merr != nil {
+				t.logger.Warn().Err(merr).Str("tenant", tenant.ID).
+					Msg("membership state unavailable for /me/access; reporting unenforced")
+			} else {
+				enforced = e
+			}
+		}
+	}
+
 	allowed, limited := GetAllowedGroups(c)
 	if !limited {
-		return c.JSON(fiber.Map{"role": role, "allowedGroupIds": nil})
+		return c.JSON(fiber.Map{"role": role, "allowedGroupIds": nil, "membershipsEnforced": enforced})
 	}
-	return c.JSON(fiber.Map{"role": role, "allowedGroupIds": allowed})
+	return c.JSON(fiber.Map{"role": role, "allowedGroupIds": allowed, "membershipsEnforced": enforced})
 }
 
 // RemoveMember — DELETE /tenants/:id/members/:wallet. Owner-only.

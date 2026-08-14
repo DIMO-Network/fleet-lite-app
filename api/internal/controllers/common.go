@@ -48,7 +48,11 @@ func GetAllowedGroups(c *fiber.Ctx) (ids []string, limited bool) {
 // our failure, not the caller's. Never recover by dropping the scope filter; an
 // unscoped answer here is the whole fleet.
 func ScopeUnavailable(err error) error {
-	if errors.Is(err, service.ErrGroupScopeUnavailable) {
+	// Membership scope gets the identical treatment: with enforcement on, an
+	// unfiltered answer would show a customer vehicles their operator switched
+	// off, so "we could not check" is 503, never a silent pass-through.
+	if errors.Is(err, service.ErrGroupScopeUnavailable) ||
+		errors.Is(err, service.ErrMembershipScopeUnavailable) {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "authorization service unavailable")
 	}
 	return nil
