@@ -32,6 +32,15 @@ export class ManageGroupVehiclesModal extends LitElement {
     @state() private errorMessage = '';
     private changed = false;
 
+    /**
+     * Membership as it was when the modal opened, which is what the list is
+     * ordered by. Deliberately not memberIds: ordering on live membership would
+     * make a row jump to the top the instant you add it, shifting everything
+     * under the cursor mid-click. Frozen here, the list stays put while you work
+     * and comes back re-sorted the next time you open it.
+     */
+    private initialMemberIds = new Set<number>();
+
     connectedCallback() {
         super.connectedCallback();
         const members = new Set<number>();
@@ -41,6 +50,7 @@ export class ManageGroupVehiclesModal extends LitElement {
             }
         }
         this.memberIds = members;
+        this.initialMemberIds = new Set(members);
     }
 
     static styles = [
@@ -178,9 +188,15 @@ export class ManageGroupVehiclesModal extends LitElement {
 
     render() {
         const q = this.query.trim().toLowerCase();
-        const filtered = q
+        const matched = q
             ? this.vehicles.filter((v) => this.searchHaystack(v).includes(q))
             : this.vehicles;
+        // Members first, so opening the modal answers "what's in this group?"
+        // without scrolling. Array.sort is stable, so each side keeps the order
+        // it came in with.
+        const filtered = [...matched].sort(
+            (a, b) => Number(this.initialMemberIds.has(b.tokenId)) - Number(this.initialMemberIds.has(a.tokenId)),
+        );
 
         return html`
             <div class="card" @click=${(e: Event) => e.stopPropagation()}>
