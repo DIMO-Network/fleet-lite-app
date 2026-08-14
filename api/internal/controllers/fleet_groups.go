@@ -212,64 +212,6 @@ func (fc *FleetGroupsController) RemoveVehicleFromGroup(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
-// SyncVehicleGroups — POST /fleet/vehicles/:tokenID/groups/sync
-//
-// One owner, nothing to sync: since P4 every group write goes to
-// fleet-tenancy-api and the local tables mirror it, so there is no peer
-// attestation stream left to pull. The endpoint survives only for the
-// frontend contract — same route, same response shape, `synced` always false
-// — and goes away with it.
-func (fc *FleetGroupsController) SyncVehicleGroups(c *fiber.Ctx) error {
-	tenant, err := GetTenant(c)
-	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
-	}
-	tokenID, err := ParseTokenIDParam(c, "tokenID")
-	if err != nil {
-		return err
-	}
-	// Limited members may only see vehicles inside their allowed groups (and
-	// out-of-scope vehicles look nonexistent).
-	allowed, limited := GetAllowedGroups(c)
-	if limited {
-		ok, aerr := fc.groups.VehicleInGroups(c.Context(), tenant, int64(tokenID), allowed)
-		if aerr != nil {
-			if serr := ScopeUnavailable(aerr); serr != nil {
-				return serr
-			}
-			return fiber.NewError(fiber.StatusNotFound, "vehicle not found")
-		}
-		if !ok {
-			return fiber.NewError(fiber.StatusNotFound, "vehicle not found")
-		}
-	}
-
-	groups, err := fc.groups.VehicleGroups(c.Context(), tenant, int64(tokenID))
-	if err != nil {
-		if serr := ScopeUnavailable(err); serr != nil {
-			return serr
-		}
-		fc.logger.Err(err).Str("tenant", tenant.ID).Int64("token_id", int64(tokenID)).
-			Msg("load vehicle groups")
-		return fiber.NewError(fiber.StatusInternalServerError, "failed to load vehicle groups")
-	}
-	if groups == nil {
-		groups = []service.GroupRef{}
-	}
-	// Don't leak the names of groups outside a limited member's scope.
-	if limited {
-		allowedSet := toSet(allowed)
-		kept := groups[:0]
-		for _, g := range groups {
-			if allowedSet[g.ID] {
-				kept = append(kept, g)
-			}
-		}
-		groups = kept
-	}
-	return c.JSON(fiber.Map{"groups": groups, "synced": false, "added": 0, "removed": 0})
-}
-
 // mapServiceError translates service sentinel errors into HTTP errors.
 func (fc *FleetGroupsController) mapServiceError(err error, msg string) error {
 	switch {
