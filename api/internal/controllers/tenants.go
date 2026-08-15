@@ -288,12 +288,10 @@ func (t *TenantsController) LoginTouch(c *fiber.Ctx) error {
 	_ = c.BodyParser(&req) // email is optional
 	tenantID := c.Params("id")
 
-	if err := t.tenantSvc.TouchLogin(c.Context(), tenantID, wallet, req.Email); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			// An operator-managed tenant has no tenant_users row to touch.
-		} else {
-			t.logger.Warn().Err(err).Str("tenant", tenantID).Msg("local login touch failed")
-		}
+	// sql.ErrNoRows is expected: an operator-managed tenant has no
+	// tenant_users row to touch.
+	if err := t.tenantSvc.TouchLogin(c.Context(), tenantID, wallet, req.Email); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		t.logger.Warn().Err(err).Str("tenant", tenantID).Msg("local login touch failed")
 	}
 	if t.tenancyConfigured() {
 		if tenant, terr := t.tenantSvc.GetOrMirrorTenant(c.Context(), tenantID); terr == nil {
