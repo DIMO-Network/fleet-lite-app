@@ -43,14 +43,17 @@ func NewTenantMiddleware(
 		}
 
 		// The tenant loads before the authorization check because asking the
-		// tenancy service requires authenticating as the tenant being asked
-		// about, so its credentials are needed before the question can be put.
+		// tenancy service requires authenticating, and for a self-serve tenant
+		// that means its own credentials — so they are needed before the
+		// question can be put. An operator-managed tenant has no local row at
+		// all: GetOrMirrorTenant resolves it from the tenancy service and
+		// writes the credential-less mirror row the local schema needs.
 		//
 		// That means credentials are decrypted for a caller not yet known to be
 		// a member. Nothing leaves the process — the client sends a minted JWT,
 		// never the key — but it is work done on an unauthenticated caller's
 		// behalf, so a bad Tenant-Id costs a decrypt.
-		tenant, err := tenantSvc.GetTenantByID(c.Context(), tenantID)
+		tenant, err := tenantSvc.GetOrMirrorTenant(c.Context(), tenantID)
 		if err != nil {
 			// An unknown tenant is the caller naming something that does not
 			// exist, not a fault here. 403 rather than 404 for the same reason

@@ -6,7 +6,9 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -37,6 +39,15 @@ type TenantService struct {
 	settings    *config.Settings
 	identityAPI gateway.IdentityAPI
 	cache       *cache.Cache // tenant_<id> -> *models.Tenant (decrypted)
+
+	// tenancy resolves tenants this database has never held — operator-managed
+	// customers, whose record lives in fleet-tenancy-api. Optional: unset (local
+	// dev without the service), GetOrMirrorTenant degrades to the local read.
+	tenancy *gateway.TenancyAPI
+	// onMirrorCreated fires after a managed tenant's mirror row is first
+	// written — the moment this app learns the tenant exists, and the right
+	// time to kick its initial vehicle sync. Wired in app.go.
+	onMirrorCreated func(models.Tenant)
 }
 
 func NewTenantService(logger *zerolog.Logger, pdb *db.Store, settings *config.Settings, identityAPI gateway.IdentityAPI) *TenantService {
@@ -104,6 +115,70 @@ func (s *TenantService) GetTenantByID(ctx context.Context, tenantID string) (*mo
 	}
 
 	s.cache.Set(cacheKey, tenant, cache.DefaultExpiration)
+	return tenant, nil
+}
+
+// UseTenancy wires the fleet-tenancy-api client for resolving operator-managed
+// tenants. Optional; without it every read is local, exactly as before.
+func (s *TenantService) UseTenancy(t *gateway.TenancyAPI) { s.tenancy = t }
+
+// OnMirrorCreated registers the hook fired when a managed tenant's mirror row
+// is first written.
+func (s *TenantService) OnMirrorCreated(fn func(models.Tenant)) { s.onMirrorCreated = fn }
+
+// GetOrMirrorTenant is GetTenantByID with a tenancy fallback: a tenant this
+// database has never held — an operator-managed customer, provisioned entirely
+// from the console — is resolved from fleet-tenancy-api and written as a local
+// mirror row (id + name, no credentials).
+//
+// The mirror row exists because every table here FKs tenants(id): vehicles,
+// groups, favorites, geofences, TCO settings all need the row before the
+// tenant's data can be materialised. It is a mirror in the P4 sense — the
+// authoritative record lives in the tenancy service; the local row exists for
+// SQL joins — and it carries no credentials, which is what routes every DIMO
+// call for this tenant through the tenancy minter.
+//
+// A tenant the tenancy service refuses (unknown, suspended, or hidden from
+// fleet-lite) reads as not-found, indistinguishable from a bad id — the same
+// no-probing stance as everywhere else.
+func (s *TenantService) GetOrMirrorTenant(ctx context.Context, tenantID string) (*models.Tenant, error) {
+	tenant, err := s.GetTenantByID(ctx, tenantID)
+	if err == nil {
+		return tenant, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) || s.tenancy == nil || !s.tenancy.Configured() {
+		return nil, err
+	}
+
+	detail, derr := s.tenancy.TenantDetail(ctx, tenantID)
+	if derr != nil {
+		var te *gateway.TenancyError
+		if errors.As(derr, &te) && (te.StatusCode == 403 || te.StatusCode == 400) {
+			// The service does not know it, or we may not see it: for this
+			// app both mean the tenant does not exist. Return the original
+			// not-found so the middleware's 403 mapping applies.
+			return nil, err
+		}
+		return nil, fmt.Errorf("resolve tenant %s from tenancy: %w", tenantID, derr)
+	}
+	if detail.Status != "active" || !detail.FleetLiteEnabled {
+		return nil, err
+	}
+
+	row := &dbmodels.Tenant{ID: detail.ID, Name: detail.Name}
+	if uerr := row.Upsert(ctx, s.pdb.DBS().Writer, true,
+		[]string{"id"}, boil.Whitelist("name", "updated_at"), boil.Infer()); uerr != nil {
+		return nil, fmt.Errorf("mirror tenant %s: %w", tenantID, uerr)
+	}
+
+	tenant = &models.Tenant{ID: detail.ID, Name: detail.Name}
+	s.cache.Set("tenant_"+tenantID, tenant, cache.DefaultExpiration)
+	s.logger.Info().Str("tenant_id", tenantID).Str("name", detail.Name).
+		Msg("mirrored an operator-managed tenant from tenancy")
+
+	if s.onMirrorCreated != nil {
+		s.onMirrorCreated(*tenant)
+	}
 	return tenant, nil
 }
 

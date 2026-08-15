@@ -129,6 +129,11 @@ type VehicleService struct {
 	// construction in cmd/, or a deployment without a tenancy client) means no
 	// membership filtering at all.
 	memberships membershipGate
+
+	// tenancy resolves an explicit-mode tenant's fleet: its entitled token ids
+	// and the operator's minted credential. nil means credential-less tenants
+	// cannot sync — a named error, not a silent skip.
+	tenancy *gateway.TenancyAPI
 }
 
 // membershipGate is the slice of MembershipService the vehicle filters need.
@@ -148,6 +153,10 @@ func (s *VehicleService) UseGroupIndex(src groupIndexSource) { s.groups = src }
 // no tenancy client) no membership filtering happens — which is also the
 // correct behaviour for every tenant until an operator flips enforcement on.
 func (s *VehicleService) UseMemberships(m membershipGate) { s.memberships = m }
+
+// UseTenancy wires the tenancy client that resolves explicit-mode tenants'
+// fleets. Without it, syncing a credential-less tenant errors by name.
+func (s *VehicleService) UseTenancy(t *gateway.TenancyAPI) { s.tenancy = t }
 
 // membershipFilter restricts a vehicles query to tokens with an active
 // membership, when this tenant's operator has enforcement turned on.
@@ -200,11 +209,22 @@ func (s *VehicleService) scopeFilter(ctx context.Context, tenant models.Tenant, 
 	return allowedTokensFilter(idx.TokenIDsForGroups(allowedGroupIDs)), nil
 }
 
-// SyncVehicles fetches the vehicles privileged to the tenant's developer-license
-// client ID and upserts them into the vehicles table. Returns the count synced.
+// SyncVehicles refreshes the tenant's rows in the vehicles table and returns
+// the count synced.
+//
+// Two paths, chosen by whether the tenant holds its own credentials:
+//
+//   - Self-serve (ClientID set): everything the tenant's developer license is
+//     privileged on. Additive, exactly as it always was — removal is the
+//     manual prune-unshared-vehicles command's job.
+//   - Operator-managed (no ClientID): the entitled set carved out of the
+//     operator's fleet, and rows that leave it are DELETED. Deletion is safe
+//     precisely because the entitled set is authoritative and exclusive per
+//     operator — and required, because revoking an entitlement is the
+//     operator taking a vehicle away, which additive sync would never show.
 func (s *VehicleService) SyncVehicles(ctx context.Context, tenant *models.Tenant) (int, error) {
 	if tenant.ClientID == "" {
-		return 0, fmt.Errorf("tenant %s has no DIMO client ID", tenant.ID)
+		return s.syncEntitledVehicles(ctx, tenant)
 	}
 	vehicles, err := s.identityAPI.FetchPrivilegedVehicles(tenant.ClientID)
 	if err != nil {
@@ -212,38 +232,135 @@ func (s *VehicleService) SyncVehicles(ctx context.Context, tenant *models.Tenant
 	}
 
 	for _, v := range vehicles {
-		raw, _ := json.Marshal(v)
-		row := &dbmodels.Vehicle{
-			TenantID:     tenant.ID,
-			TokenID:      v.TokenID,
-			OwnerAddress: null.StringFrom(v.Owner),
-			Make:         null.StringFrom(v.Definition.Make),
-			Model:        null.StringFrom(v.Definition.Model),
-			Year:         null.IntFrom(v.Definition.Year),
-			DefinitionID: null.StringFrom(v.Definition.ID),
-			Raw:          null.JSONFrom(raw),
-			SyncedAt:     time.Now(),
-		}
-		if v.AftermarketDevice != nil {
-			row.DeviceType = null.StringFrom("aftermarket")
-			row.Imei = null.StringFrom(v.AftermarketDevice.IMEI)
-			row.Serial = null.StringFrom(v.AftermarketDevice.Serial)
-		} else if v.SyntheticDevice.TokenID != 0 {
-			row.DeviceType = null.StringFrom("synthetic")
-		}
-		if v.MintedAt != nil {
-			row.MintedAt = null.TimeFrom(*v.MintedAt)
-		}
-
-		if err := row.Upsert(ctx, s.pdb.DBS().Writer, true,
-			[]string{"tenant_id", "token_id"},
-			boil.Whitelist("owner_address", "make", "model", "year", "definition_id",
-				"device_type", "imei", "serial", "minted_at", "raw", "synced_at", "updated_at"),
-			boil.Infer()); err != nil {
-			return 0, fmt.Errorf("upsert vehicle %d: %w", v.TokenID, err)
+		if err := s.upsertIdentityVehicle(ctx, tenant.ID, v); err != nil {
+			return 0, err
 		}
 	}
 	return len(vehicles), nil
+}
+
+// syncEntitledVehicles materialises an explicit-mode tenant's fleet: the
+// entitled token ids from fleet-tenancy-api, with metadata from the operator's
+// privileged set under the operator's minted credential.
+func (s *VehicleService) syncEntitledVehicles(ctx context.Context, tenant *models.Tenant) (int, error) {
+	if s.tenancy == nil || !s.tenancy.Configured() {
+		return 0, fmt.Errorf("tenant %s has no DIMO client ID and no tenancy client is configured", tenant.ID)
+	}
+
+	// The mode read is what disambiguates the entitlement endpoint's 200 []:
+	// for an implicit-mode tenant an empty list means "ask the license", and
+	// a credential-less implicit tenant is a configuration hole worth naming,
+	// not a fleet worth emptying.
+	detail, err := s.tenancy.TenantDetail(ctx, tenant.ID)
+	if err != nil {
+		return 0, fmt.Errorf("resolve tenant %s from tenancy: %w", tenant.ID, err)
+	}
+	if detail.EntitlementMode != "explicit" {
+		return 0, fmt.Errorf("tenant %s is %s-mode but holds no credentials; nothing to sync from",
+			tenant.ID, detail.EntitlementMode)
+	}
+
+	ents, err := s.tenancy.Entitlements(ctx, *tenant)
+	if err != nil {
+		return 0, fmt.Errorf("entitlements for tenant %s: %w", tenant.ID, err)
+	}
+	entitled := make([]int64, 0, len(ents))
+	for _, e := range ents {
+		entitled = append(entitled, e.VehicleTokenID)
+	}
+
+	synced := 0
+	if len(entitled) > 0 {
+		// The operator's client id comes from the minted effective credential —
+		// the identity query enumerates the operator's whole privileged set,
+		// and the entitled ids select this tenant's slice of it.
+		minted, merr := s.tenancy.DimoToken(ctx, tenant.ID)
+		if merr != nil {
+			return 0, fmt.Errorf("effective credential for tenant %s: %w", tenant.ID, merr)
+		}
+		vehicles, ferr := s.identityAPI.FetchPrivilegedVehicles(minted.ClientID)
+		if ferr != nil {
+			return 0, fmt.Errorf("fetch operator privileged vehicles: %w", ferr)
+		}
+
+		want := make(map[int64]bool, len(entitled))
+		for _, id := range entitled {
+			want[id] = true
+		}
+		for _, v := range vehicles {
+			if !want[v.TokenID] {
+				continue
+			}
+			if err := s.upsertIdentityVehicle(ctx, tenant.ID, v); err != nil {
+				return 0, err
+			}
+			delete(want, v.TokenID)
+			synced++
+		}
+		// Entitled but absent from the operator's privileged set: usually a
+		// revoked or never-granted SACD. The entitlement stands, the data does
+		// not — a data condition to surface, not a sync failure.
+		if len(want) > 0 {
+			missing := make([]int64, 0, len(want))
+			for id := range want {
+				missing = append(missing, id)
+			}
+			s.logger.Warn().Str("tenant", tenant.ID).Ints64("token_ids", missing).
+				Msg("entitled vehicles missing from the operator's privileged set")
+		}
+	}
+
+	// Rows outside the entitled set were revoked (or the set is now empty):
+	// the operator took them away, so they go. Favorites, group memberships
+	// and geofence assignments cascade with the row.
+	res, err := dbmodels.Vehicles(
+		qm.Where("tenant_id = ?", tenant.ID),
+		qm.Where("NOT (token_id = ANY(?))", pq.Array(entitled)),
+	).DeleteAll(ctx, s.pdb.DBS().Writer)
+	if err != nil {
+		return 0, fmt.Errorf("prune revoked vehicles for tenant %s: %w", tenant.ID, err)
+	}
+	if res > 0 {
+		s.logger.Info().Str("tenant", tenant.ID).Int64("removed", res).
+			Msg("pruned vehicles no longer entitled")
+	}
+	return synced, nil
+}
+
+// upsertIdentityVehicle writes one identity-api vehicle node as this tenant's
+// row — the shared half of both sync paths.
+func (s *VehicleService) upsertIdentityVehicle(ctx context.Context, tenantID string, v models.Vehicle) error {
+	raw, _ := json.Marshal(v)
+	row := &dbmodels.Vehicle{
+		TenantID:     tenantID,
+		TokenID:      v.TokenID,
+		OwnerAddress: null.StringFrom(v.Owner),
+		Make:         null.StringFrom(v.Definition.Make),
+		Model:        null.StringFrom(v.Definition.Model),
+		Year:         null.IntFrom(v.Definition.Year),
+		DefinitionID: null.StringFrom(v.Definition.ID),
+		Raw:          null.JSONFrom(raw),
+		SyncedAt:     time.Now(),
+	}
+	if v.AftermarketDevice != nil {
+		row.DeviceType = null.StringFrom("aftermarket")
+		row.Imei = null.StringFrom(v.AftermarketDevice.IMEI)
+		row.Serial = null.StringFrom(v.AftermarketDevice.Serial)
+	} else if v.SyntheticDevice.TokenID != 0 {
+		row.DeviceType = null.StringFrom("synthetic")
+	}
+	if v.MintedAt != nil {
+		row.MintedAt = null.TimeFrom(*v.MintedAt)
+	}
+
+	if err := row.Upsert(ctx, s.pdb.DBS().Writer, true,
+		[]string{"tenant_id", "token_id"},
+		boil.Whitelist("owner_address", "make", "model", "year", "definition_id",
+			"device_type", "imei", "serial", "minted_at", "raw", "synced_at", "updated_at"),
+		boil.Infer()); err != nil {
+		return fmt.Errorf("upsert vehicle %d: %w", v.TokenID, err)
+	}
+	return nil
 }
 
 // ListVehicles returns the tenant's synced vehicles in identity-api Vehicle

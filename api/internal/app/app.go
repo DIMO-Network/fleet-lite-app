@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"os"
 	"strconv"
@@ -8,6 +9,7 @@ import (
 	"github.com/DIMO-Network/fleet-lite-app/internal/config"
 	"github.com/DIMO-Network/fleet-lite-app/internal/controllers"
 	"github.com/DIMO-Network/fleet-lite-app/internal/gateway"
+	"github.com/DIMO-Network/fleet-lite-app/internal/models"
 	"github.com/DIMO-Network/fleet-lite-app/internal/service"
 	"github.com/DIMO-Network/shared/pkg/db"
 	"github.com/DIMO-Network/shared/pkg/middleware/metrics"
@@ -90,12 +92,32 @@ func App(
 	if tenancyAPI != nil && tenancyAPI.Configured() {
 		membershipSvc = service.NewMembershipService(logger, tenancyAPI)
 		vehicleSvc.UseMemberships(membershipSvc)
+
+		// Operator-managed tenants (plan 03). Three wires, one feature:
+		// unknown tenants resolve from tenancy into mirror rows, their DIMO
+		// calls mint through the tenancy token endpoint (the auth provider's
+		// remote path — every gateway inherits it), and their vehicle sync is
+		// entitlement-driven. The mirror hook kicks the first sync so a
+		// freshly-provisioned customer's first login shows their fleet, not an
+		// empty garage until the nightly cron.
+		tenantSvc.UseTenancy(tenancyAPI)
+		vehicleSvc.UseTenancy(tenancyAPI)
+		authProvider.UseRemoteMinter(tenancyAPI)
+		tenantSvc.OnMirrorCreated(func(t models.Tenant) {
+			go func() {
+				if n, err := vehicleSvc.SyncVehicles(context.Background(), &t); err != nil {
+					logger.Warn().Err(err).Str("tenant", t.ID).Msg("initial managed-tenant vehicle sync failed")
+				} else {
+					logger.Info().Int("count", n).Str("tenant", t.ID).Msg("initial managed-tenant vehicle sync")
+				}
+			}()
+		})
 	}
 	membershipsCtrl := controllers.NewMembershipsController(logger, membershipSvc)
 	geofenceDetectionSvc := service.NewGeofenceDetectionService(logger, pdb, telemetryAPI, geofenceSvc)
 	geofencesCtrl := controllers.NewGeofencesController(logger, geofenceSvc, attestSvc, geofenceDetectionSvc, vehicleSvc)
 	settingsCtrl := controllers.NewSettingsController(settings, logger)
-	tenantsCtrl := controllers.NewTenantsController(logger, settings, tenantSvc, vehicleSvc, identity, authProvider, membershipSvc)
+	tenantsCtrl := controllers.NewTenantsController(logger, settings, tenantSvc, vehicleSvc, identity, authProvider, membershipSvc, tenancyAPI)
 	invitationsCtrl := controllers.NewInvitationsController(logger, tenantSvc, invitationSvc)
 	webhooksCtrl := controllers.NewWebhooksController(logger, settings, invitationSvc)
 	userPrefsSvc := service.NewUserPrefsService(logger, pdb)

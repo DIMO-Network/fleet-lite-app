@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/DIMO-Network/fleet-lite-app/internal/config"
@@ -21,6 +23,10 @@ type TenantsController struct {
 	// memberships answers whether enforcement is on, for /me/access. nil means
 	// the feature does not exist on this deployment and reads as "off".
 	memberships *service.MembershipService
+	// tenancy lists a wallet's operator-managed tenants and answers membership
+	// for tenants with no local tenant_users rows. nil or unconfigured means
+	// local-only behaviour, exactly as before the operator-tenancy work.
+	tenancy *gateway.TenancyAPI
 }
 
 func NewTenantsController(
@@ -31,6 +37,7 @@ func NewTenantsController(
 	identity gateway.IdentityAPI,
 	authProvider *gateway.DimoAuthProvider,
 	memberships *service.MembershipService,
+	tenancy *gateway.TenancyAPI,
 ) *TenantsController {
 	return &TenantsController{
 		logger:       logger,
@@ -40,7 +47,14 @@ func NewTenantsController(
 		identity:     identity,
 		authProvider: authProvider,
 		memberships:  memberships,
+		tenancy:      tenancy,
 	}
+}
+
+// tenancyConfigured reports whether the shared tenancy service is reachable in
+// this deployment.
+func (t *TenantsController) tenancyConfigured() bool {
+	return t.tenancy != nil && t.tenancy.Configured()
 }
 
 type tenantJSON struct {
@@ -51,6 +65,11 @@ type tenantJSON struct {
 
 // requireMember resolves the caller's wallet and confirms membership in the
 // path tenant, returning the wallet and role.
+//
+// Local tenant_users first — the self-serve fast path — then the tenancy
+// service, which is the only place an operator-managed tenant's memberships
+// exist at all. The fallback answer must be a direct membership: a delegation
+// is an operator's management right and never a fleet-lite session.
 func (t *TenantsController) requireMember(c *fiber.Ctx) (string, string, error) {
 	wallet, err := GetWalletAddressFromJWT(c)
 	if err != nil {
@@ -61,13 +80,42 @@ func (t *TenantsController) requireMember(c *fiber.Ctx) (string, string, error) 
 		return "", "", fiber.NewError(fiber.StatusBadRequest, "tenant id is required")
 	}
 	role, err := t.tenantSvc.GetMembershipRole(c.Context(), tenantID, wallet.Hex())
-	if err != nil || role == "" {
+	if err == nil && role != "" {
+		return wallet.Hex(), role, nil
+	}
+
+	if !t.tenancyConfigured() {
 		return "", "", fiber.NewError(fiber.StatusForbidden, "no access to tenant")
 	}
-	return wallet.Hex(), role, nil
+	tenant, terr := t.tenantSvc.GetOrMirrorTenant(c.Context(), tenantID)
+	if terr != nil {
+		return "", "", fiber.NewError(fiber.StatusForbidden, "no access to tenant")
+	}
+	res, aerr := t.tenancy.Authz(c.Context(), *tenant, wallet.Hex())
+	if aerr != nil {
+		// Fail closed, and as unavailability rather than refusal — the same
+		// split NewTenantMiddleware makes.
+		t.logger.Err(aerr).Str("tenant_id", tenantID).Str("wallet", wallet.Hex()).
+			Msg("tenancy membership check unavailable")
+		return "", "", fiber.NewError(fiber.StatusServiceUnavailable, "authorization service unavailable")
+	}
+	if !res.Member || res.Via != "direct" {
+		return "", "", fiber.NewError(fiber.StatusForbidden, "no access to tenant")
+	}
+	return wallet.Hex(), res.Role, nil
 }
 
-// GetTenants — GET /tenants. Lists the tenants the caller is a member of.
+// GetTenants — GET /tenants. Lists the tenants the caller is a member of: the
+// union of the local list (self-serve tenants, which POST /tenants still
+// writes only here) and the tenancy service's answer (operator-managed
+// tenants, which have no local membership rows at all). Deduped by id — every
+// backfilled tenant is in both — with the local name winning only in being
+// listed first; the sets agree by construction.
+//
+// A tenancy failure degrades to the local list with a warning rather than
+// failing the request: this is a listing, not an authorization decision —
+// opening any tenant still goes through the fail-closed authz middleware.
+// The degraded answer is exactly the pre-tenancy one.
 func (t *TenantsController) GetTenants(c *fiber.Ctx) error {
 	wallet, err := GetWalletAddressFromJWT(c)
 	if err != nil {
@@ -79,8 +127,24 @@ func (t *TenantsController) GetTenants(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to list tenants")
 	}
 	out := make([]tenantJSON, 0, len(rows))
+	seen := make(map[string]bool, len(rows))
 	for _, r := range rows {
 		out = append(out, tenantJSON{ID: r.ID, Name: r.Name})
+		seen[r.ID] = true
+	}
+
+	if t.tenancyConfigured() {
+		remote, rerr := t.tenancy.WalletTenants(c.Context(), wallet.Hex())
+		if rerr != nil {
+			t.logger.Warn().Err(rerr).Str("wallet", wallet.Hex()).
+				Msg("tenancy tenant list unavailable; serving the local list only")
+		}
+		for _, r := range remote {
+			if seen[r.TenantID] {
+				continue
+			}
+			out = append(out, tenantJSON{ID: r.TenantID, Name: r.Name, Role: r.Role})
+		}
 	}
 	return c.JSON(fiber.Map{"tenants": out})
 }
@@ -145,7 +209,7 @@ func (t *TenantsController) SyncVehicles(c *fiber.Ctx) error {
 	if _, _, err := t.requireMember(c); err != nil {
 		return err
 	}
-	tenant, err := t.tenantSvc.GetTenantByID(c.Context(), c.Params("id"))
+	tenant, err := t.tenantSvc.GetOrMirrorTenant(c.Context(), c.Params("id"))
 	if err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to load tenant")
 	}
@@ -168,9 +232,17 @@ type memberJSON struct {
 }
 
 // GetMembers — GET /tenants/:id/members. Any member can list the tenant's members.
+//
+// An operator-managed tenant's members exist only in fleet-tenancy-api, so its
+// list is served from there; a self-serve tenant keeps its local list.
 func (t *TenantsController) GetMembers(c *fiber.Ctx) error {
 	if _, _, err := t.requireMember(c); err != nil {
 		return err
+	}
+	if t.tenancyConfigured() {
+		if tenant, terr := t.tenantSvc.GetOrMirrorTenant(c.Context(), c.Params("id")); terr == nil && tenant.ClientID == "" {
+			return t.getRemoteMembers(c, *tenant)
+		}
 	}
 	rows, err := t.tenantSvc.ListMembers(c.Context(), c.Params("id"))
 	if err != nil {
@@ -201,6 +273,12 @@ type loginRequest struct {
 // email (the client supplies the email, since the DIMO JWT carries neither name
 // nor email). Drives the group-sync cron's tenant-activity tiering and powers
 // the Members list. Any member may touch their own login.
+//
+// Written to both membership stores, each best-effort once the caller is
+// known to be a member: the local row (absent by design for an
+// operator-managed tenant) and the shared one in fleet-tenancy-api (where the
+// operator console reads last-activity from). A lost stamp is telemetry lost,
+// never a failed login.
 func (t *TenantsController) LoginTouch(c *fiber.Ctx) error {
 	wallet, _, err := t.requireMember(c)
 	if err != nil {
@@ -208,11 +286,47 @@ func (t *TenantsController) LoginTouch(c *fiber.Ctx) error {
 	}
 	var req loginRequest
 	_ = c.BodyParser(&req) // email is optional
-	if err := t.tenantSvc.TouchLogin(c.Context(), c.Params("id"), wallet, req.Email); err != nil {
-		t.logger.Err(err).Str("tenant", c.Params("id")).Msg("touch login")
-		return fiber.NewError(fiber.StatusInternalServerError, "failed to record login")
+	tenantID := c.Params("id")
+
+	if err := t.tenantSvc.TouchLogin(c.Context(), tenantID, wallet, req.Email); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// An operator-managed tenant has no tenant_users row to touch.
+		} else {
+			t.logger.Warn().Err(err).Str("tenant", tenantID).Msg("local login touch failed")
+		}
+	}
+	if t.tenancyConfigured() {
+		if tenant, terr := t.tenantSvc.GetOrMirrorTenant(c.Context(), tenantID); terr == nil {
+			if rerr := t.tenancy.LoginTouch(c.Context(), *tenant, wallet, req.Email); rerr != nil {
+				t.logger.Warn().Err(rerr).Str("tenant", tenantID).Msg("tenancy login touch failed")
+			}
+		}
 	}
 	return c.JSON(fiber.Map{"ok": true})
+}
+
+// getRemoteMembers serves the member list from the shared membership records —
+// the only member list an operator-managed tenant has.
+func (t *TenantsController) getRemoteMembers(c *fiber.Ctx, tenant models.Tenant) error {
+	members, err := t.tenancy.Members(c.Context(), tenant)
+	if err != nil {
+		t.logger.Err(err).Str("tenant", tenant.ID).Msg("list tenancy members")
+		return fiber.NewError(fiber.StatusServiceUnavailable, "member list unavailable")
+	}
+	out := make([]memberJSON, 0, len(members))
+	for _, m := range members {
+		mj := memberJSON{Wallet: m.Wallet, Role: m.Role, LastLoginAt: m.LastLoginAt}
+		if m.Email != nil {
+			mj.Email = *m.Email
+		}
+		// Same three-valued scope encoding the local list uses: absent means
+		// full access, an array (even empty) means limited to those groups.
+		if m.Role != service.RoleOwner && m.ScopeGroupIDs != nil {
+			mj.AllowedGroupIDs = m.ScopeGroupIDs
+		}
+		out = append(out, mj)
+	}
+	return c.JSON(fiber.Map{"members": out})
 }
 
 type addMemberRequest struct {

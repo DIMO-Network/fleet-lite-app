@@ -55,6 +55,66 @@ type RemoteActiveMemberships struct {
 	TokenIDs []int64 `json:"tokenIds"`
 }
 
+// RemoteWalletTenant is one row of GET /v1/tenants?wallet=&surface=fleet_lite:
+// a tenant the wallet holds a direct membership in, with the membership riding
+// along. Keep it in step with that service's models.WalletTenant.
+type RemoteWalletTenant struct {
+	TenantID        string   `json:"tenantId"`
+	Name            string   `json:"name"`
+	Kind            string   `json:"kind"`
+	EntitlementMode string   `json:"entitlementMode"`
+	Role            string   `json:"role"`
+	Permissions     []string `json:"permissions"`
+	// ScopeGroupIDs nil means unrestricted; an empty array means restricted to
+	// nothing — the same three-valued encoding as the authz answer.
+	ScopeGroupIDs []string `json:"scopeGroupIds"`
+}
+
+// RemoteTenantDetail is GET /v1/tenants/{id} — the fields this app reads. The
+// service sends more (counts, external ref); decoding only what is consumed
+// keeps the coupling narrow. Keep field names in step with models.Tenant there.
+type RemoteTenantDetail struct {
+	ID               string `json:"id"`
+	Name             string `json:"name"`
+	Kind             string `json:"kind"`
+	Status           string `json:"status"`
+	EntitlementMode  string `json:"entitlementMode"`
+	FleetLiteEnabled bool   `json:"fleetLiteEnabled"`
+}
+
+// RemoteMintedToken is GET /v1/tenants/{id}/dimo-token: a developer JWT for
+// the tenant's EFFECTIVE credential — the operator's license for a managed
+// customer. ClientID names whose license the token is, which the entitlement
+// sync needs to enumerate the operator's privileged set.
+type RemoteMintedToken struct {
+	Token              string    `json:"token"`
+	ExpiresAt          time.Time `json:"expiresAt"`
+	ClientID           string    `json:"clientId"`
+	CredentialTenantID string    `json:"credentialTenantId"`
+}
+
+// RemoteEntitlement is one row of GET /v1/tenants/{id}/vehicles: a vehicle an
+// explicit-mode tenant may see. Token id and provenance only — metadata comes
+// from identity-api. Keep it in step with that service's models.Entitlement.
+type RemoteEntitlement struct {
+	VehicleTokenID int64   `json:"vehicleTokenId"`
+	Source         string  `json:"source"`
+	SourceGroupID  *string `json:"sourceGroupId"`
+}
+
+// RemoteMember is one row of GET /v1/tenants/{id}/members — the shared
+// membership record, which for an operator-managed tenant is the only member
+// list there is. Keep it in step with that service's models.Member.
+type RemoteMember struct {
+	Wallet      string   `json:"wallet"`
+	Email       *string  `json:"email"`
+	Role        string   `json:"role"`
+	Permissions []string `json:"permissions"`
+	// Same three-valued scope encoding as everywhere else.
+	ScopeGroupIDs []string `json:"scopeGroupIds"`
+	LastLoginAt   *string  `json:"lastLoginAt"`
+}
+
 // RemoteMembership is one vehicle membership as fleet-tenancy-api serves it
 // from GET /v1/tenants/{id}/vehicle-memberships. Token id only — VIN, plate
 // and model are joined from this app's own vehicle list, which owns them.
