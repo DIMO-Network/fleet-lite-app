@@ -15,6 +15,7 @@ import (
 
 	"github.com/DIMO-Network/fleet-lite-app/internal/config"
 	"github.com/DIMO-Network/fleet-lite-app/internal/models"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/patrickmn/go-cache"
 	"github.com/rs/zerolog"
 )
@@ -50,6 +51,17 @@ type TenancyAPI struct {
 	apiKey       string
 	client       *http.Client
 
+	// selfTenant is this app's own identity — the Login-with-DIMO license,
+	// whose key lives in this app's secret — used to authenticate calls about
+	// tenants whose credentials we do not hold: operator-managed customers.
+	// The service knows the same client id as a registered service caller, so
+	// scope passes on its service branch rather than the self branch.
+	//
+	// nil when DIMO_AUTH_CLIENT_ID / DIMO_AUTH_PRIVATE_KEY are unset (local
+	// dev): calls about credential-less tenants then fail with
+	// ErrAppIdentityNotConfigured rather than an unexplained mint error.
+	selfTenant *models.Tenant
+
 	// authzCache holds answers for the lifetime the service says they are good
 	// for. NewTenantMiddleware asks on every request, so without this the
 	// tenancy service takes this app's entire request rate.
@@ -82,6 +94,12 @@ const tenancyTimeout = 5 * time.Second
 // Returned before any request is built, so a misconfigured deployment fails
 // with the reason rather than with an unexplained 401.
 var ErrTenancyNotConfigured = errors.New("tenancy api is not configured")
+
+// ErrAppIdentityNotConfigured means a call needed this app's own identity —
+// the subject tenant holds no credentials — but DIMO_AUTH_CLIENT_ID or
+// DIMO_AUTH_PRIVATE_KEY is unset.
+var ErrAppIdentityNotConfigured = errors.New(
+	"tenant holds no credentials and the app identity (DIMO_AUTH_CLIENT_ID/DIMO_AUTH_PRIVATE_KEY) is not configured")
 
 // AccessLayer names which of the service's three access-control layers turned
 // a call away.
@@ -177,7 +195,7 @@ func (a *AuthzResult) HasCapability(c string) bool {
 func (a *AuthzResult) Unrestricted() bool { return a.ScopeGroupIDs == nil }
 
 func NewTenancyAPI(logger zerolog.Logger, settings *config.Settings, authProvider *DimoAuthProvider) *TenancyAPI {
-	return &TenancyAPI{
+	t := &TenancyAPI{
 		logger:       logger,
 		authProvider: authProvider,
 		baseURL:      strings.TrimSuffix(settings.TenancyAPIURL.String(), "/"),
@@ -185,6 +203,50 @@ func NewTenancyAPI(logger zerolog.Logger, settings *config.Settings, authProvide
 		client:       &http.Client{Timeout: tenancyTimeout},
 		authzCache:   cache.New(defaultAuthzTTL, 2*defaultAuthzTTL),
 	}
+	if self := AppSelfTenant(settings); self != nil {
+		t.selfTenant = self
+	}
+	return t
+}
+
+// AppSelfTenant builds the models.Tenant this app authenticates as when acting
+// in its own name — the Login-with-DIMO license from settings. nil when either
+// half is missing, so callers degrade with a named error instead of minting
+// with a zero client id.
+//
+// The ID is a fixed sentinel, not a database id: it keys the auth provider's
+// per-tenant caches, and it must never collide with a real tenant uuid.
+func AppSelfTenant(settings *config.Settings) *models.Tenant {
+	zero := common.Address{}
+	if settings.DimoAuthClientID == zero || settings.DimoAuthPrivateKey == "" {
+		return nil
+	}
+	return &models.Tenant{
+		ID:              "app:fleet-lite",
+		Name:            "fleet-lite-app",
+		ClientID:        settings.DimoAuthClientID.Hex(),
+		DIMOPrivateKey:  settings.DimoAuthPrivateKey,
+		DIMORedirectURI: settings.DimoAuthRedirectURL.String(),
+	}
+}
+
+// authTenant picks the identity a call about `subject` authenticates as: the
+// subject itself when we hold its credentials (self-serve tenants — the scope
+// check then passes on its self branch), otherwise this app's own identity
+// (operator-managed tenants — the service-caller branch).
+//
+// The split is deliberate rather than always using the app identity: the
+// bounded per-tenant path stays bounded where it can be, and every existing
+// call keeps its behaviour, so a bad service-caller registration can only
+// break the managed-tenant path it was added for.
+func (t *TenancyAPI) authTenant(subject models.Tenant) (models.Tenant, error) {
+	if subject.ClientID != "" {
+		return subject, nil
+	}
+	if t.selfTenant == nil {
+		return models.Tenant{}, ErrAppIdentityNotConfigured
+	}
+	return *t.selfTenant, nil
 }
 
 // authzCacheKey identifies one answer. The wallet is lowercased because the
@@ -276,6 +338,90 @@ func (t *TenancyAPI) VehicleMemberships(ctx context.Context, tenant models.Tenan
 	return &res, nil
 }
 
+// ----- The operator-tenancy surface (plan 03) -----
+//
+// These are what let this app open a tenant it holds no credentials for: the
+// wallet's tenant list before any Tenant-Id exists, the tenant's detail and
+// minted token, and the entitled vehicle set that replaces the privileged
+// query for explicit-mode tenants. All of them authenticate via authTenant,
+// which for a credential-less subject means this app's own identity.
+
+// asSelf is the subject stand-in for calls that have no tenant credentials by
+// construction — either no tenant is involved yet (the wallet listing) or only
+// an id is known. authTenant resolves it to the app identity.
+func asSelf(tenantID string) models.Tenant { return models.Tenant{ID: tenantID} }
+
+// WalletTenants lists the tenants a wallet holds a direct membership in, from
+// GET /v1/tenants?wallet=&surface=fleet_lite — already filtered to active,
+// fleet-lite-visible tenants by the service.
+func (t *TenancyAPI) WalletTenants(ctx context.Context, wallet string) ([]models.RemoteWalletTenant, error) {
+	if wallet == "" {
+		return nil, fmt.Errorf("wallet is required")
+	}
+	q := url.Values{}
+	q.Set("wallet", wallet)
+	q.Set("surface", "fleet_lite")
+	var res []models.RemoteWalletTenant
+	if err := t.get(ctx, asSelf(""), "/v1/tenants?"+q.Encode(), &res); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+// TenantDetail reads one tenant's record from GET /v1/tenants/{id} — the
+// existence check and entitlement-mode read behind the middleware's mirror
+// fallback and the entitlement sync.
+func (t *TenancyAPI) TenantDetail(ctx context.Context, tenantID string) (*models.RemoteTenantDetail, error) {
+	var res models.RemoteTenantDetail
+	if err := t.get(ctx, asSelf(tenantID), "/v1/tenants/"+url.PathEscape(tenantID), &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+// DimoToken mints a developer JWT for the tenant's EFFECTIVE credential from
+// GET /v1/tenants/{id}/dimo-token — the operator's license for a managed
+// customer. Uncached here: DimoAuthProvider owns the cache, keyed by tenant
+// and bounded by the token's own expiry.
+func (t *TenancyAPI) DimoToken(ctx context.Context, tenantID string) (*models.RemoteMintedToken, error) {
+	var res models.RemoteMintedToken
+	if err := t.get(ctx, asSelf(tenantID), "/v1/tenants/"+url.PathEscape(tenantID)+"/dimo-token", &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+// Entitlements lists the vehicles an explicit-mode tenant may see, from
+// GET /v1/tenants/{id}/vehicles. The service answers 200 [] for implicit-mode
+// tenants too — indistinguishable from "entitled to nothing" — so callers must
+// check entitlementMode before treating an empty list as an empty fleet.
+func (t *TenancyAPI) Entitlements(ctx context.Context, tenant models.Tenant) ([]models.RemoteEntitlement, error) {
+	var res []models.RemoteEntitlement
+	if err := t.get(ctx, tenant, "/v1/tenants/"+url.PathEscape(tenant.ID)+"/vehicles", &res); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+// Members lists the shared membership records from GET /v1/tenants/{id}/members
+// — for an operator-managed tenant, the only member list there is.
+func (t *TenancyAPI) Members(ctx context.Context, tenant models.Tenant) ([]models.RemoteMember, error) {
+	var res []models.RemoteMember
+	if err := t.get(ctx, tenant, "/v1/tenants/"+url.PathEscape(tenant.ID)+"/members", &res); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+// LoginTouch stamps the shared membership's last_login_at via
+// POST /v1/tenants/{id}/members/{wallet}/login. Telemetry, not authorization —
+// callers treat a failure as a lost stamp, not a failed login.
+func (t *TenancyAPI) LoginTouch(ctx context.Context, tenant models.Tenant, wallet, email string) error {
+	return t.do(ctx, tenant, http.MethodPost,
+		"/v1/tenants/"+url.PathEscape(tenant.ID)+"/members/"+url.PathEscape(wallet)+"/login",
+		map[string]string{"email": email}, nil)
+}
+
 // ----- Group writes (P4 of the groups move) -----
 //
 // Every group mutation writes through to fleet-tenancy-api, which owns the
@@ -356,12 +502,16 @@ func (t *TenancyAPI) do(ctx context.Context, tenant models.Tenant, method, path 
 		return fmt.Errorf("%w: url=%q key set=%t", ErrTenancyNotConfigured, t.baseURL, t.apiKey != "")
 	}
 
-	// The developer JWT is minted from the tenant's own license, so this is
-	// both our proof of identity and the reason the scope check passes. It is
-	// cached per tenant by the auth provider — this is not an exchange per call.
-	developerJWT, err := t.authProvider.GetDeveloperJWT(tenant)
+	// The developer JWT is minted from the tenant's own license when we hold
+	// it, and from this app's identity otherwise — see authTenant. Either way
+	// it is cached per identity by the auth provider, not an exchange per call.
+	authAs, err := t.authTenant(tenant)
 	if err != nil {
-		return fmt.Errorf("developer JWT for tenant %s: %w", tenant.ID, err)
+		return fmt.Errorf("tenant %s: %w", tenant.ID, err)
+	}
+	developerJWT, err := t.authProvider.GetDeveloperJWT(authAs)
+	if err != nil {
+		return fmt.Errorf("developer JWT for %s: %w", authAs.ID, err)
 	}
 
 	var reader io.Reader

@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -39,9 +40,15 @@ func cacheTTLFromJWT(raw string, margin, fallback time.Duration) time.Duration {
 	return ttl
 }
 
-// DimoAuthProvider manages per-tenant DIMO developer/vehicle/asset JWTs. Each
-// tenant supplies its own developer license (client ID + decrypted private key);
-// all outbound DIMO data calls run under the current tenant's credentials.
+// DimoAuthProvider manages per-tenant DIMO developer/vehicle/asset JWTs.
+//
+// Two kinds of tenant, one interface. A self-serve tenant supplies its own
+// developer license (client ID + decrypted private key) and mints locally. An
+// operator-managed tenant has no credentials here at all — its developer JWT
+// is minted by fleet-tenancy-api under the operator's license and fetched via
+// the remote minter. Every DIMO call site funnels through GetDeveloperJWT /
+// GetVehicleJWT / GetAssetJWT, so this split is the single place the
+// difference exists; telemetry, attest, fetch and extract inherit it.
 type DimoAuthProvider struct {
 	mu                sync.RWMutex
 	authServices      map[string]*dimoauth.AuthService // tenant ID -> auth service
@@ -50,6 +57,20 @@ type DimoAuthProvider struct {
 
 	settings *config.Settings
 	logger   zerolog.Logger
+
+	// remoteMinter fetches a developer JWT for a tenant whose credentials this
+	// app does not hold. Set after construction (UseRemoteMinter) because the
+	// tenancy client and this provider need each other: tenancy authenticates
+	// its calls with developer JWTs from here, and here fetches managed-tenant
+	// JWTs from tenancy. The cycle is broken by identity: tenancy only ever
+	// asks this provider to mint for credentialed tenants (its own identity
+	// included), so a remote mint can never recurse into another remote mint.
+	remoteMinter remoteDeveloperJWTMinter
+}
+
+// remoteDeveloperJWTMinter is the slice of TenancyAPI this provider needs.
+type remoteDeveloperJWTMinter interface {
+	DimoToken(ctx context.Context, tenantID string) (*models.RemoteMintedToken, error)
 }
 
 func NewDimoAuthProvider(logger zerolog.Logger, settings *config.Settings) *DimoAuthProvider {
@@ -62,10 +83,21 @@ func NewDimoAuthProvider(logger zerolog.Logger, settings *config.Settings) *Dimo
 	}
 }
 
-// GetDeveloperJWT returns a cached or freshly-obtained developer JWT for the tenant.
+// UseRemoteMinter wires the tenancy minter for tenants whose credentials this
+// app does not hold. Wired in app.go after both sides exist; see the field
+// comment for why this is a setter rather than a constructor argument.
+func (p *DimoAuthProvider) UseRemoteMinter(m remoteDeveloperJWTMinter) { p.remoteMinter = m }
+
+// GetDeveloperJWT returns a cached or freshly-obtained developer JWT for the
+// tenant — minted locally from its own license, or fetched from the tenancy
+// minter when it has none.
 func (p *DimoAuthProvider) GetDeveloperJWT(tenant models.Tenant) (string, error) {
 	if cached, found := p.developerJWTCache.Get(tenant.ID); found {
 		return cached.(string), nil
+	}
+
+	if tenant.ClientID == "" {
+		return p.remoteDeveloperJWT(tenant)
 	}
 
 	auth, err := p.getOrCreateAuthService(tenant)
@@ -82,6 +114,25 @@ func (p *DimoAuthProvider) GetDeveloperJWT(tenant models.Tenant) (string, error)
 	return jwt.Raw, nil
 }
 
+// remoteDeveloperJWT fetches a managed tenant's developer JWT — the operator's
+// license, minted by fleet-tenancy-api — and caches it under the tenant id
+// with the same expiry-derived TTL as local mints.
+func (p *DimoAuthProvider) remoteDeveloperJWT(tenant models.Tenant) (string, error) {
+	if p.remoteMinter == nil {
+		return "", fmt.Errorf("tenant %s holds no credentials and no tenancy minter is wired", tenant.ID)
+	}
+	minted, err := p.remoteMinter.DimoToken(context.Background(), tenant.ID)
+	if err != nil {
+		return "", fmt.Errorf("remote developer JWT for tenant %s: %w", tenant.ID, err)
+	}
+	if minted.Token == "" {
+		return "", fmt.Errorf("remote developer JWT for tenant %s: empty token", tenant.ID)
+	}
+	p.developerJWTCache.Set(tenant.ID, minted.Token,
+		cacheTTLFromJWT(minted.Token, 5*time.Minute, 10*time.Minute))
+	return minted.Token, nil
+}
+
 // GetVehicleJWT exchanges the tenant's developer JWT for a vehicle-scoped JWT (by tokenID).
 func (p *DimoAuthProvider) GetVehicleJWT(tenant models.Tenant, tokenID uint64) (string, error) {
 	cacheKey := fmt.Sprintf("%s:%d", tenant.ID, tokenID)
@@ -93,7 +144,7 @@ func (p *DimoAuthProvider) GetVehicleJWT(tenant models.Tenant, tokenID uint64) (
 	if err != nil {
 		return "", fmt.Errorf("dev JWT for vehicle exchange: %w", err)
 	}
-	auth, err := p.getOrCreateAuthService(tenant)
+	auth, err := p.exchangeServiceFor(tenant)
 	if err != nil {
 		return "", err
 	}
@@ -119,7 +170,7 @@ func (p *DimoAuthProvider) GetAssetJWT(tenant models.Tenant, tokenDID string) (s
 	if err != nil {
 		return "", fmt.Errorf("dev JWT for asset exchange: %w", err)
 	}
-	auth, err := p.getOrCreateAuthService(tenant)
+	auth, err := p.exchangeServiceFor(tenant)
 	if err != nil {
 		return "", err
 	}
@@ -165,6 +216,30 @@ func ParseTokenIDFromDID(tokenDID string) (uint64, error) {
 		return 0, fmt.Errorf("parse tokenID from DID %s: %w", tokenDID, err)
 	}
 	return id, nil
+}
+
+// exchangeServiceFor returns the AuthService a token exchange runs through.
+//
+// The exchange itself needs only the token-exchange URL — dimoauth's
+// GetVehicleJWT/GetAssetJWT take the developer JWT as a parameter and never
+// touch the private key — but the type is only constructible with a valid key.
+// A credentialed tenant uses its own service, as before; a managed tenant,
+// whose developer JWT came from the tenancy minter, exchanges through a
+// service built from this app's own settings. Which key that service holds is
+// irrelevant to the exchange: the JWT being exchanged is what the token
+// exchange authorizes, and it is the operator's.
+func (p *DimoAuthProvider) exchangeServiceFor(tenant models.Tenant) (*dimoauth.AuthService, error) {
+	if tenant.ClientID != "" {
+		return p.getOrCreateAuthService(tenant)
+	}
+	if p.settings.DimoAuthPrivateKey == "" {
+		return nil, fmt.Errorf("tenant %s holds no credentials and DIMO_AUTH_PRIVATE_KEY is unset", tenant.ID)
+	}
+	return p.getOrCreateAuthService(models.Tenant{
+		ID:             "app:exchange",
+		ClientID:       p.settings.DimoAuthClientID.Hex(),
+		DIMOPrivateKey: p.settings.DimoAuthPrivateKey,
+	})
 }
 
 func (p *DimoAuthProvider) getOrCreateAuthService(tenant models.Tenant) (*dimoauth.AuthService, error) {
