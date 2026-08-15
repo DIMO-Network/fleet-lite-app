@@ -207,7 +207,16 @@ func (s *InvitationService) Accept(ctx context.Context, token, inviteeWallet str
 		return "", ErrInviteInvalid
 	}
 
-	if err := s.tenantSvc.AddMember(ctx, inv.TenantID, inviteeWallet, inv.Role, []string(inv.AllowedGroupIds)); err != nil {
+	// The grant goes through the write-through: authz answers come from the
+	// tenancy service, so an accept that wrote only the local row would greet
+	// the invitee with 403s. A tenancy failure leaves the invitation pending
+	// — accepting again retries the whole grant, which is idempotent.
+	tenant, err := s.tenantSvc.GetOrMirrorTenant(ctx, inv.TenantID)
+	if err != nil {
+		return "", fmt.Errorf("load tenant for accept: %w", err)
+	}
+	if err := s.tenantSvc.GrantMember(ctx, tenant, inviteeWallet, inv.Role,
+		[]string(inv.AllowedGroupIds), inv.InvitedByWallet); err != nil {
 		return "", fmt.Errorf("add member: %w", err)
 	}
 

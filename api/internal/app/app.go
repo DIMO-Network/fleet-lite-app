@@ -118,7 +118,7 @@ func App(
 	geofencesCtrl := controllers.NewGeofencesController(logger, geofenceSvc, attestSvc, geofenceDetectionSvc, vehicleSvc)
 	settingsCtrl := controllers.NewSettingsController(settings, logger)
 	tenantsCtrl := controllers.NewTenantsController(logger, settings, tenantSvc, vehicleSvc, identity, authProvider, membershipSvc, tenancyAPI)
-	invitationsCtrl := controllers.NewInvitationsController(logger, tenantSvc, invitationSvc)
+	invitationsCtrl := controllers.NewInvitationsController(logger, tenantSvc, invitationSvc, tenancyAPI)
 	webhooksCtrl := controllers.NewWebhooksController(logger, settings, invitationSvc)
 	userPrefsSvc := service.NewUserPrefsService(logger, pdb)
 	userPrefsCtrl := controllers.NewUserPrefsController(logger, userPrefsSvc)

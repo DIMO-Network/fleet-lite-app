@@ -413,6 +413,56 @@ func (t *TenancyAPI) Members(ctx context.Context, tenant models.Tenant) ([]model
 	return res, nil
 }
 
+// RemoteMemberWrite is the body of PUT /v1/tenants/{id}/members/{wallet}. The
+// service REPLACES the membership with it, so senders must carry the whole
+// record — see the read-modify-write in TenantService's write-through.
+type RemoteMemberWrite struct {
+	Email       string
+	Role        string
+	Permissions []string
+	// ScopeGroupIDs nil means unrestricted; an empty, non-nil slice means
+	// restricted to nothing. The service refuses an absent field, so the
+	// marshalling below always sends it — null or an array, never omitted.
+	ScopeGroupIDs   []string
+	GrantedByWallet string
+}
+
+// PutMember writes one whole membership through to the shared model — the
+// write that makes a fleet-lite grant actually confer access, since authz
+// answers come from the tenancy service.
+func (t *TenancyAPI) PutMember(ctx context.Context, tenant models.Tenant, wallet string, w RemoteMemberWrite) error {
+	perms := w.Permissions
+	if perms == nil {
+		perms = []string{}
+	}
+	body := map[string]any{
+		"role":        w.Role,
+		"permissions": perms,
+	}
+	// A map value of nil marshals as an explicit null — "unrestricted", which
+	// the service must see spelled out rather than guessed at.
+	if w.ScopeGroupIDs == nil {
+		body["scopeGroupIds"] = nil
+	} else {
+		body["scopeGroupIds"] = w.ScopeGroupIDs
+	}
+	if w.Email != "" {
+		body["email"] = w.Email
+	}
+	if w.GrantedByWallet != "" {
+		body["grantedByWallet"] = w.GrantedByWallet
+	}
+	return t.do(ctx, tenant, http.MethodPut,
+		"/v1/tenants/"+url.PathEscape(tenant.ID)+"/members/"+url.PathEscape(wallet), body, nil)
+}
+
+// DeleteMember removes the shared membership. Deleting one already gone is a
+// 204 on the service side, so retries converge.
+func (t *TenancyAPI) DeleteMember(ctx context.Context, tenant models.Tenant, wallet string) error {
+	return t.do(ctx, tenant, http.MethodDelete,
+		"/v1/tenants/"+url.PathEscape(tenant.ID)+"/members/"+url.PathEscape(wallet), nil, nil)
+}
+
 // LoginTouch stamps the shared membership's last_login_at via
 // POST /v1/tenants/{id}/members/{wallet}/login. Telemetry, not authorization —
 // callers treat a failure as a lost stamp, not a failed login.
