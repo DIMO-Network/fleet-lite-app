@@ -335,14 +335,13 @@ type addMemberRequest struct {
 	AllowedGroupIDs []string `json:"allowedGroupIds"`
 }
 
-// AddMember — POST /tenants/:id/members. Owner-only; adds a wallet to the tenant.
+// AddMember — POST /tenants/:id/members. Requires manage_members; writes the
+// membership locally AND through to the tenancy service, which is where authz
+// answers come from — a local-only row would report success and confer nothing.
 func (t *TenantsController) AddMember(c *fiber.Ctx) error {
-	_, role, err := t.requireMember(c)
+	actor, err := requireTenantCapability(c, t.logger, t.tenantSvc, t.tenancy, CapManageMembers)
 	if err != nil {
 		return err
-	}
-	if role != service.RoleOwner {
-		return fiber.NewError(fiber.StatusForbidden, "only an owner can manage members")
 	}
 	var req addMemberRequest
 	if err := c.BodyParser(&req); err != nil || req.Wallet == "" {
@@ -352,11 +351,24 @@ func (t *TenantsController) AddMember(c *fiber.Ctx) error {
 	if memberRole != service.RoleOwner {
 		memberRole = service.RoleMember
 	}
-	if err := t.tenantSvc.AddMember(c.Context(), c.Params("id"), req.Wallet, memberRole, req.AllowedGroupIDs); err != nil {
-		t.logger.Err(err).Msg("add member")
-		return fiber.NewError(fiber.StatusInternalServerError, "failed to add member")
+	tenant, err := t.tenantSvc.GetOrMirrorTenant(c.Context(), c.Params("id"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to load tenant")
+	}
+	if err := t.tenantSvc.GrantMember(c.Context(), tenant, req.Wallet, memberRole, req.AllowedGroupIDs, actor); err != nil {
+		return t.mapMemberWriteError(err, "add member")
 	}
 	return c.JSON(fiber.Map{"ok": true})
+}
+
+// mapMemberWriteError keeps the split the write-through creates: an upstream
+// failure is a 502 the caller should retry, anything else is this app's fault.
+func (t *TenantsController) mapMemberWriteError(err error, op string) error {
+	t.logger.Err(err).Msg(op)
+	if errors.Is(err, service.ErrTenancyWriteFailed) {
+		return fiber.NewError(fiber.StatusBadGateway, "membership write did not reach the tenancy service; retry")
+	}
+	return fiber.NewError(fiber.StatusInternalServerError, "failed to "+op)
 }
 
 type updateMemberAccessRequest struct {
@@ -364,21 +376,26 @@ type updateMemberAccessRequest struct {
 	AllowedGroupIDs []string `json:"allowedGroupIds"`
 }
 
-// UpdateMemberAccess — PUT /tenants/:id/members/:wallet/access. Owner-only;
-// changes an existing member's allowed fleet groups (null = full access).
+// UpdateMemberAccess — PUT /tenants/:id/members/:wallet/access. Requires
+// manage_members; changes an existing member's allowed fleet groups (null =
+// full access), locally and in the shared model.
 func (t *TenantsController) UpdateMemberAccess(c *fiber.Ctx) error {
-	_, role, err := t.requireMember(c)
+	_, err := requireTenantCapability(c, t.logger, t.tenantSvc, t.tenancy, CapManageMembers)
 	if err != nil {
 		return err
-	}
-	if role != service.RoleOwner {
-		return fiber.NewError(fiber.StatusForbidden, "only an owner can manage members")
 	}
 	var req updateMemberAccessRequest
 	if err := c.BodyParser(&req); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
-	if err := t.tenantSvc.UpdateMemberAccess(c.Context(), c.Params("id"), c.Params("wallet"), req.AllowedGroupIDs); err != nil {
+	tenant, err := t.tenantSvc.GetOrMirrorTenant(c.Context(), c.Params("id"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to load tenant")
+	}
+	if err := t.tenantSvc.ChangeMemberScope(c.Context(), tenant, c.Params("wallet"), req.AllowedGroupIDs); err != nil {
+		if errors.Is(err, service.ErrTenancyWriteFailed) {
+			return t.mapMemberWriteError(err, "update member access")
+		}
 		t.logger.Err(err).Str("tenant", c.Params("id")).Msg("update member access")
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
@@ -421,19 +438,23 @@ func (t *TenantsController) GetMyAccess(c *fiber.Ctx) error {
 
 // RemoveMember — DELETE /tenants/:id/members/:wallet. Owner-only.
 func (t *TenantsController) RemoveMember(c *fiber.Ctx) error {
-	_, role, err := t.requireMember(c)
+	_, err := requireTenantCapability(c, t.logger, t.tenantSvc, t.tenancy, CapManageMembers)
 	if err != nil {
 		return err
-	}
-	if role != service.RoleOwner {
-		return fiber.NewError(fiber.StatusForbidden, "only an owner can manage members")
 	}
 	wallet := c.Params("wallet")
 	if wallet == "" {
 		return fiber.NewError(fiber.StatusBadRequest, "wallet is required")
 	}
-	if err := t.tenantSvc.RemoveMember(c.Context(), c.Params("id"), wallet); err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "failed to remove member")
+	tenant, err := t.tenantSvc.GetOrMirrorTenant(c.Context(), c.Params("id"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to load tenant")
+	}
+	// Revocations go to the shared model FIRST: if the local delete then
+	// fails, authz already refuses — the person can only ever end up with
+	// less access than intended, never more.
+	if err := t.tenantSvc.RemoveMemberEverywhere(c.Context(), tenant, wallet); err != nil {
+		return t.mapMemberWriteError(err, "remove member")
 	}
 	return c.JSON(fiber.Map{"ok": true})
 }
@@ -460,14 +481,19 @@ type updateSettingsRequest struct {
 	APIKey   *string `json:"apiKey"`
 }
 
-// UpdateSettings — PUT /tenants/:id/settings. Owner-only; updates DIMO credentials.
+// UpdateSettings — PUT /tenants/:id/settings. Requires manage_settings;
+// updates DIMO credentials. Refused outright for an operator-managed tenant:
+// its effective credential is the operator's license, held by the tenancy
+// service, and a locally-written key would silently fork it.
 func (t *TenantsController) UpdateSettings(c *fiber.Ctx) error {
-	_, role, err := t.requireMember(c)
+	_, err := requireTenantCapability(c, t.logger, t.tenantSvc, t.tenancy, CapManageSettings)
 	if err != nil {
 		return err
 	}
-	if role != service.RoleOwner {
-		return fiber.NewError(fiber.StatusForbidden, "only an owner can update settings")
+	if t.tenancyConfigured() {
+		if tenant, terr := t.tenantSvc.GetOrMirrorTenant(c.Context(), c.Params("id")); terr == nil && tenant.ClientID == "" {
+			return fiber.NewError(fiber.StatusConflict, "this fleet's credentials are managed by your operator")
+		}
 	}
 	var req updateSettingsRequest
 	if err := c.BodyParser(&req); err != nil {

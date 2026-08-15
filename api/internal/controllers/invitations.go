@@ -5,6 +5,7 @@ import (
 	"time"
 
 	dbmodels "github.com/DIMO-Network/fleet-lite-app/internal/db/models"
+	"github.com/DIMO-Network/fleet-lite-app/internal/gateway"
 	"github.com/DIMO-Network/fleet-lite-app/internal/service"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
@@ -14,39 +15,31 @@ type InvitationsController struct {
 	logger        *zerolog.Logger
 	tenantSvc     *service.TenantService
 	invitationSvc *service.InvitationService
+	// tenancy backs the capability gate: permissions are authoritative and
+	// live in the shared model. nil/unconfigured falls back to the local
+	// owner-role check, exactly as before.
+	tenancy *gateway.TenancyAPI
 }
 
 func NewInvitationsController(
 	logger *zerolog.Logger,
 	tenantSvc *service.TenantService,
 	invitationSvc *service.InvitationService,
+	tenancy *gateway.TenancyAPI,
 ) *InvitationsController {
 	return &InvitationsController{
 		logger:        logger,
 		tenantSvc:     tenantSvc,
 		invitationSvc: invitationSvc,
+		tenancy:       tenancy,
 	}
 }
 
-// requireOwner resolves the caller's wallet, confirms membership in the path
-// tenant, and that they're an owner. Mirrors TenantsController.requireMember.
-func (ic *InvitationsController) requireOwner(c *fiber.Ctx) (string, error) {
-	wallet, err := GetWalletAddressFromJWT(c)
-	if err != nil {
-		return "", fiber.NewError(fiber.StatusUnauthorized, err.Error())
-	}
-	tenantID := c.Params("id")
-	if tenantID == "" {
-		return "", fiber.NewError(fiber.StatusBadRequest, "tenant id is required")
-	}
-	role, err := ic.tenantSvc.GetMembershipRole(c.Context(), tenantID, wallet.Hex())
-	if err != nil || role == "" {
-		return "", fiber.NewError(fiber.StatusForbidden, "no access to tenant")
-	}
-	if role != service.RoleOwner {
-		return "", fiber.NewError(fiber.StatusForbidden, "only an owner can manage invitations")
-	}
-	return wallet.Hex(), nil
+// requireManageMembers gates every invitation operation except accept on the
+// manage_members capability — invitations are member management with an email
+// in the middle. Replaces the old owner-role gate; role is a label.
+func (ic *InvitationsController) requireManageMembers(c *fiber.Ctx) (string, error) {
+	return requireTenantCapability(c, ic.logger, ic.tenantSvc, ic.tenancy, CapManageMembers)
 }
 
 type invitationJSON struct {
@@ -90,7 +83,7 @@ type createInvitationRequest struct {
 // CreateInvitation — POST /tenants/:id/invitations. Owner-only. Issues an
 // email invitation and sends the accept-link via Postmark.
 func (ic *InvitationsController) CreateInvitation(c *fiber.Ctx) error {
-	inviter, err := ic.requireOwner(c)
+	inviter, err := ic.requireManageMembers(c)
 	if err != nil {
 		return err
 	}
@@ -121,7 +114,7 @@ func (ic *InvitationsController) CreateInvitation(c *fiber.Ctx) error {
 // ListInvitations — GET /tenants/:id/invitations. Owner-only — invitations are
 // a user-management surface (they carry emails and access scopes).
 func (ic *InvitationsController) ListInvitations(c *fiber.Ctx) error {
-	if _, err := ic.requireOwner(c); err != nil {
+	if _, err := ic.requireManageMembers(c); err != nil {
 		return err
 	}
 	tenantID := c.Params("id")
@@ -139,7 +132,7 @@ func (ic *InvitationsController) ListInvitations(c *fiber.Ctx) error {
 
 // RevokeInvitation — DELETE /tenants/:id/invitations/:invID. Owner-only.
 func (ic *InvitationsController) RevokeInvitation(c *fiber.Ctx) error {
-	if _, err := ic.requireOwner(c); err != nil {
+	if _, err := ic.requireManageMembers(c); err != nil {
 		return err
 	}
 	if err := ic.invitationSvc.Revoke(c.Context(), c.Params("id"), c.Params("invID")); err != nil {
@@ -156,7 +149,7 @@ type resendInvitationRequest struct {
 // ResendInvitation — POST /tenants/:id/invitations/:invID/resend. Owner-only.
 // Mints a fresh token and re-sends the email in the inviter's current locale.
 func (ic *InvitationsController) ResendInvitation(c *fiber.Ctx) error {
-	inviter, err := ic.requireOwner(c)
+	inviter, err := ic.requireManageMembers(c)
 	if err != nil {
 		return err
 	}
