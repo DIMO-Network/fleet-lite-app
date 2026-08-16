@@ -413,6 +413,37 @@ func (t *TenancyAPI) Members(ctx context.Context, tenant models.Tenant) ([]model
 	return res, nil
 }
 
+// CreateSelfServeTenant registers a new self-serve tenant with the tenancy
+// service — tenant, credential and owner membership in one transaction on the
+// far side — and returns the record, whose id the caller MUST reuse for its
+// local row. Always the app identity: the tenant does not exist yet, so there
+// is no subject to authenticate as.
+func (t *TenancyAPI) CreateSelfServeTenant(ctx context.Context, name, clientID, apiKey, ownerWallet, ownerEmail string) (*models.RemoteTenantDetail, error) {
+	var res models.RemoteTenantDetail
+	if err := t.do(ctx, asSelf(""), http.MethodPost, "/v1/tenants", map[string]string{
+		"name":        name,
+		"clientId":    clientID,
+		"apiKey":      apiKey,
+		"ownerWallet": ownerWallet,
+		"ownerEmail":  ownerEmail,
+	}, &res); err != nil {
+		return nil, err
+	}
+	if res.ID == "" {
+		return nil, fmt.Errorf("tenancy created a tenant but answered no id")
+	}
+	return &res, nil
+}
+
+// PutTenantCredentials sets or replaces a tenant's own license in the tenancy
+// service. Deliberately the app identity rather than the subject's: a rotation
+// must not depend on the credential being rotated away still minting.
+func (t *TenancyAPI) PutTenantCredentials(ctx context.Context, tenantID, clientID, apiKey string) error {
+	return t.do(ctx, asSelf(""), http.MethodPut,
+		"/v1/tenants/"+url.PathEscape(tenantID)+"/credentials",
+		map[string]string{"clientId": clientID, "apiKey": apiKey}, nil)
+}
+
 // RemoteMemberWrite is the body of PUT /v1/tenants/{id}/members/{wallet}. The
 // service REPLACES the membership with it, so senders must carry the whole
 // record — see the read-modify-write in TenantService's write-through.

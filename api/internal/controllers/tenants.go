@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/DIMO-Network/fleet-lite-app/internal/config"
+	dbmodels "github.com/DIMO-Network/fleet-lite-app/internal/db/models"
 	"github.com/DIMO-Network/fleet-lite-app/internal/gateway"
 	"github.com/DIMO-Network/fleet-lite-app/internal/models"
 	"github.com/DIMO-Network/fleet-lite-app/internal/service"
@@ -158,6 +159,14 @@ type createTenantRequest struct {
 // CreateTenant — POST /tenants. Validates the supplied DIMO developer creds by
 // minting a developer JWT, then creates the tenant + owner membership and kicks
 // off an initial vehicle sync.
+//
+// Creation is REMOTE-FIRST: the tenancy service registers the tenant (with its
+// credential and owner membership, atomically) and mints the id; the local row
+// materialises under that same id. The reverse order is what this replaces —
+// a local-only tenant that the authz cutover made unopenable, because layer 2
+// had never seen its license. A remote success followed by a local failure
+// degrades safely: the middleware's mirror path re-materialises the row on
+// first open, and the tenant works through the minter meanwhile.
 func (t *TenantsController) CreateTenant(c *fiber.Ctx) error {
 	wallet, err := GetWalletAddressFromJWT(c)
 	if err != nil {
@@ -176,7 +185,8 @@ func (t *TenantsController) CreateTenant(c *fiber.Ctx) error {
 	}
 
 	// Validate the creds before persisting: resolve the dev-license redirect URI
-	// and try to mint a developer JWT.
+	// and try to mint a developer JWT. The tenancy service validates again on
+	// its side; this local probe exists to answer a typo in one hop.
 	probe := models.Tenant{ID: "validate:" + req.ClientID, ClientID: req.ClientID, DIMOPrivateKey: req.APIKey}
 	if lic, lerr := t.identity.FetchDeveloperLicenseByClientID(req.ClientID); lerr == nil && lic != nil && len(lic.RedirectURIs.Edges) > 0 {
 		probe.DIMORedirectURI = lic.RedirectURIs.Edges[0].Node.URI
@@ -186,8 +196,42 @@ func (t *TenantsController) CreateTenant(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "could not authenticate with DIMO using the provided client ID and API key")
 	}
 
-	tenant, err := t.tenantSvc.CreateTenant(c.Context(), name, req.ClientID, req.APIKey, wallet.Hex())
+	// The authoritative write. Refusals pass through with their own statuses —
+	// a 409 here is "that license already has a tenant", which the caller can
+	// act on and a 500 would bury.
+	remoteID := ""
+	if t.tenancyConfigured() {
+		// No email at create time — the DIMO JWT carries none; the login touch
+		// fills the shared users row on the owner's first session.
+		created, rerr := t.tenancy.CreateSelfServeTenant(c.Context(), name, req.ClientID, req.APIKey, wallet.Hex(), "")
+		if rerr != nil {
+			var te *gateway.TenancyError
+			if errors.As(rerr, &te) && (te.StatusCode == fiber.StatusBadRequest || te.StatusCode == fiber.StatusConflict) {
+				return fiber.NewError(te.StatusCode, te.Message)
+			}
+			t.logger.Err(rerr).Str("client_id", req.ClientID).Msg("tenancy self-serve create failed")
+			return fiber.NewError(fiber.StatusBadGateway, "tenant registration did not reach the tenancy service; retry")
+		}
+		remoteID = created.ID
+	}
+
+	var tenant *dbmodels.Tenant
+	if remoteID != "" {
+		tenant, err = t.tenantSvc.CreateTenantWithID(c.Context(), remoteID, name, req.ClientID, req.APIKey, wallet.Hex())
+	} else {
+		// No tenancy client configured (local dev): local-only, as always.
+		tenant, err = t.tenantSvc.CreateTenant(c.Context(), name, req.ClientID, req.APIKey, wallet.Hex())
+	}
 	if err != nil {
+		if remoteID != "" {
+			// The tenant EXISTS — the authority accepted it. Reporting failure
+			// now would tell the owner their tenant was not created when it
+			// was; the mirror path re-materialises the local row on first
+			// open. Log loudly, answer with what exists.
+			t.logger.Error().Err(err).Str("tenant_id", remoteID).
+				Msg("tenant registered in tenancy but the local row failed; the mirror path will converge it")
+			return c.Status(fiber.StatusCreated).JSON(tenantJSON{ID: remoteID, Name: name, Role: service.RoleOwner})
+		}
 		t.logger.Err(err).Msg("create tenant")
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to create tenant")
 	}
@@ -499,6 +543,22 @@ func (t *TenantsController) UpdateSettings(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
+
+	// Remote first, same reasoning as creation: the tenancy service is where
+	// layer 2 resolves the license, so a rotation it never saw is a rotation
+	// that locks the tenant out. Only a full pair goes through — a client-id
+	// change alone would desync the halves of one credential.
+	if t.tenancyConfigured() && req.ClientID != nil && req.APIKey != nil && *req.APIKey != "" {
+		if rerr := t.tenancy.PutTenantCredentials(c.Context(), c.Params("id"), *req.ClientID, *req.APIKey); rerr != nil {
+			var te *gateway.TenancyError
+			if errors.As(rerr, &te) && (te.StatusCode == fiber.StatusBadRequest || te.StatusCode == fiber.StatusConflict) {
+				return fiber.NewError(te.StatusCode, te.Message)
+			}
+			t.logger.Err(rerr).Str("tenant", c.Params("id")).Msg("tenancy credential write failed")
+			return fiber.NewError(fiber.StatusBadGateway, "credential update did not reach the tenancy service; retry")
+		}
+	}
+
 	if err := t.tenantSvc.UpdateCredentials(c.Context(), c.Params("id"), req.ClientID, req.APIKey); err != nil {
 		t.logger.Err(err).Msg("update tenant settings")
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to update settings")
