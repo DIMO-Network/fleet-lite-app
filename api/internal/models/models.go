@@ -115,6 +115,45 @@ type RemoteMember struct {
 	LastLoginAt   *string  `json:"lastLoginAt"`
 }
 
+// RemoteInvitation is one invitation as fleet-tenancy-api serves it, once
+// INVITES_FROM_TENANCY is on and that service owns the records. Keep it in
+// step with that service's models.Invitation.
+//
+// The token never appears here, and must not: the plaintext exists only in
+// the email that service sent. This shape is what the owner's screen shows.
+type RemoteInvitation struct {
+	ID       string `json:"id"`
+	TenantID string `json:"tenantId"`
+	Email    string `json:"email"`
+	Role     string `json:"role"`
+	Status   string `json:"status"`
+
+	InvitedBy     string  `json:"invitedBy,omitempty"`
+	InviteeWallet *string `json:"inviteeWallet,omitempty"`
+	// CreatedByTenantID marks an invitation the OPERATOR sent from the console
+	// rather than one this tenant sent itself. Nil for everything this app
+	// creates; the UI can distinguish the two.
+	CreatedByTenantID *string `json:"createdByTenantId,omitempty"`
+
+	// ScopeGroupIDs is the same three-valued encoding as everywhere else: nil
+	// unrestricted, empty restricted to nothing. It becomes the membership's
+	// scope verbatim when the invitation is accepted.
+	ScopeGroupIDs []string `json:"scopeGroupIds"`
+
+	EmailStatus       *string `json:"emailStatus,omitempty"`
+	EmailStatusAt     *string `json:"emailStatusAt,omitempty"`
+	EmailStatusDetail *string `json:"emailStatusDetail,omitempty"`
+
+	CreatedAt  string  `json:"createdAt"`
+	ExpiresAt  string  `json:"expiresAt"`
+	AcceptedAt *string `json:"acceptedAt,omitempty"`
+
+	// EmailSent rides on create/resend responses only: false means the record
+	// was written but Postmark did not accept the message. A partial success,
+	// not a failure — the invite is usable and can be resent.
+	EmailSent *bool `json:"emailSent,omitempty"`
+}
+
 // RemoteMembership is one vehicle membership as fleet-tenancy-api serves it
 // from GET /v1/tenants/{id}/vehicle-memberships. Token id only — VIN, plate
 // and model are joined from this app's own vehicle list, which owns them.

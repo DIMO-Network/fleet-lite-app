@@ -552,6 +552,118 @@ func (t *TenancyAPI) RemoveGroupVehicle(ctx context.Context, tenant models.Tenan
 			"/vehicles/"+strconv.FormatInt(tokenID, 10), nil, nil)
 }
 
+// ----- Invitations (P2 of the invitations move) -----
+//
+// Behind INVITES_FROM_TENANCY, the whole invitation lifecycle moves to
+// fleet-tenancy-api: it mints the token, sends the email, receives Postmark's
+// delivery webhooks, and — on accept — writes the membership itself.
+//
+// That last point is why Accept here is not "the remote call plus our usual
+// grant": the tenancy accept marks the invitation and upserts the membership
+// in ONE transaction, so calling GrantMember afterwards would be a second,
+// weaker write of something already done.
+//
+// The token is deliberately absent from every request and response below. It
+// exists in the invitee's email and in that service's memory at mint time,
+// and nowhere else — including our logs.
+
+// Invitations lists a tenant's invitations from
+// GET /v1/tenants/{id}/invitations.
+func (t *TenancyAPI) Invitations(ctx context.Context, tenant models.Tenant) ([]models.RemoteInvitation, error) {
+	var res struct {
+		Invitations []models.RemoteInvitation `json:"invitations"`
+	}
+	if err := t.get(ctx, tenant, "/v1/tenants/"+url.PathEscape(tenant.ID)+"/invitations", &res); err != nil {
+		return nil, err
+	}
+	return res.Invitations, nil
+}
+
+// RemoteInvitationCreate is the body of POST /v1/tenants/{id}/invitations.
+type RemoteInvitationCreate struct {
+	Email  string
+	Role   string
+	Locale string
+	// ScopeGroupIDs carries the tri-state: nil unrestricted, empty non-nil
+	// restricted to nothing. The service refuses the field absent, so the
+	// marshalling below always sends it — null or an array, never omitted.
+	ScopeGroupIDs   []string
+	InvitedByWallet string
+}
+
+// CreateInvitation issues an invitation: the service mints the token, stores
+// its hash and emails the accept link.
+//
+// A 201 whose EmailSent is false is a PARTIAL SUCCESS, not a failure — the
+// record is authoritative and the email is courtesy. Callers surface it as
+// "created, email did not go out" and offer a resend, exactly as the local
+// flow did with ErrEmailNotSent.
+func (t *TenancyAPI) CreateInvitation(ctx context.Context, tenant models.Tenant, in RemoteInvitationCreate) (*models.RemoteInvitation, error) {
+	body := map[string]any{
+		"email":           in.Email,
+		"role":            in.Role,
+		"locale":          in.Locale,
+		"invitedByWallet": in.InvitedByWallet,
+	}
+	// A map value of nil marshals as an explicit null — "unrestricted", which
+	// the service must see spelled out rather than guessed at.
+	if in.ScopeGroupIDs == nil {
+		body["scopeGroupIds"] = nil
+	} else {
+		body["scopeGroupIds"] = in.ScopeGroupIDs
+	}
+	var res models.RemoteInvitation
+	if err := t.do(ctx, tenant, http.MethodPost,
+		"/v1/tenants/"+url.PathEscape(tenant.ID)+"/invitations", body, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+// RevokeInvitation revokes a pending invitation. Idempotent on the service
+// side — revoking one already dead is a 204 — so retries converge.
+func (t *TenancyAPI) RevokeInvitation(ctx context.Context, tenant models.Tenant, invitationID string) error {
+	return t.do(ctx, tenant, http.MethodDelete,
+		"/v1/tenants/"+url.PathEscape(tenant.ID)+"/invitations/"+url.PathEscape(invitationID), nil, nil)
+}
+
+// ResendInvitation mints a FRESH token and re-sends the email. The previous
+// link dies — that is the contract, not a side effect — so an accept racing a
+// resend loses.
+func (t *TenancyAPI) ResendInvitation(ctx context.Context, tenant models.Tenant, invitationID, actorWallet, locale string) (*models.RemoteInvitation, error) {
+	var res models.RemoteInvitation
+	if err := t.do(ctx, tenant, http.MethodPost,
+		"/v1/tenants/"+url.PathEscape(tenant.ID)+"/invitations/"+url.PathEscape(invitationID)+"/resend",
+		map[string]string{"actorWallet": actorWallet, "locale": locale}, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+// AcceptInvitation consumes a token and binds the wallet to whatever tenant
+// the token resolves to — which is why there is no tenant in the path, and why
+// this authenticates as the app identity: the accepting wallet is not yet a
+// member of anything, and we do not know the tenant until the service tells us.
+//
+// The service writes the membership as part of the same transaction, so the
+// caller must NOT also grant. It answers 410 for a dead token (unknown,
+// superseded, already used, expired, revoked) with nothing distinguishing
+// which, deliberately.
+func (t *TenancyAPI) AcceptInvitation(ctx context.Context, token, wallet, email string) (*models.RemoteInvitation, error) {
+	if token == "" || wallet == "" {
+		return nil, fmt.Errorf("token and wallet are required")
+	}
+	body := map[string]string{"token": token, "wallet": wallet}
+	if email != "" {
+		body["email"] = email
+	}
+	var res models.RemoteInvitation
+	if err := t.do(ctx, asSelf(""), http.MethodPost, "/v1/invitations/accept", body, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
 // AuthzFresh bypasses the cache. Reconciliation wants the service's current
 // answer, not one this process happened to read a minute ago.
 func (t *TenancyAPI) AuthzFresh(ctx context.Context, tenant models.Tenant, wallet string) (*AuthzResult, error) {

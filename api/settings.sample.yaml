@@ -54,6 +54,13 @@ TENANCY_API_KEY: ''
 ## Serve fleet-group display READS from the tenancy service (writes always go
 ## there since P4). The flag and the local mirror tables go away in P5.
 GROUPS_FROM_TENANCY: false
+## Serve the WHOLE invitation lifecycle from the tenancy service — records,
+## token minting, the Postmark email, the delivery webhook, and the membership
+## grant at accept. Not a read/write split like the groups flag: two services
+## holding two token hashes for one invitation would mean an emailed link that
+## works against one and not the other. Run backfill-invitations and
+## invitations-diff before flipping this. Off keeps the local path, unchanged.
+INVITES_FROM_TENANCY: false
 
 ## Chain config (polygon mainnet)
 CHAIN_ID: 137
