@@ -102,6 +102,15 @@ func App(
 		// empty garage until the nightly cron.
 		tenantSvc.UseTenancy(tenancyAPI)
 		vehicleSvc.UseTenancy(tenancyAPI)
+		// Invitations (P2 of the invitations move). Unlike the groups flag this
+		// moves the WHOLE lifecycle — records, token, email, webhook and the
+		// accept-time grant — because two services holding two token hashes for
+		// one invitation would mean a link that works against one and not the
+		// other. Off ships the local path unchanged, which is the revert.
+		invitationSvc.UseTenancy(tenancyAPI, settings.InvitesFromTenancy)
+		if settings.InvitesFromTenancy {
+			logger.Info().Msg("INVITES_FROM_TENANCY is on — invitations are served by fleet-tenancy-api")
+		}
 		authProvider.UseRemoteMinter(tenancyAPI)
 		tenantSvc.OnMirrorCreated(func(t models.Tenant) {
 			go func() {

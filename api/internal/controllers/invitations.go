@@ -2,10 +2,9 @@ package controllers
 
 import (
 	"errors"
-	"time"
 
-	dbmodels "github.com/DIMO-Network/fleet-lite-app/internal/db/models"
 	"github.com/DIMO-Network/fleet-lite-app/internal/gateway"
+	"github.com/DIMO-Network/fleet-lite-app/internal/models"
 	"github.com/DIMO-Network/fleet-lite-app/internal/service"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
@@ -124,8 +123,8 @@ func (ic *InvitationsController) ListInvitations(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to list invitations")
 	}
 	out := make([]invitationJSON, 0, len(rows))
-	for _, r := range rows {
-		out = append(out, toInvitationJSON(r))
+	for i := range rows {
+		out = append(out, toInvitationJSON(&rows[i]))
 	}
 	return c.JSON(fiber.Map{"invitations": out})
 }
@@ -156,7 +155,10 @@ func (ic *InvitationsController) ResendInvitation(c *fiber.Ctx) error {
 	// Body is optional; an unparseable/empty body just falls back to English.
 	var req resendInvitationRequest
 	_ = c.BodyParser(&req)
-	if err := ic.invitationSvc.Resend(c.Context(), c.Params("id"), c.Params("invID"), inviter, req.Locale); err != nil {
+	// The refreshed record is deliberately discarded: the frontend's resend
+	// response is a flag, not a row, and it re-lists after a resend anyway.
+	_, err = ic.invitationSvc.Resend(c.Context(), c.Params("id"), c.Params("invID"), inviter, req.Locale)
+	if err != nil {
 		if errors.Is(err, service.ErrInviteInvalid) {
 			return fiber.NewError(fiber.StatusNotFound, "no pending invitation to resend")
 		}
@@ -187,7 +189,7 @@ func (ic *InvitationsController) AcceptInvitation(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil || req.Token == "" {
 		return fiber.NewError(fiber.StatusBadRequest, "token is required")
 	}
-	tenantID, err := ic.invitationSvc.Accept(c.Context(), req.Token, wallet.Hex())
+	inv, err := ic.invitationSvc.Accept(c.Context(), req.Token, wallet.Hex())
 	if err != nil {
 		if errors.Is(err, service.ErrInviteInvalid) {
 			return fiber.NewError(fiber.StatusGone, err.Error())
@@ -195,46 +197,36 @@ func (ic *InvitationsController) AcceptInvitation(c *fiber.Ctx) error {
 		ic.logger.Err(err).Msg("accept invitation")
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to accept invitation")
 	}
-	return c.JSON(fiber.Map{"ok": true, "tenantId": tenantID})
+	return c.JSON(fiber.Map{"ok": true, "tenantId": inv.TenantID})
 }
 
-func toInvitationJSON(r *dbmodels.Invitation) invitationJSON {
+// toInvitationJSON maps the shared invitation shape onto this app's wire
+// format. The field names are deliberately unchanged — notably allowedGroupIds
+// rather than the shared model's scopeGroupIds — because the frontend speaks
+// this shape and the invitation records moving to another service is not a
+// reason to break it.
+func toInvitationJSON(r *models.RemoteInvitation) invitationJSON {
 	out := invitationJSON{
-		ID:        r.ID,
-		Email:     r.Email,
-		Role:      r.Role,
-		Status:    r.Status,
-		InvitedBy: r.InvitedByWallet,
-		CreatedAt: r.CreatedAt.UTC().Format(time.RFC3339),
-		ExpiresAt: r.ExpiresAt.UTC().Format(time.RFC3339),
+		ID:                r.ID,
+		Email:             r.Email,
+		Role:              r.Role,
+		Status:            r.Status,
+		InvitedBy:         r.InvitedBy,
+		CreatedAt:         r.CreatedAt,
+		ExpiresAt:         r.ExpiresAt,
+		AcceptedAt:        r.AcceptedAt,
+		InviteeWallet:     r.InviteeWallet,
+		EmailStatus:       r.EmailStatus,
+		EmailStatusAt:     r.EmailStatusAt,
+		EmailStatusDetail: r.EmailStatusDetail,
+		AllowedGroupIDs:   r.ScopeGroupIDs,
 	}
-	if r.AcceptedAt.Valid {
-		s := r.AcceptedAt.Time.UTC().Format(time.RFC3339)
-		out.AcceptedAt = &s
-	}
-	if r.InviteeWallet.Valid && r.InviteeWallet.String != "" {
-		w := r.InviteeWallet.String
-		out.InviteeWallet = &w
-	}
-	if r.EmailStatus.Valid && r.EmailStatus.String != "" {
-		s := r.EmailStatus.String
-		out.EmailStatus = &s
-	}
-	if r.EmailStatusAt.Valid {
-		s := r.EmailStatusAt.Time.UTC().Format(time.RFC3339)
-		out.EmailStatusAt = &s
-	}
-	if r.EmailStatusDetail.Valid && r.EmailStatusDetail.String != "" {
-		s := r.EmailStatusDetail.String
-		out.EmailStatusDetail = &s
-	}
-	out.AllowedGroupIDs = r.AllowedGroupIds
 	return out
 }
 
 // toInvitationJSONWithEmail is toInvitationJSON plus the email-delivery flag, for
 // create/resend responses where the caller needs to know if the email dispatched.
-func toInvitationJSONWithEmail(r *dbmodels.Invitation, emailSent bool) invitationJSON {
+func toInvitationJSONWithEmail(r *models.RemoteInvitation, emailSent bool) invitationJSON {
 	out := toInvitationJSON(r)
 	out.EmailSent = &emailSent
 	return out

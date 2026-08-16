@@ -77,6 +77,7 @@ func main() {
 		subcommands.Register(&tenancyDiffCmd{logger: logger, settings: settings}, "tenancy")
 		subcommands.Register(&groupsDiffCmd{logger: logger, settings: settings}, "tenancy")
 		subcommands.Register(&mirrorGroupsCmd{logger: logger, settings: settings}, "tenancy")
+		subcommands.Register(&invitationsDiffCmd{logger: logger, settings: settings}, "tenancy")
 		subcommands.Register(&pushPostmarkTemplatesCmd{logger: logger, settings: settings}, "email")
 		subcommands.Register(&configurePostmarkWebhookCmd{logger: logger, settings: settings}, "email")
 		flag.Parse()

@@ -64,6 +64,21 @@ type Settings struct {
 	// scope-filtering SQL stops joining against the mirror.
 	GroupsFromTenancy bool `yaml:"GROUPS_FROM_TENANCY"`
 
+	// InvitesFromTenancy moves the WHOLE invitation lifecycle to
+	// fleet-tenancy-api: records, token minting, the Postmark email, the
+	// delivery webhook, and the membership grant at accept.
+	//
+	// Unlike GroupsFromTenancy this is not a read/write split — there is no
+	// half-way state worth having. An invitation's token hash is what
+	// recognises an emailed link, so two services holding two hashes for one
+	// invitation would mean a link that works in one and not the other. The
+	// backfill copies the hashes, this flag moves the whole flow, and the
+	// local table becomes inert.
+	//
+	// TEMPORARY: the flag, the local invitations table and the local Postmark
+	// webhook route all go away once the soak is clean (P4 of the plan).
+	InvitesFromTenancy bool `yaml:"INVITES_FROM_TENANCY"`
+
 	// DIMO Identity API
 	IdentityAPIEndpoint url.URL `yaml:"IDENTITY_API_ENDPOINT"`
 

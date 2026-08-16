@@ -74,6 +74,11 @@ type InvitationService struct {
 	// groups validates the allowed-group ids an invite carries. nil (or an
 	// unflagged source) keeps that validation on the local mirror.
 	groups groupIndexSource
+
+	// tenancy + fromTenancy move the whole lifecycle to fleet-tenancy-api —
+	// see invitation_delegate.go, which owns the branching.
+	tenancy     *gateway.TenancyAPI
+	fromTenancy bool
 }
 
 // UseGroupIndex wires the group index used to validate an invite's group scope.
@@ -97,7 +102,7 @@ func NewInvitationService(logger *zerolog.Logger, pdb *db.Store, settings *confi
 // allowedGroupIDs limits the future member to those fleet groups (nil = full
 // access); ignored for owner invites, and every id must be one of the tenant's
 // groups. See docs/GROUP_ACCESS_PLAN.md.
-func (s *InvitationService) Create(ctx context.Context, tenantID, inviterWallet, email, role, locale string, allowedGroupIDs []string) (*dbmodels.Invitation, error) {
+func (s *InvitationService) createLocal(ctx context.Context, tenantID, inviterWallet, email, role, locale string, allowedGroupIDs []string) (*dbmodels.Invitation, error) {
 	email = strings.TrimSpace(strings.ToLower(email))
 	if email == "" {
 		return nil, fmt.Errorf("email is required")
@@ -186,7 +191,7 @@ func (s *InvitationService) markEmailSent(ctx context.Context, inv *dbmodels.Inv
 // the invited role. It is idempotent-ish: a second accept of the same token
 // fails with ErrInviteInvalid (single-use). Returns the tenant id so the caller
 // can redirect the invitee into it.
-func (s *InvitationService) Accept(ctx context.Context, token, inviteeWallet string) (string, error) {
+func (s *InvitationService) acceptLocal(ctx context.Context, token, inviteeWallet string) (*dbmodels.Invitation, error) {
 	hash := hashInviteToken(token)
 	inv, err := dbmodels.Invitations(
 		dbmodels.InvitationWhere.TokenHash.EQ(hash),
@@ -197,14 +202,14 @@ func (s *InvitationService) Accept(ctx context.Context, token, inviteeWallet str
 		// newer invite/resend, or was never issued.
 		s.logger.Info().Str("wallet", strings.ToLower(inviteeWallet)).Str("tokenHashPrefix", hash[:8]).
 			Msg("invite flow: accept failed — token not found (superseded by a newer invite/resend, or never issued)")
-		return "", ErrInviteInvalid
+		return nil, ErrInviteInvalid
 	}
 	if inv.Status != InviteStatusPending || time.Now().After(inv.ExpiresAt) {
 		s.logger.Info().Str("invitation", inv.ID).Str("tenant", inv.TenantID).Str("email", inv.Email).
 			Str("status", inv.Status).Time("expiresAt", inv.ExpiresAt).
 			Str("acceptedByWallet", inv.InviteeWallet.String).Str("attemptingWallet", strings.ToLower(inviteeWallet)).
 			Msg("invite flow: accept failed — invitation not pending or expired")
-		return "", ErrInviteInvalid
+		return nil, ErrInviteInvalid
 	}
 
 	// The grant goes through the write-through: authz answers come from the
@@ -213,11 +218,11 @@ func (s *InvitationService) Accept(ctx context.Context, token, inviteeWallet str
 	// — accepting again retries the whole grant, which is idempotent.
 	tenant, err := s.tenantSvc.GetOrMirrorTenant(ctx, inv.TenantID)
 	if err != nil {
-		return "", fmt.Errorf("load tenant for accept: %w", err)
+		return nil, fmt.Errorf("load tenant for accept: %w", err)
 	}
 	if err := s.tenantSvc.GrantMember(ctx, tenant, inviteeWallet, inv.Role,
 		[]string(inv.AllowedGroupIds), inv.InvitedByWallet); err != nil {
-		return "", fmt.Errorf("add member: %w", err)
+		return nil, fmt.Errorf("add member: %w", err)
 	}
 
 	now := time.Now()
@@ -227,16 +232,16 @@ func (s *InvitationService) Accept(ctx context.Context, token, inviteeWallet str
 	inv.UpdatedAt = now
 	if _, err := inv.Update(ctx, s.pdb.DBS().Writer,
 		boil.Whitelist("status", "invitee_wallet", "accepted_at", "updated_at")); err != nil {
-		return inv.TenantID, fmt.Errorf("mark invitation accepted: %w", err)
+		return inv, fmt.Errorf("mark invitation accepted: %w", err)
 	}
 	s.logger.Info().Str("invitation", inv.ID).Str("tenant", inv.TenantID).Str("email", inv.Email).
 		Str("role", inv.Role).Str("inviteeWallet", inv.InviteeWallet.String).
 		Msg("invite flow: invitation accepted")
-	return inv.TenantID, nil
+	return inv, nil
 }
 
 // List returns a tenant's invitations, newest first.
-func (s *InvitationService) List(ctx context.Context, tenantID string) (dbmodels.InvitationSlice, error) {
+func (s *InvitationService) listLocal(ctx context.Context, tenantID string) (dbmodels.InvitationSlice, error) {
 	return dbmodels.Invitations(
 		dbmodels.InvitationWhere.TenantID.EQ(tenantID),
 		qm.OrderBy("created_at desc"),
@@ -245,7 +250,7 @@ func (s *InvitationService) List(ctx context.Context, tenantID string) (dbmodels
 
 // Revoke marks a pending invitation revoked. No-op (no error) if it isn't
 // pending or doesn't belong to the tenant.
-func (s *InvitationService) Revoke(ctx context.Context, tenantID, invitationID string) error {
+func (s *InvitationService) revokeLocal(ctx context.Context, tenantID, invitationID string) error {
 	n, err := dbmodels.Invitations(
 		dbmodels.InvitationWhere.ID.EQ(invitationID),
 		dbmodels.InvitationWhere.TenantID.EQ(tenantID),
@@ -263,18 +268,18 @@ func (s *InvitationService) Revoke(ctx context.Context, tenantID, invitationID s
 
 // Resend re-sends the email for a pending invitation by minting a fresh token
 // (the old token is invalidated). Returns ErrInviteInvalid if not pending.
-func (s *InvitationService) Resend(ctx context.Context, tenantID, invitationID, inviterWallet, locale string) error {
+func (s *InvitationService) resendLocal(ctx context.Context, tenantID, invitationID, inviterWallet, locale string) (*dbmodels.Invitation, error) {
 	inv, err := dbmodels.Invitations(
 		dbmodels.InvitationWhere.ID.EQ(invitationID),
 		dbmodels.InvitationWhere.TenantID.EQ(tenantID),
 		dbmodels.InvitationWhere.Status.EQ(InviteStatusPending),
 	).One(ctx, s.pdb.DBS().Reader)
 	if err != nil {
-		return ErrInviteInvalid
+		return nil, ErrInviteInvalid
 	}
 	token, hash, err := generateInviteToken()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	inv.TokenHash = hash
 	inv.ExpiresAt = time.Now().Add(s.expiry())
@@ -292,7 +297,7 @@ func (s *InvitationService) Resend(ctx context.Context, tenantID, invitationID, 
 		"token_hash", "expires_at", "updated_at",
 		"postmark_message_id", "email_status", "email_status_at", "email_status_detail",
 	)); err != nil {
-		return fmt.Errorf("refresh invitation token: %w", err)
+		return nil, fmt.Errorf("refresh invitation token: %w", err)
 	}
 	s.logger.Info().Str("invitation", inv.ID).Str("tenant", tenantID).Str("email", inv.Email).
 		Time("expiresAt", inv.ExpiresAt).
@@ -302,10 +307,10 @@ func (s *InvitationService) Resend(ctx context.Context, tenantID, invitationID, 
 		// Token was refreshed but the email didn't go out — partial success, the
 		// invite stays pending and can be resent again once email is fixed.
 		s.logger.Err(err).Str("tenant", tenantID).Str("email", inv.Email).Msg("resend invitation email")
-		return fmt.Errorf("%w: %v", ErrEmailNotSent, err)
+		return inv, fmt.Errorf("%w: %v", ErrEmailNotSent, err)
 	}
 	s.markEmailSent(ctx, inv, messageID)
-	return nil
+	return inv, nil
 }
 
 // validateGroupIDs verifies every id names one of the tenant's fleet groups.
