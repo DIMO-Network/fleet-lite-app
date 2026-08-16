@@ -62,7 +62,23 @@ func NewTenantService(logger *zerolog.Logger, pdb *db.Store, settings *config.Se
 
 // CreateTenant inserts a tenant (encrypting the API key) and the owner membership.
 func (s *TenantService) CreateTenant(ctx context.Context, name, clientID, apiKeyPlain, ownerWallet string) (*dbmodels.Tenant, error) {
-	tenant := &dbmodels.Tenant{Name: name}
+	return s.createTenant(ctx, "", name, clientID, apiKeyPlain, ownerWallet)
+}
+
+// CreateTenantWithID is CreateTenant under an id minted elsewhere — the
+// tenancy service's, when self-serve creation has already registered the
+// tenant remotely. One uuid across both systems is the invariant everything
+// downstream leans on (the Tenant-Id header, the FKs, the diffs), so the
+// remote id is reused rather than re-keyed.
+func (s *TenantService) CreateTenantWithID(ctx context.Context, id, name, clientID, apiKeyPlain, ownerWallet string) (*dbmodels.Tenant, error) {
+	if id == "" {
+		return nil, fmt.Errorf("id is required")
+	}
+	return s.createTenant(ctx, id, name, clientID, apiKeyPlain, ownerWallet)
+}
+
+func (s *TenantService) createTenant(ctx context.Context, id, name, clientID, apiKeyPlain, ownerWallet string) (*dbmodels.Tenant, error) {
+	tenant := &dbmodels.Tenant{ID: id, Name: name}
 	if clientID != "" {
 		tenant.DimoClientID = null.StringFrom(clientID)
 	}
