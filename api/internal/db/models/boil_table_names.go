@@ -8,7 +8,6 @@ var TableNames = struct {
 	GeofencePasses       string
 	GeofenceScanCoverage string
 	Geofences            string
-	Invitations          string
 	TenantUsers          string
 	Tenants              string
 	UserPreferences      string
@@ -22,7 +21,6 @@ var TableNames = struct {
 	GeofencePasses:       "geofence_passes",
 	GeofenceScanCoverage: "geofence_scan_coverage",
 	Geofences:            "geofences",
-	Invitations:          "invitations",
 	TenantUsers:          "tenant_users",
 	Tenants:              "tenants",
 	UserPreferences:      "user_preferences",
