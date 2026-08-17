@@ -77,9 +77,6 @@ func main() {
 		subcommands.Register(&tenancyDiffCmd{logger: logger, settings: settings}, "tenancy")
 		subcommands.Register(&groupsDiffCmd{logger: logger, settings: settings}, "tenancy")
 		subcommands.Register(&mirrorGroupsCmd{logger: logger, settings: settings}, "tenancy")
-		subcommands.Register(&invitationsDiffCmd{logger: logger, settings: settings}, "tenancy")
-		subcommands.Register(&pushPostmarkTemplatesCmd{logger: logger, settings: settings}, "email")
-		subcommands.Register(&configurePostmarkWebhookCmd{logger: logger, settings: settings}, "email")
 		flag.Parse()
 		os.Exit(int(subcommands.Execute(ctx)))
 	}
@@ -99,8 +96,7 @@ func main() {
 	tenantSvc := service.NewTenantService(&logger, &pdb, &settings, identityService)
 	vehicleSvc := service.NewVehicleService(&logger, &pdb, identityService)
 	groupSvc := service.NewFleetGroupService(&logger, &pdb)
-	postmarkAPI := gateway.NewPostmarkAPI(logger, &settings)
-	invitationSvc := service.NewInvitationService(&logger, &pdb, &settings, tenantSvc, postmarkAPI)
+	invitationSvc := service.NewInvitationService(&logger, tenantSvc)
 	tenancyAPI := gateway.NewTenancyAPI(logger, &settings, authProvider)
 	// Group writes go through tenancy unconditionally since P4; the flag only
 	// chooses where the display reads come from.

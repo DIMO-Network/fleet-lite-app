@@ -1,4 +1,4 @@
-.PHONY: all deps docker clean test fmt lint install migrate migrate-down sqlboiler addmigration push-postmark-templates configure-postmark-webhook
+.PHONY: all deps docker clean test fmt lint install migrate migrate-down sqlboiler addmigration
 
 INSTALL_DIR    = $(GOPATH)/bin
 DEST_DIR       = ./target
@@ -61,14 +61,6 @@ migrate:
 
 migrate-down:
 	@go run ./cmd/fleet-lite-app migrate -down
-
-# Sync repo-stored Postmark templates (api/templates/postmark) up to Postmark.
-# Requires POSTMARK_SERVER_TOKEN in settings.yaml. Rerunnable (upserts by alias).
-push-postmark-templates:
-	@go run ./cmd/fleet-lite-app push-postmark-templates
-
-configure-postmark-webhook:
-	@go run ./cmd/fleet-lite-app configure-postmark-webhook
 
 sqlboiler:
 	@sqlboiler psql --no-tests --wipe

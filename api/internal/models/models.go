@@ -115,9 +115,9 @@ type RemoteMember struct {
 	LastLoginAt   *string  `json:"lastLoginAt"`
 }
 
-// RemoteInvitation is one invitation as fleet-tenancy-api serves it, once
-// INVITES_FROM_TENANCY is on and that service owns the records. Keep it in
-// step with that service's models.Invitation.
+// RemoteInvitation is one invitation as fleet-tenancy-api serves it. That
+// service owns the records outright since P4. Keep this in step with its
+// models.Invitation.
 //
 // The token never appears here, and must not: the plaintext exists only in
 // the email that service sent. This shape is what the owner's screen shows.

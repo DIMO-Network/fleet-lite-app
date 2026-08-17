@@ -58,7 +58,7 @@ type invitationJSON struct {
 	// expected owner (e.g. a shared session consumed the link).
 	InviteeWallet *string `json:"inviteeWallet,omitempty"`
 	// Email-delivery tracking, stamped on send and upgraded by the Postmark
-	// webhook (see docs/POSTMARK_WEBHOOK_PLAN.md). EmailStatus is one of
+	// webhook that fleet-tenancy-api receives. EmailStatus is one of
 	// sent | delivered | opened | bounced; absent means the email never
 	// dispatched — the send failed, or sending is disabled (local dev).
 	// Detail carries the bounce reason. Owner-only, like the rest of this shape.

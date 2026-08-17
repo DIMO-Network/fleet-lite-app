@@ -1,8 +1,0 @@
-You've been invited to {{tenant_name}}
-
-{{inviter}} invited you to join the {{tenant_name}} fleet on DIMO.
-
-Accept your invitation (you'll sign in with your DIMO account to finish joining):
-{{accept_url}}
-
-This invitation expires in {{expires_in}}. If you weren't expecting it, you can ignore this email.

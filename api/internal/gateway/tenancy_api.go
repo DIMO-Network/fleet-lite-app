@@ -552,11 +552,11 @@ func (t *TenancyAPI) RemoveGroupVehicle(ctx context.Context, tenant models.Tenan
 			"/vehicles/"+strconv.FormatInt(tokenID, 10), nil, nil)
 }
 
-// ----- Invitations (P2 of the invitations move) -----
+// ----- Invitations -----
 //
-// Behind INVITES_FROM_TENANCY, the whole invitation lifecycle moves to
-// fleet-tenancy-api: it mints the token, sends the email, receives Postmark's
-// delivery webhooks, and — on accept — writes the membership itself.
+// The whole invitation lifecycle lives in fleet-tenancy-api since P4: it mints
+// the token, sends the email, receives Postmark's delivery webhooks, and — on
+// accept — writes the membership itself. There is no local path here.
 //
 // That last point is why Accept here is not "the remote call plus our usual
 // grant": the tenancy accept marks the invitation and upserts the membership

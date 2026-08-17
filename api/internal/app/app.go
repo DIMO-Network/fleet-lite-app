@@ -79,12 +79,12 @@ func App(
 	fleetGroupsCtrl := controllers.NewFleetGroupsController(logger, groupSvc)
 	geofenceSvc := service.NewGeofenceService(logger, pdb)
 	// P5: every group-scoped read — the vehicle scope filter, a group-scoped
-	// geofence, an invite's group list — resolves through the FleetGroupService
-	// index instead of the local fleet_groups tables. It is a no-op while
-	// GROUPS_FROM_TENANCY is off, which is the revert path.
+	// geofence — resolves through the FleetGroupService index instead of the
+	// local fleet_groups tables. It is a no-op while GROUPS_FROM_TENANCY is
+	// off, which is the revert path. Invitations no longer appear here: their
+	// group scope is validated by fleet-tenancy-api, which owns the records.
 	vehicleSvc.UseGroupIndex(groupSvc)
 	geofenceSvc.UseGroupIndex(groupSvc)
-	invitationSvc.UseGroupIndex(groupSvc)
 	// Vehicle memberships (plan 02, step 6): the commercial gate. Wired only
 	// when a tenancy client exists; a no-op for every tenant until an operator
 	// flips memberships_enforced, which is what makes this safe to ship dark.
@@ -102,15 +102,12 @@ func App(
 		// empty garage until the nightly cron.
 		tenantSvc.UseTenancy(tenancyAPI)
 		vehicleSvc.UseTenancy(tenancyAPI)
-		// Invitations (P2 of the invitations move). Unlike the groups flag this
-		// moves the WHOLE lifecycle — records, token, email, webhook and the
-		// accept-time grant — because two services holding two token hashes for
+		// Invitations live entirely in fleet-tenancy-api since P4 — records,
+		// token, email, delivery webhooks and the accept-time grant. There is
+		// no local path and no flag: two services holding two token hashes for
 		// one invitation would mean a link that works against one and not the
-		// other. Off ships the local path unchanged, which is the revert.
-		invitationSvc.UseTenancy(tenancyAPI, settings.InvitesFromTenancy)
-		if settings.InvitesFromTenancy {
-			logger.Info().Msg("INVITES_FROM_TENANCY is on — invitations are served by fleet-tenancy-api")
-		}
+		// other, so the lifecycle cannot be split.
+		invitationSvc.UseTenancy(tenancyAPI)
 		authProvider.UseRemoteMinter(tenancyAPI)
 		tenantSvc.OnMirrorCreated(func(t models.Tenant) {
 			go func() {
@@ -128,15 +125,11 @@ func App(
 	settingsCtrl := controllers.NewSettingsController(settings, logger)
 	tenantsCtrl := controllers.NewTenantsController(logger, settings, tenantSvc, vehicleSvc, identity, authProvider, membershipSvc, tenancyAPI)
 	invitationsCtrl := controllers.NewInvitationsController(logger, tenantSvc, invitationSvc, tenancyAPI)
-	webhooksCtrl := controllers.NewWebhooksController(logger, settings, invitationSvc)
 	userPrefsSvc := service.NewUserPrefsService(logger, pdb)
 	userPrefsCtrl := controllers.NewUserPrefsController(logger, userPrefsSvc)
 
 	// Public endpoints (no auth)
 	app.Get("/public/settings", settingsCtrl.GetPublicSettings)
-	// Postmark can't do DIMO JWTs — the webhook authenticates with basic auth
-	// against POSTMARK_WEBHOOK_SECRET inside the handler.
-	app.Post("/webhooks/postmark", webhooksCtrl.HandlePostmark)
 	app.Get("/identity/vehicle/:tokenID", identityCtrl.GetVehicleByTokenID)
 	app.Get("/identity/definition/:id", identityCtrl.GetDefinitionByID)
 	app.Get("/identity/owner/:owner", identityCtrl.GetOwnerBy0x)

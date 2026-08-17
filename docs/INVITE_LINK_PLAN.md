@@ -1,5 +1,14 @@
 # Shareable Invitation Links — Investigation + Plan (fleet-lite-app)
 
+> **SUPERSEDED 2026-08-17 — implemented here, then moved out.** The invitation
+> lifecycle now lives entirely in **fleet-tenancy-api**: it mints the token,
+> sends the email, receives Postmark's delivery webhooks, and writes the
+> membership at accept. P4 of that repo's
+> `docs/plans/04-invitations-into-tenancy.md` deleted this app's local
+> implementation, its Postmark integration and its webhook route. This
+> document is kept for the reasoning behind the design, not as a description
+> of code in this repo.
+
 Let an owner get the accept link for an invitation **in the UI** and share it
 themselves — Slack, WhatsApp, in person — instead of relying on the invitation
 email reaching the invitee.
