@@ -64,21 +64,6 @@ type Settings struct {
 	// scope-filtering SQL stops joining against the mirror.
 	GroupsFromTenancy bool `yaml:"GROUPS_FROM_TENANCY"`
 
-	// InvitesFromTenancy moves the WHOLE invitation lifecycle to
-	// fleet-tenancy-api: records, token minting, the Postmark email, the
-	// delivery webhook, and the membership grant at accept.
-	//
-	// Unlike GroupsFromTenancy this is not a read/write split — there is no
-	// half-way state worth having. An invitation's token hash is what
-	// recognises an emailed link, so two services holding two hashes for one
-	// invitation would mean a link that works in one and not the other. The
-	// backfill copies the hashes, this flag moves the whole flow, and the
-	// local table becomes inert.
-	//
-	// TEMPORARY: the flag, the local invitations table and the local Postmark
-	// webhook route all go away once the soak is clean (P4 of the plan).
-	InvitesFromTenancy bool `yaml:"INVITES_FROM_TENANCY"`
-
 	// DIMO Identity API
 	IdentityAPIEndpoint url.URL `yaml:"IDENTITY_API_ENDPOINT"`
 
@@ -95,22 +80,11 @@ type Settings struct {
 	ChainID           int64          `yaml:"CHAIN_ID"`
 	VehicleNftAddress common.Address `yaml:"VEHICLE_NFT_ADDRESS"`
 
-	// Member invitations (Postmark transactional email).
-	// PostmarkServerToken authenticates against the Postmark API (server-scoped).
-	// InvitationFromEmail must be a verified Postmark sender signature/domain.
-	// InvitationTemplateAlias is the Postmark template alias the invite email uses
-	// (see api/templates/postmark, pushed via `make push-postmark-templates`).
-	// AppBaseURL is the public origin used to build the accept link.
-	// InviteExpiryHours bounds how long an invite token stays valid.
-	// PostmarkWebhookSecret is the basic-auth password Postmark presents when
-	// POSTing delivery/open/bounce events to /webhooks/postmark; empty disables
-	// the endpoint. See docs/POSTMARK_WEBHOOK_PLAN.md.
-	PostmarkServerToken     string  `yaml:"POSTMARK_SERVER_TOKEN"`   // secret
-	PostmarkWebhookSecret   string  `yaml:"POSTMARK_WEBHOOK_SECRET"` // secret
-	InvitationFromEmail     string  `yaml:"INVITATION_FROM_EMAIL"`
-	InvitationTemplateAlias string  `yaml:"POSTMARK_INVITATION_TEMPLATE_ALIAS"`
-	AppBaseURL              url.URL `yaml:"APP_BASE_URL"`
-	InviteExpiryHours       int     `yaml:"INVITE_EXPIRY_HOURS"`
+	// Member invitations are served entirely by fleet-tenancy-api since P4 of
+	// its docs/plans/04-invitations-into-tenancy.md. It holds the Postmark
+	// credentials, the templates, the accept-link origin and the token expiry,
+	// and it receives the delivery webhooks. Nothing invitation-shaped is
+	// configured here any more — if it needs to be again, it belongs there.
 }
 
 func (s *Settings) IsProduction() bool {

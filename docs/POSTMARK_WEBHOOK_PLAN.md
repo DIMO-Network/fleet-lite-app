@@ -1,5 +1,14 @@
 # Postmark Delivery/Open Tracking — Investigation + Plan (fleet-lite-app)
 
+> **SUPERSEDED 2026-08-17 — implemented here, then moved out.** The invitation
+> lifecycle now lives entirely in **fleet-tenancy-api**: it mints the token,
+> sends the email, receives Postmark's delivery webhooks, and writes the
+> membership at accept. P4 of that repo's
+> `docs/plans/04-invitations-into-tenancy.md` deleted this app's local
+> implementation, its Postmark integration and its webhook route. This
+> document is kept for the reasoning behind the design, not as a description
+> of code in this repo.
+
 Show owners what happened to an invitation email after "Send invite": **sent →
 delivered → opened** (and **bounced**, the failure case that matters most). Today the
 UI only knows whether the Postmark API call succeeded (`emailSent`); everything after

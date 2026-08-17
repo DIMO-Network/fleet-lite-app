@@ -54,22 +54,11 @@ TENANCY_API_KEY: ''
 ## Serve fleet-group display READS from the tenancy service (writes always go
 ## there since P4). The flag and the local mirror tables go away in P5.
 GROUPS_FROM_TENANCY: false
-## Serve the WHOLE invitation lifecycle from the tenancy service — records,
-## token minting, the Postmark email, the delivery webhook, and the membership
-## grant at accept. Not a read/write split like the groups flag: two services
-## holding two token hashes for one invitation would mean an emailed link that
-## works against one and not the other. Run backfill-invitations and
-## invitations-diff before flipping this. Off keeps the local path, unchanged.
-INVITES_FROM_TENANCY: false
 
 ## Chain config (polygon mainnet)
 CHAIN_ID: 137
 VEHICLE_NFT_ADDRESS: '0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF'
 
-## Member invitations (Postmark transactional email)
-POSTMARK_SERVER_TOKEN: ''                              # secret — Postmark server API token
-POSTMARK_WEBHOOK_SECRET: ''                            # secret — basic-auth password for /webhooks/postmark
-INVITATION_FROM_EMAIL: 'no-reply@dimo.co'              # must be a verified Postmark sender
-POSTMARK_INVITATION_TEMPLATE_ALIAS: 'fleet-invitation' # api/templates/postmark, pushed via make push-postmark-templates
-APP_BASE_URL: 'https://local-fleet-lite.dimo.org:3009' # public origin for the accept link
-INVITE_EXPIRY_HOURS: 168                               # 7 days
+## Member invitations are served entirely by fleet-tenancy-api (P4). It holds
+## the Postmark credentials, templates, accept-link origin and token expiry,
+## and receives the delivery webhooks. Nothing is configured here.

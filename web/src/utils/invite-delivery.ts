@@ -4,7 +4,7 @@ import { Invitation } from '../services/tenant-service.ts';
 /**
  * Presentation for an invitation's email-delivery state. The status is stamped
  * when Postmark accepts the message and upgraded by the delivery/open/bounce
- * webhook (see docs/POSTMARK_WEBHOOK_PLAN.md), so it only ever moves forward:
+ * webhook that fleet-tenancy-api receives, so it only ever moves forward:
  * sent → delivered → opened, with bounced overriding all.
  *
  * An absent status means the email never dispatched — the send failed, or
