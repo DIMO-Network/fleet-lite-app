@@ -184,6 +184,17 @@ type Vehicle struct {
 	Definition        Definition         `json:"definition"`
 	SyntheticDevice   SyntheticDevice    `json:"syntheticDevice"`
 	AftermarketDevice *AftermarketDevice `json:"aftermarketDevice,omitempty"`
+	// CanShare reports whether this vehicle can be shared with another wallet
+	// without its owner's passkey — i.e. whether the owner's kernel account
+	// registered the operator's signer, resolved by fleet-tenancy-api against
+	// accounts-api.
+	//
+	// A display gate only. The share endpoint re-checks it, and the worker
+	// re-checks it again before spending gas, so a stale true here costs a
+	// clear error rather than an unauthorized grant. It is omitted when false
+	// so the vehicle list does not grow a field for every vehicle that cannot
+	// be shared.
+	CanShare bool `json:"canShare,omitempty"`
 	// IsFavorite reflects whether the current tenant has starred this vehicle.
 	// Populated by VehicleService when assembling responses — it isn't part of
 	// the identity-api shape and is never present in the stored `raw` JSON.

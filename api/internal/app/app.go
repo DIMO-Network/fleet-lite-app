@@ -75,7 +75,21 @@ func App(
 
 	// Controllers
 	identityCtrl := controllers.NewIdentityController(settings, logger)
-	vehiclesCtrl := controllers.NewVehiclesController(settings, logger, vehicleSvc, groupSvc)
+	// Vehicle sharing (docs/VEHICLE_SHARING_PLAN.md). Every on-chain decision
+	// belongs to fleet-tenancy-api, which holds the signer; this app owns the
+	// human half — which member is asking, and whether the vehicle is in their
+	// group scope.
+	//
+	// Passed as nil rather than a nil *TenancyAPI when unconfigured: a typed nil
+	// in an interface is not == nil, and the service's own Configured() check
+	// would call through it. TenancyAPI.Configured is nil-safe for the same
+	// reason, so this is belt and braces on a trap that is silent when it fires.
+	sharingSvc := service.NewSharingService(logger, nil)
+	if tenancyAPI.Configured() {
+		sharingSvc = service.NewSharingService(logger, tenancyAPI)
+	}
+	vehiclesCtrl := controllers.NewVehiclesController(settings, logger, vehicleSvc, groupSvc, sharingSvc)
+	sharingCtrl := controllers.NewSharingController(logger, sharingSvc, vehicleSvc, tenancyAPI)
 	fleetGroupsCtrl := controllers.NewFleetGroupsController(logger, groupSvc)
 	geofenceSvc := service.NewGeofenceService(logger, pdb)
 	// P5: every group-scoped read — the vehicle scope filter, a group-scoped
@@ -184,6 +198,13 @@ func App(
 	tenantApp.Get("/vehicles/:tokenID", vehiclesCtrl.GetVehicle)
 	tenantApp.Post("/vehicles/:tokenID/favorite", vehiclesCtrl.AddFavorite)
 	tenantApp.Delete("/vehicles/:tokenID/favorite", vehiclesCtrl.RemoveFavorite)
+
+	// Share a vehicle with a wallet: an on-chain SACD grant, made by
+	// fleet-tenancy-api's signer on the owner's kernel account. Gated on
+	// manage_vehicles — the same capability as transfer/disconnect/delete,
+	// because it is the same authority over somebody else's account.
+	tenantApp.Post("/vehicles/:tokenID/share", sharingCtrl.ShareVehicle)
+	tenantApp.Get("/vehicles/:tokenID/share/status", sharingCtrl.ShareStatus)
 
 	// Fleet groups (tenant-scoped CRUD + vehicle membership)
 	tenantApp.Get("/fleet/groups", fleetGroupsCtrl.GetGroups)
