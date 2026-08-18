@@ -1700,6 +1700,57 @@
   <source><x id="0" equiv-text="${expiring}"/> memberships expire within 30 days. Your fleet operator renews them.</source>
         <target><x id="0" equiv-text="${expiring}"/> membresías vencen en 30 días o menos. El operador de su flota las renueva.</target>
 </trans-unit>
+<trans-unit id="s26156a5bcb44ac99">
+  <source>30 days</source>
+</trans-unit>
+<trans-unit id="sd347ec01a202f8a5">
+  <source>1 year</source>
+</trans-unit>
+<trans-unit id="sc62e587718608e85">
+  <source>No expiry</source>
+</trans-unit>
+<trans-unit id="s6c5623c2f0205753">
+  <source>Shared. The grant is on chain.</source>
+</trans-unit>
+<trans-unit id="s121ef1f89a9e972d">
+  <source>The share could not be completed.</source>
+</trans-unit>
+<trans-unit id="sfe255b8825ebcad9">
+  <source>Until <x id="0" equiv-text="${when.toLocaleDateString()}"/></source>
+</trans-unit>
+<trans-unit id="s47e52a1832bbfd38">
+  <source>Share vehicle</source>
+</trans-unit>
+<trans-unit id="s2e5f0579d98a7bbd">
+  <source>Give another wallet access to <x id="0" equiv-text="${this.vehicleTitle}"/>.</source>
+</trans-unit>
+<trans-unit id="s61aecbc69cddd9fd">
+  <source>Give another wallet access to this vehicle.</source>
+</trans-unit>
+<trans-unit id="s9236d58aba771b04">
+  <source>Wallet address</source>
+</trans-unit>
+<trans-unit id="se0f764fca6c21fa4">
+  <source>That does not look like a wallet address.</source>
+</trans-unit>
+<trans-unit id="sd0b06e7c54d772ab">
+  <source>They will be able to see this vehicle’s data and send commands to it.</source>
+</trans-unit>
+<trans-unit id="sbcdda1147516d9d7">
+  <source>Access expires</source>
+</trans-unit>
+<trans-unit id="sea5e7a6becbbc1e4">
+  <source>Already shared with</source>
+</trans-unit>
+<trans-unit id="s9bc0ff5515fa792a">
+  <source>Nobody yet.</source>
+</trans-unit>
+<trans-unit id="s499ada0c6cfc11af">
+  <source>Sharing…</source>
+</trans-unit>
+<trans-unit id="s2df075aface0dab8">
+  <source>Share</source>
+</trans-unit>
 </body>
 </file>
 </xliff>

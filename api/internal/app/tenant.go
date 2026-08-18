@@ -88,6 +88,7 @@ func NewTenantMiddleware(
 
 		c.Locals(controllers.TenantLocalsKey, *tenant)
 		c.Locals(controllers.RoleLocalsKey, decision.Role)
+		c.Locals(controllers.PermissionsLocalsKey, res.Permissions)
 		if decision.Limited {
 			c.Locals(controllers.AllowedGroupsLocalsKey, decision.ScopeGroups)
 		}

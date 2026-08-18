@@ -7,7 +7,9 @@ import { ApiService } from '../services/api-service.ts';
 import { FleetCache } from '../services/fleet-cache.ts';
 import { Vehicle, VehicleCard, VehiclesResponse } from '../types/vehicle.ts';
 import { seedLocationsFromDb, fetchFleetLocations } from '../utils/fleet-map.ts';
+import { TenantService } from '../services/tenant-service.ts';
 import '../elements/tenant-switcher.ts';
+import '../elements/share-vehicle-modal.ts';
 
 type SortKey = 'status' | 'name' | 'tokenId';
 type SortDir = 'asc' | 'desc';
@@ -26,6 +28,13 @@ export class FleetListView extends LitElement {
     @state() private refreshing = false;
     @state() private hiddenVehicles = new Set<string>();
     @state() private showHidden = false;
+    /**
+     * Whether the signed-in member holds manage_vehicles. Purely to avoid
+     * offering an action that would be refused — the API enforces it, and so
+     * does fleet-tenancy-api behind that.
+     */
+    @state() private canShareVehicles = false;
+    @state() private shareTarget: VehicleCard | null = null;
     private unsubscribeHidden: (() => void) | null = null;
 
     private loadGeneration = 0;
@@ -57,6 +66,7 @@ export class FleetListView extends LitElement {
             groups: v.groups ?? [],
             licensePlate: v.licensePlate,
             vin: v.vin || undefined,
+            canShare: v.canShare ?? false,
         };
     }
 
@@ -204,7 +214,26 @@ export class FleetListView extends LitElement {
         this.unsubscribeHidden = hiddenVehiclesService.subscribe(() => {
             this.hiddenVehicles = hiddenVehiclesService.getHidden(this.tenantId);
         });
+        void this.loadShareCapability();
         await this.loadData();
+    }
+
+    /**
+     * Whether this member may share at all. Best-effort and deliberately not
+     * awaited with the vehicle load: failing to resolve it hides the share
+     * button, which is the safe direction, and must not delay the fleet list.
+     */
+    private async loadShareCapability() {
+        try {
+            const access = await TenantService.getInstance().fetchMyAccess();
+            this.canShareVehicles = (access.permissions ?? []).includes('manage_vehicles');
+        } catch {
+            this.canShareVehicles = false;
+        }
+    }
+
+    private openShare(v: VehicleCard) {
+        this.shareTarget = v;
     }
 
     override disconnectedCallback() {
@@ -303,6 +332,12 @@ export class FleetListView extends LitElement {
                         </button>
                     ` : html`
                         <div class="action-cell">
+                            ${this.canShareVehicles && v.canShare ? html`
+                                <button class="share-row-btn" title="${msg('Share vehicle')}"
+                                    @click=${(e: Event) => { e.stopPropagation(); this.openShare(v); }}>
+                                    <span class="material-symbols-outlined">share</span>
+                                </button>
+                            ` : nothing}
                             <button class="hide-row-btn" title="${msg('Hide vehicle')}"
                                 @click=${(e: Event) => { e.stopPropagation(); hiddenVehiclesService.hide(this.tenantId, v.tokenId); }}>
                                 <span class="material-symbols-outlined">visibility_off</span>
@@ -721,6 +756,26 @@ export class FleetListView extends LitElement {
             .hide-row-btn:hover { color: var(--error); }
             .hide-row-btn .material-symbols-outlined { font-size: 18px; }
 
+            /* Reveals on row hover like the hide button beside it, but stays
+               visible on keyboard focus — hover-only would make it reachable by
+               tab and invisible while focused. */
+            .share-row-btn {
+                background: none;
+                border: none;
+                padding: 4px;
+                color: var(--on-surface-variant);
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                border-radius: var(--radius-sm);
+                opacity: 0;
+                transition: opacity 0.15s, color 0.15s;
+            }
+            tbody tr:hover .share-row-btn,
+            .share-row-btn:focus-visible { opacity: 1; }
+            .share-row-btn:hover { color: var(--primary); }
+            .share-row-btn .material-symbols-outlined { font-size: 18px; }
+
             .unhide-row-btn {
                 background: none;
                 border: none;
@@ -800,6 +855,15 @@ export class FleetListView extends LitElement {
             </header>
             ${this.renderControls()}
             ${this.renderBody()}
+            ${this.shareTarget
+                ? html`
+                      <share-vehicle-modal
+                          .tokenId=${Number(this.shareTarget.tokenId)}
+                          .vehicleTitle=${this.shareTarget.title}
+                          @close=${() => { this.shareTarget = null; }}
+                      ></share-vehicle-modal>
+                  `
+                : nothing}
         `;
     }
 }

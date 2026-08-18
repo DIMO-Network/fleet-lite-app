@@ -473,11 +473,20 @@ func (t *TenantsController) GetMyAccess(c *fiber.Ctx) error {
 		}
 	}
 
+	// permissions[] alongside role, because it is what the backend actually
+	// gates on — role is a display label. The UI uses it to hide actions the
+	// caller cannot perform; every one of those actions is still enforced
+	// server-side, so this is a courtesy, not a gate.
+	perms := GetTenantPermissions(c)
+	if perms == nil {
+		perms = []string{}
+	}
+
 	allowed, limited := GetAllowedGroups(c)
 	if !limited {
-		return c.JSON(fiber.Map{"role": role, "allowedGroupIds": nil, "membershipsEnforced": enforced})
+		return c.JSON(fiber.Map{"role": role, "permissions": perms, "allowedGroupIds": nil, "membershipsEnforced": enforced})
 	}
-	return c.JSON(fiber.Map{"role": role, "allowedGroupIds": allowed, "membershipsEnforced": enforced})
+	return c.JSON(fiber.Map{"role": role, "permissions": perms, "allowedGroupIds": allowed, "membershipsEnforced": enforced})
 }
 
 // RemoveMember — DELETE /tenants/:id/members/:wallet. Owner-only.

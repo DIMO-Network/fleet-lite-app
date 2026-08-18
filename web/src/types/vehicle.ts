@@ -51,6 +51,12 @@ export interface Vehicle {
     locationPulledAt?: string;
     /** Groups this vehicle belongs to (always present, [] when none). */
     groups: VehicleGroupRef[];
+    /**
+     * Whether this vehicle can be shared with another wallet without its
+     * owner's passkey — resolved by fleet-tenancy-api against accounts-api.
+     * Absent (falsy) when it cannot be, or when the lookup was unavailable.
+     */
+    canShare?: boolean;
 }
 
 export interface VehiclesResponse {
@@ -78,4 +84,10 @@ export interface VehicleCard {
     vin?: string;
     /** Groups this vehicle belongs to, for the map/list group filter. */
     groups?: VehicleGroupRef[];
+    /**
+     * Whether this vehicle can be shared with another wallet without its
+     * owner's passkey. A display gate only — the API re-checks it, and the
+     * tenancy service checks it again before anything goes on chain.
+     */
+    canShare?: boolean;
 }

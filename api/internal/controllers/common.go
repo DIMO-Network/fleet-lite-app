@@ -20,6 +20,14 @@ const TenantLocalsKey = "tenant"
 // role ("owner" / "member") for the current tenant.
 const RoleLocalsKey = "tenant_role"
 
+// PermissionsLocalsKey is where the tenant middleware stashes the caller's
+// capabilities for the current tenant.
+//
+// permissions[] is authoritative and role is a label — the same rule the
+// backend gates on. It is exposed so the UI can hide an action the caller
+// cannot perform, never so the UI can decide whether to allow it.
+const PermissionsLocalsKey = "tenant_permissions"
+
 // AllowedGroupsLocalsKey is where the tenant middleware stashes the caller's
 // allowed fleet-group ids — set ONLY when the caller is a limited member
 // (owners and full-access members have no entry). See docs/GROUP_ACCESS_PLAN.md.
@@ -30,6 +38,12 @@ const AllowedGroupsLocalsKey = "tenant_allowed_groups"
 func GetTenantRole(c *fiber.Ctx) string {
 	role, _ := c.Locals(RoleLocalsKey).(string)
 	return role
+}
+
+// GetTenantPermissions returns the caller's capabilities in the current tenant.
+func GetTenantPermissions(c *fiber.Ctx) []string {
+	perms, _ := c.Locals(PermissionsLocalsKey).([]string)
+	return perms
 }
 
 // GetAllowedGroups returns the fleet-group ids the caller is limited to.
