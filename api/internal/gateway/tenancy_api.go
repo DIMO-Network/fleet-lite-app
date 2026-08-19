@@ -260,7 +260,15 @@ func authzCacheKey(tenantID, wallet string) string {
 // Configured reports whether both the URL and the key are set. Call sites that
 // are meant to degrade rather than fail (a shadow read, a background job) can
 // check this instead of interpreting an error.
-func (t *TenancyAPI) Configured() bool { return t.baseURL != "" && t.apiKey != "" }
+// Configured reports whether this client can reach the tenancy service.
+//
+// Nil-safe: an unconfigured deployment leaves the client nil, and callers hold
+// it behind interfaces where a typed-nil pointer is not == nil. Guarding here
+// means "is tenancy available?" is one expression everywhere instead of a nil
+// check every caller has to remember.
+func (t *TenancyAPI) Configured() bool {
+	return t != nil && t.baseURL != "" && t.apiKey != ""
+}
 
 // Authz answers "what may this wallet do in this tenant?" — the question that
 // replaces our own NewTenantMiddleware membership lookup at cutover.
@@ -785,4 +793,77 @@ func newTenancyError(status int, body []byte) *TenancyError {
 		e.Layer = LayerCallerScope
 	}
 	return e
+}
+
+// ShareableOwners asks which of these vehicle owners the tenant may sign for —
+// POST /v1/tenants/{id}/shareable-owners.
+//
+// A POST for a read: the input is a list whose length is the tenant's fleet,
+// which is the wrong shape for a query string. Addresses come back EIP-55
+// checksummed regardless of how they were sent.
+//
+// The owners are ours to supply because we already store owner_address per
+// vehicle; the tenancy service holds only token ids and would have to rebuild
+// the fact from identity-api to answer without them.
+func (t *TenancyAPI) ShareableOwners(ctx context.Context, tenant models.Tenant, owners []string) ([]string, error) {
+	if len(owners) == 0 {
+		return nil, nil
+	}
+	var res struct {
+		Owners []string `json:"owners"`
+	}
+	err := t.do(ctx, tenant, http.MethodPost,
+		"/v1/tenants/"+url.PathEscape(tenant.ID)+"/shareable-owners",
+		map[string]any{"owners": owners}, &res)
+	if err != nil {
+		return nil, err
+	}
+	return res.Owners, nil
+}
+
+// ShareVehicle queues an on-chain SACD grant and returns the job id —
+// POST /v1/tenants/{id}/vehicles/{tokenId}/share.
+//
+// Asynchronous by design: the share waits on a bundler for longer than an HTTP
+// request should. The caller polls ShareStatus.
+func (t *TenancyAPI) ShareVehicle(ctx context.Context, tenant models.Tenant, tokenID int64,
+	grantee string, durationDays int, wallet string) (int64, error) {
+	var res struct {
+		JobID int64 `json:"jobId"`
+	}
+	err := t.do(ctx, tenant, http.MethodPost,
+		fmt.Sprintf("/v1/tenants/%s/vehicles/%d/share", url.PathEscape(tenant.ID), tokenID),
+		map[string]any{
+			"grantee":      grantee,
+			"durationDays": durationDays,
+			"wallet":       wallet,
+		}, &res)
+	if err != nil {
+		return 0, err
+	}
+	return res.JobID, nil
+}
+
+// ShareJobStatus is the tenancy service's single-job status shape.
+//
+// Success is IsSuccessful, never a "Success" string — kaufmann carries both
+// conventions for different operations and mixing them is a recorded trap.
+type ShareJobStatus struct {
+	JobID        int64    `json:"jobId"`
+	State        string   `json:"state"`
+	IsSuccessful bool     `json:"isSuccessful"`
+	Errors       []string `json:"errors"`
+}
+
+// ShareStatus reads a queued share's outcome —
+// GET /v1/tenants/{id}/vehicles/{tokenId}/share/status?jobId=.
+func (t *TenancyAPI) ShareStatus(ctx context.Context, tenant models.Tenant, tokenID, jobID int64) (*ShareJobStatus, error) {
+	var res ShareJobStatus
+	err := t.get(ctx, tenant,
+		fmt.Sprintf("/v1/tenants/%s/vehicles/%d/share/status?jobId=%d",
+			url.PathEscape(tenant.ID), tokenID, jobID), &res)
+	if err != nil {
+		return nil, err
+	}
+	return &res, nil
 }

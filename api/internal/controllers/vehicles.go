@@ -12,14 +12,16 @@ type VehiclesController struct {
 	logger     *zerolog.Logger
 	vehicleSvc *service.VehicleService
 	groupSvc   *service.FleetGroupService
+	sharingSvc *service.SharingService
 }
 
-func NewVehiclesController(settings *config.Settings, logger *zerolog.Logger, vehicleSvc *service.VehicleService, groupSvc *service.FleetGroupService) *VehiclesController {
+func NewVehiclesController(settings *config.Settings, logger *zerolog.Logger, vehicleSvc *service.VehicleService, groupSvc *service.FleetGroupService, sharingSvc *service.SharingService) *VehiclesController {
 	return &VehiclesController{
 		settings:   settings,
 		logger:     logger,
 		vehicleSvc: vehicleSvc,
 		groupSvc:   groupSvc,
+		sharingSvc: sharingSvc,
 	}
 }
 
@@ -55,6 +57,12 @@ func (v *VehiclesController) GetVehicles(c *fiber.Ctx) error {
 	for i := range vehicles {
 		vehicles[i].Groups = scopeGroupRefs(groupsByToken[vehicles[i].TokenID], limited, allowed)
 	}
+
+	// Which of these can be shared without the owner's passkey. Best-effort
+	// like the groups above: a failure leaves every canShare false and hides
+	// the share button, rather than blanking the customer's fleet to hide it.
+	v.sharingSvc.AnnotateCanShare(c.Context(), tenant, vehicles)
+
 	return c.JSON(fiber.Map{"vehicles": vehicles})
 }
 
