@@ -76,6 +76,7 @@ func main() {
 		subcommands.Register(&tenancyCheckCmd{logger: logger, settings: settings}, "tenancy")
 		subcommands.Register(&tenancyDiffCmd{logger: logger, settings: settings}, "tenancy")
 		subcommands.Register(&groupsDiffCmd{logger: logger, settings: settings}, "tenancy")
+		subcommands.Register(&vehiclesDiffCmd{logger: logger, settings: settings}, "tenancy")
 		subcommands.Register(&mirrorGroupsCmd{logger: logger, settings: settings}, "tenancy")
 		flag.Parse()
 		os.Exit(int(subcommands.Execute(ctx)))
