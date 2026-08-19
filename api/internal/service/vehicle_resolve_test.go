@@ -225,10 +225,10 @@ func TestResolveTokenSetFailsClosed(t *testing.T) {
 
 // --- the LEFT-JOIN, which is the part plan 07 step 2 makes a gate ---
 
-func vehicleRow(tokenID int64, make_, model string) *dbmodels.Vehicle {
+func vehicleRow(tokenID int64, brand, model string) *dbmodels.Vehicle {
 	return &dbmodels.Vehicle{
 		TokenID: tokenID,
-		Make:    null.StringFrom(make_),
+		Make:    null.StringFrom(brand),
 		Model:   null.StringFrom(model),
 	}
 }
