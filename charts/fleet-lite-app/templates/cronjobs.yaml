@@ -5,6 +5,29 @@
   failure being retried, ttlSecondsAfterFinished: 0 to bin a pod immediately —
   was silently replaced by the fallback, with nothing to indicate the value had
   been ignored.
+
+  WHY THE RATIONALE LIVES HERE AND NOT IN values.yaml: the version-bump
+  workflow round-trips values.yaml through a YAML parser and writes it back,
+  which strips every comment in the file. Two explanatory comments added
+  alongside the sync-vehicles and vehicles-diff entries were gone one commit
+  later (65bd633). This template is not rewritten, so notes that need to
+  survive belong here.
+
+  The defaults above are wrong for any job whose failure is a signal rather
+  than a blip, and both sync-vehicles and vehicles-diff override them:
+
+    backoffLimit: 0            A skipped tenant or a set that disagrees is
+                               deterministic. Retrying cannot change the answer
+                               and only doubles the log a human has to read.
+
+    ttlSecondsAfterFinished    The 1-hour default is why the 2026-08-19
+      : 259200 (3 days)        empty-fleet incident went unseen for three days:
+                               sync-vehicles logged a skipped tenant nightly and
+                               the pod was collected long before anyone looked.
+                               A failure nobody can still read is barely better
+                               than no failure at all.
+
+  See fleet-tenancy-api docs/plans/07-vehicle-roster.md step 1.
 */}}
 {{- if .enabled }}
 ---
