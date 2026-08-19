@@ -2,8 +2,11 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	dbmodels "github.com/DIMO-Network/fleet-lite-app/internal/db/models"
@@ -15,6 +18,7 @@ import (
 	"github.com/aarondl/sqlboiler/v4/queries"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
 	"github.com/lib/pq"
+	"github.com/patrickmn/go-cache"
 	"github.com/rs/zerolog"
 )
 
@@ -133,7 +137,24 @@ type VehicleService struct {
 	// tenancy resolves an explicit-mode tenant's fleet: its entitled token ids
 	// and the operator's minted credential. nil means credential-less tenants
 	// cannot sync — a named error, not a silent skip.
-	tenancy *gateway.TenancyAPI
+	tenancy tenancySource
+
+	// entitledCache holds one entitled token-id slice per tenant, for the READ
+	// path only. Two reasons, and the second is the important one:
+	//
+	// Load — the set read now runs on every vehicle-list render, exactly as the
+	// membership gate does. Uncached it would take this app's whole request
+	// rate to tenancy.
+	//
+	// Freshness coherence — the membership gate and the group index are both
+	// cached for 60s. A live, uncached set read against 60s-stale gates would
+	// reintroduce the very mixing this path exists to remove, just with the
+	// staleness on the other foot. All three legs of the intersection must age
+	// together, so this shares their TTL.
+	//
+	// The sync path deliberately does NOT use it: a nightly job that prunes
+	// rows must act on the current answer, not one up to a minute old.
+	entitledCache *cache.Cache
 }
 
 // membershipGate is the slice of MembershipService the vehicle filters need.
@@ -141,9 +162,31 @@ type membershipGate interface {
 	ActiveTokens(ctx context.Context, tenant models.Tenant) (enforced bool, tokenIDs []int64, err error)
 }
 
-func NewVehicleService(logger *zerolog.Logger, pdb *db.Store, identityAPI gateway.IdentityAPI) *VehicleService {
-	return &VehicleService{logger: logger, pdb: pdb, identityAPI: identityAPI}
+// tenancySource is the slice of gateway.TenancyAPI this service uses: the
+// entitled set and the mode/credential reads the sync needs. Narrow and
+// interfaced for the same reason membershipGate is — so the set-resolution
+// logic is testable without a live service.
+type tenancySource interface {
+	Configured() bool
+	Entitlements(ctx context.Context, tenant models.Tenant) ([]models.RemoteEntitlement, error)
+	TenantDetail(ctx context.Context, tenantID string) (*models.RemoteTenantDetail, error)
+	DimoToken(ctx context.Context, tenantID string) (*models.RemoteMintedToken, error)
 }
+
+func NewVehicleService(logger *zerolog.Logger, pdb *db.Store, identityAPI gateway.IdentityAPI) *VehicleService {
+	return &VehicleService{
+		logger:        logger,
+		pdb:           pdb,
+		identityAPI:   identityAPI,
+		entitledCache: cache.New(entitledTTL, 2*entitledTTL),
+	}
+}
+
+// entitledTTL bounds how stale the read path's entitled set may be. It matches
+// membershipTTL and the group-index window on purpose: all three gate the same
+// request, and the point of resolving them together is that none is fresher
+// than the others.
+const entitledTTL = 60 * time.Second
 
 // UseGroupIndex wires the group index that scopes limited members. Without it
 // the scope filters read the local mirror.
@@ -156,7 +199,17 @@ func (s *VehicleService) UseMemberships(m membershipGate) { s.memberships = m }
 
 // UseTenancy wires the tenancy client that resolves explicit-mode tenants'
 // fleets. Without it, syncing a credential-less tenant errors by name.
-func (s *VehicleService) UseTenancy(t *gateway.TenancyAPI) { s.tenancy = t }
+//
+// A nil *TenancyAPI leaves the field nil rather than storing a typed nil: an
+// interface holding a nil pointer is not == nil, so every `s.tenancy == nil`
+// guard in this file would pass and then call through it. Same trap app.go
+// documents when constructing SharingService, and it is silent when it fires.
+func (s *VehicleService) UseTenancy(t *gateway.TenancyAPI) {
+	if t == nil {
+		return
+	}
+	s.tenancy = t
+}
 
 // membershipFilter restricts a vehicles query to tokens with an active
 // membership, when this tenant's operator has enforcement turned on.
@@ -207,6 +260,205 @@ func (s *VehicleService) scopeFilter(ctx context.Context, tenant models.Tenant, 
 		return nil, err
 	}
 	return allowedTokensFilter(idx.TokenIDsForGroups(allowedGroupIDs)), nil
+}
+
+// resolvesFromTenancy reports whether this tenant's vehicle SET comes from
+// fleet-tenancy-api rather than from the local table.
+//
+// Only credential-less (operator-managed, explicit-mode) tenants. A self-serve
+// tenant holding its own DIMO client id has no entitlement set to resolve —
+// its fleet genuinely IS whatever its developer license is privileged on, which
+// the local table caches — so for those the local-table-plus-filters path is
+// correct, not merely legacy.
+func (s *VehicleService) resolvesFromTenancy(tenant models.Tenant) bool {
+	return tenant.ClientID == "" && s.tenancy != nil && s.tenancy.Configured()
+}
+
+// resolveTokenSet answers "which vehicles are this caller's", from one source
+// at one freshness: entitled ∩ active memberships ∩ group scope, every leg read
+// from fleet-tenancy-api.
+//
+// THIS IS THE FIX FOR THE 2026-08-19 EMPTY-FLEET INCIDENT, and the reason it is
+// a set intersection rather than a query with filters. The old path took the
+// SET from the nightly local cache and applied the membership and group gates
+// live on 60-second TTLs. TRAST's cached set held one revoked token; the live
+// gates correctly excluded it; cached-set ∩ live-gate = ∅ and the customer saw
+// nothing. Had everything been stale they would have seen one wrong vehicle;
+// had everything been live, nine. Zero was the artifact of mixing, and it was
+// silent. Do not reintroduce a gate that reads from a different snapshot than
+// the set.
+//
+// Returned ids are sorted so callers are deterministic.
+func (s *VehicleService) resolveTokenSet(ctx context.Context, tenant models.Tenant, allowedGroupIDs []string) ([]int64, error) {
+	entitled, err := s.entitledTokenIDs(ctx, tenant)
+	if err != nil {
+		return nil, err
+	}
+	set := make(map[int64]bool, len(entitled))
+	for _, id := range entitled {
+		set[id] = true
+	}
+
+	// Membership gate. Applies to owners too — enforcement is per tenant, not
+	// per member — which is why it is not folded into the scope block below.
+	// An unavailable answer propagates; it must never degrade into an
+	// unfiltered set.
+	if err := s.intersectActiveMemberships(ctx, tenant, set); err != nil {
+		return nil, err
+	}
+
+	// Group scope, for limited members only. nil means unrestricted; an empty
+	// allowed-group list means "reaches nothing" and must survive as an empty
+	// set rather than being skipped — the inversion that once handed a member
+	// scoped to empty groups the entire fleet.
+	if allowedGroupIDs != nil {
+		if s.groupsIndexed() {
+			idx, gerr := s.groups.groupIndex(ctx, tenant)
+			if gerr != nil {
+				return nil, gerr
+			}
+			inScope := make(map[int64]bool)
+			for _, id := range idx.TokenIDsForGroups(allowedGroupIDs) {
+				inScope[id] = true
+			}
+			for id := range set {
+				if !inScope[id] {
+					delete(set, id)
+				}
+			}
+		} else {
+			scoped, serr := s.localScopedTokenIDs(ctx, tenant.ID, allowedGroupIDs)
+			if serr != nil {
+				return nil, serr
+			}
+			for id := range set {
+				if !scoped[id] {
+					delete(set, id)
+				}
+			}
+		}
+	}
+
+	out := make([]int64, 0, len(set))
+	for id := range set {
+		out = append(out, id)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out, nil
+}
+
+// entitledTokenIDs is the cached read-path entitlement lookup. Only successes
+// are cached, exactly as the authz, membership and group-index caches do it: a
+// cached failure would extend an outage past its cause.
+func (s *VehicleService) entitledTokenIDs(ctx context.Context, tenant models.Tenant) ([]int64, error) {
+	if s.entitledCache != nil {
+		if cached, found := s.entitledCache.Get(tenant.ID); found {
+			return cached.([]int64), nil
+		}
+	}
+	ents, err := s.tenancy.Entitlements(ctx, tenant)
+	if err != nil {
+		return nil, fmt.Errorf("entitlements for tenant %s: %w", tenant.ID, err)
+	}
+	out := make([]int64, 0, len(ents))
+	for _, e := range ents {
+		out = append(out, e.VehicleTokenID)
+	}
+	if s.entitledCache != nil {
+		s.entitledCache.Set(tenant.ID, out, cache.DefaultExpiration)
+	}
+	return out, nil
+}
+
+// localScopedTokenIDs is the pre-index fallback for group scope, reading the
+// local mirror. Only reached when GROUPS_FROM_TENANCY is off, which is the
+// revert path.
+func (s *VehicleService) localScopedTokenIDs(ctx context.Context, tenantID string, allowedGroupIDs []string) (map[int64]bool, error) {
+	var rows []struct {
+		TokenID int64 `boil:"token_id"`
+	}
+	if err := queries.Raw(
+		`SELECT DISTINCT token_id FROM vehicle_fleet_groups WHERE tenant_id = $1 AND fleet_group_id = ANY($2)`,
+		tenantID, pq.Array(allowedGroupIDs),
+	).Bind(ctx, s.pdb.DBS().Reader, &rows); err != nil {
+		return nil, fmt.Errorf("scoped token ids: %w", err)
+	}
+	out := make(map[int64]bool, len(rows))
+	for _, r := range rows {
+		out[r.TokenID] = true
+	}
+	return out, nil
+}
+
+// listResolvedVehicles builds the vehicle list for a tenant whose set comes
+// from tenancy: resolve the set, then LEFT-JOIN the local table for metadata.
+//
+// THE JOIN DIRECTION IS THE WHOLE POINT. Every token in the resolved set
+// appears, whether or not a metadata row exists for it; one with no row comes
+// back carrying its token id and MetadataPending. An inner join here — or any
+// "skip tokens we have no row for" — would move the bug rather than fix it: the
+// set would be provably correct while the response stayed short, which is
+// harder to see than the original. See TestListResolvedVehiclesMissingRow.
+func (s *VehicleService) listResolvedVehicles(ctx context.Context, tenant models.Tenant, allowedGroupIDs []string) ([]models.Vehicle, error) {
+	tokenIDs, err := s.resolveTokenSet(ctx, tenant, allowedGroupIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := dbmodels.Vehicles(
+		qm.Where("tenant_id = ?", tenant.ID),
+		qm.Where("token_id = ANY(?)", pq.Array(tokenIDs)),
+		qm.OrderBy("last_seen DESC NULLS LAST, token_id"),
+	).All(ctx, s.pdb.DBS().Reader)
+	if err != nil {
+		return nil, err
+	}
+	favorites, err := s.favoriteSet(ctx, tenant.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return mergeResolvedVehicles(tokenIDs, rows, favorites), nil
+}
+
+// mergeResolvedVehicles is the LEFT-JOIN itself: every token in the resolved
+// set becomes a vehicle, using the local row when there is one and a thin
+// MetadataPending placeholder when there is not.
+//
+// Pure, so the missing-row case is testable without a database — and it is the
+// case worth testing. An inner join, or a "skip tokens we have no row for",
+// yields a provably correct set with a short response, which is strictly harder
+// to diagnose than the empty fleet this whole plan step exists to fix.
+//
+// Ordering: cached rows first in the caller's last-seen order, thin rows after
+// in token order. A vehicle with no metadata has no last_seen to sort by, so it
+// goes at the end rather than being interleaved by a value it does not have.
+func mergeResolvedVehicles(tokenIDs []int64, rows []*dbmodels.Vehicle, favorites map[int64]bool) []models.Vehicle {
+	byToken := make(map[int64]bool, len(rows))
+	for _, r := range rows {
+		byToken[r.TokenID] = true
+	}
+
+	out := make([]models.Vehicle, 0, len(tokenIDs))
+	for _, r := range rows {
+		v := rowToVehicle(r)
+		v.IsFavorite = favorites[v.TokenID]
+		v.LicensePlate = r.LicensePlate.String
+		v.VIN = r.Vin.String
+		applyLastLocation(&v, r)
+		out = append(out, v)
+	}
+	for _, id := range tokenIDs {
+		if byToken[id] {
+			continue
+		}
+		out = append(out, models.Vehicle{
+			TokenID:         id,
+			IsFavorite:      favorites[id],
+			MetadataPending: true,
+		})
+	}
+	return out
 }
 
 // SyncVehicles refreshes the tenant's rows in the vehicles table and returns
@@ -371,6 +623,12 @@ func (s *VehicleService) upsertIdentityVehicle(ctx context.Context, tenantID str
 // limited member and is ALWAYS filtered — an empty slice is a member who sees
 // nothing, not a member who sees everything.
 func (s *VehicleService) ListVehicles(ctx context.Context, tenant models.Tenant, allowedGroupIDs []string) ([]models.Vehicle, error) {
+	// Operator-managed tenants resolve the set from tenancy and use the local
+	// table only for metadata. Self-serve tenants keep the local-table path,
+	// which for them is correct rather than legacy — see resolvesFromTenancy.
+	if s.resolvesFromTenancy(tenant) {
+		return s.listResolvedVehicles(ctx, tenant, allowedGroupIDs)
+	}
 	mods := []qm.QueryMod{
 		qm.Where("tenant_id = ?", tenant.ID),
 		// Most-recently-seen first (the composite idx_vehicles_tenant_last_seen
@@ -417,6 +675,9 @@ func (s *VehicleService) ListVehicles(ctx context.Context, tenant models.Tenant,
 // one of those groups — out-of-scope vehicles error exactly like nonexistent
 // ones, so limited members can't probe what exists.
 func (s *VehicleService) GetVehicle(ctx context.Context, tenant models.Tenant, tokenID int64, allowedGroupIDs []string) (*models.Vehicle, error) {
+	if s.resolvesFromTenancy(tenant) {
+		return s.getResolvedVehicle(ctx, tenant, tokenID, allowedGroupIDs)
+	}
 	mods := []qm.QueryMod{
 		qm.Where("tenant_id = ?", tenant.ID),
 		qm.And("token_id = ?", tokenID),
@@ -445,6 +706,58 @@ func (s *VehicleService) GetVehicle(ctx context.Context, tenant models.Tenant, t
 	if err != nil {
 		return nil, err
 	}
+	v.LicensePlate = r.LicensePlate.String
+	v.VIN = r.Vin.String
+	applyLastLocation(&v, r)
+	return &v, nil
+}
+
+// getResolvedVehicle is GetVehicle for a tenant whose set comes from tenancy.
+//
+// Membership in the resolved set is the authorization decision; the local row
+// only supplies metadata. A token in the set with no row returns a thin vehicle
+// rather than the not-found the old path gave — that 404 was the single-vehicle
+// face of the same incident, and a customer deep-linking to a freshly-entitled
+// vehicle hit it.
+//
+// A token outside the set returns sql.ErrNoRows, exactly as a nonexistent one
+// does. Out-of-scope and nonexistent must stay indistinguishable so a limited
+// member cannot probe what exists — the same 404-not-403 convention the old
+// path relied on its filters to produce.
+func (s *VehicleService) getResolvedVehicle(ctx context.Context, tenant models.Tenant, tokenID int64, allowedGroupIDs []string) (*models.Vehicle, error) {
+	tokenIDs, err := s.resolveTokenSet(ctx, tenant, allowedGroupIDs)
+	if err != nil {
+		return nil, err
+	}
+	inSet := false
+	for _, id := range tokenIDs {
+		if id == tokenID {
+			inSet = true
+			break
+		}
+	}
+	if !inSet {
+		return nil, sql.ErrNoRows
+	}
+
+	favorite, err := s.IsFavorite(ctx, tenant.ID, tokenID)
+	if err != nil {
+		return nil, err
+	}
+
+	r, err := dbmodels.Vehicles(
+		qm.Where("tenant_id = ?", tenant.ID),
+		qm.And("token_id = ?", tokenID),
+	).One(ctx, s.pdb.DBS().Reader)
+	if errors.Is(err, sql.ErrNoRows) {
+		return &models.Vehicle{TokenID: tokenID, IsFavorite: favorite, MetadataPending: true}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	v := rowToVehicle(r)
+	v.IsFavorite = favorite
 	v.LicensePlate = r.LicensePlate.String
 	v.VIN = r.Vin.String
 	applyLastLocation(&v, r)

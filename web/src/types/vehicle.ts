@@ -57,6 +57,17 @@ export interface Vehicle {
      * Absent (falsy) when it cannot be, or when the lookup was unavailable.
      */
     canShare?: boolean;
+    /**
+     * The vehicle is in this tenant's resolved set — entitled, membered and in
+     * scope — but no metadata has been cached for it yet, so `definition`,
+     * `syntheticDevice` and the rest are zeroed rather than absent.
+     *
+     * Expect it briefly between an operator granting an entitlement and the
+     * next nightly sync. Render a "details syncing" placeholder: the vehicle is
+     * genuinely theirs, and it must not be mistaken for one with no device
+     * paired, which is what a zeroed syntheticDevice otherwise looks like.
+     */
+    metadataPending?: boolean;
 }
 
 export interface VehiclesResponse {
@@ -90,4 +101,6 @@ export interface VehicleCard {
      * tenancy service checks it again before anything goes on chain.
      */
     canShare?: boolean;
+    /** Metadata has not been cached for this vehicle yet; see Vehicle.metadataPending. */
+    metadataPending?: boolean;
 }

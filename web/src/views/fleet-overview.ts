@@ -240,10 +240,17 @@ export class FleetOverviewView extends LitElement {
             seenAt: `Token #${v.tokenId}`,
             lastSeen: v.lastSeen,
             online: integrated,
-            errorMessage: integrated ? undefined : msg('No DIMO integration — pair a device to stream telemetry'),
+            // See fleet-list-view.toCard: an unsynced vehicle arrives zeroed and
+            // must not be reported as having no device paired.
+            errorMessage: v.metadataPending
+                ? msg('Details still syncing — this vehicle was added recently')
+                : integrated
+                    ? undefined
+                    : msg('No DIMO integration — pair a device to stream telemetry'),
             isFavorite: v.isFavorite ?? false,
             licensePlate: v.licensePlate,
             groups: v.groups ?? [],
+            metadataPending: v.metadataPending ?? false,
         };
     }
 
