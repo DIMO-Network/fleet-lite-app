@@ -87,11 +87,34 @@ serviceMonitor:
   port: mon-http
   interval: 30s
 cronJobs:
+  # sync-vehicles fails the run on any skipped tenant. Both overrides exist so
+  # that failure can actually be read: backoffLimit 0 because a skip is
+  # deterministic and retrying only doubles the log, and the 3-day TTL because
+  # the default hour is why the 2026-08-19 skip was never seen — by the time
+  # anyone looked, the pod was gone.
   - name: sync-vehicles
     enabled: true
     schedule: 0 3 * * *
+    backoffLimit: 0
+    ttlSecondsAfterFinished: 259200
     script: |
       /fleet-lite-app sync-vehicles
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+  # Runs half an hour after sync-vehicles: it is the gate on that run having
+  # produced an entitled set the local rows actually match.
+  - name: vehicles-diff
+    enabled: true
+    schedule: 30 3 * * *
+    backoffLimit: 0
+    ttlSecondsAfterFinished: 259200
+    script: |
+      /fleet-lite-app vehicles-diff
     resources:
       requests:
         cpu: 50m

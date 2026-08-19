@@ -26,6 +26,11 @@ import (
 // vehicles, so it silently drifts stale — and because the group-attestation
 // import iterates the local vehicle list, stale vehicles mean stale groups.
 // Run on a schedule (CronJob) to keep both current.
+//
+// Exit status is part of the contract: any tenant this run could not sync
+// fails the command. A tenant skipped silently while the job reports success
+// is how an operator-managed customer sat on an empty fleet for three days —
+// the CronJob was green the whole time. See docs/HANDOFF.md, 2026-08-19.
 type syncVehiclesCmd struct {
 	logger   zerolog.Logger
 	settings config.Settings
@@ -44,6 +49,9 @@ func (*syncVehiclesCmd) Usage() string {
 	Identity API and upsert them into the local vehicles table. Additive only — never
 	deletes (use prune-unshared-vehicles to remove no-longer-shared vehicles).
 	-tenant-id limits the run to one tenant.
+
+	Exits non-zero if any tenant was skipped, for any reason. Every skip is
+	logged with a reason field.
   `
 }
 
@@ -56,8 +64,25 @@ func (p *syncVehiclesCmd) Execute(ctx context.Context, _ *flag.FlagSet, _ ...int
 	p.pdb.WaitForDB(p.logger)
 
 	identityService := gateway.NewIdentityAPIService(p.logger, &p.settings)
+	authProvider := gateway.NewDimoAuthProvider(p.logger, &p.settings)
+	tenancyAPI := gateway.NewTenancyAPI(p.logger, &p.settings, authProvider)
 	tenantSvc := service.NewTenantService(&p.logger, &p.pdb, &p.settings, identityService)
 	vehicleSvc := service.NewVehicleService(&p.logger, &p.pdb, identityService)
+
+	// The same wires app.go:118 makes for the web server. Without them every
+	// credential-less (operator-managed) tenant takes VehicleService's
+	// "no tenancy client is configured" path and is skipped — the omission
+	// that caused the 2026-08-19 empty-fleet incident. Only UseTenancy is
+	// needed here: the sync path resolves the entitled set and its metadata
+	// and consults neither the membership gate nor the group index, which are
+	// read-time filters. Wiring them would be dead weight that reads as
+	// coverage.
+	if tenancyAPI.Configured() {
+		tenantSvc.UseTenancy(tenancyAPI)
+		vehicleSvc.UseTenancy(tenancyAPI)
+	} else {
+		p.logger.Warn().Msg("no tenancy client configured — operator-managed tenants cannot be synced and will fail this run")
+	}
 
 	var dbTenants dbmodels.TenantSlice
 	var err error
@@ -70,27 +95,45 @@ func (p *syncVehiclesCmd) Execute(ctx context.Context, _ *flag.FlagSet, _ ...int
 		p.logger.Fatal().Err(err).Msg("failed to list tenants")
 	}
 
-	var synced, skippedTenants int
+	var synced int
+	// Skipped tenants are collected rather than only counted so the summary can
+	// name them. A CronJob failure that does not say which customer is affected
+	// costs the next reader the same investigation this one already paid for.
+	var skipped []string
 	for _, dt := range dbTenants {
 		tenant, terr := tenantSvc.GetTenantByID(ctx, dt.ID)
 		if terr != nil {
-			p.logger.Err(terr).Str("tenant_id", dt.ID).Msg("load tenant, skipping")
-			skippedTenants++
+			p.logger.Err(terr).Str("tenant_id", dt.ID).Str("reason", "load tenant failed").
+				Msg("skipping tenant")
+			skipped = append(skipped, dt.ID)
 			continue
 		}
 		// SyncVehicles errors on an empty/invalid client id or an Identity failure;
-		// skip that tenant so one bad tenant can't abort the whole run.
+		// carry on to the remaining tenants so one bad tenant can't cost the rest
+		// their sync — but the run as a whole still fails, below.
 		n, serr := vehicleSvc.SyncVehicles(ctx, tenant)
 		if serr != nil {
-			p.logger.Err(serr).Str("tenant_id", dt.ID).Msg("sync vehicles, skipping tenant")
-			skippedTenants++
+			p.logger.Err(serr).Str("tenant_id", dt.ID).Str("tenant", tenant.Name).
+				Str("reason", "sync failed").Msg("skipping tenant")
+			skipped = append(skipped, dt.ID)
 			continue
 		}
 		synced += n
 		p.logger.Info().Str("tenant_id", dt.ID).Int("synced", n).Msg("synced tenant vehicles")
 	}
 
-	p.logger.Info().Int("synced", synced).Int("skipped_tenants", skippedTenants).
+	ev := p.logger.Info()
+	if len(skipped) > 0 {
+		ev = p.logger.Error().Strs("skipped_tenant_ids", skipped)
+	}
+	ev.Int("synced", synced).Int("skipped_tenants", len(skipped)).
 		Int("tenants", len(dbTenants)).Msg("sync-vehicles complete")
+
+	// A skipped tenant is a tenant whose fleet is now stale, and stale here is
+	// invisible to the customer until they notice vehicles missing. Fail the
+	// run so the CronJob alerts instead of reporting a green partial sync.
+	if len(skipped) > 0 {
+		return subcommands.ExitFailure
+	}
 	return subcommands.ExitSuccess
 }
