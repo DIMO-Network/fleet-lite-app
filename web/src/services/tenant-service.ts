@@ -26,6 +26,14 @@ export interface Member {
 /** The caller's own role + group scope in the current tenant (GET /me/access). */
 export interface MyAccess {
     role: string;
+    /**
+     * The caller's capabilities in this tenant. Authoritative for what they may
+     * do — role is a display label. Used to hide actions that would be refused;
+     * every one of them is still enforced server-side.
+     *
+     * Optional so an older backend's response still parses.
+     */
+    permissions?: string[];
     /** null = unrestricted (owner or full-access member). */
     allowedGroupIds: string[] | null;
     /**
