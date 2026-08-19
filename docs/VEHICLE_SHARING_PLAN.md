@@ -1,26 +1,28 @@
 # Vehicle sharing — fleet-lite surface
 
-Status: **planned, not started**. Written 2026-08-18.
+Status: **shipped to `main` 2026-08-19, not yet released.** Written 2026-08-18.
 
 A **Share** button on the vehicle **list view** (not the map): enter a 0x
 wallet address, pick a duration, and that wallet receives an on-chain SACD
 permission grant on the vehicle. The owner keeps the NFT. No wallet prompt —
 the transaction is signed server-side by the operator's signer.
 
-**The authoritative plan is
-[`fleet-tenancy-api/docs/plans/05-vehicle-sharing.md`](../../fleet-tenancy-api/docs/plans/05-vehicle-sharing.md).**
-It records the decisions (SACD grant not transfer; server-signed v1 with
-browser-passkey phase 2; tx machinery in fleet-tenancy-api; River job model;
-list-but-not-revoke v1 scope; fixed default permissions), the authorization
-chain, the API shapes, and the traps. This doc covers only what lands in this
-repo — steps 3 and 4 of that plan.
+**The record now lives in
+[`fleet-tenancy-api/docs/HANDOFF.md`](../../fleet-tenancy-api/docs/HANDOFF.md)**,
+under "Vehicle sharing" — the plan it was written against has been retired, as
+that repo's plans are. Read the handoff for the decisions, the authorization
+chain and the caveats; in particular **sharing is unavailable to self-serve
+tenants**, which have no signer key on their own credential.
+
+Delivered here as #132 (api) and #133 (web). This doc is kept as the fleet-lite
+view of the feature.
 
 **v1 adds no web3 dependencies to this repo, frontend or backend.** The
 passkey stack (Turnkey/ZeroDev, for owners whose accounts weren't created by
 kaufmann-oracle) is phase 2, consumed as an npm package published from
 `b2b-fleet-mgr-app` — nothing here should anticipate it.
 
-## api/ (step 3)
+## api/ (#132)
 
 New authenticated endpoints, thin over fleet-tenancy-api:
 
@@ -50,7 +52,7 @@ comparison — checksum-normalise both sides before comparing.
 Listing existing shares needs **no new backend**: the modal reads chain state
 through the existing identity-api proxy.
 
-## web/ (step 4)
+## web/ (#133)
 
 Two pieces, both plain Lit following this repo's conventions (scoped CSS, no
 Tailwind, `sharedStyles` for Material Symbols, `msg()` for every string):
