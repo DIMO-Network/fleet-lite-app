@@ -123,6 +123,19 @@ func App(
 		// other, so the lifecycle cannot be split.
 		invitationSvc.UseTenancy(tenancyAPI)
 		authProvider.UseRemoteMinter(tenancyAPI)
+
+		// The vehicle roster (plan 07 step 4). Metadata only — owner,
+		// definition, mint time, VIN, plate and the device ids the list's
+		// connection indicator is drawn from. The SET is unchanged and still
+		// resolved from the three gates above.
+		//
+		// Behind a flag per the plan, because this makes fleet-tenancy-api
+		// load-bearing for every fleet page render, and the difference between
+		// a config flip and an incident is that the flag exists.
+		if settings.VehicleMetadataFromTenancy {
+			vehicleSvc.UseVehicleMetadata(tenancyAPI)
+			logger.Info().Msg("vehicle metadata resolves from fleet-tenancy-api's roster")
+		}
 		tenantSvc.OnMirrorCreated(func(t models.Tenant) {
 			go func() {
 				if n, err := vehicleSvc.SyncVehicles(context.Background(), &t); err != nil {

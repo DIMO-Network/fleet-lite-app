@@ -1,3 +1,18 @@
+{{/*
+Rationale lives HERE, not in values.yaml: the version-bump workflow round-trips
+that file through a YAML parser on every merge and strips every comment in it.
+
+VEHICLE_METADATA_FROM_TENANCY (plan 07 step 4) chooses where a vehicle's
+metadata comes from — fleet-tenancy-api's roster when 'true', the local
+vehicles table when 'false'. It does NOT change which vehicles a tenant sees;
+that set is resolved from entitlements, active memberships and group scope
+either way.
+
+'false' is the revert path and it is a config flip, not a release. Flip it back
+before diagnosing anything else if fleet pages slow down or lose metadata after
+a deploy — this makes fleet-tenancy-api load-bearing for every fleet render,
+which is the risk the plan names.
+*/}}
 apiVersion: v1
 kind: ConfigMap
 metadata:

@@ -64,6 +64,20 @@ type Settings struct {
 	// scope-filtering SQL stops joining against the mirror.
 	GroupsFromTenancy bool `yaml:"GROUPS_FROM_TENANCY"`
 
+	// VehicleMetadataFromTenancy chooses where a vehicle's METADATA comes from
+	// — fleet-tenancy-api's roster when on, the local vehicles table when off.
+	// It does not touch which vehicles a tenant sees: that set is resolved from
+	// entitlements, memberships and group scope either way, and moving one
+	// without the other is what this whole plan exists to stop.
+	//
+	// Off is the revert path, and it is a config flip rather than a release —
+	// the lesson from GROUPS_FROM_TENANCY, whose existence is why the group
+	// cutover was revertible.
+	//
+	// TEMPORARY: goes away with plan 07 step 5, when the local table narrows to
+	// its app-local columns and there is nothing left to fall back to.
+	VehicleMetadataFromTenancy bool `yaml:"VEHICLE_METADATA_FROM_TENANCY"`
+
 	// DIMO Identity API
 	IdentityAPIEndpoint url.URL `yaml:"IDENTITY_API_ENDPOINT"`
 
