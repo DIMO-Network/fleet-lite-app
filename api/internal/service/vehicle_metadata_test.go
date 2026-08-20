@@ -11,12 +11,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func rosterRow(tokenID int64, make_, model string) models.RemoteVehicleMetadata {
+func rosterRow(tokenID int64, brand, model string) models.RemoteVehicleMetadata {
 	return models.RemoteVehicleMetadata{
 		VehicleTokenID: tokenID,
 		Owner:          "0x97B8bA44C66d2C893925dE41BbDF0eE9b9640E7a",
 		DefinitionID:   "maxus_t60_2024",
-		Make:           make_,
+		Make:           brand,
 		Model:          model,
 		Year:           2024,
 	}
