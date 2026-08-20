@@ -203,6 +203,9 @@ func (p *groupsDiffCmd) Execute(ctx context.Context, _ *flag.FlagSet, _ ...inter
 
 	counts := map[groupVerdict]int{}
 	checkedGroups, checkedTenants := 0, 0
+	// Tenants whose remote read failed. Collected rather than fatal, so one
+	// tenant cannot blind the diff for the others — see the loop below.
+	var unreachable []string
 
 	for _, t := range tenants {
 		tenant, terr := tenantSvc.GetTenantByID(ctx, t.ID)
@@ -216,10 +219,23 @@ func (p *groupsDiffCmd) Execute(ctx context.Context, _ *flag.FlagSet, _ ...inter
 			p.logger.Err(lerr).Str("tenant_id", t.ID).Msg("read local groups")
 			return subcommands.ExitFailure
 		}
+		// A tenant we cannot reach is recorded and skipped, NOT fatal.
+		//
+		// It used to return here, and that made the diff worth less than it
+		// looks: the walk is ordered by tenant name, so whichever tenant
+		// happened to fail first took every tenant after it down with it, and
+		// a green run and a run that checked one tenant were indistinguishable
+		// from the exit code alone. On 2026-08-20 two consecutive failures
+		// named two different tenants and verified nothing beyond them.
+		//
+		// The run still fails at the end — an unverified tenant is not a pass —
+		// but it fails having checked everything it could.
 		remote, rerr := tenancyAPI.VehicleGroups(ctx, *tenant)
 		if rerr != nil {
-			p.logger.Err(rerr).Str("tenant_id", t.ID).Msg("vehicle-groups call failed")
-			return subcommands.ExitFailure
+			p.logger.Err(rerr).Str("tenant_id", t.ID).Str("tenant", tenant.Name).
+				Msg("vehicle-groups call failed; this tenant is NOT verified by this run")
+			unreachable = append(unreachable, t.ID)
+			continue
 		}
 
 		checkedTenants++
@@ -243,16 +259,25 @@ func (p *groupsDiffCmd) Execute(ctx context.Context, _ *flag.FlagSet, _ ...inter
 		}
 	}
 
-	p.logger.Info().
-		Int("tenants", checkedTenants).
+	ev := p.logger.Info()
+	if len(unreachable) > 0 {
+		ev = p.logger.Error()
+	}
+	ev.Int("tenants", checkedTenants).
 		Int("groups", checkedGroups).
 		Int("agree", counts[groupAgree]).
 		Int("remote_extra", counts[groupRemoteExtra]).
 		Int("differ", counts[groupDiffer]).
 		Int("missing_remote", counts[groupMissingRemote]).
+		Int("unreachable", len(unreachable)).
+		Strs("unreachable_tenants", unreachable).
 		Msg("groups diff complete")
 
-	if counts[groupDiffer] > 0 || counts[groupMissingRemote] > 0 {
+	// Unreachable counts as failure. The question this command answers is "is
+	// the mirror trustworthy", and "we could not tell for one tenant" is not a
+	// yes — but it is now visible as its own count instead of hiding behind an
+	// exit code that could mean either.
+	if counts[groupDiffer] > 0 || counts[groupMissingRemote] > 0 || len(unreachable) > 0 {
 		return subcommands.ExitFailure
 	}
 	return subcommands.ExitSuccess

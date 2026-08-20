@@ -105,9 +105,16 @@ func (p *DimoAuthProvider) GetDeveloperJWT(tenant models.Tenant) (string, error)
 		return "", err
 	}
 
-	jwt := auth.GetToken()
+	// Retried: the login challenge is unreliable and single-use, so a second
+	// call is a fresh attempt rather than the same request repeated. See
+	// mintWithRetry for the evidence that the keys are not the problem.
+	jwt := mintWithRetry(auth, func(attempt int) {
+		p.logger.Warn().Int("attempt", attempt).Str("tenant_id", tenant.ID).
+			Msg("developer JWT mint failed, retrying with a fresh challenge")
+	})
 	if jwt == nil {
-		return "", fmt.Errorf("failed to get developer JWT for tenant %s", tenant.ID)
+		return "", fmt.Errorf("failed to get developer JWT for tenant %s after %d attempts",
+			tenant.ID, mintAttempts)
 	}
 	p.developerJWTCache.Set(tenant.ID, jwt.Raw,
 		cacheTTLFromJWT(jwt.Raw, 5*time.Minute, 14*24*time.Hour))
