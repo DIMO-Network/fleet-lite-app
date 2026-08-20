@@ -102,6 +102,31 @@ type RemoteEntitlement struct {
 	SourceGroupID  *string `json:"sourceGroupId"`
 }
 
+// RemoteVehicleMetadata is one row of POST /v1/tenants/{id}/vehicle-metadata:
+// what a vehicle IS, from fleet-tenancy-api's roster, which reconciles it
+// against the chain nightly. Keep it in step with that service's
+// models.VehicleMetadata.
+//
+// Null device token ids mean the chain reports no such device — a fact, not a
+// gap, and what the list's connection indicator is drawn from.
+type RemoteVehicleMetadata struct {
+	VehicleTokenID int64      `json:"vehicleTokenId"`
+	Owner          string     `json:"owner"`
+	DefinitionID   string     `json:"definitionId"`
+	Make           string     `json:"make"`
+	Model          string     `json:"model"`
+	Year           int        `json:"year"`
+	MintedAt       *time.Time `json:"mintedAt"`
+	VIN            string     `json:"vin"`
+	LicensePlate   string     `json:"licensePlate"`
+
+	SyntheticDeviceTokenID   *int64 `json:"syntheticDeviceTokenId"`
+	AftermarketDeviceTokenID *int64 `json:"aftermarketDeviceTokenId"`
+
+	ReconciledAt time.Time  `json:"reconciledAt"`
+	UnseenSince  *time.Time `json:"unseenSince"`
+}
+
 // RemoteMember is one row of GET /v1/tenants/{id}/members — the shared
 // membership record, which for an operator-managed tenant is the only member
 // list there is. Keep it in step with that service's models.Member.

@@ -323,6 +323,37 @@ func (t *TenancyAPI) VehicleGroups(ctx context.Context, tenant models.Tenant) ([
 	return res.Groups, nil
 }
 
+// VehicleMetadata resolves what a set of vehicles IS from the tenancy roster —
+// owner, definition, mint time, VIN, plate and the device token ids that say
+// whether a vehicle is connected.
+//
+// A POST for a read, because the input is a list whose length is the tenant's
+// fleet: six hundred token ids in a query string is several kilobytes of
+// request line, which the server refuses while reading the request. Nothing is
+// written.
+//
+// ROWS MAY BE FEWER THAN THE TOKENS ASKED FOR, and that is not an error. A
+// missing row means the roster has not seen that vehicle yet — a vehicle
+// entitled minutes ago, before the nightly reconcile — and the caller must keep
+// its left join. Treating absence as exclusion is the empty-fleet incident
+// again, one layer down.
+func (t *TenancyAPI) VehicleMetadata(ctx context.Context, tenant models.Tenant, tokenIDs []int64) ([]models.RemoteVehicleMetadata, error) {
+	if len(tokenIDs) == 0 {
+		return nil, nil
+	}
+	var res struct {
+		Vehicles []models.RemoteVehicleMetadata `json:"vehicles"`
+	}
+	payload := struct {
+		TokenIDs []int64 `json:"tokenIds"`
+	}{TokenIDs: tokenIDs}
+	if err := t.do(ctx, tenant, http.MethodPost,
+		"/v1/tenants/"+url.PathEscape(tenant.ID)+"/vehicle-metadata", payload, &res); err != nil {
+		return nil, err
+	}
+	return res.Vehicles, nil
+}
+
 // ActiveVehicleMemberships is the membership gate read: whether enforcement is
 // on for this tenant, and the token ids currently paid for. On the vehicle-list
 // hot path once enforcement is live, so it is cached by MembershipService —

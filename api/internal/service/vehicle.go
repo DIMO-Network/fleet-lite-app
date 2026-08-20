@@ -155,6 +155,13 @@ type VehicleService struct {
 	// The sync path deliberately does NOT use it: a nightly job that prunes
 	// rows must act on the current answer, not one up to a minute old.
 	entitledCache *cache.Cache
+
+	// metadata is the roster — what a vehicle IS, from fleet-tenancy-api.
+	// nil means metadata comes from the local vehicles table, exactly as it
+	// always has: the VEHICLE_METADATA_FROM_TENANCY revert path, which is a
+	// config flip rather than a release. See UseVehicleMetadata.
+	metadata      vehicleMetadataSource
+	metadataCache *cache.Cache
 }
 
 // membershipGate is the slice of MembershipService the vehicle filters need.
@@ -416,6 +423,18 @@ func (s *VehicleService) listResolvedVehicles(ctx context.Context, tenant models
 	favorites, err := s.favoriteSet(ctx, tenant.ID)
 	if err != nil {
 		return nil, err
+	}
+
+	// The cutover (plan 07 step 4). The set above is unchanged and still comes
+	// from the same three gates; only where the METADATA comes from moves. The
+	// local rows are still read either way — they hold the last GPS fix, which
+	// is app-local and is not in the roster.
+	if s.metadata != nil {
+		meta, merr := s.rosterMetadata(ctx, tenant, tokenIDs)
+		if merr != nil {
+			return nil, merr
+		}
+		return mergeRosterVehicles(tokenIDs, meta, rows, favorites), nil
 	}
 
 	return mergeResolvedVehicles(tokenIDs, rows, favorites), nil
@@ -749,13 +768,30 @@ func (s *VehicleService) getResolvedVehicle(ctx context.Context, tenant models.T
 		qm.Where("tenant_id = ?", tenant.ID),
 		qm.And("token_id = ?", tokenID),
 	).One(ctx, s.pdb.DBS().Reader)
-	if errors.Is(err, sql.ErrNoRows) {
-		return &models.Vehicle{TokenID: tokenID, IsFavorite: favorite, MetadataPending: true}, nil
-	}
-	if err != nil {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
+	var local []*dbmodels.Vehicle
+	if r != nil {
+		local = []*dbmodels.Vehicle{r}
+	}
 
+	// The detail view reads from the same place the list does, or the two
+	// disagree about one vehicle on two screens — which is the whole failure
+	// this plan is about, at the smallest possible scale.
+	if s.metadata != nil {
+		meta, merr := s.rosterMetadata(ctx, tenant, []int64{tokenID})
+		if merr != nil {
+			return nil, merr
+		}
+		merged := mergeRosterVehicles([]int64{tokenID}, meta, local,
+			map[int64]bool{tokenID: favorite})
+		return &merged[0], nil
+	}
+
+	if r == nil {
+		return &models.Vehicle{TokenID: tokenID, IsFavorite: favorite, MetadataPending: true}, nil
+	}
 	v := rowToVehicle(r)
 	v.IsFavorite = favorite
 	v.LicensePlate = r.LicensePlate.String
