@@ -54,6 +54,16 @@ export class FleetListView extends LitElement {
             : hasSynthetic
                 ? `Synthetic #${v.syntheticDevice.tokenId}`
                 : '';
+        // A vehicle whose metadata has not synced yet arrives with every field
+        // zeroed, which is indistinguishable from one with no device paired.
+        // Say which it is: "no integration" is a state the customer can act on
+        // and this is not one, so showing it here would send them to pair a
+        // device that is already paired.
+        const errorMessage = v.metadataPending
+            ? msg('Details still syncing — this vehicle was added recently')
+            : integrated
+                ? undefined
+                : msg('No DIMO integration — pair a device to stream telemetry');
         return {
             tokenId: String(v.tokenId),
             make: v.definition.make,
@@ -61,12 +71,13 @@ export class FleetListView extends LitElement {
             location: integration,
             seenAt: `Token #${v.tokenId}`,
             online: integrated,
-            errorMessage: integrated ? undefined : msg('No DIMO integration — pair a device to stream telemetry'),
+            errorMessage,
             isFavorite: v.isFavorite ?? false,
             groups: v.groups ?? [],
             licensePlate: v.licensePlate,
             vin: v.vin || undefined,
             canShare: v.canShare ?? false,
+            metadataPending: v.metadataPending ?? false,
         };
     }
 

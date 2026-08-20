@@ -225,6 +225,18 @@ type Vehicle struct {
 	// Groups the vehicle belongs to, for the fleet-overview map/list filter.
 	// Always a (possibly empty) slice in the /vehicles response.
 	Groups []GroupRef `json:"groups"`
+	// MetadataPending marks a vehicle that is in the tenant's resolved set —
+	// entitled, membered and in scope — but has no local metadata row yet, so
+	// everything except its token id is unknown. It appears anyway, because the
+	// set is the authoritative answer to "which vehicles are yours" and dropping
+	// a token for want of a cached row is what turned a stale cache into an
+	// empty fleet on 2026-08-19.
+	//
+	// Expect it briefly after an operator grants an entitlement and before the
+	// next sync-vehicles run. The client should render a placeholder rather than
+	// a blank card. Omitted when false, so a fully-cached fleet is unchanged on
+	// the wire.
+	MetadataPending bool `json:"metadataPending,omitempty"`
 }
 
 type SyntheticDevice struct {

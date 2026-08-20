@@ -382,6 +382,7 @@
 'sfedc31958f58f903': `Aún no tiene grupos asignados: consulte a un propietario.`,
 'sff8f897f159ae5a4': `Nombre el grupo y elija un color. Luego podrá asignar vehículos.`,
 's6c6cb319e19e97fd': `TCO`,
+'sf6510147e1f44ccb': `Details still syncing — this vehicle was added recently`,
 's4e606ce6a461df05': `Close search`,
 's31196398a641533e': `Search vehicles`,
 's5017b86392faf520': `Comfortable view`,

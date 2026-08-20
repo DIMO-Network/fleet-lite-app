@@ -1751,6 +1751,9 @@
 <trans-unit id="s2df075aface0dab8">
   <source>Share</source>
 </trans-unit>
+<trans-unit id="sf6510147e1f44ccb">
+  <source>Details still syncing — this vehicle was added recently</source>
+</trans-unit>
 </body>
 </file>
 </xliff>
