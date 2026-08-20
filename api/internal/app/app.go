@@ -53,6 +53,11 @@ func App(
 		BodyLimit:             25 * 1024 * 1024,
 	})
 	app.Use(metrics.HTTPMetricsMiddleware)
+	// The four golden signals, per route. The shared middleware above labels
+	// every route with an empty path and is chartable by nothing — see
+	// metrics.go. Both are registered; only this one can answer "which route
+	// got slow".
+	app.Use(NewMetricsMiddleware())
 	app.Use(fiberrecover.New(fiberrecover.Config{
 		EnableStackTrace: true,
 	}))
