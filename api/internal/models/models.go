@@ -201,6 +201,15 @@ type RemoteMembershipList struct {
 }
 
 // Vehicle is the slim view of an identity-api vehicle node that fleet-lite-app cares about.
+// ShareBlocker values. Strings on the wire so the frontend switches on names,
+// not magic numbers, and an unrecognised future value degrades to a generic
+// "not shareable" rather than breaking the parse.
+const (
+	ShareBlockerOwner   = "owner"
+	ShareBlockerNoOwner = "no_owner"
+	ShareBlockerUnknown = "unknown"
+)
+
 type Vehicle struct {
 	ID                string             `json:"id"`
 	TokenID           int64              `json:"tokenId"`
@@ -220,6 +229,18 @@ type Vehicle struct {
 	// so the vehicle list does not grow a field for every vehicle that cannot
 	// be shared.
 	CanShare bool `json:"canShare,omitempty"`
+	// ShareBlocker names WHY a vehicle cannot be shared, so the UI can explain
+	// instead of hiding the control. Empty when CanShare is true — and empty
+	// when the annotation never ran at all (sharing unconfigured), which is how
+	// the frontend tells "not shareable" from "sharing does not exist here":
+	// an icon renders only when canShare or shareBlocker is present.
+	//
+	//   owner    — the owner was checked and its account has not authorized
+	//              fleet sharing (no kernel validator for the tenant signer;
+	//              typically a personally-owned vehicle)
+	//   no_owner — the vehicle record carries no usable owner address
+	//   unknown  — the shareable-owners lookup failed; honesty over a guess
+	ShareBlocker string `json:"shareBlocker,omitempty"`
 	// IsFavorite reflects whether the current tenant has starred this vehicle.
 	// Populated by VehicleService when assembling responses — it isn't part of
 	// the identity-api shape and is never present in the stored `raw` JSON.

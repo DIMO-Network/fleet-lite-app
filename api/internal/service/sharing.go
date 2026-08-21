@@ -75,8 +75,14 @@ func (s *SharingService) AnnotateCanShare(ctx context.Context, tenant models.Ten
 
 	shareable, err := s.tenancy.ShareableOwners(ctx, tenant, owners)
 	if err != nil {
+		// Marked unknown, not silently unshareable: claiming "this owner has
+		// not authorized sharing" when we never asked would send someone
+		// chasing an authorization problem that is actually an outage.
 		s.logger.Warn().Err(err).Str("tenant", tenant.ID).
-			Msg("could not resolve shareable owners; share buttons hidden for this response")
+			Msg("could not resolve shareable owners; reporting share status unknown")
+		for i := range vehicles {
+			vehicles[i].ShareBlocker = models.ShareBlockerUnknown
+		}
 		return
 	}
 
@@ -90,8 +96,13 @@ func (s *SharingService) AnnotateCanShare(ctx context.Context, tenant models.Ten
 	}
 	for i := range vehicles {
 		if !common.IsHexAddress(vehicles[i].Owner) {
+			vehicles[i].ShareBlocker = models.ShareBlockerNoOwner
 			continue
 		}
-		vehicles[i].CanShare = allowed[strings.ToLower(vehicles[i].Owner)]
+		if allowed[strings.ToLower(vehicles[i].Owner)] {
+			vehicles[i].CanShare = true
+		} else {
+			vehicles[i].ShareBlocker = models.ShareBlockerOwner
+		}
 	}
 }

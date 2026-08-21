@@ -1754,6 +1754,30 @@
 <trans-unit id="sf6510147e1f44ccb">
   <source>Details still syncing — this vehicle was added recently</source>
 </trans-unit>
+<trans-unit id="s8a09ef93ccb43efd">
+  <source>Sharing needs the manage-vehicles permission</source>
+  <target>Compartir requiere el permiso de gestión de vehículos</target>
+</trans-unit>
+<trans-unit id="s67b4ca731435f4fe">
+  <source>its owner</source>
+  <target>su propietario</target>
+</trans-unit>
+<trans-unit id="sc3a3e90961653dc6">
+  <source>Owned by you (<x id="0" equiv-text="${short}"/>) — personally owned vehicles can't be fleet-shared</source>
+  <target>Es de tu propiedad (<x id="0" equiv-text="${short}"/>) — los vehículos personales no se pueden compartir desde la flota</target>
+</trans-unit>
+<trans-unit id="s1442ad24e294f01a">
+  <source>Owned by <x id="0" equiv-text="${short}"/> — this account hasn't authorized fleet sharing</source>
+  <target>Propiedad de <x id="0" equiv-text="${short}"/> — esta cuenta no ha autorizado el uso compartido de flota</target>
+</trans-unit>
+<trans-unit id="s2a3b6740b50a8a80">
+  <source>No owner on record — can't be shared</source>
+  <target>Sin propietario registrado — no se puede compartir</target>
+</trans-unit>
+<trans-unit id="sf0a255da4ed68233">
+  <source>Sharing status couldn't be checked — try reloading</source>
+  <target>No se pudo verificar el estado de compartición — recarga la página</target>
+</trans-unit>
 </body>
 </file>
 </xliff>

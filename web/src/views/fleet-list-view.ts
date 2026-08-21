@@ -34,6 +34,8 @@ export class FleetListView extends LitElement {
      * does fleet-tenancy-api behind that.
      */
     @state() private canShareVehicles = false;
+    /** The signed-in wallet, so a blocked share can say "owned by you". */
+    @state() private myWallet = '';
     @state() private shareTarget: VehicleCard | null = null;
     private unsubscribeHidden: (() => void) | null = null;
 
@@ -77,6 +79,8 @@ export class FleetListView extends LitElement {
             licensePlate: v.licensePlate,
             vin: v.vin || undefined,
             canShare: v.canShare ?? false,
+            shareBlocker: v.shareBlocker,
+            owner: v.owner,
             metadataPending: v.metadataPending ?? false,
         };
     }
@@ -234,10 +238,40 @@ export class FleetListView extends LitElement {
      * awaited with the vehicle load: failing to resolve it hides the share
      * button, which is the safe direction, and must not delay the fleet list.
      */
+    /**
+     * The share control's tooltip. Always present, because the icon is always
+     * rendered once the share annotation ran: an explained refusal teaches the
+     * user what would make the vehicle shareable, where a hidden icon taught
+     * them the feature didn't exist. The order matters — a member who cannot
+     * share at all hears that first, not a per-vehicle reason they can't act on.
+     */
+    private shareTitle(v: VehicleCard): string {
+        if (!this.canShareVehicles) {
+            return msg('Sharing needs the manage-vehicles permission');
+        }
+        if (v.canShare) return msg('Share vehicle');
+        switch (v.shareBlocker) {
+            case 'owner': {
+                const short = v.owner
+                    ? `${v.owner.slice(0, 6)}…${v.owner.slice(-4)}`
+                    : msg('its owner');
+                return this.myWallet && v.owner
+                    && v.owner.toLowerCase() === this.myWallet.toLowerCase()
+                    ? msg(str`Owned by you (${short}) — personally owned vehicles can't be fleet-shared`)
+                    : msg(str`Owned by ${short} — this account hasn't authorized fleet sharing`);
+            }
+            case 'no_owner':
+                return msg('No owner on record — can\'t be shared');
+            default:
+                return msg('Sharing status couldn\'t be checked — try reloading');
+        }
+    }
+
     private async loadShareCapability() {
         try {
             const access = await TenantService.getInstance().fetchMyAccess();
             this.canShareVehicles = (access.permissions ?? []).includes('manage_vehicles');
+            this.myWallet = access.wallet ?? '';
         } catch {
             this.canShareVehicles = false;
         }
@@ -343,9 +377,14 @@ export class FleetListView extends LitElement {
                         </button>
                     ` : html`
                         <div class="action-cell">
-                            ${this.canShareVehicles && v.canShare ? html`
-                                <button class="share-row-btn" title="${msg('Share vehicle')}"
-                                    @click=${(e: Event) => { e.stopPropagation(); this.openShare(v); }}>
+                            ${v.canShare || v.shareBlocker ? html`
+                                <button class="share-row-btn ${this.canShareVehicles && v.canShare ? '' : 'share-row-btn--blocked'}"
+                                    title="${this.shareTitle(v)}"
+                                    aria-disabled=${this.canShareVehicles && v.canShare ? 'false' : 'true'}
+                                    @click=${(e: Event) => {
+                                        e.stopPropagation();
+                                        if (this.canShareVehicles && v.canShare) this.openShare(v);
+                                    }}>
                                     <span class="material-symbols-outlined">share</span>
                                 </button>
                             ` : nothing}
@@ -770,6 +809,14 @@ export class FleetListView extends LitElement {
             /* Reveals on row hover like the hide button beside it, but stays
                visible on keyboard focus — hover-only would make it reachable by
                tab and invisible while focused. */
+            .share-row-btn--blocked {
+                opacity: 0.35;
+                cursor: not-allowed;
+            }
+            .share-row-btn--blocked:hover {
+                color: var(--on-surface-variant);
+                opacity: 0.35;
+            }
             .share-row-btn {
                 background: none;
                 border: none;
