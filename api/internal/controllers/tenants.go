@@ -482,11 +482,19 @@ func (t *TenantsController) GetMyAccess(c *fiber.Ctx) error {
 		perms = []string{}
 	}
 
+	// The caller's own wallet, so the UI can say "owned by you" instead of
+	// showing the user their own address as a stranger's. Best-effort: the JWT
+	// was already validated upstream, so a miss here is empty, not an error.
+	wallet := ""
+	if addr, werr := GetWalletAddressFromJWT(c); werr == nil {
+		wallet = addr.Hex()
+	}
+
 	allowed, limited := GetAllowedGroups(c)
 	if !limited {
-		return c.JSON(fiber.Map{"role": role, "permissions": perms, "allowedGroupIds": nil, "membershipsEnforced": enforced})
+		return c.JSON(fiber.Map{"role": role, "permissions": perms, "allowedGroupIds": nil, "membershipsEnforced": enforced, "wallet": wallet})
 	}
-	return c.JSON(fiber.Map{"role": role, "permissions": perms, "allowedGroupIds": allowed, "membershipsEnforced": enforced})
+	return c.JSON(fiber.Map{"role": role, "permissions": perms, "allowedGroupIds": allowed, "membershipsEnforced": enforced, "wallet": wallet})
 }
 
 // RemoveMember — DELETE /tenants/:id/members/:wallet. Owner-only.

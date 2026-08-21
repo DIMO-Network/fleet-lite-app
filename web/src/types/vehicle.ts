@@ -58,6 +58,14 @@ export interface Vehicle {
      */
     canShare?: boolean;
     /**
+     * Why the vehicle cannot be shared, when it cannot: 'owner' (the owner's
+     * account has not authorized fleet sharing — typically personally owned),
+     * 'no_owner', or 'unknown' (the check failed). Absent when shareable, and
+     * absent when sharing does not exist in this deployment at all — the icon
+     * renders only when canShare or shareBlocker is present.
+     */
+    shareBlocker?: 'owner' | 'no_owner' | 'unknown';
+    /**
      * The vehicle is in this tenant's resolved set — entitled, membered and in
      * scope — but no metadata has been cached for it yet, so `definition`,
      * `syntheticDevice` and the rest are zeroed rather than absent.
@@ -75,6 +83,8 @@ export interface VehiclesResponse {
 }
 
 export interface VehicleCard {
+    /** Owner wallet, for the share tooltip's "owned by you" comparison. */
+    owner?: string;
     tokenId: string;
     /** Vehicle make (e.g. "Tesla"), used to resolve the OEM brand logo. */
     make: string;
@@ -101,6 +111,14 @@ export interface VehicleCard {
      * tenancy service checks it again before anything goes on chain.
      */
     canShare?: boolean;
+    /**
+     * Why the vehicle cannot be shared, when it cannot: 'owner' (the owner's
+     * account has not authorized fleet sharing — typically personally owned),
+     * 'no_owner', or 'unknown' (the check failed). Absent when shareable, and
+     * absent when sharing does not exist in this deployment at all — the icon
+     * renders only when canShare or shareBlocker is present.
+     */
+    shareBlocker?: 'owner' | 'no_owner' | 'unknown';
     /** Metadata has not been cached for this vehicle yet; see Vehicle.metadataPending. */
     metadataPending?: boolean;
 }

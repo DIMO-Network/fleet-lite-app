@@ -54,7 +54,10 @@ func TestAnnotateCanShare(t *testing.T) {
 	svc.AnnotateCanShare(context.Background(), sharingTenant, vehicles)
 
 	assert.True(t, vehicles[0].CanShare)
+	assert.Empty(t, vehicles[0].ShareBlocker, "shareable carries no blocker")
 	assert.False(t, vehicles[1].CanShare, "an owner the tenant cannot sign for gets no share button")
+	assert.Equal(t, models.ShareBlockerOwner, vehicles[1].ShareBlocker,
+		"and the UI is told WHY, so it can explain instead of hiding")
 }
 
 // Owner addresses reach this app from identity-api and from its own database.
@@ -98,7 +101,9 @@ func TestAnnotateCanShare_UpstreamFailureHidesButtonsWithoutFailing(t *testing.T
 
 	svc.AnnotateCanShare(context.Background(), sharingTenant, vehicles)
 
-	assert.False(t, vehicles[0].CanShare, "unknown means no button, never an assumed yes")
+	assert.False(t, vehicles[0].CanShare, "unknown means no enabled button, never an assumed yes")
+	assert.Equal(t, models.ShareBlockerUnknown, vehicles[0].ShareBlocker,
+		"a failed lookup reports UNKNOWN — claiming the owner refused when we never asked would send someone chasing an authorization problem that is an outage")
 }
 
 // A vehicle whose owner is not an address (unsynced, or a malformed row) must
@@ -116,8 +121,11 @@ func TestAnnotateCanShare_SkipsMalformedOwners(t *testing.T) {
 	assert.Equal(t, 1, res.calls)
 	assert.Len(t, res.asked, 1, "only the real address is asked about")
 	assert.False(t, vehicles[0].CanShare)
+	assert.Equal(t, models.ShareBlockerNoOwner, vehicles[0].ShareBlocker)
 	assert.False(t, vehicles[1].CanShare)
+	assert.Equal(t, models.ShareBlockerNoOwner, vehicles[1].ShareBlocker)
 	assert.True(t, vehicles[2].CanShare)
+	assert.Empty(t, vehicles[2].ShareBlocker)
 }
 
 // With no vehicles there is nothing to ask, and with no tenancy client there is

@@ -34,6 +34,8 @@ export interface MyAccess {
      * Optional so an older backend's response still parses.
      */
     permissions?: string[];
+    /** The caller's own wallet, so the UI can say "owned by you". */
+    wallet?: string;
     /** null = unrestricted (owner or full-access member). */
     allowedGroupIds: string[] | null;
     /**
