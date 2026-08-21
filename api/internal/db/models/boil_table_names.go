@@ -4,7 +4,6 @@
 package models
 
 var TableNames = struct {
-	FleetGroups          string
 	GeofencePasses       string
 	GeofenceScanCoverage string
 	Geofences            string
@@ -12,12 +11,10 @@ var TableNames = struct {
 	Tenants              string
 	UserPreferences      string
 	VehicleFavorites     string
-	VehicleFleetGroups   string
 	VehicleGeofences     string
 	VehicleTcoSettings   string
 	Vehicles             string
 }{
-	FleetGroups:          "fleet_groups",
 	GeofencePasses:       "geofence_passes",
 	GeofenceScanCoverage: "geofence_scan_coverage",
 	Geofences:            "geofences",
@@ -25,7 +22,6 @@ var TableNames = struct {
 	Tenants:              "tenants",
 	UserPreferences:      "user_preferences",
 	VehicleFavorites:     "vehicle_favorites",
-	VehicleFleetGroups:   "vehicle_fleet_groups",
 	VehicleGeofences:     "vehicle_geofences",
 	VehicleTcoSettings:   "vehicle_tco_settings",
 	Vehicles:             "vehicles",

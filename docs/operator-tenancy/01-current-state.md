@@ -83,7 +83,8 @@ them back from fetch-api.
 - fleet-lite: `internal/service/group_sync.go` plus the
   `import-group-attestations` CLI, run as daily-warm / weekly-full CronJobs. The
   reconcile takes the union of the latest CE **per producer** and applies
-  removals only behind a freshness gate. See `docs/GROUP_SYNC.md`.
+  removals only behind a freshness gate. (Its design doc, GROUP_SYNC.md,
+  was deleted in P5b — groups now live in fleet-tenancy-api.)
 
 fleet-lite stamps `producer: "fleet-lite-app"` on its own writes. kaufmann's
 writes carry the shared `dimo_client_id` as `source` and (historically) an empty

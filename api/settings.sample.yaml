@@ -53,7 +53,6 @@ TENANCY_API_URL: 'http://localhost:3010'
 TENANCY_API_KEY: ''
 ## Serve fleet-group display READS from the tenancy service (writes always go
 ## there since P4). The flag and the local mirror tables go away in P5.
-GROUPS_FROM_TENANCY: false
 
 ## Chain config (polygon mainnet)
 CHAIN_ID: 137

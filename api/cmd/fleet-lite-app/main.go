@@ -75,9 +75,7 @@ func main() {
 		subcommands.Register(&pruneUnsharedVehiclesCmd{logger: logger, settings: settings}, "vehicles")
 		subcommands.Register(&tenancyCheckCmd{logger: logger, settings: settings}, "tenancy")
 		subcommands.Register(&tenancyDiffCmd{logger: logger, settings: settings}, "tenancy")
-		subcommands.Register(&groupsDiffCmd{logger: logger, settings: settings}, "tenancy")
 		subcommands.Register(&vehiclesDiffCmd{logger: logger, settings: settings}, "tenancy")
-		subcommands.Register(&mirrorGroupsCmd{logger: logger, settings: settings}, "tenancy")
 		flag.Parse()
 		os.Exit(int(subcommands.Execute(ctx)))
 	}
@@ -99,12 +97,9 @@ func main() {
 	groupSvc := service.NewFleetGroupService(&logger, &pdb)
 	invitationSvc := service.NewInvitationService(&logger, tenantSvc)
 	tenancyAPI := gateway.NewTenancyAPI(logger, &settings, authProvider)
-	// Group writes go through tenancy unconditionally since P4; the flag only
-	// chooses where the display reads come from.
-	groupSvc.UseTenancy(tenancyAPI, settings.GroupsFromTenancy)
-	if settings.GroupsFromTenancy {
-		logger.Info().Msg("GROUPS_FROM_TENANCY is on — fleet-group reads served from fleet-tenancy-api")
-	}
+	// Reads and writes both — tenancy owns the record and P5b dropped the
+	// local mirror, so there is nothing else to wire.
+	groupSvc.UseTenancy(tenancyAPI)
 
 	monApp := createMonitoringServer()
 	group, gCtx := errgroup.WithContext(ctx)

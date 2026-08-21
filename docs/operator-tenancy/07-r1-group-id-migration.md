@@ -406,7 +406,7 @@ republish-group-attestations [-tenant-id X] [-dry-run]
 
 Iterate distinct `(tenant_id, token_id)` in `vehicle_fleet_groups`, load groups,
 call `AttestVehicleGroups`. Throttle it — one signed CE per vehicle, and
-`GROUP_SYNC.md` already flags fetch/attest fan-out as needing a concurrency cap.
+The retired GROUP_SYNC design already flags fetch/attest fan-out as needing a concurrency cap.
 
 Run `-dry-run` first and reconcile the count against the SQL above.
 

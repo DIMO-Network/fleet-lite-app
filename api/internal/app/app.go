@@ -97,11 +97,11 @@ func App(
 	sharingCtrl := controllers.NewSharingController(logger, sharingSvc, vehicleSvc, tenancyAPI)
 	fleetGroupsCtrl := controllers.NewFleetGroupsController(logger, groupSvc)
 	geofenceSvc := service.NewGeofenceService(logger, pdb)
-	// P5: every group-scoped read — the vehicle scope filter, a group-scoped
-	// geofence — resolves through the FleetGroupService index instead of the
-	// local fleet_groups tables. It is a no-op while GROUPS_FROM_TENANCY is
-	// off, which is the revert path. Invitations no longer appear here: their
-	// group scope is validated by fleet-tenancy-api, which owns the records.
+	// Every group-scoped read — the vehicle scope filter, a group-scoped
+	// geofence — resolves through the FleetGroupService index; the local
+	// fleet_groups tables are gone since P5b. Invitations no longer appear
+	// here: their group scope is validated by fleet-tenancy-api, which owns
+	// the records.
 	vehicleSvc.UseGroupIndex(groupSvc)
 	geofenceSvc.UseGroupIndex(groupSvc)
 	// Vehicle memberships (plan 02, step 6): the commercial gate. Wired only

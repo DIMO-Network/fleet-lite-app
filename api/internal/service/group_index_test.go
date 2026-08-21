@@ -208,28 +208,6 @@ func TestScopeFailurePropagatesRatherThanUnfiltering(t *testing.T) {
 	assert.ErrorIs(t, err, ErrGroupScopeUnavailable)
 }
 
-// With the flag off the local mirror is still the source, so no remote call is
-// made at all — the revert path has to keep working until the tables are gone.
-func TestUnflaggedScopeStaysOnTheLocalFilter(t *testing.T) {
-	remote := &fakeRemoteGroups{groups: indexFixture()}
-	l := zerolog.Nop()
-	groupSvc := NewFleetGroupService(&l, nil)
-	groupSvc.UseTenancy(remote, false)
-
-	svc := &VehicleService{}
-	svc.UseGroupIndex(groupSvc)
-
-	filter, err := svc.scopeFilter(context.Background(), viewTenant, []string{"t_empty"})
-	require.NoError(t, err)
-	assert.Zero(t, remote.calls)
-
-	// Still a filter, and still one an empty set cannot escape: `= ANY('{}')`
-	// on the subquery's group ids.
-	sql, args := renderVehicleQuery(t, filter)
-	assert.Contains(t, sql, "vehicle_fleet_groups")
-	assert.Equal(t, &pq.StringArray{"t_empty"}, args[len(args)-1])
-}
-
 // ----- The cache -----
 
 func TestGroupIndexCacheServesRepeatedReadsFromOneRemoteCall(t *testing.T) {
@@ -381,7 +359,7 @@ func indexedGroupSource(t *testing.T, groups []models.RemoteFleetGroup) groupInd
 	t.Helper()
 	l := zerolog.Nop()
 	s := NewFleetGroupService(&l, nil)
-	s.UseTenancy(&fakeRemoteGroups{groups: groups}, true)
+	s.UseTenancy(&fakeRemoteGroups{groups: groups})
 	return s
 }
 

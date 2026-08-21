@@ -295,7 +295,7 @@ Concretely, at operator scale:
 - `SyncVehicles` upserts row-by-row in a loop
   (`internal/service/vehicle.go`) — thousands of individual statements per pass.
 - The group-sync cron's weekly full pass is **one fetch-api call per vehicle**,
-  each needing an asset JWT. `docs/GROUP_SYNC.md` already flags this as needing
+  each needing an asset JWT. The retired GROUP_SYNC design already flags this as needing
   throttle/batch; at operator scale it stops being optional.
 - Location refresh and telemetry fan-out scale with the held set, not the
   displayed set.
@@ -314,7 +314,7 @@ Concretely, at operator scale:
 
 Point 2 is the important one: in a mature operator, most vehicles are either
 unassigned inventory or belong to a customer nobody has logged into this week.
-The existing warm/cold tiering in `GROUP_SYNC.md` (tenant activity by
+The warm/cold tiering of the retired GROUP_SYNC design (tenant activity by
 `last_login_at`) already has the right shape — it just needs to extend to the
 entitlement dimension as well as the activity one.
 
