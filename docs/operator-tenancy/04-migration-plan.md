@@ -91,7 +91,7 @@ and syncs from its own license. Behaviour is identical from the outside.
   cheap per-customer materialisation from entitlements, with batched upserts.
 - Work tiering: only vehicles entitled to a fleet-lite-visible tenant get location
   refresh, group sync and telemetry. Unassigned inventory is identity-metadata
-  only. Extends the existing warm/cold tiering in `docs/GROUP_SYNC.md` along the
+  only. Extends the warm/cold tiering of the retired GROUP_SYNC design along the
   entitlement dimension.
 - Effective-credential resolution (customer → parent) in the token endpoint.
 - `AssertEntitled` choke point, plus the cross-tenant isolation test suite.

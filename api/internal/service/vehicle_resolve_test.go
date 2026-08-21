@@ -46,12 +46,9 @@ func (f *fakeTenancySource) DimoToken(context.Context, string) (*models.RemoteMi
 // from a group→token map, so scope resolution is exercised through the same
 // TokenIDsForGroups the production path uses rather than a reimplementation.
 type fakeGroupIndexSource struct {
-	indexed bool
 	byGroup map[string][]int64
 	err     error
 }
-
-func (f *fakeGroupIndexSource) groupsIndexed() bool { return f.indexed }
 
 func (f *fakeGroupIndexSource) groupIndex(context.Context, models.Tenant) (*GroupIndex, error) {
 	if f.err != nil {
@@ -155,7 +152,7 @@ func TestResolveTokenSetGroupScope(t *testing.T) {
 	s := newSvc(
 		&fakeTenancySource{configured: true, entitled: []int64{1, 2, 3, 4}},
 		nil,
-		&fakeGroupIndexSource{indexed: true, byGroup: map[string][]int64{
+		&fakeGroupIndexSource{byGroup: map[string][]int64{
 			"g-a": {2, 3},
 			"g-b": {4, 77},
 		}},
@@ -177,7 +174,7 @@ func TestResolveTokenSetEmptyScopeReachesNothing(t *testing.T) {
 	s := newSvc(
 		&fakeTenancySource{configured: true, entitled: []int64{1, 2, 3}},
 		nil,
-		&fakeGroupIndexSource{indexed: true, byGroup: map[string][]int64{"g-a": {1, 2}}},
+		&fakeGroupIndexSource{byGroup: map[string][]int64{"g-a": {1, 2}}},
 	)
 
 	got, err := s.resolveTokenSet(context.Background(), explicitTenant, []string{})
@@ -191,7 +188,7 @@ func TestResolveTokenSetNilScopeIsUnrestricted(t *testing.T) {
 	s := newSvc(
 		&fakeTenancySource{configured: true, entitled: []int64{1, 2, 3}},
 		nil,
-		&fakeGroupIndexSource{indexed: true, byGroup: map[string][]int64{"g-a": {1}}},
+		&fakeGroupIndexSource{byGroup: map[string][]int64{"g-a": {1}}},
 	)
 
 	got, err := s.resolveTokenSet(context.Background(), explicitTenant, nil)
@@ -218,7 +215,7 @@ func TestResolveTokenSetFailsClosed(t *testing.T) {
 	_, err = newSvc(
 		&fakeTenancySource{configured: true, entitled: []int64{1}},
 		nil,
-		&fakeGroupIndexSource{indexed: true, err: boom},
+		&fakeGroupIndexSource{err: boom},
 	).resolveTokenSet(context.Background(), explicitTenant, []string{"g-a"})
 	require.Error(t, err, "group index unavailable")
 }

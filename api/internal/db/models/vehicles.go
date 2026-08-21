@@ -39,8 +39,6 @@ type Vehicle struct {
 	SyncedAt         time.Time    `boil:"synced_at" json:"synced_at" toml:"synced_at" yaml:"synced_at"`
 	CreatedAt        time.Time    `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
 	UpdatedAt        time.Time    `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
-	GroupsUpdatedAt  null.Time    `boil:"groups_updated_at" json:"groups_updated_at,omitempty" toml:"groups_updated_at" yaml:"groups_updated_at,omitempty"`
-	LastGroupSyncAt  null.Time    `boil:"last_group_sync_at" json:"last_group_sync_at,omitempty" toml:"last_group_sync_at" yaml:"last_group_sync_at,omitempty"`
 	LicensePlate     null.String  `boil:"license_plate" json:"license_plate,omitempty" toml:"license_plate" yaml:"license_plate,omitempty"`
 	Vin              null.String  `boil:"vin" json:"vin,omitempty" toml:"vin" yaml:"vin,omitempty"`
 	LastLat          null.Float64 `boil:"last_lat" json:"last_lat,omitempty" toml:"last_lat" yaml:"last_lat,omitempty"`
@@ -68,8 +66,6 @@ var VehicleColumns = struct {
 	SyncedAt         string
 	CreatedAt        string
 	UpdatedAt        string
-	GroupsUpdatedAt  string
-	LastGroupSyncAt  string
 	LicensePlate     string
 	Vin              string
 	LastLat          string
@@ -92,8 +88,6 @@ var VehicleColumns = struct {
 	SyncedAt:         "synced_at",
 	CreatedAt:        "created_at",
 	UpdatedAt:        "updated_at",
-	GroupsUpdatedAt:  "groups_updated_at",
-	LastGroupSyncAt:  "last_group_sync_at",
 	LicensePlate:     "license_plate",
 	Vin:              "vin",
 	LastLat:          "last_lat",
@@ -118,8 +112,6 @@ var VehicleTableColumns = struct {
 	SyncedAt         string
 	CreatedAt        string
 	UpdatedAt        string
-	GroupsUpdatedAt  string
-	LastGroupSyncAt  string
 	LicensePlate     string
 	Vin              string
 	LastLat          string
@@ -142,8 +134,6 @@ var VehicleTableColumns = struct {
 	SyncedAt:         "vehicles.synced_at",
 	CreatedAt:        "vehicles.created_at",
 	UpdatedAt:        "vehicles.updated_at",
-	GroupsUpdatedAt:  "vehicles.groups_updated_at",
-	LastGroupSyncAt:  "vehicles.last_group_sync_at",
 	LicensePlate:     "vehicles.license_plate",
 	Vin:              "vehicles.vin",
 	LastLat:          "vehicles.last_lat",
@@ -194,8 +184,6 @@ var VehicleWhere = struct {
 	SyncedAt         whereHelpertime_Time
 	CreatedAt        whereHelpertime_Time
 	UpdatedAt        whereHelpertime_Time
-	GroupsUpdatedAt  whereHelpernull_Time
-	LastGroupSyncAt  whereHelpernull_Time
 	LicensePlate     whereHelpernull_String
 	Vin              whereHelpernull_String
 	LastLat          whereHelpernull_Float64
@@ -218,8 +206,6 @@ var VehicleWhere = struct {
 	SyncedAt:         whereHelpertime_Time{field: "\"vehicles\".\"synced_at\""},
 	CreatedAt:        whereHelpertime_Time{field: "\"vehicles\".\"created_at\""},
 	UpdatedAt:        whereHelpertime_Time{field: "\"vehicles\".\"updated_at\""},
-	GroupsUpdatedAt:  whereHelpernull_Time{field: "\"vehicles\".\"groups_updated_at\""},
-	LastGroupSyncAt:  whereHelpernull_Time{field: "\"vehicles\".\"last_group_sync_at\""},
 	LicensePlate:     whereHelpernull_String{field: "\"vehicles\".\"license_plate\""},
 	Vin:              whereHelpernull_String{field: "\"vehicles\".\"vin\""},
 	LastLat:          whereHelpernull_Float64{field: "\"vehicles\".\"last_lat\""},
@@ -265,9 +251,9 @@ func (r *vehicleR) GetTenant() *Tenant {
 type vehicleL struct{}
 
 var (
-	vehicleAllColumns            = []string{"tenant_id", "token_id", "owner_address", "make", "model", "year", "definition_id", "device_type", "imei", "serial", "minted_at", "raw", "synced_at", "created_at", "updated_at", "groups_updated_at", "last_group_sync_at", "license_plate", "vin", "last_lat", "last_lon", "last_seen", "location_pulled_at"}
+	vehicleAllColumns            = []string{"tenant_id", "token_id", "owner_address", "make", "model", "year", "definition_id", "device_type", "imei", "serial", "minted_at", "raw", "synced_at", "created_at", "updated_at", "license_plate", "vin", "last_lat", "last_lon", "last_seen", "location_pulled_at"}
 	vehicleColumnsWithoutDefault = []string{"tenant_id", "token_id"}
-	vehicleColumnsWithDefault    = []string{"owner_address", "make", "model", "year", "definition_id", "device_type", "imei", "serial", "minted_at", "raw", "synced_at", "created_at", "updated_at", "groups_updated_at", "last_group_sync_at", "license_plate", "vin", "last_lat", "last_lon", "last_seen", "location_pulled_at"}
+	vehicleColumnsWithDefault    = []string{"owner_address", "make", "model", "year", "definition_id", "device_type", "imei", "serial", "minted_at", "raw", "synced_at", "created_at", "updated_at", "license_plate", "vin", "last_lat", "last_lon", "last_seen", "location_pulled_at"}
 	vehiclePrimaryKeyColumns     = []string{"tenant_id", "token_id"}
 	vehicleGeneratedColumns      = []string{}
 )

@@ -22,7 +22,7 @@ import (
 // as groups-diff and tenancy-diff, for the set that the 2026-08-19 empty-fleet
 // incident showed nobody was watching.
 //
-// Unlike groups-diff the comparison is symmetric, and both directions are
+// Unlike the group diffs this repo used to carry the comparison is symmetric, and both directions are
 // failures. syncEntitledVehicles both upserts the entitled set and prunes
 // everything outside it, so after a successful sync the two sides are equal by
 // construction. Any inequality means the sync did not run, did not finish, or

@@ -3,7 +3,7 @@
 Add a **Geofences** feature: a tenant defines named polygon geofences (with a speed
 limit), assigns them to vehicles (all / by group / manual), draws/edits them on a map,
 and CRUDs them from a new left-nav section. Storage leverages **DIMO documents
-(attestations)**, mirroring [Glovebox](GLOVEBOX.md) and [Fleet Groups](FLEET_GROUPS_PLAN.md),
+(attestations)**, mirroring [Glovebox](GLOVEBOX.md) and the since-deleted fleet-groups plan,
 with one new twist: **geofence definitions are attested at the tenant / client-id (dev
 license) level**, while **manual vehicle↔geofence mappings are attested at the vehicle
 level** — same per-vehicle pattern as groups.
@@ -78,7 +78,7 @@ in each phase heading and in "Phase 3 (part 2) — ALERTS".
 >   license can self-mint an asset JWT for its own ethr DID. The developer JWT used **directly**
 >   as the fetch bearer is rejected (`401`), same as vehicles — exchange is mandatory.
 > - **Indexing lag ≈ 7s** confirmed (event appeared on the 2nd poll), consistent with
->   [GROUP_SYNC.md](GROUP_SYNC.md)'s 5–10s window.
+>   the retired GROUP_SYNC design's 5–10s window (doc deleted in P5b).
 
 ---
 

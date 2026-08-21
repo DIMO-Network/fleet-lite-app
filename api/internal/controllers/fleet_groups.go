@@ -5,7 +5,6 @@ import (
 	"regexp"
 	"time"
 
-	dbmodels "github.com/DIMO-Network/fleet-lite-app/internal/db/models"
 	"github.com/DIMO-Network/fleet-lite-app/internal/service"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
@@ -47,7 +46,7 @@ type FleetGroupResponse struct {
 	UpdatedAt    time.Time `json:"updatedAt"`
 }
 
-func toFleetGroupResponse(g *dbmodels.FleetGroup, count int) FleetGroupResponse {
+func toFleetGroupResponse(g *service.FleetGroup, count int) FleetGroupResponse {
 	return FleetGroupResponse{
 		ID:           g.ID,
 		Name:         g.Name,

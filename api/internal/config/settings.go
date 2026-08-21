@@ -56,14 +56,6 @@ type Settings struct {
 	TenancyAPIURL url.URL `yaml:"TENANCY_API_URL"`
 	TenancyAPIKey string  `yaml:"TENANCY_API_KEY"` // secret
 
-	// GroupsFromTenancy only chooses where the display READS come from —
-	// fleet-tenancy-api when on, the local mirror tables when off. Writes go
-	// to tenancy unconditionally since P4; it owns the record either way.
-	//
-	// TEMPORARY: both the flag and the local tables go away in P5, when the
-	// scope-filtering SQL stops joining against the mirror.
-	GroupsFromTenancy bool `yaml:"GROUPS_FROM_TENANCY"`
-
 	// VehicleMetadataFromTenancy chooses where a vehicle's METADATA comes from
 	// — fleet-tenancy-api's roster when on, the local vehicles table when off.
 	// It does not touch which vehicles a tenant sees: that set is resolved from
@@ -71,8 +63,8 @@ type Settings struct {
 	// without the other is what this whole plan exists to stop.
 	//
 	// Off is the revert path, and it is a config flip rather than a release —
-	// the lesson from GROUPS_FROM_TENANCY, whose existence is why the group
-	// cutover was revertible.
+	// the lesson from the groups move, whose flag is why that cutover was
+	// revertible (the flag itself retired with the local tables in P5b).
 	//
 	// TEMPORARY: goes away with plan 07 step 5, when the local table narrows to
 	// its app-local columns and there is nothing left to fall back to.

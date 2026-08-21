@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"regexp"
@@ -13,9 +12,6 @@ import (
 	dbmodels "github.com/DIMO-Network/fleet-lite-app/internal/db/models"
 	"github.com/DIMO-Network/fleet-lite-app/internal/models"
 	"github.com/DIMO-Network/shared/pkg/db"
-	"github.com/aarondl/sqlboiler/v4/boil"
-	"github.com/aarondl/sqlboiler/v4/queries"
-	"github.com/aarondl/sqlboiler/v4/queries/qm"
 	"github.com/lib/pq"
 	"github.com/patrickmn/go-cache"
 	"github.com/rs/zerolog"
@@ -42,15 +38,27 @@ var ErrVehicleNotFound = errors.New("vehicle not found for tenant")
 //
 // It is deliberately not recoverable into an unfiltered read. Callers map it to
 // 503, matching NewTenantMiddleware's treatment of an unavailable authz answer:
-// this is our failure, not the caller's. The local tables are the *revert* path
-// (GROUPS_FROM_TENANCY), not a runtime fallback — a fallback consulted only
+// this is our failure, not the caller's. There is no local fallback — P5b
+// dropped the mirror tables — and that is by design: a fallback consulted only
 // during an incident is a fallback nobody has verified.
 var ErrGroupScopeUnavailable = errors.New("fleet group scope is unavailable")
 
+// FleetGroup is one group as this app renders it. A plain struct since P5b:
+// the local tables are gone, so the record's shape comes from the tenancy
+// read, not a database model.
+type FleetGroup struct {
+	ID        string
+	Name      string
+	Color     string
+	TenantID  string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 // GroupWithCount is a fleet group plus its current member count, returned by
-// ListGroups for the management UI.
+// ListGroupsView for the management UI.
 type GroupWithCount struct {
-	Group        *dbmodels.FleetGroup
+	Group        *FleetGroup
 	VehicleCount int
 }
 
@@ -61,17 +69,13 @@ type FleetGroupService struct {
 	logger *zerolog.Logger
 	pdb    *db.Store
 
-	// tenancy is the fleet-tenancy-api client. Since P4 every WRITE goes
-	// through it — the service owns the record and the local tables are a
-	// synchronously-maintained mirror until P5 drops them. Since P5 every group
-	// READ comes from it too when readFromTenancy is set (GROUPS_FROM_TENANCY),
-	// including the scope filters in vehicle.go / geofence.go / invitation.go
-	// that used to join the mirror.
+	// tenancy is the fleet-tenancy-api client. It owns the record: every
+	// write goes through it and every read comes from it, including the scope
+	// filters in vehicle.go / geofence.go / invitation.go. P5b dropped the
+	// local mirror tables, so there is no other source — the way back from a
+	// tenancy outage is fixing tenancy, which both apps already fail closed on
+	// for authz.
 	tenancy remoteGroupSource
-	// readFromTenancy flips every group read to the remote source. It is the
-	// revert path, not a runtime fallback: with it on, a remote failure fails
-	// the request rather than falling back to the mirror.
-	readFromTenancy bool
 
 	// indexCache holds one GroupIndex per tenant id.
 	//
@@ -98,7 +102,6 @@ const groupIndexTTL = 60 * time.Second
 // services (vehicles, geofences, invitations) need. An interface so each of
 // them is testable without a live tenancy client.
 type groupIndexSource interface {
-	groupsIndexed() bool
 	groupIndex(ctx context.Context, tenant models.Tenant) (*GroupIndex, error)
 }
 
@@ -121,14 +124,12 @@ func NewFleetGroupService(logger *zerolog.Logger, pdb *db.Store) *FleetGroupServ
 	}
 }
 
-// UseTenancy wires the tenancy client. Writes go through it unconditionally —
-// there is deliberately no local-only write path left, because a write that
-// reports success without reaching the record's owner is the
-// reported-success-conferred-nothing bug the membership cutover already hit.
-// readFromTenancy additionally serves the *View reads remotely.
-func (s *FleetGroupService) UseTenancy(client remoteGroupSource, readFromTenancy bool) {
+// UseTenancy wires the tenancy client — reads and writes both, there is
+// deliberately no local path left, because a write that reports success
+// without reaching the record's owner is the reported-success-conferred-
+// nothing bug the membership cutover already hit.
+func (s *FleetGroupService) UseTenancy(client remoteGroupSource) {
 	s.tenancy = client
-	s.readFromTenancy = readFromTenancy
 }
 
 // ----- The group index (P5 of the groups move) -----
@@ -277,12 +278,6 @@ func (i *GroupIndex) group(groupID string) (models.RemoteFleetGroup, bool) {
 	return models.RemoteFleetGroup{}, false
 }
 
-// groupsIndexed reports whether group reads are served from the index. False
-// keeps every caller on the local mirror — the revert path.
-func (s *FleetGroupService) groupsIndexed() bool {
-	return s.readFromTenancy && s.tenancy != nil
-}
-
 // groupIndex returns the tenant's index, from cache when warm.
 //
 // Only successes are cached, exactly as gateway.TenancyAPI.Authz does it: a
@@ -373,41 +368,6 @@ func GroupID(tenantID, name string) string {
 	return tenantID + GroupIDSeparator + s
 }
 
-// TenantOwnsGroupID reports whether a group id belongs to the given tenant.
-// Legacy bare-slug ids (no separator) carry no tenant and return false.
-func TenantOwnsGroupID(tenantID, groupID string) bool {
-	i := strings.Index(groupID, GroupIDSeparator)
-	return i > 0 && groupID[:i] == tenantID
-}
-
-// ListGroups returns the tenant's groups with member counts, ordered by name.
-func (s *FleetGroupService) ListGroups(ctx context.Context, tenantID string) ([]GroupWithCount, error) {
-	var rows []struct {
-		ID           string `boil:"id"`
-		Name         string `boil:"name"`
-		Color        string `boil:"color"`
-		VehicleCount int    `boil:"vehicle_count"`
-	}
-	err := queries.Raw(`
-		SELECT fg.id, fg.name, fg.color, COUNT(vfg.token_id) AS vehicle_count
-		FROM fleet_groups fg
-		LEFT JOIN vehicle_fleet_groups vfg ON vfg.fleet_group_id = fg.id
-		WHERE fg.tenant_id = $1
-		GROUP BY fg.id
-		ORDER BY fg.name`, tenantID).Bind(ctx, s.pdb.DBS().Reader, &rows)
-	if err != nil {
-		return nil, fmt.Errorf("list fleet groups: %w", err)
-	}
-	out := make([]GroupWithCount, len(rows))
-	for i, r := range rows {
-		out[i] = GroupWithCount{
-			Group:        &dbmodels.FleetGroup{ID: r.ID, Name: r.Name, Color: r.Color, TenantID: tenantID},
-			VehicleCount: r.VehicleCount,
-		}
-	}
-	return out, nil
-}
-
 // VehicleInGroups reports whether the vehicle belongs to at least one of the
 // given fleet groups. Used to authorize limited members' per-vehicle requests,
 // so an empty group list is "no" — never "unrestricted".
@@ -415,62 +375,20 @@ func (s *FleetGroupService) VehicleInGroups(ctx context.Context, tenant models.T
 	if len(groupIDs) == 0 {
 		return false, nil
 	}
-	if s.groupsIndexed() {
-		idx, err := s.groupIndex(ctx, tenant)
-		if err != nil {
-			return false, err
-		}
-		return idx.VehicleInGroups(tokenID, groupIDs), nil
-	}
-	n, err := dbmodels.VehicleFleetGroups(
-		dbmodels.VehicleFleetGroupWhere.TenantID.EQ(tenant.ID),
-		dbmodels.VehicleFleetGroupWhere.TokenID.EQ(tokenID),
-		qm.AndIn("fleet_group_id in ?", toAnySlice(groupIDs)...),
-	).Count(ctx, s.pdb.DBS().Reader)
+	idx, err := s.groupIndex(ctx, tenant)
 	if err != nil {
-		return false, fmt.Errorf("vehicle in groups: %w", err)
+		return false, err
 	}
-	return n > 0, nil
+	return idx.VehicleInGroups(tokenID, groupIDs), nil
 }
 
-func toAnySlice(ss []string) []interface{} {
-	out := make([]interface{}, len(ss))
-	for i, s := range ss {
-		out[i] = s
-	}
-	return out
-}
-
-// GetGroup returns one group for the tenant from the local mirror, or
-// ErrGroupNotFound. Local-path-only since P5 — the index-backed read is
-// GetGroupView / groupForUpdate.
-func (s *FleetGroupService) GetGroup(ctx context.Context, tenantID, groupID string) (*dbmodels.FleetGroup, error) {
-	g, err := dbmodels.FleetGroups(
-		dbmodels.FleetGroupWhere.ID.EQ(groupID),
-		dbmodels.FleetGroupWhere.TenantID.EQ(tenantID),
-	).One(ctx, s.pdb.DBS().Reader)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrGroupNotFound
-		}
-		return nil, fmt.Errorf("get fleet group: %w", err)
-	}
-	return g, nil
-}
-
-// ----- Writes (P4 of the groups move) -----
+// ----- Writes -----
 //
-// Every mutation goes to fleet-tenancy-api FIRST — it owns the record — and is
-// then mirrored into the local tables, which the scope-filtering SQL still
-// reads until P5. The order is deliberate: a half-failure (remote succeeded,
-// local did not) leaves the authority right and the mirror behind, which a
-// retry or the mirror-groups command converges; the opposite order can leave a
-// write that reported success to the user but never reached the owner — the
-// membership cutover's reported-success-conferred-nothing bug.
-//
-// Every remote call is idempotent-or-classified, so retrying a failed request
-// converges: re-adding is a no-op, re-deleting answers not-found (mapped
-// below), re-creating answers name-taken.
+// Every mutation goes to fleet-tenancy-api — it owns the record, and since P5b
+// there is no local copy to keep in step. Every remote call is
+// idempotent-or-classified, so retrying a failed request converges: re-adding
+// is a no-op, re-deleting answers not-found (mapped below), re-creating
+// answers name-taken.
 
 // remoteWriteErr classifies a tenancy write failure into this service's
 // sentinel errors. Anything unclassified is surfaced as-is — the request must
@@ -500,11 +418,11 @@ func (s *FleetGroupService) requireTenancy() error {
 
 // CreateGroup creates a tenant-scoped group with a slug id derived from the name.
 // Returns ErrGroupNameExists on a (tenant_id, name) collision.
-func (s *FleetGroupService) CreateGroup(ctx context.Context, tenant models.Tenant, name, color string) (*dbmodels.FleetGroup, error) {
+func (s *FleetGroupService) CreateGroup(ctx context.Context, tenant models.Tenant, name, color string) (*FleetGroup, error) {
 	if err := s.requireTenancy(); err != nil {
 		return nil, err
 	}
-	g := &dbmodels.FleetGroup{
+	g := &FleetGroup{
 		ID:       GroupID(tenant.ID, name),
 		Name:     name,
 		Color:    color,
@@ -517,18 +435,12 @@ func (s *FleetGroupService) CreateGroup(ctx context.Context, tenant models.Tenan
 		return nil, remoteWriteErr(err, "create fleet group")
 	}
 	s.invalidateGroupIndex(tenant.ID)
-	// Mirror. The upsert (rather than a bare insert) is what makes a retry
-	// after a half-failure converge instead of tripping the unique index.
-	if err := g.Upsert(ctx, s.pdb.DBS().Writer, true,
-		[]string{"id"}, boil.Whitelist("name", "color", "updated_at"), boil.Infer()); err != nil {
-		return nil, fmt.Errorf("mirror fleet group locally: %w", err)
-	}
 	return g, nil
 }
 
 // UpdateGroup updates the color and/or name of a group. nil pointers are left
 // unchanged. Returns ErrGroupNotFound / ErrGroupNameExists where applicable.
-func (s *FleetGroupService) UpdateGroup(ctx context.Context, tenant models.Tenant, groupID string, name, color *string) (*dbmodels.FleetGroup, error) {
+func (s *FleetGroupService) UpdateGroup(ctx context.Context, tenant models.Tenant, groupID string, name, color *string) (*FleetGroup, error) {
 	if err := s.requireTenancy(); err != nil {
 		return nil, err
 	}
@@ -538,35 +450,12 @@ func (s *FleetGroupService) UpdateGroup(ctx context.Context, tenant models.Tenan
 	// Bust before the read-back: the authority has moved, so a cached index
 	// would answer with the values this call just replaced.
 	s.invalidateGroupIndex(tenant.ID)
-
-	g, err := s.groupForUpdate(ctx, tenant, groupID)
-	if errors.Is(err, ErrGroupNotFound) {
-		// The authority has the group but the mirror lost it (a prior
-		// half-failure). Rebuild the row rather than failing an update the
-		// owner has already accepted.
-		g = &dbmodels.FleetGroup{ID: groupID, TenantID: tenant.ID}
-	} else if err != nil {
-		return nil, err
-	}
-	if name != nil && *name != "" {
-		g.Name = *name
-	}
-	if color != nil && *color != "" {
-		g.Color = *color
-	}
-	if err := g.Upsert(ctx, s.pdb.DBS().Writer, true,
-		[]string{"id"}, boil.Whitelist("name", "color", "updated_at"), boil.Infer()); err != nil {
-		return nil, fmt.Errorf("mirror fleet group locally: %w", err)
-	}
-	return g, nil
+	return s.groupFromIndex(ctx, tenant, groupID)
 }
 
-// groupForUpdate re-reads a group after a successful remote update so the
-// mirror row and the response carry the authority's current values.
-func (s *FleetGroupService) groupForUpdate(ctx context.Context, tenant models.Tenant, groupID string) (*dbmodels.FleetGroup, error) {
-	if !s.groupsIndexed() {
-		return s.GetGroup(ctx, tenant.ID, groupID)
-	}
+// groupFromIndex re-reads a group after a successful remote update so the
+// response carries the authority's current values, not this call's inputs.
+func (s *FleetGroupService) groupFromIndex(ctx context.Context, tenant models.Tenant, groupID string) (*FleetGroup, error) {
 	idx, err := s.groupIndex(ctx, tenant)
 	if err != nil {
 		return nil, err
@@ -575,7 +464,7 @@ func (s *FleetGroupService) groupForUpdate(ctx context.Context, tenant models.Te
 	if !ok {
 		return nil, ErrGroupNotFound
 	}
-	return &dbmodels.FleetGroup{ID: g.ID, Name: g.Name, Color: g.Color,
+	return &FleetGroup{ID: g.ID, Name: g.Name, Color: g.Color,
 		TenantID: tenant.ID, CreatedAt: g.CreatedAt, UpdatedAt: g.UpdatedAt}, nil
 }
 
@@ -589,12 +478,6 @@ func (s *FleetGroupService) DeleteGroup(ctx context.Context, tenant models.Tenan
 		return remoteWriteErr(err, "delete fleet group")
 	}
 	s.invalidateGroupIndex(tenant.ID)
-	if _, err := dbmodels.FleetGroups(
-		dbmodels.FleetGroupWhere.ID.EQ(groupID),
-		dbmodels.FleetGroupWhere.TenantID.EQ(tenant.ID),
-	).DeleteAll(ctx, s.pdb.DBS().Writer); err != nil {
-		return fmt.Errorf("mirror fleet group delete locally: %w", err)
-	}
 	return nil
 }
 
@@ -629,160 +512,63 @@ func (s *FleetGroupService) AddVehicle(ctx context.Context, tenant models.Tenant
 		return false, remoteWriteErr(err, "add vehicle to group")
 	}
 	s.invalidateGroupIndex(tenant.ID)
-
-	// Mirror. Upsert-do-nothing rather than check-then-insert: "was it new?"
-	// now comes from the authority, and a membership the authority holds but the
-	// mirror lost (a prior half-failure) must still be repaired here.
-	m := &dbmodels.VehicleFleetGroup{TenantID: tenant.ID, TokenID: tokenID, FleetGroupID: groupID}
-	if err := m.Upsert(ctx, s.pdb.DBS().Writer, false,
-		[]string{"tenant_id", "token_id", "fleet_group_id"}, boil.None(), boil.Infer()); err != nil {
-		return false, fmt.Errorf("mirror membership locally: %w", err)
-	}
 	return !existed, nil
 }
 
 // membershipExists reports whether the vehicle is already in the group.
 func (s *FleetGroupService) membershipExists(ctx context.Context, tenant models.Tenant, tokenID int64, groupID string) (bool, error) {
-	if s.groupsIndexed() {
-		idx, err := s.groupIndex(ctx, tenant)
-		if err != nil {
-			return false, err
-		}
-		return idx.VehicleInGroups(tokenID, []string{groupID}), nil
-	}
-	exists, err := dbmodels.VehicleFleetGroups(
-		dbmodels.VehicleFleetGroupWhere.TenantID.EQ(tenant.ID),
-		dbmodels.VehicleFleetGroupWhere.TokenID.EQ(tokenID),
-		dbmodels.VehicleFleetGroupWhere.FleetGroupID.EQ(groupID),
-	).Exists(ctx, s.pdb.DBS().Reader)
+	idx, err := s.groupIndex(ctx, tenant)
 	if err != nil {
-		return false, fmt.Errorf("check membership: %w", err)
+		return false, err
 	}
-	return exists, nil
+	return idx.VehicleInGroups(tokenID, []string{groupID}), nil
 }
 
-// RemoveVehicle removes a vehicle from a group. Returns whether a local
-// membership row was removed.
+// RemoveVehicle removes a vehicle from a group. Returns whether the vehicle
+// was in the group before this call — read pre-write, same reasoning as
+// AddVehicle: "did this call remove it?" is only answerable from the state the
+// call found.
 func (s *FleetGroupService) RemoveVehicle(ctx context.Context, tenant models.Tenant, tokenID int64, groupID string) (bool, error) {
 	if err := s.requireTenancy(); err != nil {
+		return false, err
+	}
+	existed, err := s.membershipExists(ctx, tenant, tokenID, groupID)
+	if err != nil {
 		return false, err
 	}
 	if err := s.tenancy.RemoveGroupVehicle(ctx, tenant, groupID, tokenID); err != nil {
 		return false, remoteWriteErr(err, "remove vehicle from group")
 	}
 	s.invalidateGroupIndex(tenant.ID)
-	n, err := dbmodels.VehicleFleetGroups(
-		dbmodels.VehicleFleetGroupWhere.TenantID.EQ(tenant.ID),
-		dbmodels.VehicleFleetGroupWhere.TokenID.EQ(tokenID),
-		dbmodels.VehicleFleetGroupWhere.FleetGroupID.EQ(groupID),
-	).DeleteAll(ctx, s.pdb.DBS().Writer)
-	if err != nil {
-		return false, fmt.Errorf("mirror membership removal locally: %w", err)
-	}
-	return n > 0, nil
-}
-
-// localVehicleGroups returns the groups a vehicle currently belongs to from the
-// local mirror (tenant-scoped), ordered by name. An empty result is valid — the
-// vehicle is in no groups. Takes an explicit executor so it can run inside a
-// transaction.
-//
-// Unexported since P5: it reads a table that is about to be dropped, and the
-// index-backed VehicleGroups is what new callers want.
-func (s *FleetGroupService) localVehicleGroups(ctx context.Context, exec boil.ContextExecutor, tenantID string, tokenID int64) ([]GroupRef, error) {
-	var rows []struct {
-		ID    string `boil:"id"`
-		Name  string `boil:"name"`
-		Color string `boil:"color"`
-	}
-	err := queries.Raw(`
-		SELECT fg.id, fg.name, fg.color
-		FROM fleet_groups fg
-		JOIN vehicle_fleet_groups vfg ON vfg.fleet_group_id = fg.id
-		WHERE vfg.tenant_id = $1 AND vfg.token_id = $2
-		ORDER BY fg.name`, tenantID, tokenID).Bind(ctx, exec, &rows)
-	if err != nil {
-		return nil, fmt.Errorf("load vehicle groups: %w", err)
-	}
-	groups := make([]GroupRef, len(rows))
-	for i, r := range rows {
-		groups[i] = GroupRef{ID: r.ID, Name: r.Name, Color: r.Color}
-	}
-	return groups, nil
+	return existed, nil
 }
 
 // VehicleGroups loads a single vehicle's current groups, name-ordered.
 func (s *FleetGroupService) VehicleGroups(ctx context.Context, tenant models.Tenant, tokenID int64) ([]GroupRef, error) {
-	if s.groupsIndexed() {
-		idx, err := s.groupIndex(ctx, tenant)
-		if err != nil {
-			return nil, err
-		}
-		return idx.GroupsForVehicle(tokenID), nil
-	}
-	return s.localVehicleGroups(ctx, s.pdb.DBS().Reader, tenant.ID, tokenID)
-}
-
-// VehicleGroupsMap returns, for the whole tenant, a map of token id -> the groups
-// that vehicle belongs to, from the local mirror. Used to attach `groups` to the
-// /vehicles list in one query rather than per-vehicle.
-func (s *FleetGroupService) VehicleGroupsMap(ctx context.Context, tenantID string) (map[int64][]GroupRef, error) {
-	var rows []struct {
-		TokenID int64  `boil:"token_id"`
-		ID      string `boil:"id"`
-		Name    string `boil:"name"`
-		Color   string `boil:"color"`
-	}
-	err := queries.Raw(`
-		SELECT vfg.token_id, fg.id, fg.name, fg.color
-		FROM vehicle_fleet_groups vfg
-		JOIN fleet_groups fg ON fg.id = vfg.fleet_group_id
-		WHERE vfg.tenant_id = $1
-		ORDER BY fg.name`, tenantID).Bind(ctx, s.pdb.DBS().Reader, &rows)
+	idx, err := s.groupIndex(ctx, tenant)
 	if err != nil {
-		return nil, fmt.Errorf("load tenant vehicle groups: %w", err)
+		return nil, err
 	}
-	out := make(map[int64][]GroupRef)
-	for _, r := range rows {
-		out[r.TokenID] = append(out[r.TokenID], GroupRef{ID: r.ID, Name: r.Name, Color: r.Color})
-	}
-	return out, nil
+	return idx.GroupsForVehicle(tokenID), nil
 }
 
 // GroupMemberTokenIDs returns the token ids of vehicles currently in a group
 // (tenant-scoped), ascending. Used for group-level attestation fan-out
 // (recolor/delete) and the group's member count.
 func (s *FleetGroupService) GroupMemberTokenIDs(ctx context.Context, tenant models.Tenant, groupID string) ([]int64, error) {
-	if s.groupsIndexed() {
-		idx, err := s.groupIndex(ctx, tenant)
-		if err != nil {
-			return nil, err
-		}
-		return idx.MemberTokenIDs(groupID), nil
-	}
-	members, err := dbmodels.VehicleFleetGroups(
-		dbmodels.VehicleFleetGroupWhere.TenantID.EQ(tenant.ID),
-		dbmodels.VehicleFleetGroupWhere.FleetGroupID.EQ(groupID),
-		qm.OrderBy("token_id"),
-	).All(ctx, s.pdb.DBS().Reader)
+	idx, err := s.groupIndex(ctx, tenant)
 	if err != nil {
-		return nil, fmt.Errorf("group member token ids: %w", err)
+		return nil, err
 	}
-	ids := make([]int64, len(members))
-	for i, m := range members {
-		ids[i] = m.TokenID
-	}
-	return ids, nil
+	return idx.MemberTokenIDs(groupID), nil
 }
 
-// ----- The flagged read surface (P3 of the groups move) -----
+// ----- The read surface -----
 //
-// The *View methods are what the read-only controller paths call. Local they
-// are exactly the old queries; with GROUPS_FROM_TENANCY they are served from
-// fleet-tenancy-api, authenticated as the tenant being read. A remote failure
-// is surfaced, not silently downgraded to the local tables — a fallback nobody
-// watches is how a broken read path stays broken, and the flag itself is the
-// way back.
+// The *View methods are what the read-only controller paths call, served from
+// fleet-tenancy-api and authenticated as the tenant being read. A remote
+// failure is surfaced, never silently downgraded — a fallback nobody watches
+// is how a broken read path stays broken.
 //
 // Since P5 they share the cached GroupIndex with the scope filters, so one
 // request that both lists vehicles and decorates them with group chips asks the
@@ -795,9 +581,6 @@ func (s *FleetGroupService) GroupMemberTokenIDs(ctx context.Context, tenant mode
 // made even when another pod handled it. Screen-shaped and low-rate, so the
 // extra tenancy call is affordable in a way it wouldn't be on the scope filter.
 func (s *FleetGroupService) ListGroupsView(ctx context.Context, tenant models.Tenant) ([]GroupWithCount, error) {
-	if !s.groupsIndexed() {
-		return s.ListGroups(ctx, tenant.ID)
-	}
 	idx, err := s.groupIndexFresh(ctx, tenant)
 	if err != nil {
 		return nil, err
@@ -806,7 +589,7 @@ func (s *FleetGroupService) ListGroupsView(ctx context.Context, tenant models.Te
 	out := make([]GroupWithCount, len(groups))
 	for i, g := range groups {
 		out[i] = GroupWithCount{
-			Group: &dbmodels.FleetGroup{ID: g.ID, Name: g.Name, Color: g.Color,
+			Group: &FleetGroup{ID: g.ID, Name: g.Name, Color: g.Color,
 				TenantID: tenant.ID, CreatedAt: g.CreatedAt, UpdatedAt: g.UpdatedAt},
 			VehicleCount: g.VehicleCount,
 		}
@@ -815,21 +598,7 @@ func (s *FleetGroupService) ListGroupsView(ctx context.Context, tenant models.Te
 }
 
 // GetGroupView returns one group and its member token ids.
-func (s *FleetGroupService) GetGroupView(ctx context.Context, tenant models.Tenant, groupID string) (*dbmodels.FleetGroup, []int64, error) {
-	if !s.groupsIndexed() {
-		g, err := s.GetGroup(ctx, tenant.ID, groupID)
-		if err != nil {
-			return nil, nil, err
-		}
-		members, err := s.GroupMemberTokenIDs(ctx, tenant, groupID)
-		if err != nil {
-			// Preserves the old controller behaviour: the group renders, the
-			// count is best-effort.
-			s.logger.Err(err).Str("group", groupID).Msg("count members")
-			members = nil
-		}
-		return g, members, nil
-	}
+func (s *FleetGroupService) GetGroupView(ctx context.Context, tenant models.Tenant, groupID string) (*FleetGroup, []int64, error) {
 	// Fresh for the same reason as ListGroupsView — it backs the same screens.
 	idx, err := s.groupIndexFresh(ctx, tenant)
 	if err != nil {
@@ -839,7 +608,7 @@ func (s *FleetGroupService) GetGroupView(ctx context.Context, tenant models.Tena
 	if !ok {
 		return nil, nil, ErrGroupNotFound
 	}
-	return &dbmodels.FleetGroup{ID: g.ID, Name: g.Name, Color: g.Color,
+	return &FleetGroup{ID: g.ID, Name: g.Name, Color: g.Color,
 			TenantID: tenant.ID, CreatedAt: g.CreatedAt, UpdatedAt: g.UpdatedAt},
 		idx.MemberTokenIDs(groupID), nil
 }
@@ -850,9 +619,6 @@ func (s *FleetGroupService) GetGroupView(ctx context.Context, tenant models.Tena
 // denied (group chips are not access control), which is why this is the one
 // group read P5 leaves best-effort. See controllers/vehicles.go.
 func (s *FleetGroupService) VehicleGroupsMapView(ctx context.Context, tenant models.Tenant) (map[int64][]GroupRef, error) {
-	if !s.groupsIndexed() {
-		return s.VehicleGroupsMap(ctx, tenant.ID)
-	}
 	idx, err := s.groupIndex(ctx, tenant)
 	if err != nil {
 		return nil, err

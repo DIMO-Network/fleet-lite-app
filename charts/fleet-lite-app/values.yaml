@@ -115,30 +115,3 @@ cronJobs:
       limits:
         cpu: 500m
         memory: 256Mi
-  - name: groups-diff
-    enabled: true
-    schedule: 45 6 * * *
-    backoffLimit: 0
-    ttlSecondsAfterFinished: 259200
-    script: |
-      /fleet-lite-app groups-diff
-    resources:
-      requests:
-        cpu: 50m
-        memory: 128Mi
-      limits:
-        cpu: 500m
-        memory: 256Mi
-  - name: mirror-groups
-    enabled: true
-    schedule: 15 6 * * *
-    ttlSecondsAfterFinished: 259200
-    script: |
-      /fleet-lite-app mirror-groups
-    resources:
-      requests:
-        cpu: 50m
-        memory: 128Mi
-      limits:
-        cpu: 500m
-        memory: 256Mi

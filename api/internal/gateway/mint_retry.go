@@ -25,7 +25,7 @@ const (
 // mintWithRetry gets a developer JWT, retrying a nil result.
 //
 // WHY THIS EXISTS, because it looks like the kind of retry that papers over a
-// real error. On 2026-08-20 the nightly groups-diff failed on
+// real error. On 2026-08-20 a nightly diff job failed on
 // `submit_challenge` with 400 "Could not verify signature" for tenant
 // e0cd30da; a re-run minted that tenant fine and failed on a DIFFERENT tenant,
 // and three runs after that were clean. The keys are right — identity-api

@@ -15,7 +15,6 @@ import (
 	"github.com/DIMO-Network/shared/pkg/db"
 	"github.com/aarondl/null/v8"
 	"github.com/aarondl/sqlboiler/v4/boil"
-	"github.com/aarondl/sqlboiler/v4/queries"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
 	"github.com/lib/pq"
 	"github.com/patrickmn/go-cache"
@@ -30,31 +29,14 @@ import (
 // allowedGroupIDs for which it means "reaches everything", and every caller
 // intersects against it rather than skipping the intersection when it is empty.
 func (s *VehicleService) AccessibleTokenIDs(ctx context.Context, tenant models.Tenant, allowedGroupIDs []string) (map[int64]bool, error) {
-	var out map[int64]bool
-	if s.groupsIndexed() {
-		idx, err := s.groups.groupIndex(ctx, tenant)
-		if err != nil {
-			return nil, err
-		}
-		ids := idx.TokenIDsForGroups(allowedGroupIDs)
-		out = make(map[int64]bool, len(ids))
-		for _, id := range ids {
-			out[id] = true
-		}
-	} else {
-		var rows []struct {
-			TokenID int64 `boil:"token_id"`
-		}
-		if err := queries.Raw(
-			`SELECT DISTINCT token_id FROM vehicle_fleet_groups WHERE tenant_id = $1 AND fleet_group_id = ANY($2)`,
-			tenant.ID, pq.Array(allowedGroupIDs),
-		).Bind(ctx, s.pdb.DBS().Reader, &rows); err != nil {
-			return nil, fmt.Errorf("accessible token ids: %w", err)
-		}
-		out = make(map[int64]bool, len(rows))
-		for _, r := range rows {
-			out[r.TokenID] = true
-		}
+	idx, err := s.groups.groupIndex(ctx, tenant)
+	if err != nil {
+		return nil, err
+	}
+	ids := idx.TokenIDsForGroups(allowedGroupIDs)
+	out := make(map[int64]bool, len(ids))
+	for _, id := range ids {
+		out[id] = true
 	}
 	// Membership gate: with enforcement on, group scope only reaches the paid
 	// subset. Geofence counts read this set, so skipping the intersection here
@@ -90,17 +72,6 @@ func (s *VehicleService) intersectActiveMemberships(ctx context.Context, tenant 
 		}
 	}
 	return nil
-}
-
-// allowedGroupsFilter restricts a vehicles query to tokens inside any of the
-// caller's allowed fleet groups, via the local mirror. Only applied for limited
-// members (non-nil allowedGroupIDs) — ungrouped vehicles are deliberately
-// invisible to them. See docs/GROUP_ACCESS_PLAN.md.
-func allowedGroupsFilter(tenantID string, allowedGroupIDs []string) qm.QueryMod {
-	return qm.Where(
-		"token_id IN (SELECT token_id FROM vehicle_fleet_groups WHERE tenant_id = ? AND fleet_group_id = ANY(?))",
-		tenantID, pq.Array(allowedGroupIDs),
-	)
 }
 
 // allowedTokensFilter is allowedGroupsFilter's index-fed form: group membership
@@ -250,8 +221,6 @@ func (s *VehicleService) membershipFilter(ctx context.Context, tenant models.Ten
 	return qm.Where("token_id = ANY(?)", pq.Array(tokenIDs)), nil
 }
 
-func (s *VehicleService) groupsIndexed() bool { return s.groups != nil && s.groups.groupsIndexed() }
-
 // scopeFilter builds the limited-member vehicle filter for whichever read path
 // is active.
 //
@@ -259,9 +228,6 @@ func (s *VehicleService) groupsIndexed() bool { return s.groups != nil && s.grou
 // degrade into an unfiltered query. Call this only when the caller is limited —
 // nil allowedGroupIDs means unrestricted and no filter at all.
 func (s *VehicleService) scopeFilter(ctx context.Context, tenant models.Tenant, allowedGroupIDs []string) (qm.QueryMod, error) {
-	if !s.groupsIndexed() {
-		return allowedGroupsFilter(tenant.ID, allowedGroupIDs), nil
-	}
 	idx, err := s.groups.groupIndex(ctx, tenant)
 	if err != nil {
 		return nil, err
@@ -319,29 +285,17 @@ func (s *VehicleService) resolveTokenSet(ctx context.Context, tenant models.Tena
 	// set rather than being skipped — the inversion that once handed a member
 	// scoped to empty groups the entire fleet.
 	if allowedGroupIDs != nil {
-		if s.groupsIndexed() {
-			idx, gerr := s.groups.groupIndex(ctx, tenant)
-			if gerr != nil {
-				return nil, gerr
-			}
-			inScope := make(map[int64]bool)
-			for _, id := range idx.TokenIDsForGroups(allowedGroupIDs) {
-				inScope[id] = true
-			}
-			for id := range set {
-				if !inScope[id] {
-					delete(set, id)
-				}
-			}
-		} else {
-			scoped, serr := s.localScopedTokenIDs(ctx, tenant.ID, allowedGroupIDs)
-			if serr != nil {
-				return nil, serr
-			}
-			for id := range set {
-				if !scoped[id] {
-					delete(set, id)
-				}
+		idx, gerr := s.groups.groupIndex(ctx, tenant)
+		if gerr != nil {
+			return nil, gerr
+		}
+		inScope := make(map[int64]bool)
+		for _, id := range idx.TokenIDsForGroups(allowedGroupIDs) {
+			inScope[id] = true
+		}
+		for id := range set {
+			if !inScope[id] {
+				delete(set, id)
 			}
 		}
 	}
@@ -373,26 +327,6 @@ func (s *VehicleService) entitledTokenIDs(ctx context.Context, tenant models.Ten
 	}
 	if s.entitledCache != nil {
 		s.entitledCache.Set(tenant.ID, out, cache.DefaultExpiration)
-	}
-	return out, nil
-}
-
-// localScopedTokenIDs is the pre-index fallback for group scope, reading the
-// local mirror. Only reached when GROUPS_FROM_TENANCY is off, which is the
-// revert path.
-func (s *VehicleService) localScopedTokenIDs(ctx context.Context, tenantID string, allowedGroupIDs []string) (map[int64]bool, error) {
-	var rows []struct {
-		TokenID int64 `boil:"token_id"`
-	}
-	if err := queries.Raw(
-		`SELECT DISTINCT token_id FROM vehicle_fleet_groups WHERE tenant_id = $1 AND fleet_group_id = ANY($2)`,
-		tenantID, pq.Array(allowedGroupIDs),
-	).Bind(ctx, s.pdb.DBS().Reader, &rows); err != nil {
-		return nil, fmt.Errorf("scoped token ids: %w", err)
-	}
-	out := make(map[int64]bool, len(rows))
-	for _, r := range rows {
-		out[r.TokenID] = true
 	}
 	return out, nil
 }

@@ -49,7 +49,7 @@ func (f *fakeRemoteGroups) RemoveGroupVehicle(context.Context, models.Tenant, st
 func remoteViewFixture(remote *fakeRemoteGroups) *FleetGroupService {
 	l := zerolog.Nop()
 	s := NewFleetGroupService(&l, nil) // nil store: the remote branch must never touch it
-	s.UseTenancy(remote, true)
+	s.UseTenancy(remote)
 	return s
 }
 

@@ -156,7 +156,7 @@ lets the customer-facing UI distinguish members they manage from members the
 operator manages.
 
 `last_login_at` moves here from fleet-lite's `tenant_users`; the group-sync cron
-tiering in `docs/GROUP_SYNC.md` depends on it, so tenancy-api needs to expose it.
+tiering of the retired GROUP_SYNC design depends on it, so tenancy-api needs to expose it.
 
 ### `tenant_delegations`
 

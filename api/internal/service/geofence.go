@@ -16,7 +16,6 @@ import (
 	"github.com/aarondl/sqlboiler/v4/queries"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
 	"github.com/aarondl/sqlboiler/v4/types"
-	"github.com/lib/pq"
 	"github.com/rs/zerolog"
 )
 
@@ -128,10 +127,6 @@ func NewGeofenceService(logger *zerolog.Logger, pdb *db.Store) *GeofenceService 
 
 // UseGroupIndex wires the group index that resolves the "group" scope.
 func (s *GeofenceService) UseGroupIndex(src groupIndexSource) { s.groups = src }
-
-func (s *GeofenceService) groupsIndexed() bool {
-	return s.groups != nil && s.groups.groupsIndexed()
-}
 
 func validScope(s string) bool {
 	switch s {
@@ -415,16 +410,11 @@ func (s *GeofenceService) EffectiveTokenIDs(ctx context.Context, tenant models.T
 		if len(g.GroupIds) == 0 {
 			return []int64{}, nil
 		}
-		if s.groupsIndexed() {
-			idx, ierr := s.groups.groupIndex(ctx, tenant)
-			if ierr != nil {
-				return nil, ierr
-			}
-			return idx.TokenIDsForGroups([]string(g.GroupIds)), nil
+		idx, ierr := s.groups.groupIndex(ctx, tenant)
+		if ierr != nil {
+			return nil, ierr
 		}
-		q = `SELECT DISTINCT token_id FROM vehicle_fleet_groups
-		     WHERE tenant_id = $1 AND fleet_group_id = ANY($2) ORDER BY token_id`
-		args = []interface{}{tenant.ID, pq.Array([]string(g.GroupIds))}
+		return idx.TokenIDsForGroups([]string(g.GroupIds)), nil
 	default: // all
 		q = `SELECT token_id FROM vehicles WHERE tenant_id = $1 ORDER BY token_id`
 		args = []interface{}{tenant.ID}
@@ -492,22 +482,11 @@ func (s *GeofenceService) vehicleCount(ctx context.Context, tenant models.Tenant
 		if len(g.GroupIds) == 0 {
 			return 0, nil
 		}
-		if s.groupsIndexed() {
-			idx, err := s.groups.groupIndex(ctx, tenant)
-			if err != nil {
-				return 0, err
-			}
-			return idx.CountForGroups([]string(g.GroupIds)), nil
+		idx, err := s.groups.groupIndex(ctx, tenant)
+		if err != nil {
+			return 0, err
 		}
-		var row struct {
-			C int `boil:"c"`
-		}
-		err := queries.Raw(
-			`SELECT COUNT(DISTINCT token_id) AS c FROM vehicle_fleet_groups
-			 WHERE tenant_id = $1 AND fleet_group_id = ANY($2)`,
-			tenant.ID, pq.Array([]string(g.GroupIds)),
-		).Bind(ctx, s.pdb.DBS().Reader, &row)
-		return row.C, err
+		return idx.CountForGroups([]string(g.GroupIds)), nil
 	default: // all
 		n, err := dbmodels.Vehicles(dbmodels.VehicleWhere.TenantID.EQ(tenant.ID)).Count(ctx, s.pdb.DBS().Reader)
 		return int(n), err
@@ -528,24 +507,11 @@ func (s *GeofenceService) normalizeGroups(ctx context.Context, tenant models.Ten
 	if len(uniq) == 0 {
 		return nil, ErrGroupScopeNeedsGroups
 	}
-	if s.groupsIndexed() {
-		idx, err := s.groups.groupIndex(ctx, tenant)
-		if err != nil {
-			return nil, err
-		}
-		if !idx.AllExist(uniq) {
-			return nil, ErrUnknownGroup
-		}
-		return uniq, nil
-	}
-	n, err := dbmodels.FleetGroups(
-		dbmodels.FleetGroupWhere.TenantID.EQ(tenant.ID),
-		dbmodels.FleetGroupWhere.ID.IN(uniq),
-	).Count(ctx, s.pdb.DBS().Reader)
+	idx, err := s.groups.groupIndex(ctx, tenant)
 	if err != nil {
-		return nil, fmt.Errorf("validate geofence groups: %w", err)
+		return nil, err
 	}
-	if int(n) != len(uniq) {
+	if !idx.AllExist(uniq) {
 		return nil, ErrUnknownGroup
 	}
 	return uniq, nil
