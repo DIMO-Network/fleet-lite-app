@@ -11,7 +11,7 @@ require (
 	github.com/ethereum/go-ethereum v1.17.3
 	github.com/friendsofgo/errors v0.9.2
 	github.com/gofiber/contrib/jwt v1.1.2
-	github.com/gofiber/fiber/v2 v2.52.13
+	github.com/gofiber/fiber/v2 v2.52.14
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/subcommands v1.2.0
 	github.com/google/uuid v1.6.0
