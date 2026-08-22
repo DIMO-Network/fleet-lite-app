@@ -211,6 +211,24 @@ export class ShareVehicleModal extends LitElement {
                 background: var(--surface-container); border: 1px solid var(--outline-variant);
                 border-radius: var(--radius-lg); padding: 24px; color: var(--on-surface);
                 position: relative; display: flex; flex-direction: column;
+                /* The height cap is only half a constraint without this: anything
+                   the body cannot fit has to be clipped to the rounded box, not
+                   painted over the page behind it. */
+                overflow: hidden;
+            }
+            /* Fixed furniture. The close button and Close/Share are the ways out
+               of this modal, so they are never somewhere you have to scroll to
+               find, however many grants the vehicle already has. */
+            .head, .foot { flex: none; }
+            /* The one scrolling region. min-height:0 is what lets it give: a
+               column flex item won't shrink below its own content by default,
+               which is how the shared-with rows used to push the footer out
+               through the bottom of the card. The negative margin bleeds it to
+               the card's edge and the padding puts the gutter back, so the
+               scrollbar rides the border and focus rings still have room. */
+            .body {
+                flex: 1 1 auto; min-height: 0; overflow-y: auto;
+                margin: 0 -24px; padding: 0 24px;
             }
             .card h2 { font: var(--type-headline-md); margin-bottom: 4px; }
             .card .sub { font: var(--type-body-sm); color: var(--on-surface-variant); margin-bottom: 20px; }
@@ -268,7 +286,10 @@ export class ShareVehicleModal extends LitElement {
                 font: var(--type-label-caps); letter-spacing: 0.05em; text-transform: uppercase;
                 color: var(--on-surface-variant); margin-bottom: 10px;
             }
-            .existing ul { list-style: none; display: flex; flex-direction: column; gap: 6px; max-height: 140px; overflow-y: auto; }
+            /* No height cap of its own. The card body scrolls now, and a second
+               scroller nested in the first only fights it for the wheel and
+               hides grants behind a scrollbar nobody goes looking for. */
+            .existing ul { list-style: none; display: flex; flex-direction: column; gap: 6px; }
             .existing li {
                 display: flex; justify-content: space-between; gap: 12px; padding: 8px 10px;
                 background: var(--surface-container-low); border-radius: var(--radius-md);
@@ -337,87 +358,96 @@ export class ShareVehicleModal extends LitElement {
                 <button class="close" @click=${this.dispatchClose} aria-label=${msg('Close')}>
                     <span class="material-symbols-outlined">close</span>
                 </button>
-                <h2>${msg('Share vehicle')}</h2>
-                <p class="sub">
-                    ${this.vehicleTitle
-                        ? msg(str`Give another wallet access to ${this.vehicleTitle}.`)
-                        : msg('Give another wallet access to this vehicle.')}
-                </p>
-
-                ${this.blocked
-                    ? html`<div class="banner error lead" role="alert">${this.blockedReason}</div>`
-                    : nothing}
-                ${this.renderOwner()}
-
-                <label for="grantee">${msg('Wallet address')}</label>
-                <input
-                    id="grantee"
-                    type="text"
-                    class=${showInvalid ? 'invalid' : ''}
-                    placeholder="0x…"
-                    .value=${this.grantee}
-                    ?disabled=${inputsOff}
-                    @input=${(e: Event) => (this.grantee = (e.target as HTMLInputElement).value)}
-                />
-                <p class="hint ${showInvalid ? 'bad' : ''}">
-                    ${showInvalid
-                        ? msg('That does not look like a wallet address.')
-                        : msg('They will be able to see this vehicle’s data and send commands to it.')}
-                </p>
-
-                <label style="margin-top:20px">${msg('Access expires')}</label>
-                <div class="durations">
-                    ${this.durations.map(
-                        (d) => html`
-                            <button
-                                class=${this.durationDays === d.days ? 'selected' : ''}
-                                ?disabled=${inputsOff}
-                                @click=${() => (this.durationDays = d.days)}
-                            >
-                                ${d.label}
-                            </button>
-                        `,
-                    )}
+                <div class="head">
+                    <h2>${msg('Share vehicle')}</h2>
+                    <p class="sub">
+                        ${this.vehicleTitle
+                            ? msg(str`Give another wallet access to ${this.vehicleTitle}.`)
+                            : msg('Give another wallet access to this vehicle.')}
+                    </p>
                 </div>
 
-                <div class="existing">
-                    <h3>${msg('Already shared with')}</h3>
-                    ${this.loadingExisting
-                        ? html`<p class="empty">${msg('Loading…')}</p>`
-                        : this.existing.length === 0
-                          ? html`<p class="empty">${msg('Nobody yet.')}</p>`
-                          : html`
-                                <ul>
-                                    ${this.existing.map(
-                                        (s) => html`
-                                            <li>
-                                                <span class="who" title=${s.grantee}>${shortWallet(s.grantee)}</span>
-                                                <span class="when">${this.formatExpiry(s.expiresAt)}</span>
-                                            </li>
-                                        `,
-                                    )}
-                                </ul>
-                            `}
+                <div class="body custom-scrollbar">
+                    ${this.blocked
+                        ? html`<div class="banner error lead" role="alert">${this.blockedReason}</div>`
+                        : nothing}
+                    ${this.renderOwner()}
+
+                    <label for="grantee">${msg('Wallet address')}</label>
+                    <input
+                        id="grantee"
+                        type="text"
+                        class=${showInvalid ? 'invalid' : ''}
+                        placeholder="0x…"
+                        .value=${this.grantee}
+                        ?disabled=${inputsOff}
+                        @input=${(e: Event) => (this.grantee = (e.target as HTMLInputElement).value)}
+                    />
+                    <p class="hint ${showInvalid ? 'bad' : ''}">
+                        ${showInvalid
+                            ? msg('That does not look like a wallet address.')
+                            : msg('They will be able to see this vehicle’s data and send commands to it.')}
+                    </p>
+
+                    <label style="margin-top:20px">${msg('Access expires')}</label>
+                    <div class="durations">
+                        ${this.durations.map(
+                            (d) => html`
+                                <button
+                                    class=${this.durationDays === d.days ? 'selected' : ''}
+                                    ?disabled=${inputsOff}
+                                    @click=${() => (this.durationDays = d.days)}
+                                >
+                                    ${d.label}
+                                </button>
+                            `,
+                        )}
+                    </div>
+
+                    <div class="existing">
+                        <h3>${msg('Already shared with')}</h3>
+                        ${this.loadingExisting
+                            ? html`<p class="empty">${msg('Loading…')}</p>`
+                            : this.existing.length === 0
+                              ? html`<p class="empty">${msg('Nobody yet.')}</p>`
+                              : html`
+                                    <ul>
+                                        ${this.existing.map(
+                                            (s) => html`
+                                                <li>
+                                                    <span class="who" title=${s.grantee}>${shortWallet(s.grantee)}</span>
+                                                    <span class="when">${this.formatExpiry(s.expiresAt)}</span>
+                                                </li>
+                                            `,
+                                        )}
+                                    </ul>
+                                `}
+                    </div>
                 </div>
 
-                ${this.errorMessage
-                    ? html`<div class="banner error">${this.errorMessage}</div>`
-                    : nothing}
-                ${this.successMessage
-                    ? html`<div class="banner success">${this.successMessage}</div>`
-                    : nothing}
+                <!-- The submit outcome rides with the buttons, not with the scroll:
+                     an error is no use reported somewhere the grants list has
+                     already pushed out of sight. -->
+                <div class="foot">
+                    ${this.errorMessage
+                        ? html`<div class="banner error">${this.errorMessage}</div>`
+                        : nothing}
+                    ${this.successMessage
+                        ? html`<div class="banner success">${this.successMessage}</div>`
+                        : nothing}
 
-                <div class="footer">
-                    <button class="cancel" ?disabled=${this.submitting} @click=${this.dispatchClose}>
-                        ${msg('Close')}
-                    </button>
-                    <button
-                        class="confirm"
-                        ?disabled=${!this.granteeIsValid || inputsOff}
-                        @click=${this.submit}
-                    >
-                        ${this.submitting ? msg('Sharing…') : msg('Share')}
-                    </button>
+                    <div class="footer">
+                        <button class="cancel" ?disabled=${this.submitting} @click=${this.dispatchClose}>
+                            ${msg('Close')}
+                        </button>
+                        <button
+                            class="confirm"
+                            ?disabled=${!this.granteeIsValid || inputsOff}
+                            @click=${this.submit}
+                        >
+                            ${this.submitting ? msg('Sharing…') : msg('Share')}
+                        </button>
+                    </div>
                 </div>
             </div>
         `;
