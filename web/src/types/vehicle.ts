@@ -83,7 +83,10 @@ export interface VehiclesResponse {
 }
 
 export interface VehicleCard {
-    /** Owner wallet, for the share tooltip's "owned by you" comparison. */
+    /**
+     * Owner wallet: the "owned by you" comparison in the share tooltip and
+     * banner, and what the share modal shows until identity-api answers.
+     */
     owner?: string;
     tokenId: string;
     /** Vehicle make (e.g. "Tesla"), used to resolve the OEM brand logo. */
