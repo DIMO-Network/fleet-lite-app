@@ -19,20 +19,21 @@ var sharingTenant = models.Tenant{ID: "7be1ab9e-0000-0000-0000-000000000001", Cl
 
 // fakeResolver stands in for the tenancy client, recording what it was asked.
 type fakeResolver struct {
-	shareable []string
-	err       error
-	calls     int
-	asked     []string
+	unresolved []string
+	shareable  []string
+	err        error
+	calls      int
+	asked      []string
 }
 
 func (f *fakeResolver) Configured() bool { return true }
-func (f *fakeResolver) ShareableOwners(_ context.Context, _ models.Tenant, owners []string) ([]string, error) {
+func (f *fakeResolver) ShareableOwners(_ context.Context, _ models.Tenant, owners []string) ([]string, []string, error) {
 	f.calls++
 	f.asked = append([]string{}, owners...)
 	if f.err != nil {
-		return nil, f.err
+		return nil, nil, f.err
 	}
-	return f.shareable, nil
+	return f.shareable, f.unresolved, nil
 }
 
 // sharingFixture wires a SharingService at a resolver that reports only
@@ -140,4 +141,27 @@ func TestAnnotateCanShare_NoWorkMeansNoCall(t *testing.T) {
 	assert.False(t, unconfigured.Configured())
 	unconfigured.AnnotateCanShare(context.Background(), sharingTenant,
 		[]models.Vehicle{{TokenID: 1, Owner: signableOwner}})
+}
+
+// UNRESOLVED IS NOT REFUSED. On a large fleet's first render most owners have
+// not been looked up yet, and reporting those as "this account hasn't
+// authorized sharing" states a confident conclusion about a question nobody
+// asked. They must read as unknown, which is what makes the next render's
+// better answer look like progress rather than a contradiction.
+func TestAnnotateCanShare_UnresolvedIsUnknownNotRefused(t *testing.T) {
+	svc, res := sharingFixture(t)
+	res.unresolved = []string{unsignableOwner}
+
+	vehicles := []models.Vehicle{
+		{TokenID: 1, Owner: signableOwner},
+		{TokenID: 2, Owner: unsignableOwner},
+		{TokenID: 3, Owner: "0x9999999999999999999999999999999999999999"},
+	}
+	svc.AnnotateCanShare(context.Background(), sharingTenant, vehicles)
+
+	assert.True(t, vehicles[0].CanShare)
+	assert.Equal(t, models.ShareBlockerUnknown, vehicles[1].ShareBlocker,
+		"not yet looked up must not be reported as the owner declining")
+	assert.Equal(t, models.ShareBlockerOwner, vehicles[2].ShareBlocker,
+		"an owner that WAS checked and is not shareable still says so")
 }

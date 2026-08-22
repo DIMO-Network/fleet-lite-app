@@ -26,7 +26,7 @@ func TestShareableOwners(t *testing.T) {
 		defer srv.Close()
 
 		api := newTestTenancyAPI(t, srv, "psk")
-		got, err := api.ShareableOwners(context.Background(), testTenant, []string{
+		got, _, err := api.ShareableOwners(context.Background(), testTenant, []string{
 			"0x1111111111111111111111111111111111111111",
 			"0x2222222222222222222222222222222222222222",
 		})
@@ -48,7 +48,7 @@ func TestShareableOwners(t *testing.T) {
 		defer srv.Close()
 
 		api := newTestTenancyAPI(t, srv, "psk")
-		got, err := api.ShareableOwners(context.Background(), testTenant, nil)
+		got, _, err := api.ShareableOwners(context.Background(), testTenant, nil)
 		require.NoError(t, err)
 		assert.Nil(t, got)
 		assert.False(t, called)

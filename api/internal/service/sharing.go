@@ -14,7 +14,7 @@ import (
 // unexported JWT provider.
 type shareableOwnersResolver interface {
 	Configured() bool
-	ShareableOwners(ctx context.Context, tenant models.Tenant, owners []string) ([]string, error)
+	ShareableOwners(ctx context.Context, tenant models.Tenant, owners []string) (shareable, unresolved []string, err error)
 }
 
 // SharingService decides which vehicles can be shared without their owner's
@@ -73,7 +73,7 @@ func (s *SharingService) AnnotateCanShare(ctx context.Context, tenant models.Ten
 		return
 	}
 
-	shareable, err := s.tenancy.ShareableOwners(ctx, tenant, owners)
+	shareable, unresolved, err := s.tenancy.ShareableOwners(ctx, tenant, owners)
 	if err != nil {
 		// Marked unknown, not silently unshareable: claiming "this owner has
 		// not authorized sharing" when we never asked would send someone
@@ -94,14 +94,25 @@ func (s *SharingService) AnnotateCanShare(ctx context.Context, tenant models.Ten
 	for _, o := range shareable {
 		allowed[strings.ToLower(o)] = true
 	}
+	// Owners the service has not determined yet. NOT the same as refused: on a
+	// large fleet's first render most owners land here, and calling that "this
+	// account hasn't authorized sharing" would be a confident answer to a
+	// question nobody asked. Each render resolves more.
+	pending := make(map[string]bool, len(unresolved))
+	for _, o := range unresolved {
+		pending[strings.ToLower(o)] = true
+	}
 	for i := range vehicles {
 		if !common.IsHexAddress(vehicles[i].Owner) {
 			vehicles[i].ShareBlocker = models.ShareBlockerNoOwner
 			continue
 		}
-		if allowed[strings.ToLower(vehicles[i].Owner)] {
+		switch {
+		case allowed[strings.ToLower(vehicles[i].Owner)]:
 			vehicles[i].CanShare = true
-		} else {
+		case pending[strings.ToLower(vehicles[i].Owner)]:
+			vehicles[i].ShareBlocker = models.ShareBlockerUnknown
+		default:
 			vehicles[i].ShareBlocker = models.ShareBlockerOwner
 		}
 	}

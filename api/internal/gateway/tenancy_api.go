@@ -836,20 +836,26 @@ func newTenancyError(status int, body []byte) *TenancyError {
 // The owners are ours to supply because we already store owner_address per
 // vehicle; the tenancy service holds only token ids and would have to rebuild
 // the fact from identity-api to answer without them.
-func (t *TenancyAPI) ShareableOwners(ctx context.Context, tenant models.Tenant, owners []string) ([]string, error) {
+// Returns the shareable owners and, separately, the owners the service could
+// not determine within its own budget. UNRESOLVED IS NOT A DENIAL — the second
+// list exists so a large fleet's first render says "not checked yet" instead of
+// "this account declined", which is a claim about a question nobody asked.
+// Each call resolves more of them, so the fleet warms over a few renders.
+func (t *TenancyAPI) ShareableOwners(ctx context.Context, tenant models.Tenant, owners []string) ([]string, []string, error) {
 	if len(owners) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 	var res struct {
-		Owners []string `json:"owners"`
+		Owners     []string `json:"owners"`
+		Unresolved []string `json:"unresolved"`
 	}
 	err := t.do(ctx, tenant, http.MethodPost,
 		"/v1/tenants/"+url.PathEscape(tenant.ID)+"/shareable-owners",
 		map[string]any{"owners": owners}, &res)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return res.Owners, nil
+	return res.Owners, res.Unresolved, nil
 }
 
 // ShareVehicle queues an on-chain SACD grant and returns the job id —
