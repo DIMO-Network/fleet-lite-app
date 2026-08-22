@@ -222,6 +222,12 @@ func App(
 	// manage_vehicles — the same capability as transfer/disconnect/delete,
 	// because it is the same authority over somebody else's account.
 	tenantApp.Post("/vehicles/:tokenID/share", sharingCtrl.ShareVehicle)
+	// Withdraw a grant. Same gate as making one — it is the same authority over
+	// the same account. Queued like a share and polled through the status route
+	// below; there is deliberately no revoke-status endpoint, because both are
+	// the same job queue. No method collision with the GET on
+	// /share/status: :grantee only matches DELETEs.
+	tenantApp.Delete("/vehicles/:tokenID/share/:grantee", sharingCtrl.RevokeShare)
 	tenantApp.Get("/vehicles/:tokenID/share/status", sharingCtrl.ShareStatus)
 
 	// Fleet groups (tenant-scoped CRUD + vehicle membership)

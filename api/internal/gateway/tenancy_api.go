@@ -881,6 +881,37 @@ func (t *TenancyAPI) ShareVehicle(ctx context.Context, tenant models.Tenant, tok
 	return res.JobID, nil
 }
 
+// RevokeShare queues the withdrawal of an on-chain SACD grant and returns the
+// job id — DELETE /v1/tenants/{id}/vehicles/{tokenId}/share/{grantee}?wallet=.
+//
+// Asynchronous for the same reason ShareVehicle is, and polled through the same
+// ShareStatus route: there is deliberately no revoke-status endpoint, because a
+// revoke is queued on the same job table and a second status route would be two
+// names for one fact.
+//
+// Revoking writes a *zeroed* SACD record — permissions 0, expiration 0 — rather
+// than deleting the record. Nothing here depends on that, but a caller reading
+// grants back from identity-api afterwards does: the grantee keeps appearing,
+// with an expiry at the epoch.
+//
+// The acting member's wallet rides in the query string rather than a body: a
+// DELETE with a body is passed through inconsistently by proxies, and the
+// tenancy service needs the wallet to run its own capability check.
+func (t *TenancyAPI) RevokeShare(ctx context.Context, tenant models.Tenant, tokenID int64,
+	grantee, wallet string) (int64, error) {
+	var res struct {
+		JobID int64 `json:"jobId"`
+	}
+	err := t.do(ctx, tenant, http.MethodDelete,
+		fmt.Sprintf("/v1/tenants/%s/vehicles/%d/share/%s?wallet=%s",
+			url.PathEscape(tenant.ID), tokenID, url.PathEscape(grantee), url.QueryEscape(wallet)),
+		nil, &res)
+	if err != nil {
+		return 0, err
+	}
+	return res.JobID, nil
+}
+
 // ShareJobStatus is the tenancy service's single-job status shape.
 //
 // Success is IsSuccessful, never a "Success" string — kaufmann carries both

@@ -3,13 +3,40 @@ import { msg, str } from '@lit/localize';
 import { customElement, property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { ApiService } from '../services/api-service.ts';
-import { SharingService } from '../services/sharing-service.ts';
+import { JobTimeoutError, SharingService } from '../services/sharing-service.ts';
 import { shortWallet } from '../utils/share-blocker.ts';
 
 /** One existing on-chain grant, read back from identity-api. */
 interface ExistingShare {
     grantee: string;
     expiresAt: string;
+}
+
+/**
+ * Drop the grants that are no longer in force.
+ *
+ * Revoking does not delete the SACD record — it writes a *zeroed* one, with
+ * permissions 0 and expiration 0 — so identity-api keeps returning the grantee
+ * afterwards, with an expiry at the Unix epoch. Without this filter a
+ * successful revoke leaves the row exactly where it was and the feature reads
+ * as "revoke doesn't work".
+ *
+ * It is the right list for shares that simply ran out, too. An expired grant is
+ * not a current grant, and this list is headed "Already shared with".
+ *
+ * A missing or unparseable expiresAt is KEPT: formatExpiry reads that as "no
+ * expiry", and hiding a live indefinite grant because one field was malformed
+ * is much the worse mistake — it would tell somebody nobody has access when
+ * somebody does.
+ */
+function liveGrants(nodes: ExistingShare[]): ExistingShare[] {
+    const now = Date.now();
+    return nodes.filter((n) => {
+        if (!n?.grantee) return false;
+        if (!n.expiresAt) return true;
+        const when = new Date(n.expiresAt).getTime();
+        return Number.isNaN(when) || when > now;
+    });
 }
 
 /**
@@ -51,6 +78,7 @@ interface DurationOption {
  * Events:
  *   - close: dismissed.
  *   - shared: a grant landed on chain; the caller may want to refetch.
+ *   - revoked: a grant was withdrawn on chain; likewise.
  */
 @customElement('share-vehicle-modal')
 export class ShareVehicleModal extends LitElement {
@@ -71,8 +99,23 @@ export class ShareVehicleModal extends LitElement {
     @state() private submitting = false;
     @state() private errorMessage = '';
     @state() private successMessage = '';
+    /**
+     * Neither an error nor a success — "we stopped waiting and do not know".
+     * It has its own slot because collapsing it into either of the other two
+     * would state an outcome nobody has observed.
+     */
+    @state() private noticeMessage = '';
     @state() private existing: ExistingShare[] = [];
     @state() private loadingExisting = true;
+    /**
+     * The grantee whose row is asking "Revoke?", or empty. Confirmation is
+     * inline and in-component on purpose: `confirm()` blocks the page and, in a
+     * modal that is already polling a job, a blocking dialog is the wrong tool.
+     * One at a time — arming a second row disarms the first.
+     */
+    @state() private confirmingRevoke = '';
+    /** The grantee whose revoke is in flight, or empty. */
+    @state() private revoking = '';
     /** Owner as identity-api reports it; empty until it answers, or if it fails. */
     @state() private chainOwner = '';
 
@@ -139,13 +182,55 @@ export class ShareVehicleModal extends LitElement {
             const res = await ApiService.getInstance().post<{
                 data?: { vehicle?: { owner?: string; sacds?: { nodes?: ExistingShare[] } } };
             }>('/identity/proxy', { query });
-            this.existing = res.data?.vehicle?.sacds?.nodes ?? [];
+            this.existing = liveGrants(res.data?.vehicle?.sacds?.nodes ?? []);
             this.chainOwner = res.data?.vehicle?.owner ?? '';
         } catch {
             this.existing = [];
             // chainOwner stays empty so the caller's value keeps rendering.
         } finally {
             this.loadingExisting = false;
+        }
+    }
+
+    /**
+     * Withdraw one grant, then re-read the list from chain.
+     *
+     * The confirm step is spent by getting here: a second click on an armed row
+     * is the confirmation, and this is what it runs.
+     */
+    private async revoke(grantee: string) {
+        // One job at a time. The controls are disabled to match, so this is the
+        // second lock rather than the only one.
+        if (this.revoking || this.submitting || this.blocked) return;
+
+        this.revoking = grantee;
+        this.confirmingRevoke = '';
+        this.errorMessage = '';
+        this.successMessage = '';
+        this.noticeMessage = '';
+        try {
+            const svc = SharingService.getInstance();
+            const jobId = await svc.revoke(this.tokenId, grantee);
+            await svc.waitForRevoke(this.tokenId, jobId);
+
+            this.successMessage = msg('Access revoked.');
+            this.dispatchEvent(new CustomEvent('revoked', { bubbles: true, composed: true }));
+            await this.loadFromChain();
+        } catch (err) {
+            if (err instanceof JobTimeoutError) {
+                // We stopped waiting; the chain did not stop working. Saying
+                // "revoked" here would be a claim about a job still running,
+                // and saying "failed" would have somebody re-issue a grant they
+                // have already withdrawn. The list is re-read either way — it
+                // is the honest answer to "did it land?" and it costs one query.
+                this.noticeMessage = err.message;
+                await this.loadFromChain();
+            } else {
+                this.errorMessage =
+                    err instanceof Error ? err.message : msg('The access could not be revoked.');
+            }
+        } finally {
+            this.revoking = '';
         }
     }
 
@@ -161,6 +246,8 @@ export class ShareVehicleModal extends LitElement {
         this.submitting = true;
         this.errorMessage = '';
         this.successMessage = '';
+        this.noticeMessage = '';
+        this.confirmingRevoke = '';
         try {
             const svc = SharingService.getInstance();
             const jobId = await svc.share(this.tokenId, this.grantee.trim(), this.durationDays);
@@ -291,13 +378,48 @@ export class ShareVehicleModal extends LitElement {
                hides grants behind a scrollbar nobody goes looking for. */
             .existing ul { list-style: none; display: flex; flex-direction: column; gap: 6px; }
             .existing li {
-                display: flex; justify-content: space-between; gap: 12px; padding: 8px 10px;
+                display: flex; align-items: center; justify-content: space-between;
+                gap: 12px; padding: 8px 10px;
                 background: var(--surface-container-low); border-radius: var(--radius-md);
                 font: var(--type-body-sm);
             }
-            .existing li .who { font-family: monospace; }
-            .existing li .when { color: var(--on-surface-variant); }
+            /* The address is the row's identity, so it is the part that gives
+               when the row is tight — the expiry and the control keep their
+               size and the wallet ellipsises. It is already abbreviated and
+               carries the full value in its title. */
+            .existing li .who { font-family: monospace; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+            .existing li .when { color: var(--on-surface-variant); flex: none; }
             .existing .empty { color: var(--on-surface-variant); font: var(--type-body-sm); }
+
+            /* Revoke lives in the row it acts on. Two steps, both here: the
+               first click arms the row, the second runs it. Nothing about it
+               leaves the list, so there is never a dialog on top of a dialog
+               and never a question about which grant is being withdrawn. */
+            .existing li .act { flex: none; display: flex; align-items: center; gap: 6px; }
+            .existing li .act button {
+                padding: 3px 8px; cursor: pointer; font: var(--type-body-sm);
+                background: transparent; color: var(--on-surface-variant);
+                border: 1px solid var(--outline-variant); border-radius: var(--radius-sm);
+            }
+            .existing li .act button:hover:not(:disabled) { color: var(--on-surface); border-color: var(--on-surface-variant); }
+            .existing li .act button:disabled { opacity: 0.5; cursor: not-allowed; }
+            /* The destructive half of the confirm is the only thing here that
+               wears the error colour — the arming click is not destructive and
+               must not read as though it were. */
+            .existing li .act button.danger { color: var(--error); border-color: rgba(255, 180, 171, 0.4); }
+            .existing li .act button.danger:hover:not(:disabled) { border-color: var(--error); }
+            .existing li .ask { color: var(--error); flex: none; }
+            /* Disabled-and-greyed says "you can't", not "it's working". The
+               pulse is what distinguishes a job in flight from a control that
+               is merely off, and it stops for anyone who has asked motion to. */
+            .existing li .act button.busy { opacity: 1; animation: revoke-pulse 1.4s ease-in-out infinite; }
+            @keyframes revoke-pulse {
+                0%, 100% { opacity: 0.45; }
+                50% { opacity: 1; }
+            }
+            @media (prefers-reduced-motion: reduce) {
+                .existing li .act button.busy { animation: none; opacity: 0.7; }
+            }
 
             .banner {
                 padding: 12px; border-radius: var(--radius-md);
@@ -314,6 +436,13 @@ export class ShareVehicleModal extends LitElement {
             .banner.success {
                 background: rgba(140, 255, 180, 0.04);
                 border: 1px solid rgba(140, 255, 180, 0.2); color: var(--on-surface);
+            }
+            /* "We stopped waiting" is not an outcome. It is deliberately neither
+               red nor green — either colour would answer a question that is
+               still open. */
+            .banner.notice {
+                background: var(--surface-container-low);
+                border: 1px solid var(--outline-variant); color: var(--on-surface-variant);
             }
 
             .footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
@@ -349,9 +478,65 @@ export class ShareVehicleModal extends LitElement {
         `;
     }
 
+    /**
+     * One row of "Already shared with", in whichever of its three states it is
+     * in: at rest, armed, or running.
+     *
+     * Armed keeps the address on screen and replaces only the expiry, because
+     * the question "revoke this?" is unanswerable if you can no longer see
+     * which grant "this" is. Cancel is listed after Yes but is also what the
+     * row falls back to — clicking Revoke on another row disarms this one.
+     */
+    private renderGrant(s: ExistingShare) {
+        const armed = this.confirmingRevoke === s.grantee;
+        const busy = this.revoking === s.grantee;
+        // A share in flight, another row's revoke in flight, or a vehicle that
+        // cannot be signed for at all: all three make this control a no-op, so
+        // it is off rather than merely unhelpful.
+        const off = this.submitting || this.blocked || (!!this.revoking && !busy);
+
+        return html`
+            <li>
+                <span class="who" title=${s.grantee}>${shortWallet(s.grantee)}</span>
+                ${armed && !busy
+                    ? html`<span class="ask">${msg('Revoke?')}</span>`
+                    : html`<span class="when">${this.formatExpiry(s.expiresAt)}</span>`}
+                <span class="act">
+                    ${busy
+                        ? html`<button class="busy" disabled>${msg('Revoking…')}</button>`
+                        : armed
+                          ? html`
+                                <button
+                                    class="danger"
+                                    ?disabled=${off}
+                                    @click=${() => void this.revoke(s.grantee)}
+                                >
+                                    ${msg('Yes')}
+                                </button>
+                                <button @click=${() => (this.confirmingRevoke = '')}>
+                                    ${msg('Cancel')}
+                                </button>
+                            `
+                          : html`
+                                <button
+                                    ?disabled=${off}
+                                    aria-label=${msg(str`Revoke access for ${shortWallet(s.grantee)}`)}
+                                    @click=${() => (this.confirmingRevoke = s.grantee)}
+                                >
+                                    ${msg('Revoke')}
+                                </button>
+                            `}
+                </span>
+            </li>
+        `;
+    }
+
     render() {
         const showInvalid = this.grantee.trim().length > 0 && !this.granteeIsValid;
-        const inputsOff = this.submitting || this.blocked;
+        // A revoke in flight closes the share form too. Both are the same
+        // signer on the same account, and two jobs in flight against one
+        // vehicle is a race the customer would have to untangle from the list.
+        const inputsOff = this.submitting || this.blocked || !!this.revoking;
 
         return html`
             <div class="card" role="dialog" aria-modal="true" aria-label=${msg('Share vehicle')}>
@@ -412,14 +597,7 @@ export class ShareVehicleModal extends LitElement {
                               ? html`<p class="empty">${msg('Nobody yet.')}</p>`
                               : html`
                                     <ul>
-                                        ${this.existing.map(
-                                            (s) => html`
-                                                <li>
-                                                    <span class="who" title=${s.grantee}>${shortWallet(s.grantee)}</span>
-                                                    <span class="when">${this.formatExpiry(s.expiresAt)}</span>
-                                                </li>
-                                            `,
-                                        )}
+                                        ${this.existing.map((s) => this.renderGrant(s))}
                                     </ul>
                                 `}
                     </div>
@@ -435,9 +613,12 @@ export class ShareVehicleModal extends LitElement {
                     ${this.successMessage
                         ? html`<div class="banner success">${this.successMessage}</div>`
                         : nothing}
+                    ${this.noticeMessage
+                        ? html`<div class="banner notice">${this.noticeMessage}</div>`
+                        : nothing}
 
                     <div class="footer">
-                        <button class="cancel" ?disabled=${this.submitting} @click=${this.dispatchClose}>
+                        <button class="cancel" ?disabled=${this.submitting || !!this.revoking} @click=${this.dispatchClose}>
                             ${msg('Close')}
                         </button>
                         <button
