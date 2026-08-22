@@ -124,3 +124,49 @@ func TestShareStatus(t *testing.T) {
 	assert.True(t, got.IsSuccessful)
 	assert.Equal(t, "completed", got.State)
 }
+
+func TestRevokeShare(t *testing.T) {
+	t.Run("deletes the grant and returns the job id", func(t *testing.T) {
+		var gotMethod, gotPath, gotQuery string
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			gotMethod, gotPath, gotQuery = r.Method, r.URL.Path, r.URL.RawQuery
+			w.WriteHeader(http.StatusAccepted)
+			_ = json.NewEncoder(w).Encode(map[string]int64{"jobId": 77})
+		}))
+		defer srv.Close()
+
+		api := newTestTenancyAPI(t, srv, "psk")
+		jobID, err := api.RevokeShare(context.Background(), testTenant, 42,
+			"0x2222222222222222222222222222222222222222",
+			"0x3333333333333333333333333333333333333333")
+		require.NoError(t, err)
+
+		assert.Equal(t, http.MethodDelete, gotMethod)
+		assert.Equal(t, "/v1/tenants/"+testTenant.ID+
+			"/vehicles/42/share/0x2222222222222222222222222222222222222222", gotPath)
+		assert.Equal(t, "wallet=0x3333333333333333333333333333333333333333", gotQuery,
+			"the acting member must reach the tenancy service — it makes the capability check")
+		assert.Equal(t, int64(77), jobID)
+	})
+
+	// The revoke is polled through the share status route, so the job id has to
+	// survive the hop. Zero would poll a job that does not exist and report the
+	// revoke as never landing.
+	t.Run("a 403 is a TenancyError carrying the status", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"message":"the vehicle's owner has not authorized this tenant"}`))
+		}))
+		defer srv.Close()
+
+		api := newTestTenancyAPI(t, srv, "psk")
+		_, err := api.RevokeShare(context.Background(), testTenant, 42,
+			"0x2222222222222222222222222222222222222222",
+			"0x3333333333333333333333333333333333333333")
+		require.Error(t, err)
+
+		var terr *TenancyError
+		require.ErrorAs(t, err, &terr)
+		assert.Equal(t, http.StatusForbidden, terr.StatusCode)
+	})
+}

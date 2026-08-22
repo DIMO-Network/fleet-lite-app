@@ -96,6 +96,66 @@ func (s *SharingController) ShareVehicle(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusAccepted).JSON(fiber.Map{"jobId": jobID})
 }
 
+// RevokeShare — DELETE /vehicles/:tokenID/share/:grantee
+//
+// Returns 202 and a job id, polled through ShareStatus — the same route a
+// share uses. There is no separate revoke-status endpoint on purpose: both
+// operations are the same queue, and a second status route would be two names
+// for one fact.
+//
+// What lands on chain is a *zeroed* SACD record — permissions 0, expiration 0 —
+// not a deleted one. That matters to whoever reads the grants back afterwards
+// (identity-api keeps returning the grantee, expired), not to this handler.
+//
+// Every gate ShareVehicle applies applies here, in the same order and for the
+// same reasons: revoking somebody's access is the same authority over the same
+// account as granting it.
+func (s *SharingController) RevokeShare(c *fiber.Ctx) error {
+	tenant, err := GetTenant(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	tokenID, err := ParseTokenIDParam(c, "tokenID")
+	if err != nil {
+		return err
+	}
+
+	// Checked here as well as upstream so an obvious typo costs a round trip
+	// rather than a queued job. The zero address is rejected explicitly: it is
+	// a valid hex address and a meaningless grantee, and IsHexAddress says yes.
+	grantee := c.Params("grantee")
+	if !common.IsHexAddress(grantee) {
+		return fiber.NewError(fiber.StatusBadRequest, "grantee must be a wallet address")
+	}
+	granteeAddr := common.HexToAddress(grantee)
+	if granteeAddr == (common.Address{}) {
+		return fiber.NewError(fiber.StatusBadRequest, "grantee must not be the zero address")
+	}
+
+	wallet, err := s.requireManageVehicles(c, tenant)
+	if err != nil {
+		return err
+	}
+
+	// Same group-scoped re-read as ShareVehicle. Passing the caller's token id
+	// straight upstream would let a member outside the vehicle's fleet group
+	// revoke a grant the tenancy service would accept — its checks are
+	// tenant-level and know nothing about our group scope.
+	allowed, _ := GetAllowedGroups(c)
+	if _, verr := s.vehicleSvc.GetVehicle(c.Context(), tenant, int64(tokenID), allowed); verr != nil {
+		if serr := ScopeUnavailable(verr); serr != nil {
+			return serr
+		}
+		return fiber.NewError(fiber.StatusNotFound, "vehicle not found")
+	}
+
+	jobID, err := s.tenancy.RevokeShare(c.Context(), tenant, int64(tokenID), granteeAddr.Hex(), wallet)
+	if err != nil {
+		return s.upstreamError(err, tenant.ID, int64(tokenID), "queue revoke")
+	}
+	return c.Status(fiber.StatusAccepted).JSON(fiber.Map{"jobId": jobID})
+}
+
 // ShareStatus — GET /vehicles/:tokenID/share/status?jobId=
 //
 // Success is the isSuccessful boolean the tenancy service returns, passed

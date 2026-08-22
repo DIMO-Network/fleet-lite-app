@@ -1782,6 +1782,24 @@
   <source><x id="0" equiv-text="${short}"/> (you)</source>
   <target><x id="0" equiv-text="${short}"/> (tú)</target>
 </trans-unit>
+<trans-unit id="s2f62713f5932809d">
+  <source>Access revoked.</source>
+</trans-unit>
+<trans-unit id="s9eca87f909adc2a1">
+  <source>The access could not be revoked.</source>
+</trans-unit>
+<trans-unit id="s81454e9f6eaf08b6">
+  <source>Revoking…</source>
+</trans-unit>
+<trans-unit id="sfa9dc1928d99a604">
+  <source>Revoke?</source>
+</trans-unit>
+<trans-unit id="scb489a1a173ac3f0">
+  <source>Yes</source>
+</trans-unit>
+<trans-unit id="s51621cc0113782ba">
+  <source>Revoke access for <x id="0" equiv-text="${shortWallet(s.grantee)}"/></source>
+</trans-unit>
 </body>
 </file>
 </xliff>
