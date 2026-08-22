@@ -6,10 +6,13 @@ import (
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/utils"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/valyala/fasthttp"
 )
 
 func metricsApp() *fiber.App {
@@ -102,4 +105,71 @@ func TestMetricsInFlightReturnsToBaseline(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, before, testutil.ToFloat64(requestsInFlight))
+}
+
+// THE BUG THIS PINS took this app's /metrics to a 500 in production on
+// 2026-08-22, firing TargetDown and hiding the whole service from Grafana
+// while it served traffic perfectly well. fleet-tenancy-api's identical
+// middleware had done the same thing the day before; this file was cloned from
+// it before the fix landed there.
+//
+// fiber's c.Method() is a zero-copy view over fasthttp's request buffer, and
+// that buffer is reused for a later request. Prometheus retains label strings
+// inside its registry, so a retained view mutates after the fact: the series
+// becomes method="GETT", collides with the real one, and every scrape fails
+// with "collected before with the same name and label values".
+//
+// The test mutates the buffer directly rather than racing real requests,
+// because the real failure is timing-dependent and a flaky guard against a
+// silent outage is worse than none.
+func TestMetricsMethodLabelDoesNotAliasTheRequestBuffer(t *testing.T) {
+	app := fiber.New()
+	fctx := &fasthttp.RequestCtx{}
+	fctx.Request.Header.SetMethod("GET")
+	c := app.AcquireCtx(fctx)
+	defer app.ReleaseCtx(c)
+
+	label := utils.CopyString(c.Method())
+
+	// What fasthttp does between requests: the same backing array, new bytes.
+	fctx.Request.Header.SetMethod("DELETE")
+
+	assert.Equal(t, "GET", label,
+		"the stored label must survive the request buffer being reused; without a copy it mutates into garbage and poisons the registry")
+}
+
+// The observable consequence, end to end: after traffic, every method label in
+// the registry is a real HTTP method. A corrupted label ("GETT") is what makes
+// /metrics answer 500 rather than serving numbers.
+func TestMetricsEmitsOnlyRealMethodLabels(t *testing.T) {
+	app := metricsApp()
+	for i := 0; i < 25; i++ {
+		for _, m := range []string{http.MethodGet, http.MethodPost, http.MethodDelete} {
+			req := httptest.NewRequest(m, "/vehicles/190171", nil)
+			_, err := app.Test(req)
+			require.NoError(t, err)
+		}
+	}
+
+	families, err := prometheus.DefaultGatherer.Gather()
+	require.NoError(t, err, "a poisoned registry fails to gather — which is the 500 the scraper sees")
+
+	valid := map[string]bool{
+		http.MethodGet: true, http.MethodPost: true, http.MethodPut: true,
+		http.MethodPatch: true, http.MethodDelete: true, http.MethodHead: true,
+		http.MethodOptions: true, http.MethodConnect: true, http.MethodTrace: true,
+	}
+	for _, fam := range families {
+		if fam.GetName() != "http_requests_total" {
+			continue
+		}
+		for _, m := range fam.GetMetric() {
+			for _, l := range m.GetLabel() {
+				if l.GetName() == "method" {
+					assert.True(t, valid[l.GetValue()],
+						"label method=%q is not an HTTP method — the request buffer leaked into the registry", l.GetValue())
+				}
+			}
+		}
+	}
 }

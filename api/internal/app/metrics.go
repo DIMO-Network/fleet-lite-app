@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -91,8 +92,26 @@ func NewMetricsMiddleware() fiber.Handler {
 			}
 		}
 
+		// COPY THE METHOD. c.Method() is a zero-copy string over fasthttp's
+		// request buffer, and that buffer is reused for a LATER request once
+		// this one returns. Prometheus keeps the label string alive inside its
+		// registry, so the stored label mutates underneath it — the series
+		// silently becomes garbage like method="GETT", and because the
+		// corrupted labels collide with the real ones, /metrics starts
+		// answering 500 "collected before with the same name and label values"
+		// and the whole service goes dark to Grafana.
+		//
+		// This is not hypothetical here. fleet-tenancy-api's identical
+		// middleware took its /metrics to a 500 for 22 hours on 2026-08-21, and
+		// this copy of it did the same thing in prod on 2026-08-22 — the scrape
+		// body named method="GETT" on /identity/proxy and /tenants/:id/login.
+		// It only bites under real traffic, since a request has to land while a
+		// previous label is still held, which is why it survived from the
+		// golden-signals release until there was some. routeLabel is safe: a
+		// route pattern is a Go string registered at boot, not a view over the
+		// request.
 		labels := prometheus.Labels{
-			"method": c.Method(),
+			"method": utils.CopyString(c.Method()),
 			"path":   routeLabel(c),
 			"status": strconv.Itoa(status),
 		}
