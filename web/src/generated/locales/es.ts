@@ -49,6 +49,7 @@
 's0cb91fef252d799f': str`${0} de ${1} vehículos en este grupo.`,
 's0cd0f490954a4ee2': `En curso`,
 's0e871352ba4b17d3': `Revocar`,
+'s0eef24d7477a84fb': str`${0} (tú)`,
 's0f2fa21712471c91': `Carga`,
 's1096f5086f319e01': `Filtrar grupos…`,
 's11050010b0356d89': `companero@empresa.com`,

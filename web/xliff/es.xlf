@@ -1778,6 +1778,10 @@
   <source>Sharing status couldn't be checked — try reloading</source>
   <target>No se pudo verificar el estado de compartición — recarga la página</target>
 </trans-unit>
+<trans-unit id="s0eef24d7477a84fb">
+  <source><x id="0" equiv-text="${short}"/> (you)</source>
+  <target><x id="0" equiv-text="${short}"/> (tú)</target>
+</trans-unit>
 </body>
 </file>
 </xliff>

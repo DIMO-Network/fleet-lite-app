@@ -7,6 +7,7 @@ import { ApiService } from '../services/api-service.ts';
 import { FleetCache } from '../services/fleet-cache.ts';
 import { Vehicle, VehicleCard, VehiclesResponse } from '../types/vehicle.ts';
 import { seedLocationsFromDb, fetchFleetLocations } from '../utils/fleet-map.ts';
+import { shareBlockReason } from '../utils/share-blocker.ts';
 import { TenantService } from '../services/tenant-service.ts';
 import '../elements/tenant-switcher.ts';
 import '../elements/share-vehicle-modal.ts';
@@ -234,39 +235,22 @@ export class FleetListView extends LitElement {
     }
 
     /**
-     * Whether this member may share at all. Best-effort and deliberately not
-     * awaited with the vehicle load: failing to resolve it hides the share
-     * button, which is the safe direction, and must not delay the fleet list.
-     */
-    /**
      * The share control's tooltip. Always present, because the icon is always
      * rendered once the share annotation ran: an explained refusal teaches the
      * user what would make the vehicle shareable, where a hidden icon taught
-     * them the feature didn't exist. The order matters — a member who cannot
-     * share at all hears that first, not a per-vehicle reason they can't act on.
+     * them the feature didn't exist. The same sentence is handed to the modal,
+     * which is why it comes from shareBlockReason and not from here.
      */
     private shareTitle(v: VehicleCard): string {
-        if (!this.canShareVehicles) {
-            return msg('Sharing needs the manage-vehicles permission');
-        }
-        if (v.canShare) return msg('Share vehicle');
-        switch (v.shareBlocker) {
-            case 'owner': {
-                const short = v.owner
-                    ? `${v.owner.slice(0, 6)}…${v.owner.slice(-4)}`
-                    : msg('its owner');
-                return this.myWallet && v.owner
-                    && v.owner.toLowerCase() === this.myWallet.toLowerCase()
-                    ? msg(str`Owned by you (${short}) — personally owned vehicles can't be fleet-shared`)
-                    : msg(str`Owned by ${short} — this account hasn't authorized fleet sharing`);
-            }
-            case 'no_owner':
-                return msg('No owner on record — can\'t be shared');
-            default:
-                return msg('Sharing status couldn\'t be checked — try reloading');
-        }
+        return shareBlockReason(v, this.canShareVehicles, this.myWallet) ?? msg('Share vehicle');
     }
 
+    /**
+     * Whether this member may share at all. Best-effort and deliberately not
+     * awaited with the vehicle load: failing to resolve it leaves sharing
+     * explained as unavailable, which is the safe direction, and must not
+     * delay the fleet list.
+     */
     private async loadShareCapability() {
         try {
             const access = await TenantService.getInstance().fetchMyAccess();
@@ -380,10 +364,14 @@ export class FleetListView extends LitElement {
                             ${v.canShare || v.shareBlocker ? html`
                                 <button class="share-row-btn ${this.canShareVehicles && v.canShare ? '' : 'share-row-btn--blocked'}"
                                     title="${this.shareTitle(v)}"
-                                    aria-disabled=${this.canShareVehicles && v.canShare ? 'false' : 'true'}
+                                    aria-haspopup="dialog"
                                     @click=${(e: Event) => {
                                         e.stopPropagation();
-                                        if (this.canShareVehicles && v.canShare) this.openShare(v);
+                                        // Opens even when sharing is blocked. The tooltip is the
+                                        // only place the reason lived, and a tooltip is invisible
+                                        // on touch and to anyone who doesn't hover long enough,
+                                        // so the click has to lead somewhere that explains itself.
+                                        this.openShare(v);
                                     }}>
                                     <span class="material-symbols-outlined">share</span>
                                 </button>
@@ -806,17 +794,20 @@ export class FleetListView extends LitElement {
             .hide-row-btn:hover { color: var(--error); }
             .hide-row-btn .material-symbols-outlined { font-size: 18px; }
 
-            /* Reveals on row hover like the hide button beside it, but stays
-               visible on keyboard focus — hover-only would make it reachable by
-               tab and invisible while focused. */
+            /* Dimmed because sharing this vehicle won't work, but still a live
+               button: it opens the modal that says why. No not-allowed cursor —
+               the click does something, and pretending otherwise is what stopped
+               anyone finding the reason in the first place. */
             .share-row-btn--blocked {
                 opacity: 0.35;
-                cursor: not-allowed;
             }
             .share-row-btn--blocked:hover {
                 color: var(--on-surface-variant);
-                opacity: 0.35;
+                opacity: 0.6;
             }
+            /* Reveals on row hover like the hide button beside it, but stays
+               visible on keyboard focus — hover-only would make it reachable by
+               tab and invisible while focused. */
             .share-row-btn {
                 background: none;
                 border: none;
@@ -918,6 +909,9 @@ export class FleetListView extends LitElement {
                       <share-vehicle-modal
                           .tokenId=${Number(this.shareTarget.tokenId)}
                           .vehicleTitle=${this.shareTarget.title}
+                          .blockedReason=${shareBlockReason(this.shareTarget, this.canShareVehicles, this.myWallet) ?? ''}
+                          .owner=${this.shareTarget.owner ?? ''}
+                          .myWallet=${this.myWallet}
                           @close=${() => { this.shareTarget = null; }}
                       ></share-vehicle-modal>
                   `

@@ -4,6 +4,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { ApiService } from '../services/api-service.ts';
 import { SharingService } from '../services/sharing-service.ts';
+import { shortWallet } from '../utils/share-blocker.ts';
 
 /** One existing on-chain grant, read back from identity-api. */
 interface ExistingShare {
@@ -36,9 +37,17 @@ interface DurationOption {
  * redundant next to the precise location already granted) — there is no
  * per-permission picker in this version.
  *
+ * It also opens for vehicles that cannot be shared, with blockedReason set. That
+ * is the whole point of the blocked mode: the fleet list used to gate the icon
+ * and hide the reason in a tooltip, so the answer to "why can't I share this
+ * one?" was unreachable on touch and easy to miss anywhere else.
+ *
  * Props:
  *   - tokenId: the vehicle being shared.
  *   - vehicleTitle: for the heading.
+ *   - blockedReason: why sharing is unavailable; empty when it is available.
+ *   - owner: the owner wallet the caller already knows, as a fallback.
+ *   - myWallet: the signed-in wallet, to mark the owner as the reader.
  * Events:
  *   - close: dismissed.
  *   - shared: a grant landed on chain; the caller may want to refetch.
@@ -47,6 +56,15 @@ interface DurationOption {
 export class ShareVehicleModal extends LitElement {
     @property({ type: Number }) tokenId!: number;
     @property({ type: String }) vehicleTitle = '';
+    /**
+     * Why sharing is unavailable, already localized, or empty when it is
+     * available. The caller composes it (shareBlockReason) so the row tooltip
+     * and this banner are literally the same sentence and cannot drift.
+     */
+    @property({ type: String }) blockedReason = '';
+    /** Owner wallet as the caller knows it — used until the chain answers. */
+    @property({ type: String }) owner = '';
+    @property({ type: String }) myWallet = '';
 
     @state() private grantee = '';
     @state() private durationDays = 365;
@@ -55,6 +73,23 @@ export class ShareVehicleModal extends LitElement {
     @state() private successMessage = '';
     @state() private existing: ExistingShare[] = [];
     @state() private loadingExisting = true;
+    /** Owner as identity-api reports it; empty until it answers, or if it fails. */
+    @state() private chainOwner = '';
+
+    /** Sharing can't proceed, so every control that would attempt it is off. */
+    private get blocked(): boolean {
+        return this.blockedReason.length > 0;
+    }
+
+    /**
+     * The owner to show. The chain is authoritative — a transfer lands there
+     * before it reaches the card the caller built — but it arrives a round trip
+     * late and may not arrive at all, and an owner row that blinks in late is
+     * still better than one that blocks the modal.
+     */
+    private get ownerAddress(): string {
+        return this.chainOwner || this.owner;
+    }
 
     private get durations(): DurationOption[] {
         return [
@@ -75,21 +110,26 @@ export class ShareVehicleModal extends LitElement {
 
     connectedCallback() {
         super.connectedCallback();
-        void this.loadExisting();
+        void this.loadFromChain();
     }
 
     /**
-     * Read the vehicle's current grants from identity-api, through the same
-     * proxy the rest of the app uses.
+     * Read the vehicle's owner and current grants from identity-api, through
+     * the same proxy the rest of the app uses.
      *
      * Chain state is the source of truth here — nothing is read back from our
      * own database, which never records a share. Best-effort: failing to list
-     * existing grants must not stop somebody making a new one.
+     * existing grants must not stop somebody making a new one, and a blocked
+     * modal still runs it because the owner is most of the explanation.
+     *
+     * One query for both fields: they come from the same node, and a blocked
+     * vehicle would otherwise pay two round trips to render one address.
      */
-    private async loadExisting() {
+    private async loadFromChain() {
         this.loadingExisting = true;
         const query = `{
             vehicle(tokenId: ${this.tokenId}) {
+                owner
                 sacds(first: 15) {
                     nodes { grantee expiresAt }
                 }
@@ -97,11 +137,13 @@ export class ShareVehicleModal extends LitElement {
         }`;
         try {
             const res = await ApiService.getInstance().post<{
-                data?: { vehicle?: { sacds?: { nodes?: ExistingShare[] } } };
+                data?: { vehicle?: { owner?: string; sacds?: { nodes?: ExistingShare[] } } };
             }>('/identity/proxy', { query });
             this.existing = res.data?.vehicle?.sacds?.nodes ?? [];
+            this.chainOwner = res.data?.vehicle?.owner ?? '';
         } catch {
             this.existing = [];
+            // chainOwner stays empty so the caller's value keeps rendering.
         } finally {
             this.loadingExisting = false;
         }
@@ -112,7 +154,9 @@ export class ShareVehicleModal extends LitElement {
     }
 
     private async submit() {
-        if (!this.granteeIsValid || this.submitting) return;
+        // The button is disabled while blocked; this is the second lock, so a
+        // stale blockedReason update can't leave a live share behind it.
+        if (!this.granteeIsValid || this.submitting || this.blocked) return;
 
         this.submitting = true;
         this.errorMessage = '';
@@ -130,16 +174,12 @@ export class ShareVehicleModal extends LitElement {
             // seconds, so this refresh may not show the new grant yet. The
             // manual refresh below is the answer to that rather than polling
             // identity-api until it catches up.
-            await this.loadExisting();
+            await this.loadFromChain();
         } catch (err) {
             this.errorMessage = err instanceof Error ? err.message : msg('The share could not be completed.');
         } finally {
             this.submitting = false;
         }
-    }
-
-    private shortAddress(address: string): string {
-        return address.length > 12 ? `${address.slice(0, 6)}…${address.slice(-4)}` : address;
     }
 
     /**
@@ -180,6 +220,18 @@ export class ShareVehicleModal extends LitElement {
             }
             .close:hover { color: var(--primary); }
 
+            .owner-row {
+                display: flex; align-items: center; justify-content: space-between; gap: 12px;
+                padding: 8px 10px; margin-bottom: 20px;
+                background: var(--surface-container-low); border-radius: var(--radius-md);
+                font: var(--type-body-sm);
+            }
+            .owner-row .lbl {
+                font: var(--type-label-caps); letter-spacing: 0.05em;
+                text-transform: uppercase; color: var(--on-surface-variant);
+            }
+            .owner-row .who { font-family: monospace; }
+
             label {
                 display: block; font: var(--type-label-caps); letter-spacing: 0.05em;
                 text-transform: uppercase; color: var(--on-surface-variant); margin-bottom: 8px;
@@ -192,6 +244,11 @@ export class ShareVehicleModal extends LitElement {
             }
             input[type='text']:focus { outline: 1px solid var(--primary); }
             input[type='text'].invalid { border-color: var(--error); }
+            /* Same treatment the confirm button already had, so a blocked modal
+               reads as one form that is uniformly off rather than a mix of live
+               and dead controls. */
+            input[type='text']:disabled,
+            .durations button:disabled { opacity: 0.5; cursor: not-allowed; }
             .hint { font: var(--type-body-sm); color: var(--on-surface-variant); margin-top: 6px; }
             .hint.bad { color: var(--error); }
 
@@ -229,6 +286,10 @@ export class ShareVehicleModal extends LitElement {
                 background: rgba(255, 180, 171, 0.04);
                 border: 1px solid rgba(255, 180, 171, 0.2); color: var(--error);
             }
+            /* A blocked reason is a precondition, not the outcome of pressing
+               anything, so it is read before the form instead of in the
+               submit-error slot down by the footer. */
+            .banner.lead { margin-top: 0; margin-bottom: 20px; }
             .banner.success {
                 background: rgba(140, 255, 180, 0.04);
                 border: 1px solid rgba(140, 255, 180, 0.2); color: var(--on-surface);
@@ -248,8 +309,28 @@ export class ShareVehicleModal extends LitElement {
         `,
     ];
 
+    /**
+     * The owner line, or nothing at all. An "Owner: —" row while the lookup is
+     * in flight would read as "this vehicle has no owner", which is one of the
+     * blocked reasons and would contradict the banner beside it.
+     */
+    private renderOwner() {
+        const address = this.ownerAddress;
+        if (!address) return nothing;
+
+        const short = shortWallet(address);
+        const isMine = !!this.myWallet && address.toLowerCase() === this.myWallet.toLowerCase();
+        return html`
+            <div class="owner-row">
+                <span class="lbl">${msg('Owner')}</span>
+                <span class="who" title=${address}>${isMine ? msg(str`${short} (you)`) : short}</span>
+            </div>
+        `;
+    }
+
     render() {
         const showInvalid = this.grantee.trim().length > 0 && !this.granteeIsValid;
+        const inputsOff = this.submitting || this.blocked;
 
         return html`
             <div class="card" role="dialog" aria-modal="true" aria-label=${msg('Share vehicle')}>
@@ -263,6 +344,11 @@ export class ShareVehicleModal extends LitElement {
                         : msg('Give another wallet access to this vehicle.')}
                 </p>
 
+                ${this.blocked
+                    ? html`<div class="banner error lead" role="alert">${this.blockedReason}</div>`
+                    : nothing}
+                ${this.renderOwner()}
+
                 <label for="grantee">${msg('Wallet address')}</label>
                 <input
                     id="grantee"
@@ -270,7 +356,7 @@ export class ShareVehicleModal extends LitElement {
                     class=${showInvalid ? 'invalid' : ''}
                     placeholder="0x…"
                     .value=${this.grantee}
-                    ?disabled=${this.submitting}
+                    ?disabled=${inputsOff}
                     @input=${(e: Event) => (this.grantee = (e.target as HTMLInputElement).value)}
                 />
                 <p class="hint ${showInvalid ? 'bad' : ''}">
@@ -285,7 +371,7 @@ export class ShareVehicleModal extends LitElement {
                         (d) => html`
                             <button
                                 class=${this.durationDays === d.days ? 'selected' : ''}
-                                ?disabled=${this.submitting}
+                                ?disabled=${inputsOff}
                                 @click=${() => (this.durationDays = d.days)}
                             >
                                 ${d.label}
@@ -305,7 +391,7 @@ export class ShareVehicleModal extends LitElement {
                                     ${this.existing.map(
                                         (s) => html`
                                             <li>
-                                                <span class="who" title=${s.grantee}>${this.shortAddress(s.grantee)}</span>
+                                                <span class="who" title=${s.grantee}>${shortWallet(s.grantee)}</span>
                                                 <span class="when">${this.formatExpiry(s.expiresAt)}</span>
                                             </li>
                                         `,
@@ -327,7 +413,7 @@ export class ShareVehicleModal extends LitElement {
                     </button>
                     <button
                         class="confirm"
-                        ?disabled=${!this.granteeIsValid || this.submitting}
+                        ?disabled=${!this.granteeIsValid || inputsOff}
                         @click=${this.submit}
                     >
                         ${this.submitting ? msg('Sharing…') : msg('Share')}
