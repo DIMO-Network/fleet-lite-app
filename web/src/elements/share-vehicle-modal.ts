@@ -231,6 +231,15 @@ export class ShareVehicleModal extends LitElement {
                 margin: 0 -24px; padding: 0 24px;
             }
             .card h2 { font: var(--type-headline-md); margin-bottom: 4px; }
+            /* The treatment every other secondary identifier in the app already
+               gets: --type-label-caps is the mono face, so this matches the
+               owner row's label here and the token line under a vehicle row
+               elsewhere without inventing a style for it. */
+            .card .token-id {
+                font: var(--type-label-caps); letter-spacing: 0.05em;
+                text-transform: uppercase; color: var(--on-surface-variant);
+                margin-bottom: 4px;
+            }
             .card .sub { font: var(--type-body-sm); color: var(--on-surface-variant); margin-bottom: 20px; }
             .close {
                 position: absolute; top: 16px; right: 16px;
@@ -360,6 +369,11 @@ export class ShareVehicleModal extends LitElement {
                 </button>
                 <div class="head">
                     <h2>${msg('Share vehicle')}</h2>
+                    <!-- The grant is irreversible once it is on chain, so the id
+                         of the vehicle it will be written against is stated
+                         before the form rather than left to the title, which a
+                         fleet of identical models does not disambiguate. -->
+                    <p class="token-id">${msg(str`Token #${this.tokenId}`)}</p>
                     <p class="sub">
                         ${this.vehicleTitle
                             ? msg(str`Give another wallet access to ${this.vehicleTitle}.`)
