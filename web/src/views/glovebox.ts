@@ -8,6 +8,8 @@ import { DocumentService } from '../services/document-service.ts';
 import { DocumentEntry } from '../types/document.ts';
 import { categoryLabel, EXPECTED_CE_TYPES, CE_TYPE_TO_LABEL } from '../utils/document-categories.ts';
 import { FleetCache } from '../services/fleet-cache.ts';
+import { SettingsService } from '../services/settings-service.ts';
+import { buildShareVehiclesUrl } from '../utils/dimo-permissions.ts';
 import { TCOCache } from '../services/tco-cache.ts';
 import '../elements/upload-document-modal.ts';
 import '../elements/document-detail-modal.ts';
@@ -50,6 +52,9 @@ export class GloveboxView extends LitElement {
     @state() private docCounts = new Map<number, number>();
     @state() private permissionsRequired = false;
     @state() private devLicense = '';
+    // Login host for the grant link in the permissions banner. Empty until
+    // /public/settings resolves; the banner falls back to plain text.
+    @state() private loginUrl = '';
 
     @state() private showUploadModal = false;
     @state() private detailOpen: DocumentEntry | null = null;
@@ -60,6 +65,10 @@ export class GloveboxView extends LitElement {
     async connectedCallback() {
         super.connectedCallback();
         this.connected = true;
+        void SettingsService.getInstance()
+            .fetchPublicSettings()
+            .then((s) => { this.loginUrl = s.loginUrl; })
+            .catch(() => { /* banner degrades to text-only */ });
         try {
             const res = await ApiService.getInstance().get<VehiclesResponse>('/vehicles');
             this.vehicles = res.vehicles || [];
@@ -123,6 +132,21 @@ export class GloveboxView extends LitElement {
         } finally {
             this.loadingDocs = false;
         }
+    }
+
+    /**
+     * Link that sends the vehicle owner to DIMO's sharing screen for the
+     * selected vehicle, asking for every privilege — the glovebox needs
+     * RAW_DATA (7), which no permission template grants. Empty while
+     * /public/settings is still in flight or the API didn't name a license.
+     */
+    private grantUrl(): string {
+        if (!this.loginUrl || !this.devLicense || !this.selected) return '';
+        return buildShareVehiclesUrl({
+            loginUrl: this.loginUrl,
+            clientId: this.devLicense,
+            vehicles: [this.selected.tokenId],
+        });
     }
 
     private async selectVehicle(v: Vehicle) {
@@ -580,10 +604,12 @@ export class GloveboxView extends LitElement {
                                         Documents you upload here are still saved — you just can't list or download them yet.`)}
                                     </p>
                                 </div>
-                                <a class="grant" href="https://console.dimo.org" target="_blank" rel="noopener">
-                                    ${msg('Open DIMO console')}
-                                    <span class="material-symbols-outlined" style="font-size:14px;">open_in_new</span>
-                                </a>
+                                ${this.grantUrl() ? html`
+                                    <a class="grant" href=${this.grantUrl()} target="_blank" rel="noopener">
+                                        ${msg('Grant permissions')}
+                                        <span class="material-symbols-outlined" style="font-size:14px;">open_in_new</span>
+                                    </a>
+                                ` : nothing}
                             </div>
                         ` : nothing}
                         <div class="filter-row">
