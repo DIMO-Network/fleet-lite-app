@@ -17,6 +17,8 @@ import {
     formatVoltage,
 } from '../utils/units.ts';
 import { tripDurationMs } from '../utils/trips.ts';
+import { SettingsService } from '../services/settings-service.ts';
+import { buildShareVehiclesUrl } from '../utils/dimo-permissions.ts';
 import '../elements/vehicle-trips-panel.ts';
 
 interface ChartBar {
@@ -38,6 +40,9 @@ export class VehicleDetailsView extends LitElement {
     @state() private distanceBuckets: TimeSeriesBucket[] = [];
     @state() private telemetryPermissionsRequired = false;
     @state() private telemetryDevLicense = '';
+    // Login host for the grant link in the permissions banner. Empty until
+    // /public/settings resolves; the banner falls back to plain text.
+    @state() private loginUrl = '';
     @state() private favoriteBusy = false;
     // Detected trips over the last 7 days, for the Utilization (driving time)
     // card. The trips panel fetches its own (selectable) window separately.
@@ -144,7 +149,25 @@ export class VehicleDetailsView extends LitElement {
     connectedCallback() {
         super.connectedCallback();
         this.loadAll();
+        void SettingsService.getInstance()
+            .fetchPublicSettings()
+            .then((s) => { this.loginUrl = s.loginUrl; })
+            .catch(() => { /* banner degrades to text-only */ });
         this.unsubscribePrefs = PrefsService.getInstance().subscribe(() => this.requestUpdate());
+    }
+
+    /**
+     * Link that sends the vehicle owner to DIMO's sharing screen for this
+     * vehicle, asking for every privilege. Empty while /public/settings is
+     * still in flight or the API didn't name a license.
+     */
+    private grantUrl(): string {
+        if (!this.loginUrl || !this.telemetryDevLicense) return '';
+        return buildShareVehiclesUrl({
+            loginUrl: this.loginUrl,
+            clientId: this.telemetryDevLicense,
+            vehicles: [this.tokenId],
+        });
     }
 
     disconnectedCallback() {
@@ -990,10 +1013,12 @@ export class VehicleDetailsView extends LitElement {
                                 `)}
                                 </p>
                             </div>
-                            <a class="grant" href="https://console.dimo.org" target="_blank" rel="noopener">
-                                ${msg('Open DIMO console')}
-                                <span class="material-symbols-outlined" style="font-size:14px;">open_in_new</span>
-                            </a>
+                            ${this.grantUrl() ? html`
+                                <a class="grant" href=${this.grantUrl()} target="_blank" rel="noopener">
+                                    ${msg('Grant permissions')}
+                                    <span class="material-symbols-outlined" style="font-size:14px;">open_in_new</span>
+                                </a>
+                            ` : nothing}
                         </div>
                     ` : nothing}
 

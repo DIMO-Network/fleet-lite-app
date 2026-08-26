@@ -2,6 +2,7 @@ import { LitElement, html, css } from 'lit';
 import { msg } from '@lit/localize';
 import { customElement, state } from 'lit/decorators.js';
 import { SettingsService } from '../services/settings-service.ts';
+import { buildLoginUrl } from '../utils/dimo-permissions.ts';
 
 @customElement('login-element')
 export class LoginElement extends LitElement {
@@ -52,8 +53,10 @@ export class LoginElement extends LitElement {
         try {
             const settings = await SettingsService.getInstance().fetchPublicSettings();
             if (settings.clientId && settings.clientId.length === 42 && settings.clientId !== '0x0000000000000000000000000000000000000000') {
-                const redirectUri = location.origin + '/login.html';
-                this.loginUrl = `${settings.loginUrl}?clientId=${settings.clientId}&redirectUri=${encodeURIComponent(redirectUri)}&entryState=EMAIL_INPUT&forceEmail=true`;
+                this.loginUrl = buildLoginUrl({
+                    loginUrl: settings.loginUrl,
+                    clientId: settings.clientId,
+                });
             } else {
                 this.noClient = true;
             }

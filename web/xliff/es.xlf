@@ -696,10 +696,6 @@
                                     telemetry-api. Los gráficos a continuación son marcadores de posición hasta que se otorguen los permisos.
                                 </target>
 </trans-unit>
-<trans-unit id="s3a5535d697ab14d5">
-  <source>Open DIMO console</source>
-  <target>Abrir consola de DIMO</target>
-</trans-unit>
 <trans-unit id="s02e8d6f62a289f87">
   <source>Vehicle status</source>
   <target>Estado del vehículo</target>
@@ -1799,6 +1795,10 @@
 </trans-unit>
 <trans-unit id="s51621cc0113782ba">
   <source>Revoke access for <x id="0" equiv-text="${shortWallet(s.grantee)}"/></source>
+</trans-unit>
+<trans-unit id="s221a304df56e1f01">
+  <source>Grant permissions</source>
+  <target>Otorgar permisos</target>
 </trans-unit>
 </body>
 </file>
