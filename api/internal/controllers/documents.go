@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -18,6 +19,10 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
 )
+
+// maxDownloadBytes caps a single presigned-blob read. Uploads are capped at
+// 25 MB by the fiber body limit, so anything larger is a bad key, not a file.
+const maxDownloadBytes = 32 << 20
 
 type DocumentsController struct {
 	logger       *zerolog.Logger
@@ -54,20 +59,63 @@ func NewDocumentsController(
 
 // vehicleInTenant checks that the tokenID is one of the tenant's synced
 // vehicles — and, for limited members, inside their allowed groups. It returns
-// the fiber error to send, or nil when the vehicle is in scope.
+// the vehicle when it is in scope, or the fiber error to send.
 //
 // It returns an error rather than a bool so an unresolvable group scope can
 // surface as 503 instead of being flattened into "not part of this tenant".
 // Either way the caller is refused: this never opens up on failure.
-func (d *DocumentsController) vehicleInTenant(c *fiber.Ctx, tenant models.Tenant, tokenID uint64) error {
+//
+// In scope is NOT the same as owned. A tenant's vehicle set is whatever its
+// dev license is SACD-privileged on, so it routinely contains vehicles owned
+// by someone else. Reads and appends are fine on those; deletes are not —
+// see requireVehicleOwner.
+func (d *DocumentsController) vehicleInTenant(c *fiber.Ctx, tenant models.Tenant, tokenID uint64) (*models.Vehicle, error) {
 	allowed, _ := GetAllowedGroups(c)
-	if _, err := d.vehicleSvc.GetVehicle(c.Context(), tenant, int64(tokenID), allowed); err != nil {
+	vehicle, err := d.vehicleSvc.GetVehicle(c.Context(), tenant, int64(tokenID), allowed)
+	if err != nil {
 		if serr := ScopeUnavailable(err); serr != nil {
-			return serr
+			return nil, serr
 		}
-		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
+		return nil, fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
+	}
+	return vehicle, nil
+}
+
+// requireVehicleOwner refuses a caller who is not the vehicle's on-chain owner.
+//
+// This is the platform's document-sharing contract, and it is deliberately
+// stricter than "the vehicle is in my fleet": a share grants READ and APPEND,
+// never delete. dimo-app-backend enforces the same rule — its authorizeSubject
+// hands back a 'grantee' mode that "MUST NOT be treated as delete
+// authorization" — and both apps write to the same CloudEvents, so a fleet
+// grantee who could tombstone here would be deleting documents the mobile app
+// would have refused to let them touch.
+func requireVehicleOwner(c *fiber.Ctx, vehicle *models.Vehicle) error {
+	caller, err := GetWalletAddressFromJWT(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusUnauthorized, err.Error())
+	}
+	if vehicle.Owner == "" {
+		// Owner unknown (roster gap) — refuse rather than guess. A wrong
+		// allow here destroys someone else's document.
+		return fiber.NewError(fiber.StatusForbidden, "vehicle owner is unknown; cannot verify delete authority")
+	}
+	if !strings.EqualFold(vehicle.Owner, caller.Hex()) {
+		return fiber.NewError(fiber.StatusForbidden,
+			"only the vehicle owner can delete its documents; a share grants read and append only")
 	}
 	return nil
+}
+
+// isVehicleOwner reports whether the caller owns the vehicle, for annotating
+// reads. Unlike requireVehicleOwner it never errors — an unknown owner simply
+// means "not the owner", which renders the document read-only.
+func isVehicleOwner(c *fiber.Ctx, vehicle *models.Vehicle) bool {
+	caller, err := GetWalletAddressFromJWT(c)
+	if err != nil || vehicle == nil || vehicle.Owner == "" {
+		return false
+	}
+	return strings.EqualFold(vehicle.Owner, caller.Hex())
 }
 
 // ExtractDocument — POST /documents/extract (multipart file).
@@ -157,7 +205,7 @@ func (d *DocumentsController) AttestDocument(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "tokenId, category, fileBase64 are required")
 	}
 
-	if err := d.vehicleInTenant(c, tenant, uint64(req.TokenID)); err != nil {
+	if _, err := d.vehicleInTenant(c, tenant, uint64(req.TokenID)); err != nil {
 		return err
 	}
 
@@ -170,6 +218,14 @@ func (d *DocumentsController) AttestDocument(c *fiber.Ctx) error {
 
 	tokenDID := d.authProvider.BuildVehicleDID(uint64(req.TokenID))
 
+	// Stamp who uploaded this. `source` records that our dev license attested
+	// it; `producer` records the person behind the request, which is the only
+	// way an owner can later tell their own uploads from a sharee's.
+	producer := ""
+	if caller, werr := GetWalletAddressFromJWT(c); werr == nil {
+		producer = d.authProvider.BuildAccountDID(caller)
+	}
+
 	result, err := d.attestSvc.AttestDocumentPair(tenant, service.AttestInput{
 		TokenID:    strconv.FormatInt(req.TokenID, 10),
 		TokenDID:   tokenDID,
@@ -178,6 +234,7 @@ func (d *DocumentsController) AttestDocument(c *fiber.Ctx) error {
 		MimeType:   req.MimeType,
 		FileHash:   fileHash,
 		ParsedData: req.ParsedData,
+		Producer:   producer,
 	})
 	if err != nil {
 		d.logger.Err(err).Int64("tokenID", req.TokenID).Msg("attest failed")
@@ -197,8 +254,8 @@ func (d *DocumentsController) AttestDocument(c *fiber.Ctx) error {
 	return c.JSON(result)
 }
 
-// ListDocuments — GET /documents/list?tokenId=N. Returns parsed CEs only;
-// the frontend uses filehash to download the raw via /documents/download.
+// ListDocuments — GET /documents/list?tokenId=N. Returns parsed document CEs;
+// each carries the `rawId` of its blob CE, which /documents/download takes.
 func (d *DocumentsController) ListDocuments(c *fiber.Ctx) error {
 	tenant, err := GetTenant(c)
 	if err != nil {
@@ -208,12 +265,21 @@ func (d *DocumentsController) ListDocuments(c *fiber.Ctx) error {
 	if err != nil || tokenID == 0 {
 		return fiber.NewError(fiber.StatusBadRequest, "valid tokenId query param required")
 	}
-	if err := d.vehicleInTenant(c, tenant, tokenID); err != nil {
+	vehicle, err := d.vehicleInTenant(c, tenant, tokenID)
+	if err != nil {
 		return err
 	}
+	callerOwnsVehicle := isVehicleOwner(c, vehicle)
+	// The license our attestations are signed with — our own, or the
+	// operator's for a managed tenant. "" means we could not resolve it, and
+	// ownsDocument below is false for everything, which is the safe direction.
+	ourLicense := d.authProvider.EffectiveClientID(tenant)
 
 	tokenDID := d.authProvider.BuildVehicleDID(tokenID)
-	entries, err := d.fetchAPI.ListByDID(tenant, tokenDID, 200)
+	// Enumerated types, filtered server-side. An unfiltered query returns the
+	// most recent CEs of *every* type on the vehicle — on anything streaming
+	// telemetry the documents never make the window.
+	entries, err := d.fetchAPI.ListByDIDAndTypes(tenant, tokenDID, gateway.GloveboxCETypes(), 200)
 	if err != nil {
 		// 403 from token-exchange-api means the dev license lacks SACD
 		// permissions on this vehicle. Surface that so the frontend can
@@ -232,45 +298,70 @@ func (d *DocumentsController) ListDocuments(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadGateway, "list documents failed: "+err.Error())
 	}
 
-	// Build tombstoned-id set so we hide deleted docs.
+	// fetch-api already suppresses tombstoned rows, but only when the tombstone
+	// carries the same `source` as the row it voids. Filter again in-process so
+	// a tombstone written by another app — or one using the older referenceId
+	// payload shape — is honoured too.
 	tombstoned := gateway.TombstonedIDs(entries)
-
-	// rawByHash: filehash -> raw ID, so we can include raw IDs alongside parsed
-	// (for delete path; download uses filehash directly).
-	rawByHash := map[string]string{}
-	for _, e := range entries {
-		if strings.HasPrefix(e.Type, "dimo.raw.") && e.FileHash != "" {
-			rawByHash[e.FileHash] = e.ID
-		}
-	}
 
 	parsed := make([]fiber.Map, 0, len(entries))
 	for _, e := range entries {
-		if !strings.HasPrefix(e.Type, "dimo.document.") {
+		if e.Type == gateway.TombstoneCEType {
 			continue
 		}
 		if _, gone := tombstoned[e.ID]; gone {
 			continue
 		}
-		parsed = append(parsed, fiber.Map{
-			"id":       e.ID,
-			"type":     e.Type,
-			"source":   e.Source,
-			"time":     e.Time,
-			"fileHash": e.FileHash,
-			"data":     e.Data,
-			"rawId":    rawByHash[e.FileHash],
-		})
+		doc := fiber.Map{
+			"id":     e.ID,
+			"type":   e.Type,
+			"source": e.Source,
+			"time":   e.Time,
+			"data":   e.Data,
+			// The raw blob CE this document was extracted from, or "" for
+			// documents attested before raweventid pairing. /documents/download
+			// takes this id; without it there is nothing to download.
+			"rawId": e.RawEventID,
+			// Provenance and authority, so a shared vehicle's documents can be
+			// told apart in the UI instead of all looking locally owned.
+			//
+			// isThirdParty: attested by some other dev license — a document
+			// this vehicle's owner added from the DIMO mobile app reads as
+			// third-party here, and vice versa. It is NOT a permission.
+			//
+			// isReadOnly: the caller cannot modify this document. True for
+			// everyone but the vehicle's owner, matching the delete gate, and
+			// true for any document we did not attest, because our tombstone
+			// would not suppress it platform-wide.
+			"isThirdParty": !weAttested(ourLicense, e.Source),
+			"isReadOnly":   !callerOwnsVehicle || !weAttested(ourLicense, e.Source),
+		}
+		// uploadedBy is the account DID of the wallet that added the document,
+		// from the CE's `producer`. Absent on documents written before
+		// provenance stamping — omitted rather than sent empty so the UI can
+		// tell "nobody recorded" from "recorded as nobody".
+		if e.Producer != "" {
+			doc["uploadedBy"] = e.Producer
+		}
+		parsed = append(parsed, doc)
 	}
 
 	return c.JSON(fiber.Map{
 		"documents": parsed,
 		"tokenDid":  tokenDID,
+		// Whether the caller owns this vehicle or merely holds it under a
+		// share. Drives whether the UI offers delete at all.
+		"isOwner": callerOwnsVehicle,
 	})
 }
 
-// DownloadDocument — GET /documents/download?tokenId=N&filehash=X.
+// DownloadDocument — GET /documents/download?tokenId=N&rawId=X.
 // Streams the raw bytes with Content-Disposition so the browser saves.
+//
+// rawId is the raw blob CE's id, taken from a document's `rawId` in
+// /documents/list. It used to be a filehash, which could never work:
+// fetch-api's CloudEventHeader has no filehash field, so the lookup matched
+// nothing and the download button stayed disabled.
 func (d *DocumentsController) DownloadDocument(c *fiber.Ctx) error {
 	tenant, err := GetTenant(c)
 	if err != nil {
@@ -280,36 +371,70 @@ func (d *DocumentsController) DownloadDocument(c *fiber.Ctx) error {
 	if err != nil || tokenID == 0 {
 		return fiber.NewError(fiber.StatusBadRequest, "valid tokenId query param required")
 	}
-	fileHash := c.Query("filehash")
-	if fileHash == "" {
-		return fiber.NewError(fiber.StatusBadRequest, "filehash query param required")
+	rawID := c.Query("rawId")
+	if rawID == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "rawId query param required")
 	}
-	if err := d.vehicleInTenant(c, tenant, tokenID); err != nil {
+	if _, err := d.vehicleInTenant(c, tenant, tokenID); err != nil {
 		return err
 	}
 
+	// The point query is DID-scoped, so a CE that comes back necessarily
+	// belongs to this vehicle — the asset JWT is the authorization boundary.
 	tokenDID := d.authProvider.BuildVehicleDID(tokenID)
-	entry, err := d.fetchAPI.FindRawByFilehash(tenant, tokenDID, fileHash)
+	entry, err := d.fetchAPI.GetCloudEventByID(tenant, tokenDID, rawID)
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadGateway, "fetch raw document failed: "+err.Error())
 	}
 	if entry == nil {
 		return fiber.NewError(fiber.StatusNotFound, "document not found")
 	}
-
-	fileBytes, err := base64.StdEncoding.DecodeString(entry.DataBase64)
-	if err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "decode raw document base64")
+	// This endpoint serves document attachments, not arbitrary CEs. Without
+	// this a caller could name any event id on a vehicle in their fleet — a
+	// telemetry row, say — and have it streamed back as a file download.
+	if !strings.HasPrefix(entry.Type, "dimo.raw.") {
+		return fiber.NewError(fiber.StatusBadRequest, "rawId does not identify a document attachment")
 	}
+
+	fileBytes, err := d.rawDocumentBytes(entry)
+	if err != nil {
+		d.logger.Err(err).Str("rawId", rawID).Msg("read raw document payload")
+		return fiber.NewError(fiber.StatusBadGateway, "read raw document failed")
+	}
+
 	contentType := entry.DataContentType
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
 
-	filename := buildDownloadFilename(entry.Type, entry.Time, contentType, fileHash)
+	filename := buildDownloadFilename(entry.Type, entry.Time, contentType, rawID)
 	c.Set(fiber.HeaderContentType, contentType)
 	c.Set(fiber.HeaderContentDisposition, fmt.Sprintf(`attachment; filename="%s"`, filename))
 	return c.Send(fileBytes)
+}
+
+// rawDocumentBytes pulls the file out of a raw CE. fetch-api inlines small
+// blobs as dataBase64 but hands back a presigned S3 URL for larger ones, so
+// both have to be handled. We fetch the presigned URL server-side rather than
+// redirecting: it keeps the S3 URL off the client and preserves the
+// Content-Disposition filename the browser saves under.
+func (d *DocumentsController) rawDocumentBytes(entry *gateway.AttestationEntry) ([]byte, error) {
+	if entry.DataBase64 != "" {
+		return base64.StdEncoding.DecodeString(entry.DataBase64)
+	}
+	if entry.DataURL == "" {
+		return nil, fmt.Errorf("raw cloud event %s carries no payload", entry.ID)
+	}
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get(entry.DataURL)
+	if err != nil {
+		return nil, fmt.Errorf("get presigned blob: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("presigned blob status %d", resp.StatusCode)
+	}
+	return io.ReadAll(io.LimitReader(resp.Body, maxDownloadBytes))
 }
 
 // DeleteDocument — DELETE /documents/:id?tokenId=N. Emits a tombstone CE.
@@ -326,33 +451,59 @@ func (d *DocumentsController) DeleteDocument(c *fiber.Ctx) error {
 	if err != nil || tokenID == 0 {
 		return fiber.NewError(fiber.StatusBadRequest, "valid tokenId query param required")
 	}
-	if err := d.vehicleInTenant(c, tenant, tokenID); err != nil {
+	vehicle, err := d.vehicleInTenant(c, tenant, tokenID)
+	if err != nil {
+		return err
+	}
+	// Deletes are owner-only. Being in the tenant's fleet is not enough: the
+	// fleet includes vehicles held under a share, and a share is read+append.
+	if err := requireVehicleOwner(c, vehicle); err != nil {
 		return err
 	}
 
-	// Look up the paired raw id by filehash (best-effort — if we don't find
-	// it we still emit a tombstone for the parsed id).
+	// Resolve the document on this vehicle before tombstoning it. The point
+	// query is DID-scoped, so a hit proves the id really belongs to this
+	// vehicle — without it any id could be tombstoned by anyone holding a
+	// vehicle in their fleet.
 	tokenDID := d.authProvider.BuildVehicleDID(tokenID)
-	rawID := ""
-	if entries, err := d.fetchAPI.ListByDID(tenant, tokenDID, 200); err == nil {
-		for _, e := range entries {
-			if e.ID == parsedID && e.FileHash != "" {
-				for _, e2 := range entries {
-					if strings.HasPrefix(e2.Type, "dimo.raw.") && e2.FileHash == e.FileHash {
-						rawID = e2.ID
-						break
-					}
-				}
-				break
-			}
-		}
+	ce, err := d.fetchAPI.GetCloudEventByID(tenant, tokenDID, parsedID)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadGateway, "look up document failed: "+err.Error())
 	}
+	if ce == nil {
+		return fiber.NewError(fiber.StatusNotFound, "document not found on this vehicle")
+	}
+	rawID := ce.RawEventID
 
 	result, err := d.attestSvc.Tombstone(tenant, parsedID, rawID, tokenDID)
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadGateway, "tombstone failed: "+err.Error())
 	}
-	return c.JSON(result)
+
+	// fetch-api suppresses a tombstoned row only when the tombstone carries the
+	// same `source` as the row it voids (voidsSuppressionMod). We sign with our
+	// own dev license, so a document another app attested stays visible in that
+	// app even after we tombstone it — we hide it locally and no further. Tell
+	// the caller which of the two happened rather than reporting a clean delete.
+	deletedEverywhere := weAttested(d.authProvider.EffectiveClientID(tenant), ce.Source)
+	return c.JSON(fiber.Map{
+		"rawSubmission":     result.RawSubmission,
+		"parsedSubmission":  result.ParsedSubmission,
+		"deletedEverywhere": deletedEverywhere,
+	})
+}
+
+// weAttested reports whether a document's `source` is the license we sign
+// with — i.e. whether a tombstone from us would actually suppress it in
+// fetch-api, which matches on (source, voids_id).
+//
+// An unresolved license is never a match. Claiming a document we cannot
+// tombstone would offer a delete that silently does nothing outside this app.
+func weAttested(ourLicense, source string) bool {
+	if ourLicense == "" || source == "" {
+		return false
+	}
+	return strings.EqualFold(ourLicense, source)
 }
 
 func isAllowedMime(m string) bool {
@@ -364,7 +515,8 @@ func isAllowedMime(m string) bool {
 }
 
 // buildDownloadFilename: <last-segment-of-type>-YYYY-MM-DD.<ext>
-func buildDownloadFilename(ceType, ceTime, mimeType, fileHash string) string {
+// ceID is only a last-resort fallback when the type yields no usable name.
+func buildDownloadFilename(ceType, ceTime, mimeType, ceID string) string {
 	base := "document"
 	if ceType != "" {
 		parts := strings.Split(ceType, ".")
@@ -383,8 +535,8 @@ func buildDownloadFilename(ceType, ceTime, mimeType, fileHash string) string {
 	}
 	ext := extensionForMIME(mimeType)
 	base = sanitizeFilenameSegment(base)
-	if base == "" && len(fileHash) >= 8 {
-		base = "document-" + fileHash[:8]
+	if base == "" && len(ceID) >= 8 {
+		base = "document-" + ceID[:8]
 	}
 	if base == "" {
 		base = "document"

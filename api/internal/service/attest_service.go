@@ -25,8 +25,8 @@ import (
 //
 // Signing uses the dev license private key in settings.yaml
 // (DIMO_AUTH_PRIVATE_KEY). The CE pair is "raw" (data_base64 = file bytes)
-// and "parsed" (data = extracted fields); both reference the same filehash so
-// fetch-api can join them.
+// and "parsed" (data = extracted fields); the parsed one carries the raw CE's
+// id in `raweventid` so a reader can follow a document back to its file.
 type AttestService interface {
 	AttestDocumentPair(tenant models.Tenant, input AttestInput) (*AttestResult, error)
 	Tombstone(tenant models.Tenant, parsedID, rawID, tokenDID string) (*AttestResult, error)
@@ -70,6 +70,12 @@ type AttestInput struct {
 	FileHash      string                 // SHA256 hex (computed if empty)
 	ParsedData    map[string]interface{} // from Extract API
 	RawDocumentID string                 // UUID for raw event (generated if empty)
+	// Producer is the account DID of the wallet that uploaded the document,
+	// stamped on both CEs as provenance. It is NOT an authorization input —
+	// `source` (our dev license) is who attested, `producer` is who asked.
+	// dimo-app-backend stamps the same field, which is what lets a vehicle
+	// owner see which of their sharees contributed a given document.
+	Producer string
 }
 
 type AttestResult struct {
@@ -96,6 +102,13 @@ type signedCloudEvent struct {
 	Data            map[string]interface{} `json:"data"`
 	Signature       string                 `json:"signature"`
 	FileHash        string                 `json:"filehash"`
+	// RawEventID links a parsed document CE to the raw blob CE it was
+	// extracted from. This is the pairing fetch-api actually exposes — its
+	// CloudEventHeader has a `raweventid` field and no `filehash` — so it is
+	// the only link a reader can follow back to the file. dimo-app-backend
+	// stamps the same extension, which is what lets either app resolve the
+	// other's attachments.
+	RawEventID string `json:"raweventid,omitempty"`
 }
 
 // signedRawCloudEvent — raw/binary attestation.
@@ -103,6 +116,7 @@ type signedRawCloudEvent struct {
 	SpecVersion     string `json:"specversion"`
 	ID              string `json:"id"`
 	Source          string `json:"source"`
+	Producer        string `json:"producer,omitempty"`
 	Type            string `json:"type"`
 	Subject         string `json:"subject"`
 	Time            string `json:"time"`
@@ -171,6 +185,7 @@ func (s *attestService) buildParsedCloudEvent(input AttestInput, signature, sour
 		SpecVersion:     "1.0",
 		ID:              uuid.New().String(),
 		Source:          source,
+		Producer:        input.Producer,
 		Type:            parsedEventType(input.Category),
 		Subject:         input.TokenDID,
 		Time:            time.Now().UTC().Format(time.RFC3339),
@@ -178,6 +193,7 @@ func (s *attestService) buildParsedCloudEvent(input AttestInput, signature, sour
 		Data:            input.ParsedData,
 		Signature:       signature,
 		FileHash:        input.FileHash,
+		RawEventID:      input.RawDocumentID,
 	}
 }
 
@@ -194,6 +210,7 @@ func (s *attestService) buildRawCloudEvent(input AttestInput, signature, source 
 		SpecVersion:     "1.0",
 		ID:              rawID,
 		Source:          source,
+		Producer:        input.Producer,
 		Type:            rawEventType(input.Category),
 		Subject:         input.TokenDID,
 		Time:            time.Now().UTC().Format(time.RFC3339),

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -45,6 +46,17 @@ var CostEligibleCETypes = map[string]bool{
 // operating costs.
 func isCostEligible(ceType string) bool {
 	return CostEligibleCETypes[ceType]
+}
+
+// costEligibleCETypeList is CostEligibleCETypes as the slice fetch-api's
+// `types` filter wants. Sorted so the generated query is stable.
+func costEligibleCETypeList() []string {
+	types := make([]string, 0, len(CostEligibleCETypes))
+	for t := range CostEligibleCETypes {
+		types = append(types, t)
+	}
+	sort.Strings(types)
+	return types
 }
 
 // extractAmount pulls "amount"/"currency" out of a parsed document CE's data
@@ -336,7 +348,10 @@ func (s *TCOService) VehicleSummary(ctx context.Context, tenant models.Tenant, t
 	label := vehicleLabel(*vehicle)
 
 	tokenDID := s.authProvider.BuildVehicleDID(uint64(tokenID))
-	entries, err := s.fetchAPI.ListByDID(tenant, tokenDID, 500)
+	// Enumerated, server-side-filtered types. Reading unfiltered would take the
+	// most recent 500 CEs of every kind — telemetry included — and silently
+	// drop the documents the costs are computed from.
+	entries, err := s.fetchAPI.ListByDIDAndTypes(tenant, tokenDID, gateway.TCOCETypes(costEligibleCETypeList()), 500)
 	permissionsRequired := false
 	if err != nil {
 		// Mirrors DocumentsController.ListDocuments: a 403 here means the dev

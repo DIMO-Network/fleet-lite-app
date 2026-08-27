@@ -83,12 +83,12 @@ export class DocumentService {
         });
     }
 
-    /** Trigger a browser file download for the raw bytes by tokenId + filehash. */
-    async download(tokenId: number, fileHash: string): Promise<void> {
+    /** Trigger a browser file download for the raw bytes by tokenId + raw CE id. */
+    async download(tokenId: number, rawId: string): Promise<void> {
         const base = ApiService.getInstance().getApiBaseUrl();
         const token = localStorage.getItem('token');
         const res = await fetch(
-            `${base}/documents/download?tokenId=${tokenId}&filehash=${encodeURIComponent(fileHash)}`,
+            `${base}/documents/download?tokenId=${tokenId}&rawId=${encodeURIComponent(rawId)}`,
             {
                 headers: {
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -102,7 +102,7 @@ export class DocumentService {
         const blob = await res.blob();
         const disposition = res.headers.get('Content-Disposition') || '';
         const match = /filename="?([^";]+)"?/i.exec(disposition);
-        const filename = match?.[1] || `document-${fileHash.slice(0, 8)}`;
+        const filename = match?.[1] || `document-${rawId.slice(0, 8)}`;
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;

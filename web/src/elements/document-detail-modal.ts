@@ -149,7 +149,7 @@ export class DocumentDetailModal extends LitElement {
         this.downloading = true;
         this.errorMessage = '';
         try {
-            await DocumentService.getInstance().download(this.tokenId, this.document.fileHash);
+            await DocumentService.getInstance().download(this.tokenId, this.document.rawId ?? '');
         } catch (e) {
             this.errorMessage = e instanceof Error ? e.message : msg('Download failed');
         } finally {
@@ -187,12 +187,20 @@ export class DocumentDetailModal extends LitElement {
                 <p class="sub">${this.document.type} · ${this.formatTime(this.document.time)}</p>
 
                 ${this.errorMessage ? html`<div class="error-text">${this.errorMessage}</div>` : nothing}
+                ${this.document.isReadOnly
+                    ? html`<p class="sub">${this.document.isThirdParty
+                          ? msg('Added through another DIMO app. You can view and download it here; only the app that added it can remove it.')
+                          : msg('This vehicle is shared with you. You can view, download and add documents, but not delete them.')}</p>`
+                    : nothing}
 
                 <dl>
                     <dt>${msg('Document ID')}</dt>
                     <dd><code>${this.document.id}</code></dd>
-                    <dt>${msg('File hash')}</dt>
-                    <dd><code>${this.document.fileHash || '—'}</code></dd>
+                    <dt>${msg('File ID')}</dt>
+                    <dd><code>${this.document.rawId || '—'}</code></dd>
+                    ${this.document.uploadedBy
+                        ? html`<dt>${msg('Added by')}</dt><dd><code>${this.document.uploadedBy}</code></dd>`
+                        : nothing}
                     ${fields.length
                         ? fields.map(([k, v]) => html`<dt>${k}</dt><dd>${v}</dd>`)
                         : html`<dt>${msg('Fields')}</dt><dd class="empty">${msg('No structured fields extracted')}</dd>`
@@ -200,13 +208,15 @@ export class DocumentDetailModal extends LitElement {
                 </dl>
 
                 <div class="actions">
-                    <button class="danger" ?disabled=${this.deleting} @click=${this.onDelete}>
-                        ${this.deleting ? msg('Deleting…') : msg('Delete')}
-                    </button>
+                    ${this.document.isReadOnly
+                        ? nothing
+                        : html`<button class="danger" ?disabled=${this.deleting} @click=${this.onDelete}>
+                              ${this.deleting ? msg('Deleting…') : msg('Delete')}
+                          </button>`}
                     <button class="ghost" @click=${this.dispatchClose}>${msg('Close')}</button>
                     <button
                         class="primary"
-                        ?disabled=${this.downloading || !this.document.fileHash}
+                        ?disabled=${this.downloading || !this.document.rawId}
                         @click=${this.onDownload}>
                         ${this.downloading ? msg('Downloading…') : msg('Download')}
                     </button>

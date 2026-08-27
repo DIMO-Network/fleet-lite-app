@@ -165,6 +165,24 @@ func (p *DimoAuthProvider) GetVehicleJWT(tenant models.Tenant, tokenID uint64) (
 	return vehicleJWT, nil
 }
 
+// assetJWTPrivileges is what a CloudEvent read needs — and nothing more.
+//
+// Asset JWTs are used for exactly one thing here: fetch-api reads (telemetry
+// goes through GetVehicleJWT with its own set). Token-exchange refuses the
+// whole request if the SACD is missing ANY privilege asked for, so every extra
+// entry narrows the set of grants that can read documents at all.
+//
+// This is dimo-app-backend's FETCH_API_PERMISSIONS exactly. We previously also
+// asked for GetLocationHistory, which no CloudEvent read uses: a share granting
+// raw data but not all-time location produced a 403 here while the same
+// documents read fine in the mobile app.
+var assetJWTPrivileges = []string{
+	"privilege:GetNonLocationHistory",
+	"privilege:GetCurrentLocation",
+	"privilege:GetVINCredential",
+	"privilege:GetRawData",
+}
+
 // GetAssetJWT exchanges the tenant's developer JWT for an asset (DID-scoped) JWT.
 // DID format: did:erc721:<chainId>:<contractAddr>:<tokenId>
 func (p *DimoAuthProvider) GetAssetJWT(tenant models.Tenant, tokenDID string) (string, error) {
@@ -182,13 +200,7 @@ func (p *DimoAuthProvider) GetAssetJWT(tenant models.Tenant, tokenDID string) (s
 		return "", err
 	}
 
-	assetJWT, err := auth.GetAssetJWT(developerJWT, []string{
-		"privilege:GetNonLocationHistory",
-		"privilege:GetCurrentLocation",
-		"privilege:GetLocationHistory",
-		"privilege:GetVINCredential",
-		"privilege:GetRawData",
-	}, tokenDID)
+	assetJWT, err := auth.GetAssetJWT(developerJWT, assetJWTPrivileges, tokenDID)
 	if err != nil {
 		return "", fmt.Errorf("exchange for asset JWT: %w", err)
 	}
@@ -200,6 +212,52 @@ func (p *DimoAuthProvider) GetAssetJWT(tenant models.Tenant, tokenDID string) (s
 // BuildVehicleDID returns the canonical asset DID for a vehicle tokenID.
 func (p *DimoAuthProvider) BuildVehicleDID(tokenID uint64) string {
 	return fmt.Sprintf("did:erc721:%d:%s:%d", p.settings.ChainID, p.settings.VehicleNftAddress.Hex(), tokenID)
+}
+
+// EffectiveClientID returns the dev-license client id this tenant's
+// attestations are actually signed with — its own when it holds credentials,
+// the operator's when fleet-tenancy-api mints for it (`tenant.ClientID == ""`
+// is the sentinel for that, per GetDeveloperJWT).
+//
+// It matters because a CloudEvent's `source` is that client id, and fetch-api
+// only suppresses a tombstone against a row with a matching `source`. Comparing
+// a document's source to `tenant.ClientID` directly would mark every document
+// of every managed tenant as somebody else's.
+//
+// Cached per tenant: the value is stable, and this is on the document-list
+// path. An unresolvable id returns "" and callers must treat that as "we
+// cannot claim this document", never as a match.
+func (p *DimoAuthProvider) EffectiveClientID(tenant models.Tenant) string {
+	if tenant.ClientID != "" {
+		return tenant.ClientID
+	}
+	cacheKey := "client-id:" + tenant.ID
+	if cached, found := p.developerJWTCache.Get(cacheKey); found {
+		return cached.(string)
+	}
+	if p.remoteMinter == nil {
+		return ""
+	}
+	minted, err := p.remoteMinter.DimoToken(context.Background(), tenant.ID)
+	if err != nil || minted == nil || minted.ClientID == "" {
+		p.logger.Warn().Err(err).Str("tenant_id", tenant.ID).
+			Msg("could not resolve the tenant's effective client id; documents will read as third-party")
+		return ""
+	}
+	p.developerJWTCache.Set(cacheKey, minted.ClientID, 10*time.Minute)
+	return minted.ClientID
+}
+
+// BuildAccountDID returns the canonical account DID for a wallet address:
+// `did:ethr:<chainId>:<EIP-55 address>`. This is the exact form
+// dimo-app-backend's canonicalAccountDid produces, and the only form DIS and
+// fetch-api accept — a 3-part did:ethr or a lowercased address is rejected or,
+// worse, silently indexed apart.
+//
+// Used to stamp `producer` on document CEs so an uploader is attributable
+// across both apps.
+func (p *DimoAuthProvider) BuildAccountDID(address common.Address) string {
+	return fmt.Sprintf("did:ethr:%d:%s", p.settings.ChainID, address.Hex())
 }
 
 // BuildTenantDID returns the ethr DID for a tenant's dev-license client id. It

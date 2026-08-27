@@ -70,10 +70,6 @@
   <source>Delete failed</source>
   <target>Error al eliminar</target>
 </trans-unit>
-<trans-unit id="s149aa6bc7c32b9a5">
-  <source>File hash</source>
-  <target>Hash del archivo</target>
-</trans-unit>
 <trans-unit id="s36cb242ac90353bc">
   <source>Fields</source>
   <target>Campos</target>
@@ -1799,6 +1795,18 @@
 <trans-unit id="s221a304df56e1f01">
   <source>Grant permissions</source>
   <target>Otorgar permisos</target>
+</trans-unit>
+<trans-unit id="s4adc5c14fd53aceb">
+  <source>Added through another DIMO app. You can view and download it here; only the app that added it can remove it.</source>
+</trans-unit>
+<trans-unit id="s0133efb90058acce">
+  <source>This vehicle is shared with you. You can view, download and add documents, but not delete them.</source>
+</trans-unit>
+<trans-unit id="s1bed893eb831653c">
+  <source>File ID</source>
+</trans-unit>
+<trans-unit id="s37994d4488233fda">
+  <source>Added by</source>
 </trans-unit>
 </body>
 </file>
