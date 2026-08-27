@@ -39,16 +39,39 @@ func TestExtractAmount(t *testing.T) {
 		wantAmount   float64
 		wantCurrency string
 		wantOK       bool
+		ceType       string
 	}{
-		{"amount and currency", `{"amount": 412.5, "currency": "EUR"}`, 412.5, "EUR", true},
-		{"amount defaults currency to USD", `{"amount": 10}`, 10, "USD", true},
-		{"no amount field", `{"vin": "1HGCM82633A123456"}`, 0, "", false},
-		{"empty data", ``, 0, "", false},
-		{"malformed json", `not json`, 0, "", false},
+		{"amount and currency", `{"amount": 412.5, "currency": "EUR"}`, 412.5, "EUR", true, "dimo.document.vehicle.expense"},
+		{"amount defaults currency to USD", `{"amount": 10}`, 10, "USD", true, "dimo.document.vehicle.expense"},
+		{"no cost field", `{"vin": "1HGCM82633A123456"}`, 0, "", false, "dimo.document.vehicle.title"},
+		{"empty data", ``, 0, "", false, "dimo.document.vehicle.expense"},
+		{"malformed json", `not json`, 0, "", false, "dimo.document.vehicle.expense"},
+
+		// Each document type names its cost differently. Reading only "amount"
+		// left every invoice, policy and fee reported as a missing amount with
+		// the figure sitting in its payload.
+		{"invoice uses totalCost", `{"totalCost": 289.4, "currency": "USD"}`, 289.4, "USD", true, "dimo.document.vehicle.service.invoice"},
+		{"coarse service parent uses totalCost", `{"totalCost": 55}`, 55, "USD", true, "dimo.document.vehicle.service"},
+		{"maintenance uses totalCost", `{"totalCost": 120.75}`, 120.75, "USD", true, "dimo.document.vehicle.maintenance"},
+		{"insurance uses premium", `{"premium": 1450, "currency": "USD"}`, 1450, "USD", true, "dimo.document.vehicle.insurance"},
+		{"regulatory uses amountDue", `{"amountDue": 42.5}`, 42.5, "USD", true, "dimo.document.vehicle.regulatory.other"},
+		{"fuel uses amount", `{"amount": 58.81}`, 58.81, "USD", true, FuelCloudEventType},
+
+		// A finance balance is what is still owed, not what was spent. Counting
+		// it as operating cost would inflate TCO by the outstanding principal.
+		{"finance balance is not a cost", `{"balance": 24000, "lender": "Ford Credit"}`, 0, "", false, "dimo.document.vehicle.finance"},
+
+		// A document classified at a coarse parent can still carry the leaf's
+		// vocabulary, so an unmapped field name is tried before giving up.
+		{"falls back across known cost fields", `{"totalCost": 77.2}`, 77.2, "USD", true, "dimo.document.vehicle.ownership"},
+
+		// Extractors are not always disciplined about types.
+		{"numeric string with symbols", `{"totalCost": "$1,234.56"}`, 1234.56, "USD", true, "dimo.document.vehicle.service.invoice"},
+		{"non-numeric string is not a cost", `{"totalCost": "see attached"}`, 0, "", false, "dimo.document.vehicle.service.invoice"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			amount, currency, ok := extractAmount(json.RawMessage(tc.data))
+			amount, currency, ok := extractAmount(tc.ceType, json.RawMessage(tc.data))
 			if ok != tc.wantOK {
 				t.Fatalf("ok = %v, want %v", ok, tc.wantOK)
 			}

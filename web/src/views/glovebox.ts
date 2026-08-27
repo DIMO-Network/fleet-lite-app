@@ -6,7 +6,8 @@ import { ApiService } from '../services/api-service.ts';
 import { Vehicle, VehiclesResponse } from '../types/vehicle.ts';
 import { DocumentService } from '../services/document-service.ts';
 import { DocumentEntry } from '../types/document.ts';
-import { categoryLabel, EXPECTED_CE_TYPES, CE_TYPE_TO_LABEL } from '../utils/document-categories.ts';
+import { categoryLabel, EXPECTED_CE_TYPES } from '../utils/document-categories.ts';
+import { documentSummary } from '../utils/document-summary.ts';
 import { FleetCache } from '../services/fleet-cache.ts';
 import { SettingsService } from '../services/settings-service.ts';
 import { buildShareVehiclesUrl } from '../utils/dimo-permissions.ts';
@@ -538,17 +539,19 @@ export class GloveboxView extends LitElement {
     }
 
     private renderDocRow(d: DocumentEntry) {
-        const fields = (d.data as { data?: { fields?: Record<string, unknown> }; fields?: Record<string, unknown> } | null) ?? {};
-        const inner = fields.data?.fields ?? fields.fields ?? {};
-        const name = (typeof (inner as Record<string, unknown>).name === 'string')
-            ? (inner as { name: string }).name
-            : (CE_TYPE_TO_LABEL[d.type] ?? d.type);
+        // Title and detail come from the document's own extracted fields —
+        // vendor, amount, plate — the same way dimo-driver renders them. The
+        // old code only looked for a `name` field, which nothing writes, so
+        // every row fell back to its category and a group of five service
+        // records read as five identical lines.
+        const { title, subtitle } = documentSummary(d.type, d.data);
+        const when = this.formatTime(d.time);
         return html`
             <div class="doc-row" @click=${() => this.openDetail(d)}>
                 <div class="file-icon"><span class="material-symbols-outlined">description</span></div>
                 <div class="meta">
-                    <div class="title">${name}</div>
-                    <div class="when">${this.formatTime(d.time)}</div>
+                    <div class="title">${title}</div>
+                    <div class="when">${subtitle ? `${subtitle} · ${when}` : when}</div>
                 </div>
                 <span class="material-symbols-outlined chev">chevron_right</span>
             </div>

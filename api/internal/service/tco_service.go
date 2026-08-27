@@ -59,25 +59,98 @@ func costEligibleCETypeList() []string {
 	return types
 }
 
-// extractAmount pulls "amount"/"currency" out of a parsed document CE's data
-// payload. ok is false when data is empty, unparseable, or has no numeric
-// amount field — callers should skip the document rather than count it as $0.
-func extractAmount(data json.RawMessage) (amount float64, currency string, ok bool) {
+// costFieldsByType names the field a document's cost actually lives in, per CE
+// type, in precedence order.
+//
+// There is no single "amount" field. extract-api and the chat agent each use
+// the vocabulary of the document in front of them — an invoice has a
+// totalCost, a policy has a premium, a fee notice has an amountDue — and
+// dimo-driver's formatters read exactly these names. Reading only "amount"
+// found expenses and nothing else, so every invoice, policy and fee landed in
+// "missing amounts" with a real figure sitting in its payload.
+//
+// `balance` is deliberately absent. A finance document's balance is what is
+// still owed, not what was spent; summing it into operating cost would inflate
+// TCO by the outstanding principal. Finance keeps its manual amount entry.
+var costFieldsByType = map[string][]string{
+	"dimo.document.vehicle.service":          {"totalCost"},
+	"dimo.document.vehicle.service.invoice":  {"totalCost"},
+	"dimo.document.vehicle.maintenance":      {"totalCost"},
+	"dimo.document.vehicle.insurance":        {"premium"},
+	"dimo.document.vehicle.regulatory":       {"amountDue"},
+	"dimo.document.vehicle.regulatory.other": {"amountDue"},
+	"dimo.document.vehicle.expense":          {"amount"},
+	FuelCloudEventType:                       {"amount"},
+}
+
+// costFieldsFallback is tried for a type with no mapping of its own, and after
+// a mapped type's own fields come up empty — a document classified at a coarse
+// parent may still carry the leaf's vocabulary.
+var costFieldsFallback = []string{"totalCost", "amount", "amountDue", "premium"}
+
+// extractAmount pulls a document's cost and currency out of its parsed CE
+// payload, reading whichever field that document type uses. ok is false when
+// the payload is empty, unparseable, or carries no numeric cost — callers skip
+// those rather than counting them as $0.
+func extractAmount(ceType string, data json.RawMessage) (amount float64, currency string, ok bool) {
 	if len(data) == 0 {
 		return 0, "", false
 	}
-	var payload struct {
-		Amount   *float64 `json:"amount"`
-		Currency string   `json:"currency"`
-	}
-	if err := json.Unmarshal(data, &payload); err != nil || payload.Amount == nil {
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(data, &payload); err != nil {
 		return 0, "", false
 	}
-	currency = payload.Currency
-	if currency == "" {
-		currency = "USD"
+
+	fields := costFieldsByType[ceType]
+	for _, name := range append(append([]string{}, fields...), costFieldsFallback...) {
+		raw, present := payload[name]
+		if !present {
+			continue
+		}
+		v, valid := numericField(raw)
+		if !valid {
+			continue
+		}
+		return v, currencyOf(payload), true
 	}
-	return *payload.Amount, currency, true
+	return 0, "", false
+}
+
+// numericField reads a cost that may be encoded as a JSON number or, from a
+// less disciplined extractor, as a string like "1,234.56" or "$89.00".
+func numericField(raw json.RawMessage) (float64, bool) {
+	var f float64
+	if err := json.Unmarshal(raw, &f); err == nil {
+		return f, true
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return 0, false
+	}
+	cleaned := strings.Map(func(r rune) rune {
+		if (r >= '0' && r <= '9') || r == '.' || r == '-' {
+			return r
+		}
+		return -1
+	}, s)
+	if cleaned == "" || cleaned == "-" || cleaned == "." {
+		return 0, false
+	}
+	v, err := strconv.ParseFloat(cleaned, 64)
+	if err != nil {
+		return 0, false
+	}
+	return v, true
+}
+
+func currencyOf(payload map[string]json.RawMessage) string {
+	if raw, ok := payload["currency"]; ok {
+		var c string
+		if err := json.Unmarshal(raw, &c); err == nil && c != "" {
+			return c
+		}
+	}
+	return "USD"
 }
 
 // straightLineDepreciation returns the depreciation accrued from purchaseDate
@@ -283,19 +356,38 @@ func vehicleLabel(v models.Vehicle) string {
 
 // descriptionFor derives a human label for a line item from its parsed data's
 // "fileName"/"name" field, falling back to the CE type's last segment.
+// descriptionLabelFields are the fields that identify a document to a human,
+// in the order worth trying. `summary` is the extractor's own one-line
+// description and wins whenever present; the rest name the counterparty, which
+// is what makes one invoice distinguishable from the next.
+//
+// It previously read only `name`/`fileName`, which nothing writes — so every
+// row fell back to the CE type's last segment and a TCO report listed
+// "invoice, invoice, invoice".
+var descriptionLabelFields = []string{
+	"summary", "description",
+	"providerName", "vendor", "insurerName", "lender", "inspectionStation",
+	"issuingAuthority", "plateNumber", "documentKind",
+	"fileName", "name",
+}
+
 func descriptionFor(e gateway.AttestationEntry) string {
-	var payload struct {
-		Name     string `json:"name"`
-		FileName string `json:"fileName"`
-	}
+	var payload map[string]json.RawMessage
 	if len(e.Data) > 0 {
 		_ = json.Unmarshal(e.Data, &payload)
 	}
-	if payload.FileName != "" {
-		return payload.FileName
-	}
-	if payload.Name != "" {
-		return payload.Name
+	for _, field := range descriptionLabelFields {
+		raw, ok := payload[field]
+		if !ok {
+			continue
+		}
+		var v string
+		if err := json.Unmarshal(raw, &v); err != nil {
+			continue
+		}
+		if v = strings.TrimSpace(v); v != "" {
+			return v
+		}
 	}
 	parts := strings.Split(e.Type, ".")
 	return parts[len(parts)-1]
@@ -387,7 +479,7 @@ func (s *TCOService) VehicleSummary(ctx context.Context, tenant models.Tenant, t
 			Category:       e.Type,
 			Description:    descriptionFor(e),
 		}
-		if amount, currency, ok := extractAmount(e.Data); ok {
+		if amount, currency, ok := extractAmount(e.Type, e.Data); ok {
 			li.Amount, li.Currency = amount, currency
 			lineItems = append(lineItems, li)
 		} else if am, ok := amendments[e.ID]; ok {

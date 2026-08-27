@@ -3,17 +3,25 @@
  * Source of truth for both upload (category dropdown) and list (group headers).
  */
 export const CE_TYPE_TO_LABEL: Record<string, string> = {
+    // extract-api's taxonomy is hierarchical: it classifies at the coarse
+    // parent when it cannot pin the leaf, so the parent needs a label of its
+    // own. Missing these is what put real documents under "Other".
+    'dimo.document.vehicle.service':         'Service & parts',
     'dimo.document.vehicle.service.invoice': 'Service & parts',
+    'dimo.document.vehicle.maintenance':     'Service & parts',
     'dimo.document.vehicle.insurance':       'Insurance',
     'dimo.document.vehicle.registration':    'Registration',
     'dimo.document.vehicle.inspection':      'Inspection',
     'dimo.document.vehicle.title':           'Title',
     'dimo.document.vehicle.finance':         'Finance',
+    'dimo.document.vehicle.ownership':       'Ownership',
+    'dimo.document.vehicle.regulatory':      'Regulatory',
     'dimo.document.vehicle.regulatory.other':'Regulatory',
-    'dimo.document.vehicle.maintenance':     'Service & parts',
     'dimo.document.vehicle.note':            'Note',
-    'dimo.document.vehicle.expense':         'Other',
-    'dimo.document.vehicle.condition':       'Other',
+    'dimo.document.vehicle.condition':       'Condition',
+    // Expenses are their own thing, not leftovers. Fuel is an expense with a
+    // category of its own; both carry the same payload.
+    'dimo.document.vehicle.expense':         'Expenses',
     'dimo.document.vehicle.fuel':            'Fuel',
     'dimo.document.unknown':                 'Uncategorized',
 };
