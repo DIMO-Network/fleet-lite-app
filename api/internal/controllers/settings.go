@@ -16,18 +16,21 @@ func NewSettingsController(settings *config.Settings, logger *zerolog.Logger) *S
 }
 
 // PublicSettings is the subset of config exposed to the unauthenticated frontend.
-// Used by the login button to construct the LIWD redirect URL.
+// Used by the login button to construct the LIWD redirect URL, and by the
+// Leaflet maps to key their CARTO tile requests.
 type PublicSettings struct {
-	ClientID string `json:"clientId"`
-	LoginURL string `json:"loginUrl"`
-	ChainID  int64  `json:"chainId"`
+	ClientID        string `json:"clientId"`
+	LoginURL        string `json:"loginUrl"`
+	ChainID         int64  `json:"chainId"`
+	CartoBasemapKey string `json:"cartoBasemapKey"`
 }
 
 // GetPublicSettings — GET /public/settings (no auth).
 func (s *SettingsController) GetPublicSettings(c *fiber.Ctx) error {
 	return c.JSON(PublicSettings{
-		ClientID: s.settings.DimoAuthClientID.Hex(),
-		LoginURL: s.settings.DimoLoginURL.String(),
-		ChainID:  s.settings.ChainID,
+		ClientID:        s.settings.DimoAuthClientID.Hex(),
+		LoginURL:        s.settings.DimoLoginURL.String(),
+		ChainID:         s.settings.ChainID,
+		CartoBasemapKey: s.settings.CartoBasemapKey,
 	})
 }

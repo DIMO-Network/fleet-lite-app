@@ -10,6 +10,7 @@ import { PrefsService, TripMechanism } from '../services/prefs-service.ts';
 import { formatDistance, formatSpeed } from '../utils/units.ts';
 import { tripSignal, tripDistanceKm, tripTimeShort, formatDwell } from '../utils/trips.ts';
 import { Trip } from '../types/telemetry.ts';
+import { buildTileLayer } from '../utils/fleet-map.ts';
 import { GeofenceCrossing } from '../types/geofence.ts';
 import './trip-replay-modal.ts';
 
@@ -71,20 +72,9 @@ export class VehicleTripsPanel extends LitElement {
         const { theme } = (e as CustomEvent<{ theme: 'dark' | 'light' }>).detail;
         if (!this.map) return;
         this.tileLayer?.remove();
-        this.tileLayer = this.buildTileLayer(theme);
+        this.tileLayer = buildTileLayer(theme);
         this.tileLayer.addTo(this.map);
     };
-
-    private buildTileLayer(theme: 'dark' | 'light'): L.TileLayer {
-        const url = theme === 'light'
-            ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
-            : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
-        return L.tileLayer(url, {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
-            subdomains: 'abcd',
-            maxZoom: 19,
-        });
-    }
 
     connectedCallback() {
         super.connectedCallback();
@@ -114,7 +104,7 @@ export class VehicleTripsPanel extends LitElement {
         const el = this.renderRoot.querySelector<HTMLElement>('.map');
         if (!el) return;
         this.map = L.map(el, { zoomControl: true, attributionControl: true }).setView([39.5, -98.35], 4);
-        this.tileLayer = this.buildTileLayer(themeService.current);
+        this.tileLayer = buildTileLayer(themeService.current);
         this.tileLayer.addTo(this.map);
         // Shadow-DOM-hosted maps often initialize before layout settles.
         this.resizeObserver = new ResizeObserver(() => this.map?.invalidateSize());
