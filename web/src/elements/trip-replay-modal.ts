@@ -10,6 +10,7 @@ import { TelemetryService } from '../services/telemetry-service.ts';
 import { Trip, TripWaypoint } from '../types/telemetry.ts';
 import { tripDistanceKm, tripDurationMs, tripSignal } from '../utils/trips.ts';
 import { formatDistance, formatSpeed } from '../utils/units.ts';
+import { buildTileLayer } from '../utils/fleet-map.ts';
 
 interface EventFlag {
     name: string;
@@ -17,7 +18,6 @@ interface EventFlag {
 }
 
 const MAX_WAYPOINTS = 500;
-const TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>';
 
 const EVENT_COLORS: Readonly<Record<string, string>> = {
     'behavior.extremeBraking': '#EF4444',
@@ -250,16 +250,9 @@ export class TripReplayModal extends LitElement {
         const { theme } = (e as CustomEvent<{ theme: 'dark' | 'light' }>).detail;
         if (!this.map) return;
         this.tileLayer?.remove();
-        this.tileLayer = this.buildTileLayer(theme);
+        this.tileLayer = buildTileLayer(theme);
         this.tileLayer.addTo(this.map);
     };
-
-    private buildTileLayer(theme: 'dark' | 'light'): L.TileLayer {
-        const url = theme === 'light'
-            ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
-            : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
-        return L.tileLayer(url, { attribution: TILE_ATTRIBUTION, subdomains: 'abcd', maxZoom: 19 });
-    }
 
     private positionMarker?: L.CircleMarker;
     private drawnPolyline?: L.Polyline;
@@ -354,7 +347,7 @@ export class TripReplayModal extends LitElement {
         const eLng = this.trip.end.value.longitude;
 
         this.map = L.map(el as HTMLElement);
-        this.tileLayer = this.buildTileLayer(themeService.current);
+        this.tileLayer = buildTileLayer(themeService.current);
         this.tileLayer.addTo(this.map);
 
         L.circleMarker([sLat, sLng], { color: '#39FF14', fillColor: '#39FF14', fillOpacity: 0.9, radius: 8 })
@@ -377,7 +370,7 @@ export class TripReplayModal extends LitElement {
         const bounds = this.waypoints.map((w) => [w.lat, w.lng] as [number, number]);
 
         this.map = L.map(el as HTMLElement);
-        this.tileLayer = this.buildTileLayer(themeService.current);
+        this.tileLayer = buildTileLayer(themeService.current);
         this.tileLayer.addTo(this.map);
 
         L.polyline(bounds, { color: '#3388ff', opacity: 0.2, weight: 2, dashArray: '4,3' }).addTo(this.map);

@@ -82,6 +82,19 @@ type Settings struct {
 	// DIMO Telemetry API (vehicle-details charts).
 	TelemetryAPIURL url.URL `yaml:"TELEMETRY_API_URL"`
 
+	// CARTO basemap raster tiles (the Leaflet base layer on every map).
+	//
+	// Delivered through the ExternalSecret, but it is not confidential: it is
+	// domain-scoped by CARTO and served to the browser via GET /public/settings,
+	// because the tile requests come from the browser. It lives in Secrets
+	// Manager because it is a per-environment credential, not because leaking it
+	// matters.
+	//
+	// Empty is not "no key, same tiles as before" — since CARTO started
+	// requiring a key, keyless tiles come back 200 OK with "API KEY REQUIRED"
+	// stamped across the image. An empty value means visibly broken maps.
+	CartoBasemapKey string `yaml:"CARTO_BASEMAP_KEY"` // secret
+
 	// Chain
 	ChainID           int64          `yaml:"CHAIN_ID"`
 	VehicleNftAddress common.Address `yaml:"VEHICLE_NFT_ADDRESS"`

@@ -82,6 +82,14 @@ These differ slightly from rental-fleets-app and are easy to forget:
 - **Material Symbols redeclaration.** Each Shadow DOM needs its own
   `.material-symbols-outlined` font-family declaration. `sharedStyles` already
   includes it — pull in `sharedStyles` and you get it.
+- **Map tiles need a key.** All Leaflet maps go through
+  `buildTileLayer` in `web/src/utils/fleet-map.ts` — don't inline a tile URL
+  anywhere else. CARTO requires an API key: keyless tiles still return 200 but
+  come back with "API KEY REQUIRED" stamped across the image. The key comes from
+  `CARTO_BASEMAP_KEY` via `GET /public/settings`. It ships in the chart's
+  ExternalSecret (`<ns>/fleet-lite-app/carto_basemap_key` in AWS Secrets
+  Manager), though it is domain-scoped and browser-visible, so it is not
+  confidential. Free keys: https://carto.com/basemaps/apikey
 - **Active nav fill.** The active sidebar item uses
   `font-variation-settings: 'FILL' 1` on its Material Symbol. Don't swap icon
   names for filled variants; just toggle the variation setting via a CSS class.

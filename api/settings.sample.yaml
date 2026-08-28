@@ -54,6 +54,12 @@ TENANCY_API_KEY: ''
 ## Serve fleet-group display READS from the tenancy service (writes always go
 ## there since P4). The flag and the local mirror tables go away in P5.
 
+## CARTO basemap key — the Leaflet raster tiles on every map.
+## Free, instant, no account: request one at https://carto.com/basemaps/apikey
+## for the domain this env serves from. Keyless tiles still return 200 but come
+## back with "API KEY REQUIRED" stamped across the image.
+CARTO_BASEMAP_KEY: ''
+
 ## Chain config (polygon mainnet)
 CHAIN_ID: 137
 VEHICLE_NFT_ADDRESS: '0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF'

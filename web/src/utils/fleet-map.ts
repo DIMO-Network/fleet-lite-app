@@ -2,6 +2,7 @@ import L from 'leaflet';
 import 'leaflet.markercluster';
 import { Vehicle } from '../types/vehicle.ts';
 import { TelemetryService } from '../services/telemetry-service.ts';
+import { SettingsService } from '../services/settings-service.ts';
 
 /**
  * Shared Leaflet helpers for the fleet maps (vehicle map + geofence map): the
@@ -32,15 +33,60 @@ export function createFleetMap(el: HTMLElement, opts: { zoomControl: boolean }):
     }).setView(MAP_HOME_CENTER, MAP_HOME_ZOOM);
 }
 
+const TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>';
+
+/** CARTO basemap key, from GET /public/settings. CARTO now stamps "API KEY
+ *  REQUIRED" across keyless tiles (they still return 200), so this is required
+ *  for a usable map, not an optional upgrade.
+ *
+ *  Tile layers are built synchronously from theme changes and map init, but the
+ *  key arrives over the network. Rather than make every call site async, layers
+ *  built before the key lands are retargeted with setUrl() when it does. */
+let basemapKey = '';
+let keyLoad: Promise<void> | null = null;
+const awaitingKey = new Set<L.TileLayer>();
+
+function tileURL(theme: 'dark' | 'light'): string {
+    const style = theme === 'light' ? 'light_all' : 'dark_all';
+    const suffix = basemapKey ? `?key=${encodeURIComponent(basemapKey)}` : '';
+    return `https://{s}.basemaps.cartocdn.com/${style}/{z}/{x}/{y}{r}.png${suffix}`;
+}
+
+function loadBasemapKey(): Promise<void> {
+    keyLoad ??= SettingsService.getInstance()
+        .fetchPublicSettings()
+        .then((settings) => {
+            basemapKey = settings.cartoBasemapKey ?? '';
+            if (!basemapKey) return;
+            // Re-point every layer that was created keyless. Leaflet re-requests
+            // its tiles from the new template.
+            for (const layer of awaitingKey) {
+                const theme = (layer.options as { fleetTheme?: 'dark' | 'light' }).fleetTheme ?? 'dark';
+                layer.setUrl(tileURL(theme));
+            }
+            awaitingKey.clear();
+        })
+        .catch(() => {
+            // /public/settings is already surfaced elsewhere when it fails; a
+            // watermarked map is a better outcome here than no map at all.
+            keyLoad = null;
+        });
+    return keyLoad;
+}
+
 export function buildTileLayer(theme: 'dark' | 'light'): L.TileLayer {
-    const url = theme === 'light'
-        ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
-        : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
-    return L.tileLayer(url, {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
+    const layer = L.tileLayer(tileURL(theme), {
+        attribution: TILE_ATTRIBUTION,
         subdomains: 'abcd',
         maxZoom: 19,
-    });
+        fleetTheme: theme,
+    } as L.TileLayerOptions);
+    if (!basemapKey) {
+        awaitingKey.add(layer);
+        layer.on('remove', () => awaitingKey.delete(layer));
+        void loadBasemapKey();
+    }
+    return layer;
 }
 
 /** Swap the map's tile layer for the given theme and toggle the `.dark-tiles`

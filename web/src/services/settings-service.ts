@@ -4,6 +4,9 @@ export interface PublicSettings {
     clientId: string;
     loginUrl: string;
     chainId: number;
+    /** CARTO basemap key for the Leaflet tile layers. Empty means the maps
+     *  render CARTO's "API KEY REQUIRED" watermark — see fleet-map.ts. */
+    cartoBasemapKey: string;
 }
 
 export class SettingsService {
