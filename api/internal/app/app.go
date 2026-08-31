@@ -141,10 +141,18 @@ func App(
 			vehicleSvc.UseVehicleMetadata(tenancyAPI)
 			logger.Info().Msg("vehicle metadata resolves from fleet-tenancy-api's roster")
 		}
+		// Logged at ERROR, not warn. This fires the first time anyone opens a
+		// managed tenant, which makes it the earliest point at which a tenant
+		// that cannot sync is observable — and every reason it fails here will
+		// fail the nightly sync-vehicles CronJob too. It was warn when "DIMO
+		// Build" was mirrored on 2026-08-29 at 23:38, so the condition sat
+		// unread until the 03:00 job went red 3h22m later and someone worked
+		// backwards to this line. Same failure, hours earlier, addressed to
+		// whoever just watched the tenant open empty.
 		tenantSvc.OnMirrorCreated(func(t models.Tenant) {
 			go func() {
 				if n, err := vehicleSvc.SyncVehicles(context.Background(), &t); err != nil {
-					logger.Warn().Err(err).Str("tenant", t.ID).Msg("initial managed-tenant vehicle sync failed")
+					logger.Error().Err(err).Str("tenant", t.ID).Msg("initial managed-tenant vehicle sync failed")
 				} else {
 					logger.Info().Int("count", n).Str("tenant", t.ID).Msg("initial managed-tenant vehicle sync")
 				}

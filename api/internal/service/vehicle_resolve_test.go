@@ -15,10 +15,21 @@ import (
 )
 
 // fakeTenancySource implements tenancySource for set-resolution tests.
+//
+// detail/token are opt-in: unset, they keep the "not under test" answer the
+// set-resolution tests rely on, so a test that cares about one read does not
+// have to stub the others.
 type fakeTenancySource struct {
 	configured bool
 	entitled   []int64
 	err        error
+
+	detail    *models.RemoteTenantDetail
+	detailErr error
+
+	token      *models.RemoteMintedToken
+	tokenErr   error
+	tokenCalls int
 }
 
 func (f *fakeTenancySource) Configured() bool { return f.configured }
@@ -35,11 +46,24 @@ func (f *fakeTenancySource) Entitlements(context.Context, models.Tenant) ([]mode
 }
 
 func (f *fakeTenancySource) TenantDetail(context.Context, string) (*models.RemoteTenantDetail, error) {
-	return nil, errors.New("not under test")
+	if f.detailErr != nil {
+		return nil, f.detailErr
+	}
+	if f.detail == nil {
+		return nil, errors.New("not under test")
+	}
+	return f.detail, nil
 }
 
 func (f *fakeTenancySource) DimoToken(context.Context, string) (*models.RemoteMintedToken, error) {
-	return nil, errors.New("not under test")
+	f.tokenCalls++
+	if f.tokenErr != nil {
+		return nil, f.tokenErr
+	}
+	if f.token == nil {
+		return nil, errors.New("not under test")
+	}
+	return f.token, nil
 }
 
 // fakeGroupIndexSource implements groupIndexSource over a real GroupIndex built

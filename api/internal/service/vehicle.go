@@ -444,6 +444,59 @@ func (s *VehicleService) SyncVehicles(ctx context.Context, tenant *models.Tenant
 	return len(vehicles), nil
 }
 
+// ErrTenantUnconfigured marks a tenant that cannot sync because nobody ever
+// finished setting it up: it has no parent to inherit a license from and no
+// usable credential of its own, so there is no license anywhere to enumerate.
+//
+// It exists to separate "broken" from "never configured" for sync-vehicles.
+// Every other sync failure means a fleet this app is responsible for has gone
+// stale, and the CronJob must fail so someone looks. This one means a tenant
+// row exists that no license backs — a provisioning gap in fleet-tenancy-api
+// or the b2b console, which failing a nightly job here cannot fix and only
+// buries the tenants that did fail for a real reason. Worth an error log every
+// night; not worth a red job.
+var ErrTenantUnconfigured = errors.New("tenant has no license to sync from")
+
+// unsyncableImplicit classifies a credential-less implicit-mode tenant, whose
+// fleet is by definition "whatever its license is privileged on" — a question
+// with no answer when there is no license.
+//
+// Only the unparented-and-uncredentialed case is ErrTenantUnconfigured. The
+// other two shapes stay hard failures on purpose:
+//
+//   - A PARENTED tenant resolves its operator's license, so implicit here is a
+//     mode/credential mismatch in a tenant that is otherwise reachable.
+//   - An unparented tenant whose minter DOES return a credential holds its own
+//     license and could be synced from it — this app just doesn't implement
+//     implicit-mode sync yet. Skipping it quietly would hand a real fleet an
+//     empty vehicle list, which is the 2026-08-19 failure exactly.
+//
+// A minter call that fails for any other reason (upstream 502, scope 403) is
+// never read as "unconfigured" — an unreachable service must not be able to
+// silence the alert for every tenant at once.
+func (s *VehicleService) unsyncableImplicit(ctx context.Context, tenant *models.Tenant, detail *models.RemoteTenantDetail) error {
+	mismatch := fmt.Errorf("tenant %s is %s-mode but holds no credentials; nothing to sync from",
+		tenant.ID, detail.EntitlementMode)
+	if detail.ParentTenantID != nil {
+		return mismatch
+	}
+
+	// The minter is the authority on whether a credential reaches this tenant:
+	// the local mirror row never carries one, and the tenancy row may hold a
+	// half-finished credential with a null client id, which reads as "has a
+	// credential row" but resolves to nothing.
+	_, err := s.tenancy.DimoToken(ctx, tenant.ID)
+	if err == nil {
+		return mismatch
+	}
+	var httpErr interface{ HTTPStatus() int }
+	if errors.As(err, &httpErr) && httpErr.HTTPStatus() == 409 {
+		return fmt.Errorf("%w: %s is an unparented %s-mode tenant and no credential resolves for it",
+			ErrTenantUnconfigured, tenant.ID, detail.EntitlementMode)
+	}
+	return fmt.Errorf("%w (resolving its effective credential also failed: %v)", mismatch, err)
+}
+
 // syncEntitledVehicles materialises an explicit-mode tenant's fleet: the
 // entitled token ids from fleet-tenancy-api, with metadata from the operator's
 // privileged set under the operator's minted credential.
@@ -461,8 +514,7 @@ func (s *VehicleService) syncEntitledVehicles(ctx context.Context, tenant *model
 		return 0, fmt.Errorf("resolve tenant %s from tenancy: %w", tenant.ID, err)
 	}
 	if detail.EntitlementMode != "explicit" {
-		return 0, fmt.Errorf("tenant %s is %s-mode but holds no credentials; nothing to sync from",
-			tenant.ID, detail.EntitlementMode)
+		return 0, s.unsyncableImplicit(ctx, tenant, detail)
 	}
 
 	ents, err := s.tenancy.Entitlements(ctx, *tenant)
