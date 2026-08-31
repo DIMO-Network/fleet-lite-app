@@ -80,6 +80,14 @@ type RemoteTenantDetail struct {
 	Status           string `json:"status"`
 	EntitlementMode  string `json:"entitlementMode"`
 	FleetLiteEnabled bool   `json:"fleetLiteEnabled"`
+
+	// ParentTenantID is nil for an operator or an unparented self-serve
+	// tenant — the tenants with nobody to inherit a license from. It is read
+	// only to tell two credential-less states apart: a parented tenant
+	// resolves its operator's license and is expected to work, while an
+	// unparented one with no credential of its own is a dead end nothing in
+	// this app can fix. See VehicleService.unsyncableImplicit.
+	ParentTenantID *string `json:"parentTenantId"`
 }
 
 // RemoteMintedToken is GET /v1/tenants/{id}/dimo-token: a developer JWT for
