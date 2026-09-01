@@ -60,11 +60,13 @@ export interface Vehicle {
     /**
      * Why the vehicle cannot be shared, when it cannot: 'owner' (the owner's
      * account has not authorized fleet sharing — typically personally owned),
-     * 'no_owner', or 'unknown' (the check failed). Absent when shareable, and
+     * 'not_fleet_wallet' (same refusal for a tenant with an AA fleet wallet:
+     * the vehicle is not held by it), 'no_owner', or 'unknown' (the check
+     * failed). Absent when shareable, and
      * absent when sharing does not exist in this deployment at all — the icon
      * renders only when canShare or shareBlocker is present.
      */
-    shareBlocker?: 'owner' | 'no_owner' | 'unknown';
+    shareBlocker?: 'owner' | 'not_fleet_wallet' | 'no_owner' | 'unknown';
     /**
      * The vehicle is in this tenant's resolved set — entitled, membered and in
      * scope — but no metadata has been cached for it yet, so `definition`,
@@ -117,11 +119,13 @@ export interface VehicleCard {
     /**
      * Why the vehicle cannot be shared, when it cannot: 'owner' (the owner's
      * account has not authorized fleet sharing — typically personally owned),
-     * 'no_owner', or 'unknown' (the check failed). Absent when shareable, and
+     * 'not_fleet_wallet' (same refusal for a tenant with an AA fleet wallet:
+     * the vehicle is not held by it), 'no_owner', or 'unknown' (the check
+     * failed). Absent when shareable, and
      * absent when sharing does not exist in this deployment at all — the icon
      * renders only when canShare or shareBlocker is present.
      */
-    shareBlocker?: 'owner' | 'no_owner' | 'unknown';
+    shareBlocker?: 'owner' | 'not_fleet_wallet' | 'no_owner' | 'unknown';
     /** Metadata has not been cached for this vehicle yet; see Vehicle.metadataPending. */
     metadataPending?: boolean;
 }

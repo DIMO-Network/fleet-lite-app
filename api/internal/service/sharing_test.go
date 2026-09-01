@@ -19,21 +19,22 @@ var sharingTenant = models.Tenant{ID: "7be1ab9e-0000-0000-0000-000000000001", Cl
 
 // fakeResolver stands in for the tenancy client, recording what it was asked.
 type fakeResolver struct {
-	unresolved []string
-	shareable  []string
-	err        error
-	calls      int
-	asked      []string
+	unresolved      []string
+	shareable       []string
+	ownerModeWallet string
+	err             error
+	calls           int
+	asked           []string
 }
 
 func (f *fakeResolver) Configured() bool { return true }
-func (f *fakeResolver) ShareableOwners(_ context.Context, _ models.Tenant, owners []string) ([]string, []string, error) {
+func (f *fakeResolver) ShareableOwners(_ context.Context, _ models.Tenant, owners []string) ([]string, []string, string, error) {
 	f.calls++
 	f.asked = append([]string{}, owners...)
 	if f.err != nil {
-		return nil, nil, f.err
+		return nil, nil, "", f.err
 	}
-	return f.shareable, f.unresolved, nil
+	return f.shareable, f.unresolved, f.ownerModeWallet, nil
 }
 
 // sharingFixture wires a SharingService at a resolver that reports only
@@ -43,6 +44,28 @@ func sharingFixture(t *testing.T) (*SharingService, *fakeResolver) {
 	logger := zerolog.Nop()
 	res := &fakeResolver{shareable: []string{signableOwner}}
 	return NewSharingService(&logger, res), res
+}
+
+// With an AA fleet wallet configured, the refusal changes NAME, not shape: the
+// blocked copy must say "not held by the fleet wallet", because telling that
+// tenant's operator to get owner authorization points at a mechanism that
+// would not help them.
+func TestAnnotateCanShare_FleetWalletChangesTheRefusal(t *testing.T) {
+	const fleetWallet = "0x3333333333333333333333333333333333333333"
+	logger := zerolog.Nop()
+	res := &fakeResolver{shareable: []string{fleetWallet}, ownerModeWallet: fleetWallet}
+	svc := NewSharingService(&logger, res)
+
+	vehicles := []models.Vehicle{
+		{TokenID: 1, Owner: fleetWallet},
+		{TokenID: 2, Owner: unsignableOwner},
+	}
+	svc.AnnotateCanShare(context.Background(), sharingTenant, vehicles)
+
+	assert.True(t, vehicles[0].CanShare, "the fleet wallet's own vehicle is shareable")
+	assert.Equal(t, models.ShareBlockerNotFleetWallet, vehicles[1].ShareBlocker,
+		"a refused owner names the fleet wallet as the fix, not owner authorization")
+	assert.False(t, vehicles[1].CanShare)
 }
 
 func TestAnnotateCanShare(t *testing.T) {

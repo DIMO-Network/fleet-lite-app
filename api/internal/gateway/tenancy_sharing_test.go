@@ -26,7 +26,7 @@ func TestShareableOwners(t *testing.T) {
 		defer srv.Close()
 
 		api := newTestTenancyAPI(t, srv, "psk")
-		got, _, err := api.ShareableOwners(context.Background(), testTenant, []string{
+		got, _, _, err := api.ShareableOwners(context.Background(), testTenant, []string{
 			"0x1111111111111111111111111111111111111111",
 			"0x2222222222222222222222222222222222222222",
 		})
@@ -36,6 +36,25 @@ func TestShareableOwners(t *testing.T) {
 		assert.Contains(t, gotBody, "0x2222222222222222222222222222222222222222",
 			"every candidate owner must be sent, not just the first")
 		assert.Equal(t, []string{"0x1111111111111111111111111111111111111111"}, got)
+	})
+
+	// ownerModeWallet is additive on the wire (fleet-tenancy-api plan 08): a
+	// tenancy service that sends it must have it decoded, one that does not
+	// must read as "no fleet wallet" — never as an error.
+	t.Run("decodes the fleet wallet when the service reports one", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"owners":          []string{"0x3333333333333333333333333333333333333333"},
+				"ownerModeWallet": "0x3333333333333333333333333333333333333333",
+			})
+		}))
+		defer srv.Close()
+
+		api := newTestTenancyAPI(t, srv, "psk")
+		_, _, wallet, err := api.ShareableOwners(context.Background(), testTenant,
+			[]string{"0x3333333333333333333333333333333333333333"})
+		require.NoError(t, err)
+		assert.Equal(t, "0x3333333333333333333333333333333333333333", wallet)
 	})
 
 	// An empty list means there is nothing to ask about. Skipping the call
@@ -48,7 +67,7 @@ func TestShareableOwners(t *testing.T) {
 		defer srv.Close()
 
 		api := newTestTenancyAPI(t, srv, "psk")
-		got, _, err := api.ShareableOwners(context.Background(), testTenant, nil)
+		got, _, _, err := api.ShareableOwners(context.Background(), testTenant, nil)
 		require.NoError(t, err)
 		assert.Nil(t, got)
 		assert.False(t, called)

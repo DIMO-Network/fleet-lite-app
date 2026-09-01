@@ -39,6 +39,15 @@ export function shareBlockReason(
                 ? msg(str`Owned by you (${short}) — personally owned vehicles can't be fleet-shared`)
                 : msg(str`Owned by ${short} — this account hasn't authorized fleet sharing`);
         }
+        case 'not_fleet_wallet': {
+            // The tenant has an AA fleet wallet, so the fix to name is where
+            // the vehicle is held — owner authorization would not help and
+            // pointing at it sends the operator to the wrong mechanism.
+            const short = v.owner ? shortWallet(v.owner) : msg('its owner');
+            return myWallet && v.owner && v.owner.toLowerCase() === myWallet.toLowerCase()
+                ? msg(str`Owned by you (${short}) — only vehicles held by the fleet wallet can be shared`)
+                : msg(str`Owned by ${short} — not held by the fleet wallet`);
+        }
         case 'no_owner':
             return msg('No owner on record — can\'t be shared');
         default:
