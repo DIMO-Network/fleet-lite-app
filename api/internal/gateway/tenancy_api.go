@@ -841,21 +841,28 @@ func newTenancyError(status int, body []byte) *TenancyError {
 // list exists so a large fleet's first render says "not checked yet" instead of
 // "this account declined", which is a claim about a question nobody asked.
 // Each call resolves more of them, so the fleet warms over a few renders.
-func (t *TenancyAPI) ShareableOwners(ctx context.Context, tenant models.Tenant, owners []string) ([]string, []string, error) {
+func (t *TenancyAPI) ShareableOwners(ctx context.Context, tenant models.Tenant, owners []string) ([]string, []string, string, error) {
 	if len(owners) == 0 {
-		return nil, nil, nil
+		return nil, nil, "", nil
 	}
 	var res struct {
 		Owners     []string `json:"owners"`
 		Unresolved []string `json:"unresolved"`
+		// OwnerModeWallet is the tenant's AA fleet wallet when one is
+		// configured (fleet-tenancy-api plan 08): vehicles it owns are shared
+		// by the service signing as the owner, with no per-owner authorization
+		// to resolve. It changes the COPY for blocked vehicles — "not held by
+		// the fleet wallet" is actionable where "hasn't authorized sharing"
+		// sends the operator chasing the wrong fix.
+		OwnerModeWallet string `json:"ownerModeWallet"`
 	}
 	err := t.do(ctx, tenant, http.MethodPost,
 		"/v1/tenants/"+url.PathEscape(tenant.ID)+"/shareable-owners",
 		map[string]any{"owners": owners}, &res)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
-	return res.Owners, res.Unresolved, nil
+	return res.Owners, res.Unresolved, res.OwnerModeWallet, nil
 }
 
 // ShareVehicle queues an on-chain SACD grant and returns the job id —

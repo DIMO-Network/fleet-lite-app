@@ -216,6 +216,11 @@ const (
 	ShareBlockerOwner   = "owner"
 	ShareBlockerNoOwner = "no_owner"
 	ShareBlockerUnknown = "unknown"
+	// ShareBlockerNotFleetWallet replaces ShareBlockerOwner when the tenant
+	// has an AA fleet wallet (fleet-tenancy-api plan 08): the same refusal,
+	// but the actionable advice differs — the vehicle is not held by the
+	// fleet wallet, and no owner authorization would change that.
+	ShareBlockerNotFleetWallet = "not_fleet_wallet"
 )
 
 type Vehicle struct {
@@ -246,6 +251,9 @@ type Vehicle struct {
 	//   owner    — the owner was checked and its account has not authorized
 	//              fleet sharing (no kernel validator for the tenant signer;
 	//              typically a personally-owned vehicle)
+	//   not_fleet_wallet — same refusal, for a tenant with an AA fleet
+	//              wallet: the vehicle is not held by it, which is the fix to
+	//              name instead of owner authorization
 	//   no_owner — the vehicle record carries no usable owner address
 	//   unknown  — the shareable-owners lookup failed; honesty over a guess
 	ShareBlocker string `json:"shareBlocker,omitempty"`

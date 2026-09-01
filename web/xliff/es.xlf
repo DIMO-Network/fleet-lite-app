@@ -1808,6 +1808,12 @@
 <trans-unit id="s37994d4488233fda">
   <source>Added by</source>
 </trans-unit>
+<trans-unit id="sc20c30585f399bc6">
+  <source>Owned by you (<x id="0" equiv-text="${short}"/>) — only vehicles held by the fleet wallet can be shared</source>
+</trans-unit>
+<trans-unit id="s7c50f395df2bf908">
+  <source>Owned by <x id="0" equiv-text="${short}"/> — not held by the fleet wallet</source>
+</trans-unit>
 </body>
 </file>
 </xliff>

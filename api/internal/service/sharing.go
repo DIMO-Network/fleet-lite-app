@@ -14,7 +14,7 @@ import (
 // unexported JWT provider.
 type shareableOwnersResolver interface {
 	Configured() bool
-	ShareableOwners(ctx context.Context, tenant models.Tenant, owners []string) (shareable, unresolved []string, err error)
+	ShareableOwners(ctx context.Context, tenant models.Tenant, owners []string) (shareable, unresolved []string, ownerModeWallet string, err error)
 }
 
 // SharingService decides which vehicles can be shared without their owner's
@@ -73,7 +73,7 @@ func (s *SharingService) AnnotateCanShare(ctx context.Context, tenant models.Ten
 		return
 	}
 
-	shareable, unresolved, err := s.tenancy.ShareableOwners(ctx, tenant, owners)
+	shareable, unresolved, ownerModeWallet, err := s.tenancy.ShareableOwners(ctx, tenant, owners)
 	if err != nil {
 		// Marked unknown, not silently unshareable: claiming "this owner has
 		// not authorized sharing" when we never asked would send someone
@@ -102,6 +102,15 @@ func (s *SharingService) AnnotateCanShare(ctx context.Context, tenant models.Ten
 	for _, o := range unresolved {
 		pending[strings.ToLower(o)] = true
 	}
+	// With a fleet wallet configured, a refused owner gets the fleet-wallet
+	// blocker instead of the signer one: the actionable fix for that tenant is
+	// "this vehicle isn't held by the fleet wallet", not "ask the owner to
+	// authorize sharing" — advice that would send the operator to the wrong
+	// mechanism entirely.
+	refused := models.ShareBlockerOwner
+	if ownerModeWallet != "" {
+		refused = models.ShareBlockerNotFleetWallet
+	}
 	for i := range vehicles {
 		if !common.IsHexAddress(vehicles[i].Owner) {
 			vehicles[i].ShareBlocker = models.ShareBlockerNoOwner
@@ -113,7 +122,7 @@ func (s *SharingService) AnnotateCanShare(ctx context.Context, tenant models.Ten
 		case pending[strings.ToLower(vehicles[i].Owner)]:
 			vehicles[i].ShareBlocker = models.ShareBlockerUnknown
 		default:
-			vehicles[i].ShareBlocker = models.ShareBlockerOwner
+			vehicles[i].ShareBlocker = refused
 		}
 	}
 }
