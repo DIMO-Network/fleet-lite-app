@@ -429,6 +429,8 @@
 's3220e57d36c47737': `or enter manually`,
 's4280e090367d36bb': `Copy API key`,
 's65d89f28a70694dd': `Save your API key now — it cannot be retrieved after this step.`,
+'sc20c30585f399bc6': str`Owned by you (${0}) — only vehicles held by the fleet wallet can be shared`,
+'s7c50f395df2bf908': str`Owned by ${0} — not held by the fleet wallet`,
 's26156a5bcb44ac99': `30 days`,
 'sd347ec01a202f8a5': `1 year`,
 'sc62e587718608e85': `No expiry`,
