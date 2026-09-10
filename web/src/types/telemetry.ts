@@ -45,12 +45,20 @@ export interface TripSignal {
     value: number;
 }
 
+/** Per-event count, as returned by telemetry-api `eventCounts` on segments/days. */
+export interface EventCount {
+    name: string;
+    count: number;
+}
+
 /** A detected trip from telemetry-api's `segments` query. */
 export interface Trip {
     start: TripPoint;
     end: TripPoint;
     isOngoing: boolean;
     signals: TripSignal[];
+    /** Driver-behaviour event counts within the trip. Absent for connections that never emit events. */
+    eventCounts?: EventCount[];
 }
 
 export interface SegmentsResponse {
@@ -83,4 +91,33 @@ export interface TripReplayResponse {
     waypoints: TripWaypoint[];
     events: TripEvent[];
     permissionsRequired?: boolean;
+}
+
+/** All-time total for one behaviour event (telemetry-api `dataSummary.eventDataSummary`). */
+export interface BehaviorEventTotal {
+    name: string;
+    count: number;
+    firstSeen: string;
+    lastSeen: string;
+}
+
+/** One calendar day of driver-behaviour counts (telemetry-api `dailyActivity` + `eventRequests`). */
+export interface BehaviorDay {
+    /** YYYY-MM-DD in the requested timezone. */
+    date: string;
+    counts: Record<string, number>;
+    /** Travelled distance that day; null when the vehicle reports no odometer. */
+    distanceKm: number | null;
+    driveSeconds: number;
+    tripCount: number;
+}
+
+/** GET /telemetry/:tokenId/behavior */
+export interface BehaviorResponse {
+    /** false when the vehicle has never reported a behaviour event (its connection can't). */
+    supported: boolean;
+    allTime: BehaviorEventTotal[];
+    days: BehaviorDay[];
+    permissionsRequired?: boolean;
+    devLicense?: string;
 }

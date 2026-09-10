@@ -217,9 +217,19 @@ const documentStyles = `
 
         /* ---------------- Glass ---------------- */
         --glass-bg: rgba(28, 27, 27, 0.85);
+
+        /* ---------------- Driver-behaviour series (dark steps, validated) ---------------- */
+        --bhv-braking: #e66767;
+        --bhv-cornering: #9085e9;
+        --bhv-acceleration: #199e70;
     }
 
     :root[data-theme="light"] {
+        /* ---------------- Driver-behaviour series (light steps, validated) ---------------- */
+        --bhv-braking: #e34948;
+        --bhv-cornering: #4a3aa7;
+        --bhv-acceleration: #1baf7a;
+
         /* ---------------- Surface / Material 3 roles ---------------- */
         --surface: #f8f8f8;
         --surface-dim: #efefef;
