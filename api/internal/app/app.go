@@ -272,6 +272,7 @@ func App(
 	tenantApp.Get("/telemetry/:tokenID/latest", telemetryCtrl.GetLatest)
 	tenantApp.Get("/telemetry/:tokenID/timeseries", telemetryCtrl.GetTimeSeries)
 	tenantApp.Get("/telemetry/:tokenID/segments", telemetryCtrl.GetSegments)
+	tenantApp.Get("/telemetry/:tokenID/behavior", telemetryCtrl.GetBehavior)
 	tenantApp.Get("/telemetry/:tokenID/route", telemetryCtrl.GetTripRoute)
 	tenantApp.Get("/telemetry/:tokenID/replay", telemetryCtrl.GetTripReplay)
 

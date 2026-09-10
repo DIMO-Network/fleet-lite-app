@@ -1,5 +1,13 @@
 import { ApiService } from './api-service.ts';
-import { FleetLocationsResponse, LatestSignalsResponse, SegmentsResponse, TimeSeriesResponse, TripRouteResponse, TripReplayResponse } from '../types/telemetry.ts';
+import {
+    FleetLocationsResponse,
+    LatestSignalsResponse,
+    SegmentsResponse,
+    TimeSeriesResponse,
+    TripRouteResponse,
+    TripReplayResponse,
+    BehaviorResponse,
+} from '../types/telemetry.ts';
 import { TripGeofencesResponse } from '../types/geofence.ts';
 import { TripMechanism } from './prefs-service.ts';
 
@@ -63,6 +71,17 @@ export class TelemetryService {
     tripReplay(tokenId: number, from: string, to: string): Promise<TripReplayResponse> {
         const q = new URLSearchParams({ from, to });
         return ApiService.getInstance().get<TripReplayResponse>(`/telemetry/${tokenId}/replay?${q.toString()}`);
+    }
+
+    /**
+     * GET /telemetry/:tokenId/behavior — driver-behaviour event totals and
+     * per-day counts for the last `days` days (max 31), in the browser's
+     * timezone so bars line up with the user's calendar days.
+     */
+    behavior(tokenId: number, days = 30): Promise<BehaviorResponse> {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+        const q = new URLSearchParams({ days: String(days), tz });
+        return ApiService.getInstance().get<BehaviorResponse>(`/telemetry/${tokenId}/behavior?${q.toString()}`);
     }
 
     /**

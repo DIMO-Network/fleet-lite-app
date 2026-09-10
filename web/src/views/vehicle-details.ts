@@ -20,6 +20,7 @@ import { tripDurationMs } from '../utils/trips.ts';
 import { SettingsService } from '../services/settings-service.ts';
 import { buildShareVehiclesUrl } from '../utils/dimo-permissions.ts';
 import '../elements/vehicle-trips-panel.ts';
+import '../elements/vehicle-behavior-panel.ts';
 
 interface ChartBar {
     height: number;    // 0..100, normalized to the max in the series
@@ -997,6 +998,11 @@ export class VehicleDetailsView extends LitElement {
                     <!-- Trips: live mini-map + period picker + detected trips -->
                     <div class="col-12" id="trips">
                         <vehicle-trips-panel .tokenId=${this.tokenId}></vehicle-trips-panel>
+                    </div>
+
+                    <!-- Driver behaviour: 30-day event totals, daily stacked bars, all-time footer -->
+                    <div class="col-12" id="behavior">
+                        <vehicle-behavior-panel .tokenId=${this.tokenId}></vehicle-behavior-panel>
                     </div>
 
                     <div class="section-label">${msg('Last 7 days')}</div>

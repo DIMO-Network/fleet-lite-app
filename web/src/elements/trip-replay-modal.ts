@@ -11,6 +11,7 @@ import { Trip, TripWaypoint } from '../types/telemetry.ts';
 import { tripDistanceKm, tripDurationMs, tripSignal } from '../utils/trips.ts';
 import { formatDistance, formatSpeed } from '../utils/units.ts';
 import { buildTileLayer } from '../utils/fleet-map.ts';
+import { behaviorColor, isBehaviorEvent } from '../utils/behavior-events.ts';
 
 interface EventFlag {
     name: string;
@@ -18,13 +19,6 @@ interface EventFlag {
 }
 
 const MAX_WAYPOINTS = 500;
-
-const EVENT_COLORS: Readonly<Record<string, string>> = {
-    'behavior.extremeBraking': '#EF4444',
-    'behavior.harshBraking': '#F59E0B',
-    'behavior.harshCornering': '#A78BFA',
-    'behavior.harshAcceleration': '#34D399',
-};
 
 function downsample(pts: TripWaypoint[]): TripWaypoint[] {
     if (pts.length <= MAX_WAYPOINTS) return pts;
@@ -322,7 +316,7 @@ export class TripReplayModal extends LitElement {
             const endMs = new Date(this.endTs).getTime();
             const range = endMs - startMs;
             this.eventFlags = range <= 0 ? [] : resp.events
-                .filter((e) => e.name in EVENT_COLORS)
+                .filter((e) => isBehaviorEvent(e.name))
                 .map((e) => ({
                     name: e.name,
                     pct: Math.min(100, Math.max(0, (new Date(e.timestamp).getTime() - startMs) / range * 100)),
@@ -494,7 +488,7 @@ export class TripReplayModal extends LitElement {
                                 <div class="progress-fill" style="width:${this.progressPct}%"></div>
                             </div>
                             ${this.eventFlags.map((flag) => html`
-                                <div class="event-tick" style="left:${flag.pct}%;--tick-color:${EVENT_COLORS[flag.name] ?? '#64748B'}">
+                                <div class="event-tick" style="left:${flag.pct}%;--tick-color:${behaviorColor(flag.name)}">
                                     <div class="event-tick-tooltip">
                                         ${flag.name.replace(/^[^.]+\./, '').replace(/([A-Z])/g, ' $1').trim().toUpperCase()}
                                     </div>

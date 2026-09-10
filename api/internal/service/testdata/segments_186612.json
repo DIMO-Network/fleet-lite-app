@@ -1,0 +1,237 @@
+{
+ "data": {
+  "segments": [
+   {
+    "start": {
+     "value": {
+      "latitude": 42.33018,
+      "longitude": -83.07103
+     },
+     "timestamp": "2026-09-08T22:21:00Z"
+    },
+    "end": {
+     "value": {
+      "latitude": 42.6154033,
+      "longitude": -83.0277733
+     },
+     "timestamp": "2026-09-08T23:01:00Z"
+    },
+    "isOngoing": false,
+    "signals": [
+     {
+      "name": "powertrainFuelSystemRelativeLevel",
+      "agg": "FIRST",
+      "value": 27.84313725490196
+     },
+     {
+      "name": "powertrainFuelSystemRelativeLevel",
+      "agg": "LAST",
+      "value": 29.41176470588235
+     },
+     {
+      "name": "powertrainTractionBatteryStateOfChargeCurrent",
+      "agg": "FIRST",
+      "value": 38
+     },
+     {
+      "name": "powertrainTractionBatteryStateOfChargeCurrent",
+      "agg": "LAST",
+      "value": 45
+     },
+     {
+      "name": "powertrainTransmissionTravelledDistance",
+      "agg": "FIRST",
+      "value": 13917
+     },
+     {
+      "name": "powertrainTransmissionTravelledDistance",
+      "agg": "LAST",
+      "value": 13959
+     },
+     {
+      "name": "speed",
+      "agg": "AVG",
+      "value": 56.953271028037385
+     },
+     {
+      "name": "speed",
+      "agg": "MAX",
+      "value": 134
+     }
+    ],
+    "eventCounts": [
+     {
+      "name": "behavior.harshBraking",
+      "count": 0
+     },
+     {
+      "name": "behavior.extremeBraking",
+      "count": 9
+     },
+     {
+      "name": "behavior.harshAcceleration",
+      "count": 8
+     },
+     {
+      "name": "behavior.harshCornering",
+      "count": 2
+     }
+    ]
+   },
+   {
+    "start": {
+     "value": {
+      "latitude": 42.6145933,
+      "longitude": -83.028195
+     },
+     "timestamp": "2026-09-09T15:16:00Z"
+    },
+    "end": {
+     "value": {
+      "latitude": 42.3218583,
+      "longitude": -83.01557
+     },
+     "timestamp": "2026-09-09T16:09:00Z"
+    },
+    "isOngoing": false,
+    "signals": [
+     {
+      "name": "powertrainFuelSystemRelativeLevel",
+      "agg": "FIRST",
+      "value": 26.274509803921568
+     },
+     {
+      "name": "powertrainFuelSystemRelativeLevel",
+      "agg": "LAST",
+      "value": 16.470588235294116
+     },
+     {
+      "name": "powertrainTractionBatteryStateOfChargeCurrent",
+      "agg": "FIRST",
+      "value": 38
+     },
+     {
+      "name": "powertrainTractionBatteryStateOfChargeCurrent",
+      "agg": "LAST",
+      "value": 45
+     },
+     {
+      "name": "powertrainTransmissionTravelledDistance",
+      "agg": "FIRST",
+      "value": 13959
+     },
+     {
+      "name": "powertrainTransmissionTravelledDistance",
+      "agg": "LAST",
+      "value": 14005
+     },
+     {
+      "name": "speed",
+      "agg": "AVG",
+      "value": 50.515570934256054
+     },
+     {
+      "name": "speed",
+      "agg": "MAX",
+      "value": 125
+     }
+    ],
+    "eventCounts": [
+     {
+      "name": "behavior.harshBraking",
+      "count": 38
+     },
+     {
+      "name": "behavior.extremeBraking",
+      "count": 36
+     },
+     {
+      "name": "behavior.harshAcceleration",
+      "count": 24
+     },
+     {
+      "name": "behavior.harshCornering",
+      "count": 4
+     }
+    ]
+   },
+   {
+    "start": {
+     "value": {
+      "latitude": 42.3218433,
+      "longitude": -83.0155616
+     },
+     "timestamp": "2026-09-09T16:34:00Z"
+    },
+    "end": {
+     "value": {
+      "latitude": 42.3251416,
+      "longitude": -83.0074483
+     },
+     "timestamp": "2026-09-09T16:39:00Z"
+    },
+    "isOngoing": false,
+    "signals": [
+     {
+      "name": "powertrainFuelSystemRelativeLevel",
+      "agg": "FIRST",
+      "value": 16.862745098039216
+     },
+     {
+      "name": "powertrainFuelSystemRelativeLevel",
+      "agg": "LAST",
+      "value": 18.03921568627451
+     },
+     {
+      "name": "powertrainTractionBatteryStateOfChargeCurrent",
+      "agg": "FIRST",
+      "value": 39
+     },
+     {
+      "name": "powertrainTractionBatteryStateOfChargeCurrent",
+      "agg": "LAST",
+      "value": 43
+     },
+     {
+      "name": "powertrainTransmissionTravelledDistance",
+      "agg": "FIRST",
+      "value": 14005
+     },
+     {
+      "name": "powertrainTransmissionTravelledDistance",
+      "agg": "LAST",
+      "value": 14006
+     },
+     {
+      "name": "speed",
+      "agg": "AVG",
+      "value": 13.961538461538462
+     },
+     {
+      "name": "speed",
+      "agg": "MAX",
+      "value": 52
+     }
+    ],
+    "eventCounts": [
+     {
+      "name": "behavior.harshBraking",
+      "count": 0
+     },
+     {
+      "name": "behavior.extremeBraking",
+      "count": 3
+     },
+     {
+      "name": "behavior.harshAcceleration",
+      "count": 3
+     },
+     {
+      "name": "behavior.harshCornering",
+      "count": 0
+     }
+    ]
+   }
+  ]
+ }
+}

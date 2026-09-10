@@ -1814,6 +1814,82 @@
 <trans-unit id="s7c50f395df2bf908">
   <source>Owned by <x id="0" equiv-text="${short}"/> — not held by the fleet wallet</source>
 </trans-unit>
+<trans-unit id="sfb2a5eab8cd5b61b">
+  <source>Driving behaviour</source>
+  <target>Comportamiento de conducción</target>
+</trans-unit>
+<trans-unit id="sae9f8f72d2d50c62">
+  <source>Last <x id="0" equiv-text="${DAYS}"/> days</source>
+  <target>Últimos <x id="0" equiv-text="${DAYS}"/> días</target>
+</trans-unit>
+<trans-unit id="s7f8352c3c0304063">
+  <source>Failed to load driving behaviour — check console for details.</source>
+  <target>No se pudo cargar el comportamiento de conducción — revise la consola para más detalles.</target>
+</trans-unit>
+<trans-unit id="sf1ce61f6f41ab9c5">
+  <source>Grant DIMO permissions to see driving behaviour on this vehicle.</source>
+  <target>Otorgue permisos DIMO para ver el comportamiento de conducción de este vehículo.</target>
+</trans-unit>
+<trans-unit id="sdbc572f614d2e389">
+  <source>This vehicle's connection doesn't report driving events.</source>
+  <target>La conexión de este vehículo no reporta eventos de conducción.</target>
+</trans-unit>
+<trans-unit id="sef41cf20b744f0b7">
+  <source>No distance data</source>
+  <target>Sin datos de distancia</target>
+</trans-unit>
+<trans-unit id="s6aa5b7c5f76859f1">
+  <source>Events per day</source>
+  <target>Eventos por día</target>
+</trans-unit>
+<trans-unit id="s959b17bfad3303f8">
+  <source>Peak <x id="0" equiv-text="${max}"/></source>
+  <target>Máximo <x id="0" equiv-text="${max}"/></target>
+</trans-unit>
+<trans-unit id="s1cee2af0e1ed80b5">
+  <source>No distance</source>
+  <target>Sin distancia</target>
+</trans-unit>
+<trans-unit id="s1a5c405badb44c10">
+  <source><x id="0" equiv-text="${d.tripCount}"/> trips · <x id="1" equiv-text="${hrs.value} ${hrs.unit}"/></source>
+  <target><x id="0" equiv-text="${d.tripCount}"/> viajes · <x id="1" equiv-text="${hrs.value} ${hrs.unit}"/></target>
+</trans-unit>
+<trans-unit id="s33b55008dc569e72">
+  <source>No trips</source>
+  <target>Sin viajes</target>
+</trans-unit>
+<trans-unit id="h44c5e14d0e764356">
+  <source><x id="0" equiv-text="&lt;b&gt;${distFv.value} ${distFv.unit}&lt;/b&gt;"/> driven</source>
+  <target><x id="0" equiv-text="&lt;b&gt;${distFv.value} ${distFv.unit}&lt;/b&gt;"/> recorridos</target>
+</trans-unit>
+<trans-unit id="hb34baa507d1a47d6">
+  <source><x id="0" equiv-text="&lt;b&gt;${trips}&lt;/b&gt;"/> trips</source>
+  <target><x id="0" equiv-text="&lt;b&gt;${trips}&lt;/b&gt;"/> viajes</target>
+</trans-unit>
+<trans-unit id="h0ac6feb485919afc">
+  <source><x id="0" equiv-text="&lt;b&gt;${hrs.value} ${hrs.unit}&lt;/b&gt;"/> driving time</source>
+  <target><x id="0" equiv-text="&lt;b&gt;${hrs.value} ${hrs.unit}&lt;/b&gt;"/> de conducción</target>
+</trans-unit>
+<trans-unit id="h87a6f943df510f9b">
+  <source><x id="0" equiv-text="&lt;b&gt;${allTotal.toLocaleString()}&lt;/b&gt;"/> events since <x id="1" equiv-text="${this.fmtDate(first)}"/></source>
+  <target><x id="0" equiv-text="&lt;b&gt;${allTotal.toLocaleString()}&lt;/b&gt;"/> eventos desde <x id="1" equiv-text="${this.fmtDate(first)}"/></target>
+</trans-unit>
+<trans-unit id="sbe85ebe781e1e7c1">
+  <source>Driving events</source>
+  <target>Eventos de conducción</target>
+</trans-unit>
+<trans-unit id="sabc2b7bfdf6c1177">
+  <source>Harsh braking</source>
+  <target>Frenada brusca</target>
+</trans-unit>
+<trans-unit id="s542d9799dc7cf21c">
+  <source>Harsh cornering</source>
+  <target>Giro brusco</target>
+</trans-unit>
+<trans-unit id="s3962a20f5663be61">
+  <source>Harsh acceleration</source>
+  <target>Aceleración brusca</target>
+</trans-unit>
 </body>
 </file>
 </xliff>

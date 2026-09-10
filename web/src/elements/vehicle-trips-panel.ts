@@ -10,6 +10,7 @@ import { PrefsService, TripMechanism } from '../services/prefs-service.ts';
 import { formatDistance, formatSpeed } from '../utils/units.ts';
 import { tripSignal, tripDistanceKm, tripTimeShort, formatDwell } from '../utils/trips.ts';
 import { Trip } from '../types/telemetry.ts';
+import { BEHAVIOR_SERIES, behaviorTotal, seriesCount } from '../utils/behavior-events.ts';
 import { buildTileLayer } from '../utils/fleet-map.ts';
 import { GeofenceCrossing } from '../types/geofence.ts';
 import './trip-replay-modal.ts';
@@ -165,7 +166,8 @@ export class VehicleTripsPanel extends LitElement {
             this.permissionsRequired = !!res.permissionsRequired;
         } catch (e) {
             console.error('trips load failed', e);
-            if (gen === this.loadGeneration) this.tripsError = true;
+            if (gen !== this.loadGeneration) return;
+            this.tripsError = true;
         } finally {
             if (gen === this.loadGeneration) this.tripsLoading = false;
         }
@@ -520,6 +522,46 @@ export class VehicleTripsPanel extends LitElement {
                 white-space: nowrap;
             }
             .trip-row .stats .dist { color: var(--primary); font-weight: 600; }
+            .trip-row .when { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+            .bhv { display: flex; flex-wrap: wrap; gap: 4px; }
+            .bhv .pill {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                padding: 1px 6px 1px 5px;
+                border-radius: var(--radius-full);
+                background: color-mix(in srgb, var(--c) 14%, transparent);
+                font-family: var(--font-mono);
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 0.02em;
+                color: var(--on-surface);
+                font-variant-numeric: tabular-nums;
+            }
+            .bhv .pill i { width: 6px; height: 6px; border-radius: 50%; background: var(--c); }
+            .bhv-detail {
+                padding: 10px 16px 12px;
+                border-top: 1px dashed var(--outline-variant);
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+            .bhv-grid {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px 18px;
+            }
+            .bhv-item {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                font: var(--type-body-sm);
+                color: var(--on-surface-variant);
+            }
+            .bhv-item .n { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+            .bhv-item .n i { width: 10px; height: 10px; border-radius: 2px; background: var(--c); flex-shrink: 0; }
+            .bhv-item b { color: var(--on-surface); font-weight: 600; font-variant-numeric: tabular-nums; }
+            .bhv-item.zero { opacity: 0.45; }
 
             .state-row {
                 padding: 16px;
@@ -550,6 +592,7 @@ export class VehicleTripsPanel extends LitElement {
                                 ${trip.isOngoing ? '' : tripTimeShort(trip.end.timestamp)}
                             </span>
                             ${trip.isOngoing ? html`<span class="ongoing">${msg('Ongoing')}</span>` : ''}
+                            ${this.renderEventPills(trip)}
                         </span>
                         <span class="stats">
                             ${selected && this.routeLoading
@@ -564,7 +607,41 @@ export class VehicleTripsPanel extends LitElement {
                         <span class="material-symbols-outlined">smart_display</span>
                     </button>
                 </div>
+                ${selected ? this.renderTripBehavior(trip) : nothing}
                 ${selected ? this.renderTripGeofences() : nothing}
+            </div>
+        `;
+    }
+
+    /** Compact per-event badges on a trip row; nothing when the trip had no events. */
+    private renderEventPills(trip: Trip) {
+        if (behaviorTotal(trip.eventCounts) === 0) return nothing;
+        return html`<span class="bhv">
+            ${BEHAVIOR_SERIES.map((s) => {
+                const n = seriesCount(s, trip.eventCounts);
+                return n > 0
+                    ? html`<span class="pill" style="--c:var(${s.cssVar})" title=${s.label()}><i></i>${n}</span>`
+                    : nothing;
+            })}
+        </span>`;
+    }
+
+    /** The "driving events" breakdown shown under the selected trip. */
+    private renderTripBehavior(trip: Trip) {
+        if (!trip.eventCounts || behaviorTotal(trip.eventCounts) === 0) return nothing;
+        return html`
+            <div class="bhv-detail">
+                <div class="gf-head">
+                    <span class="material-symbols-outlined">speed</span>${msg('Driving events')}
+                </div>
+                <div class="bhv-grid">
+                    ${BEHAVIOR_SERIES.map((s) => {
+                        const n = seriesCount(s, trip.eventCounts);
+                        return html`<div class="bhv-item ${n === 0 ? 'zero' : ''}">
+                            <span class="n"><i style="--c:var(${s.cssVar})"></i>${s.label()}</span><b>${n}</b>
+                        </div>`;
+                    })}
+                </div>
             </div>
         `;
     }

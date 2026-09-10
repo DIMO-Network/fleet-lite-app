@@ -1,0 +1,103 @@
+{
+ "data": {
+  "dataSummary": {
+   "firstSeen": "2025-05-30T03:36:15Z",
+   "lastSeen": "2026-02-12T15:49:54.418Z",
+   "eventDataSummary": []
+  },
+  "dailyActivity": [
+   {
+    "segmentCount": 0,
+    "duration": 0,
+    "eventCounts": [
+     {
+      "name": "behavior.harshBraking",
+      "count": 0
+     },
+     {
+      "name": "behavior.extremeBraking",
+      "count": 0
+     },
+     {
+      "name": "behavior.harshAcceleration",
+      "count": 0
+     },
+     {
+      "name": "behavior.harshCornering",
+      "count": 0
+     }
+    ],
+    "signals": []
+   },
+   {
+    "segmentCount": 0,
+    "duration": 0,
+    "eventCounts": [
+     {
+      "name": "behavior.harshBraking",
+      "count": 0
+     },
+     {
+      "name": "behavior.extremeBraking",
+      "count": 0
+     },
+     {
+      "name": "behavior.harshAcceleration",
+      "count": 0
+     },
+     {
+      "name": "behavior.harshCornering",
+      "count": 0
+     }
+    ],
+    "signals": []
+   },
+   {
+    "segmentCount": 0,
+    "duration": 0,
+    "eventCounts": [
+     {
+      "name": "behavior.harshBraking",
+      "count": 0
+     },
+     {
+      "name": "behavior.extremeBraking",
+      "count": 0
+     },
+     {
+      "name": "behavior.harshAcceleration",
+      "count": 0
+     },
+     {
+      "name": "behavior.harshCornering",
+      "count": 0
+     }
+    ],
+    "signals": []
+   },
+   {
+    "segmentCount": 0,
+    "duration": 0,
+    "eventCounts": [
+     {
+      "name": "behavior.harshBraking",
+      "count": 0
+     },
+     {
+      "name": "behavior.extremeBraking",
+      "count": 0
+     },
+     {
+      "name": "behavior.harshAcceleration",
+      "count": 0
+     },
+     {
+      "name": "behavior.harshCornering",
+      "count": 0
+     }
+    ],
+    "signals": []
+   }
+  ]
+ }
+}
