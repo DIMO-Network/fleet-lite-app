@@ -10,6 +10,11 @@ import (
 	"syscall"
 	"time"
 
+	// The runtime image is busybox with no /usr/share/zoneinfo, so
+	// time.LoadLocation fails for every real zone unless the tz database is
+	// compiled in. GET /telemetry/:tokenID/behavior?tz=<IANA> depends on it.
+	_ "time/tzdata"
+
 	"github.com/DIMO-Network/fleet-lite-app/internal/app"
 	"github.com/DIMO-Network/fleet-lite-app/internal/config"
 	"github.com/DIMO-Network/fleet-lite-app/internal/gateway"
