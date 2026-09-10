@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -393,13 +395,33 @@ func parseVINVCResponse(raw []byte) (string, bool, error) {
 	return vin, true, nil
 }
 
+// dayIntervalRe matches a whole-days interval such as "1d" or "7d".
+var dayIntervalRe = regexp.MustCompile(`^(\d+)d$`)
+
+// normalizeInterval rewrites "<n>d" as "<24n>h". telemetry-api parses
+// interval with Go's time.ParseDuration, which has no day unit — "1d" started
+// failing with `unknown unit "d"` in 2026-09, so day intervals are converted
+// rather than passed through. Every other value is returned unchanged.
+func normalizeInterval(interval string) string {
+	m := dayIntervalRe.FindStringSubmatch(interval)
+	if m == nil {
+		return interval
+	}
+	days, err := strconv.Atoi(m[1])
+	if err != nil {
+		return interval
+	}
+	return strconv.Itoa(days*24) + "h"
+}
+
 // TimeSeries queries `signals(tokenId, from, to, interval)` for one signal
-// and returns its min/max/avg/last buckets. Interval is a duration string
-// the telemetry-api recognizes (e.g. "1d", "1h", "15m").
+// and returns its min/max/avg/last buckets. Interval is a Go duration string
+// (e.g. "24h", "1h", "15m"); a "<n>d" shorthand is accepted and converted.
 //
 // The telemetry-api schema requires an `agg` argument per signal and returns a
 // scalar Float — we alias the same field four times to get all aggregations.
 func (t *telemetryAPIService) TimeSeries(tenant models.Tenant, tokenID uint64, signal, from, to, interval string) ([]TimeSeriesBucket, error) {
+	interval = normalizeInterval(interval)
 	q := fmt.Sprintf(`query {
 		signals(tokenId: %d, from: %q, to: %q, interval: %q) {
 			timestamp

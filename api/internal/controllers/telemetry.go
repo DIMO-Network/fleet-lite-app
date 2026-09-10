@@ -210,7 +210,7 @@ func (t *TelemetryController) GetTimeSeries(c *fiber.Ctx) error {
 	signal := c.Query("signal")
 	from := c.Query("from")
 	to := c.Query("to")
-	interval := c.Query("interval", "1d")
+	interval := c.Query("interval", "24h")
 	if signal == "" || from == "" || to == "" {
 		return fiber.NewError(fiber.StatusBadRequest, "signal, from, to query params are required")
 	}

@@ -94,11 +94,11 @@ export class VehicleDetailsView extends LitElement {
 
         const [latestRes, speedRes, distRes, segmentsRes] = await Promise.allSettled([
             TelemetryService.getInstance().latest(tokenIdNum),
-            TelemetryService.getInstance().timeSeries(tokenIdNum, 'speed', fromIso, toIso, '1d'),
+            TelemetryService.getInstance().timeSeries(tokenIdNum, 'speed', fromIso, toIso, '24h'),
             TelemetryService.getInstance().timeSeries(
                 tokenIdNum,
                 'powertrainTransmissionTravelledDistance',
-                fromIso, toIso, '1d',
+                fromIso, toIso, '24h',
             ),
             TelemetryService.getInstance().segments(tokenIdNum, fromIso, toIso),
         ]);
