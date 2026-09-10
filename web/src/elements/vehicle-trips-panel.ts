@@ -10,7 +10,7 @@ import { PrefsService, TripMechanism } from '../services/prefs-service.ts';
 import { formatDistance, formatSpeed } from '../utils/units.ts';
 import { tripSignal, tripDistanceKm, tripTimeShort, formatDwell } from '../utils/trips.ts';
 import { Trip } from '../types/telemetry.ts';
-import { BEHAVIOR_SERIES, BEHAVIOR_DEMO, behaviorTotal, demoTripEventCounts, demoTrips, seriesCount } from '../utils/behavior-events.ts';
+import { BEHAVIOR_SERIES, behaviorTotal, seriesCount } from '../utils/behavior-events.ts';
 import { buildTileLayer } from '../utils/fleet-map.ts';
 import { GeofenceCrossing } from '../types/geofence.ts';
 import './trip-replay-modal.ts';
@@ -164,25 +164,10 @@ export class VehicleTripsPanel extends LitElement {
             if (gen !== this.loadGeneration) return;
             this.trips = res.segments || [];
             this.permissionsRequired = !!res.permissionsRequired;
-            // DESIGN-REVIEW MOCK — drop with BEHAVIOR_DEMO once segments carry eventCounts.
-            if (BEHAVIOR_DEMO) {
-                if (this.trips.length === 0) {
-                    this.trips = demoTrips(p.from, p.to);
-                    this.permissionsRequired = false;
-                } else {
-                    this.trips = this.trips.map((t) => ({ ...t, eventCounts: t.eventCounts ?? demoTripEventCounts(t) }));
-                }
-            }
         } catch (e) {
             console.error('trips load failed', e);
             if (gen !== this.loadGeneration) return;
-            // DESIGN-REVIEW MOCK — see above.
-            if (BEHAVIOR_DEMO) {
-                const p = this.periods()[this.periodIndex];
-                this.trips = demoTrips(p.from, p.to);
-            } else {
-                this.tripsError = true;
-            }
+            this.tripsError = true;
         } finally {
             if (gen === this.loadGeneration) this.tripsLoading = false;
         }

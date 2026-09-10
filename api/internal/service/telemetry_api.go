@@ -113,6 +113,13 @@ type TelemetryAPIService interface {
 	// vehicle. mechanism is a telemetry-api enum: "ignitionDetection" or
 	// "frequencyAnalysis" (aftermarket devices only support the latter).
 	Segments(tenant models.Tenant, tokenID uint64, from, to, mechanism string) ([]Segment, error)
+	// Behavior returns the vehicle's driver-behaviour event picture: the
+	// all-time per-event totals (from `dataSummary`) and per-calendar-day
+	// counts, distance and drive time for [from, to] (from `dailyActivity`),
+	// in one telemetry-api request. tz is an IANA zone name; day boundaries
+	// follow it. mechanism is the same enum Segments takes (dailyActivity
+	// rejects idling/refuel/recharge). See docs/DRIVER_BEHAVIOUR_PLAN.md.
+	Behavior(tenant models.Tenant, tokenID uint64, from, to time.Time, tz *time.Location, mechanism string) (*BehaviorSummary, error)
 	// RoutePoints samples currentLocationCoordinates at a 3s interval over a
 	// trip's time window, returning the polyline points in order.
 	RoutePoints(tenant models.Tenant, tokenID uint64, from, to string) ([]LocationCoords, error)
@@ -156,6 +163,13 @@ type SegmentSignal struct {
 	Value float64 `json:"value"`
 }
 
+// EventCount is how many times one named event (e.g. "behavior.harshBraking")
+// occurred within a segment or a day — telemetry-api's `eventCounts` row.
+type EventCount struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
 // Segment is one detected trip from telemetry-api's `segments` query — the
 // same shape the b2b fleet manager consumes on its details screen.
 type Segment struct {
@@ -163,6 +177,67 @@ type Segment struct {
 	End       SegmentPoint    `json:"end"`
 	IsOngoing bool            `json:"isOngoing"`
 	Signals   []SegmentSignal `json:"signals"`
+	// EventCounts holds the driver-behaviour counts for BehaviorEventNames
+	// within the trip. Always present (zeros) when the query requested them;
+	// the frontend folds the four names into its three display series.
+	EventCounts []EventCount `json:"eventCounts,omitempty"`
+}
+
+// BehaviorEventNames are the DIMO driver-behaviour events this app reads
+// (model-garage `default-event-names.yaml`). Only Ruptela hardware, the
+// Kaufmann oracle's Ruptela family and the default pass-through module emit
+// them; AutoPi / Tesla / HashDog never do. Order is what the API echoes back.
+var BehaviorEventNames = []string{
+	"behavior.harshBraking",
+	"behavior.extremeBraking",
+	"behavior.harshAcceleration",
+	"behavior.harshCornering",
+}
+
+// behaviorEventRequests is the GraphQL `eventRequests:` literal for
+// BehaviorEventNames. Names are compile-time constants, so interpolating them
+// unquoted-by-%q is safe.
+func behaviorEventRequests() string {
+	parts := make([]string, len(BehaviorEventNames))
+	for i, n := range BehaviorEventNames {
+		parts[i] = fmt.Sprintf("{ name: %q }", n)
+	}
+	return "[" + strings.Join(parts, " ") + "]"
+}
+
+// EventTotal is one row of `dataSummary.eventDataSummary`: everything the
+// vehicle has ever reported under one event name.
+type EventTotal struct {
+	Name      string `json:"name"`
+	Count     int    `json:"count"`
+	FirstSeen string `json:"firstSeen"`
+	LastSeen  string `json:"lastSeen"`
+}
+
+// BehaviorDay is one calendar day (in the requested timezone) of
+// driver-behaviour activity, derived from a `dailyActivity` record.
+type BehaviorDay struct {
+	// Date is YYYY-MM-DD in the requested timezone.
+	Date string `json:"date"`
+	// Counts is keyed by event name; every BehaviorEventNames entry is present.
+	Counts map[string]int `json:"counts"`
+	// DistanceKm is travelled distance LAST-FIRST from the day's default
+	// signals. nil when either end is missing — never a rate from one end.
+	DistanceKm *float64 `json:"distanceKm"`
+	// DriveSeconds is telemetry-api's per-day active `duration`.
+	DriveSeconds int `json:"driveSeconds"`
+	// TripCount is the day's `segmentCount`.
+	TripCount int `json:"tripCount"`
+}
+
+// BehaviorSummary is the payload of GET /telemetry/:tokenID/behavior — the
+// contract is `BehaviorResponse` in web/src/types/telemetry.ts.
+type BehaviorSummary struct {
+	// Supported is false when eventDataSummary is empty: the vehicle has never
+	// reported a behaviour event, i.e. its connection doesn't emit them.
+	Supported bool          `json:"supported"`
+	AllTime   []EventTotal  `json:"allTime"`
+	Days      []BehaviorDay `json:"days"`
 }
 
 // VehicleLocation is a vehicle's latest GPS fix from telemetry-api's
@@ -389,7 +464,8 @@ func IsValidSegmentMechanism(s string) bool {
 
 // Segments queries trip detection for one vehicle. Query shape mirrors the
 // b2b fleet manager's details screen: odometer FIRST/LAST (distance) and
-// speed AVG/MAX per segment. mechanism is interpolated unquoted — it is a
+// speed AVG/MAX per segment, plus per-trip driver-behaviour event counts
+// (one more argument on the same request — costs nothing extra). mechanism is interpolated unquoted — it is a
 // GraphQL enum — and restricted to the known allowlist to keep the query
 // well-formed and injection-safe.
 func (t *telemetryAPIService) Segments(tenant models.Tenant, tokenID uint64, from, to, mechanism string) ([]Segment, error) {
@@ -409,13 +485,15 @@ func (t *telemetryAPIService) Segments(tenant models.Tenant, tokenID uint64, fro
 				{ name: "speed", agg: AVG }
 				{ name: "speed", agg: MAX }
 			]
+			eventRequests: %s
 		) {
 			start { value { latitude longitude } timestamp }
 			end { value { latitude longitude } timestamp }
 			isOngoing
 			signals { name agg value }
+			eventCounts { name count }
 		}
-	}`, tokenID, from, to, mechanism)
+	}`, tokenID, from, to, mechanism, behaviorEventRequests())
 
 	raw, err := t.query(tenant, tokenID, q)
 	if err != nil {
@@ -431,6 +509,134 @@ func (t *telemetryAPIService) Segments(tenant models.Tenant, tokenID uint64, fro
 		return nil, fmt.Errorf("parse segments: %w", err)
 	}
 	return resp.Data.Segments, nil
+}
+
+// Behavior runs `dataSummary` and `dailyActivity` in one request. Day
+// boundaries follow tz (passed as dailyActivity's `timezone`), so the bars the
+// frontend draws line up with the user's calendar days.
+func (t *telemetryAPIService) Behavior(tenant models.Tenant, tokenID uint64, from, to time.Time, tz *time.Location, mechanism string) (*BehaviorSummary, error) {
+	if !IsValidSegmentMechanism(mechanism) {
+		return nil, fmt.Errorf("unknown dailyActivity mechanism %q", mechanism)
+	}
+	q := fmt.Sprintf(`query {
+		dataSummary(tokenId: %d) {
+			eventDataSummary { name numberOfEvents firstSeen lastSeen }
+		}
+		dailyActivity(
+			tokenId: %d
+			from: %q
+			to: %q
+			mechanism: %s
+			timezone: %q
+			eventRequests: %s
+		) {
+			start { timestamp }
+			segmentCount
+			duration
+			eventCounts { name count }
+			signals { name agg value }
+		}
+	}`, tokenID, tokenID, from.Format(time.RFC3339), to.Format(time.RFC3339), mechanism, tz.String(), behaviorEventRequests())
+
+	raw, err := t.query(tenant, tokenID, q)
+	if err != nil {
+		return nil, err
+	}
+	return parseBehaviorResponse(t.logger, raw, from, to, tz)
+}
+
+// behaviorDates lists the calendar days (YYYY-MM-DD in loc) that [from, to]
+// touches, oldest first — one per dailyActivity record telemetry-api returns.
+func behaviorDates(from, to time.Time, loc *time.Location) []string {
+	f := from.In(loc)
+	start := time.Date(f.Year(), f.Month(), f.Day(), 0, 0, 0, 0, loc)
+	e := to.In(loc)
+	end := time.Date(e.Year(), e.Month(), e.Day(), 0, 0, 0, 0, loc)
+	var dates []string
+	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
+		dates = append(dates, d.Format("2006-01-02"))
+	}
+	return dates
+}
+
+// parseBehaviorResponse turns the combined dataSummary + dailyActivity
+// payload into a BehaviorSummary. dailyActivity records carry no date of
+// their own — telemetry-api returns exactly one per calendar day of the
+// window, oldest first — so dates are derived from the window in loc. Each
+// active day's start timestamp is cross-checked against that derivation and
+// a mismatch is logged (not fatal: a trip that straddles midnight may be
+// attributed to the day it started in).
+func parseBehaviorResponse(logger zerolog.Logger, raw []byte, from, to time.Time, loc *time.Location) (*BehaviorSummary, error) {
+	var resp struct {
+		Data struct {
+			DataSummary struct {
+				EventDataSummary []struct {
+					Name           string `json:"name"`
+					NumberOfEvents int    `json:"numberOfEvents"`
+					FirstSeen      string `json:"firstSeen"`
+					LastSeen       string `json:"lastSeen"`
+				} `json:"eventDataSummary"`
+			} `json:"dataSummary"`
+			DailyActivity []struct {
+				Start *struct {
+					Timestamp string `json:"timestamp"`
+				} `json:"start"`
+				SegmentCount int             `json:"segmentCount"`
+				Duration     int             `json:"duration"`
+				EventCounts  []EventCount    `json:"eventCounts"`
+				Signals      []SegmentSignal `json:"signals"`
+			} `json:"dailyActivity"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, fmt.Errorf("parse behavior: %w", err)
+	}
+
+	out := &BehaviorSummary{AllTime: []EventTotal{}, Days: []BehaviorDay{}}
+	for _, e := range resp.Data.DataSummary.EventDataSummary {
+		out.AllTime = append(out.AllTime, EventTotal{Name: e.Name, Count: e.NumberOfEvents, FirstSeen: e.FirstSeen, LastSeen: e.LastSeen})
+	}
+	out.Supported = len(out.AllTime) > 0
+
+	dates := behaviorDates(from, to, loc)
+	if len(dates) != len(resp.Data.DailyActivity) {
+		return nil, fmt.Errorf("parse behavior: dailyActivity returned %d records for a %d-day window", len(resp.Data.DailyActivity), len(dates))
+	}
+	for i, rec := range resp.Data.DailyActivity {
+		day := BehaviorDay{Date: dates[i], Counts: map[string]int{}, DriveSeconds: rec.Duration, TripCount: rec.SegmentCount}
+		for _, n := range BehaviorEventNames {
+			day.Counts[n] = 0
+		}
+		for _, ec := range rec.EventCounts {
+			day.Counts[ec.Name] = ec.Count
+		}
+		var first, last *float64
+		for _, sig := range rec.Signals {
+			if sig.Name != "powertrainTransmissionTravelledDistance" {
+				continue
+			}
+			v := sig.Value
+			switch sig.Agg {
+			case "FIRST":
+				first = &v
+			case "LAST":
+				last = &v
+			}
+		}
+		if first != nil && last != nil && *last >= *first {
+			km := *last - *first
+			day.DistanceKm = &km
+		}
+		if rec.Start != nil && rec.Start.Timestamp != "" {
+			if ts, err := time.Parse(time.RFC3339, rec.Start.Timestamp); err == nil {
+				if got := ts.In(loc).Format("2006-01-02"); got != day.Date {
+					logger.Warn().Int("index", i).Str("derivedDate", day.Date).Str("startTimestamp", rec.Start.Timestamp).Str("tz", loc.String()).Msg("dailyActivity day start does not match derived date")
+				}
+			}
+		}
+		out.Days = append(out.Days, day)
+	}
+	return out, nil
 }
 
 // RoutePoints samples the vehicle's location every 3s across a trip window —

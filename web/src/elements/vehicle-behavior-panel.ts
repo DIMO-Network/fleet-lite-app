@@ -4,7 +4,7 @@ import { msg, str } from '@lit/localize';
 import { sharedStyles } from '../global-styles.ts';
 import { TelemetryService } from '../services/telemetry-service.ts';
 import { BehaviorDay, BehaviorResponse } from '../types/telemetry.ts';
-import { BEHAVIOR_SERIES, BEHAVIOR_DEMO, behaviorTotal, demoBehavior, seriesCount } from '../utils/behavior-events.ts';
+import { BEHAVIOR_SERIES, behaviorTotal, seriesCount } from '../utils/behavior-events.ts';
 import { formatDistance, formatHours } from '../utils/units.ts';
 
 const DAYS = 30;
@@ -37,14 +37,7 @@ export class VehicleBehaviorPanel extends LitElement {
         this.error = false;
         this.data = null;
         try {
-            let res: BehaviorResponse;
-            if (BEHAVIOR_DEMO) {
-                await new Promise((r) => setTimeout(r, 400));
-                // Token 180895 is the HashDog Camry from the probe — never emits events.
-                res = this.tokenId === '180895' ? { supported: false, allTime: [], days: [] } : demoBehavior(DAYS);
-            } else {
-                res = await TelemetryService.getInstance().behavior(Number(this.tokenId), DAYS);
-            }
+            const res = await TelemetryService.getInstance().behavior(Number(this.tokenId), DAYS);
             if (gen !== this.loadGeneration) return;
             this.data = res;
         } catch (e) {

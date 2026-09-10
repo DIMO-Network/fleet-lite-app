@@ -305,6 +305,99 @@ func (t *TelemetryController) GetSegments(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"segments": segments, "mechanism": mechanism})
 }
 
+// behaviorMaxDays is telemetry-api's dailyActivity window limit.
+const behaviorMaxDays = 31
+
+// GetBehavior — GET /telemetry/:tokenID/behavior?days=30&tz=<IANA zone>
+// Returns the vehicle's driver-behaviour event summary: all-time per-event
+// totals plus per-day counts / distance / drive time for the last `days`
+// calendar days (default 30, clamped to 1..31 — telemetry-api's limit) in
+// `tz` (default UTC). Day boundaries follow tz so the chart's bars line up
+// with the user's calendar.
+//
+// Same tenant/vehicle gate and trip-detection heuristic as GetSegments
+// (aftermarket ⇒ frequencyAnalysis, else ignitionDetection with a
+// frequencyAnalysis retry when nothing is detected) so day activity agrees
+// with the trips panel shown beside it. Same graceful 200 +
+// permissionsRequired:true when the dev license lacks SACDs on the vehicle.
+func (t *TelemetryController) GetBehavior(c *fiber.Ctx) error {
+	tenant, err := GetTenant(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	tokenID, err := ParseTokenIDParam(c, "tokenID")
+	if err != nil {
+		return err
+	}
+	days := c.QueryInt("days", 30)
+	if days < 1 {
+		days = 1
+	}
+	if days > behaviorMaxDays {
+		days = behaviorMaxDays
+	}
+	loc := time.UTC
+	if tz := c.Query("tz"); tz != "" {
+		loc, err = time.LoadLocation(tz)
+		if err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "tz must be an IANA time zone name")
+		}
+	}
+	allowedGroups, _ := GetAllowedGroups(c)
+	vehicle, verr := t.vehicleSvc.GetVehicle(c.Context(), tenant, int64(tokenID), allowedGroups)
+	if verr != nil {
+		if serr := ScopeUnavailable(verr); serr != nil {
+			return serr
+		}
+		return fiber.NewError(fiber.StatusForbidden, "vehicle is not part of this tenant")
+	}
+
+	// Window: the start of the day `days-1` days ago, in the user's zone,
+	// through now — exactly `days` calendar days there.
+	now := time.Now().In(loc)
+	from := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, -(days - 1))
+
+	mechanism := "ignitionDetection"
+	if vehicle.AftermarketDevice != nil && vehicle.AftermarketDevice.TokenID > 0 {
+		mechanism = "frequencyAnalysis"
+	}
+	summary, err := t.telemetry.Behavior(tenant, tokenID, from, now, loc, mechanism)
+	if err == nil && mechanism == "ignitionDetection" && !behaviorHasActivity(summary) {
+		// Mirror GetSegments: integrations that never report ignition show
+		// no activity under ignitionDetection — retry with the frequency
+		// detector so distance / trip counts line up with the trips panel.
+		mechanism = "frequencyAnalysis"
+		summary, err = t.telemetry.Behavior(tenant, tokenID, from, now, loc, mechanism)
+	}
+	if err != nil {
+		if isPermissionError(err) {
+			return c.JSON(fiber.Map{
+				"supported":           false,
+				"allTime":             []interface{}{},
+				"days":                []interface{}{},
+				"permissionsRequired": true,
+				"devLicense":          tenant.ClientID,
+			})
+		}
+		t.logger.Err(err).Uint64("tokenID", tokenID).Msg("telemetry behavior failed")
+		return fiber.NewError(fiber.StatusBadGateway, "telemetry behavior failed: "+err.Error())
+	}
+	return c.JSON(summary)
+}
+
+// behaviorHasActivity reports whether any day in the summary detected a trip.
+func behaviorHasActivity(s *service.BehaviorSummary) bool {
+	if s == nil {
+		return false
+	}
+	for _, d := range s.Days {
+		if d.TripCount > 0 || d.DriveSeconds > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // GetTripRoute — GET /telemetry/:tokenID/route?from=...&to=... Returns the
 // sampled location points across one trip's window, for drawing its polyline.
 func (t *TelemetryController) GetTripRoute(c *fiber.Ctx) error {

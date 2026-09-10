@@ -7,11 +7,12 @@ the trips panel. All of it reads from telemetry-api queries the app already
 authenticates for — no new permissions, no new storage.
 
 Created: 2026-09-10
-Status: DESIGN APPROVED (2026-09-10) — schema introspected live, event
-vocabulary confirmed from model-garage source, all three read paths verified
-against five mainnet vehicles (see "Live probe"). Frontend built against mock
-data behind `BEHAVIOR_DEMO` in `web/src/utils/behavior-events.ts` and reviewed
-in Chrome via the temporary `web/design-preview.html`. Backend not started.
+Status: BUILT (2026-09-10) — backend and frontend wired end to end on PR
+#156; service layer verified live against 186612 (Ruptela) and 180895
+(HashDog, unsupported) over a 30-day window; parser unit-tested on captured
+payloads (`api/internal/service/testdata/`). Remaining: sign-in browser pass
+on the details page (local tenant now carries the app license + the five
+probe vehicles).
 
 ---
 
@@ -272,20 +273,24 @@ Frontend (steps 3–4) is DONE against mock data; the response shapes it expects
 are `BehaviorResponse` / `Trip.eventCounts` in `web/src/types/telemetry.ts`
 and are the contract for the backend.
 
-1. `service/telemetry_api.go`: `EventCount` type; `Segments` adds
+1. ~~`service/telemetry_api.go`: `EventCount` type; `Segments` adds
    `eventRequests` + `eventCounts`; new `Behavior` method + response types.
-   Unit-test the response parsing with a captured payload from the probe.
-2. `controllers/telemetry.go`: `GetBehavior` handler (`days` clamped to 31,
+   Unit-test the response parsing with a captured payload from the probe.~~
+   Done. Note: `dailyActivity` records carry **no date field** — the API
+   returns exactly one per calendar day of the window (in `timezone`),
+   oldest first — so `parseBehaviorResponse` derives dates from the window
+   and fails loudly if the record count disagrees.
+2. ~~`controllers/telemetry.go`: `GetBehavior` handler (`days` clamped to 31,
    `tz` passed to `dailyActivity(timezone:)`); route in `app/app.go` next to
-   `segments`.
+   `segments`.~~ Done.
 3. ~~Web: `utils/behavior-events.ts`; `Trip.eventCounts`; trip-row pills +
    expanded-row breakdown.~~ Done.
 4. ~~Web: `TelemetryService.behavior`; `<vehicle-behavior-panel>`; mount in
-   `vehicle-details.ts`.~~ Done. Still to do: `npm run localize:extract`, fill
-   the Spanish targets, `localize:build` (`docs/LOCALIZATION.md`).
-5. Remove the review scaffolding: `BEHAVIOR_DEMO` + `demo*` helpers in
-   `utils/behavior-events.ts`, the demo fallbacks in `vehicle-trips-panel.ts`
-   and `vehicle-behavior-panel.ts`, and `web/design-preview.html` +
-   `web/src/design-preview.ts`.
+   `vehicle-details.ts`.~~ Done, Spanish targets filled.
+5. ~~Remove the review scaffolding.~~ Done.
 6. Verify locally against token 186612 (Ruptela, dense) and 180895 (HashDog,
-   should show the unsupported line) using the app license.
+   should show the unsupported line) using the app license. Service layer
+   done (30 days, `America/Bogota`: 30 records, dates aligned, per-trip
+   `eventCounts` populated; 180895 → `supported:false`). Browser pass on the
+   details page still to do — needs a signed-in wallet added to the local
+   tenant.
