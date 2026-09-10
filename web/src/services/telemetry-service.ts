@@ -43,9 +43,10 @@ export class TelemetryService {
 
     /**
      * GET /telemetry/:tokenId/timeseries — aggregation buckets for one signal.
-     * Caller picks interval (e.g. `1d` for 7 daily buckets).
+     * Caller picks interval as a Go duration (e.g. `24h` for daily buckets —
+     * telemetry-api rejects the `d` unit).
      */
-    timeSeries(tokenId: number, signal: string, from: string, to: string, interval = '1d'): Promise<TimeSeriesResponse> {
+    timeSeries(tokenId: number, signal: string, from: string, to: string, interval = '24h'): Promise<TimeSeriesResponse> {
         const q = new URLSearchParams({ signal, from, to, interval });
         return ApiService.getInstance().get<TimeSeriesResponse>(`/telemetry/${tokenId}/timeseries?${q.toString()}`);
     }
