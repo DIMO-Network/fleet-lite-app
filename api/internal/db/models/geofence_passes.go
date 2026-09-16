@@ -119,142 +119,6 @@ var GeofencePassTableColumns = struct {
 
 // Generated where
 
-type whereHelperstring struct{ field string }
-
-func (w whereHelperstring) EQ(x string) qm.QueryMod      { return qmhelper.Where(w.field, qmhelper.EQ, x) }
-func (w whereHelperstring) NEQ(x string) qm.QueryMod     { return qmhelper.Where(w.field, qmhelper.NEQ, x) }
-func (w whereHelperstring) LT(x string) qm.QueryMod      { return qmhelper.Where(w.field, qmhelper.LT, x) }
-func (w whereHelperstring) LTE(x string) qm.QueryMod     { return qmhelper.Where(w.field, qmhelper.LTE, x) }
-func (w whereHelperstring) GT(x string) qm.QueryMod      { return qmhelper.Where(w.field, qmhelper.GT, x) }
-func (w whereHelperstring) GTE(x string) qm.QueryMod     { return qmhelper.Where(w.field, qmhelper.GTE, x) }
-func (w whereHelperstring) LIKE(x string) qm.QueryMod    { return qm.Where(w.field+" LIKE ?", x) }
-func (w whereHelperstring) NLIKE(x string) qm.QueryMod   { return qm.Where(w.field+" NOT LIKE ?", x) }
-func (w whereHelperstring) ILIKE(x string) qm.QueryMod   { return qm.Where(w.field+" ILIKE ?", x) }
-func (w whereHelperstring) NILIKE(x string) qm.QueryMod  { return qm.Where(w.field+" NOT ILIKE ?", x) }
-func (w whereHelperstring) SIMILAR(x string) qm.QueryMod { return qm.Where(w.field+" SIMILAR TO ?", x) }
-func (w whereHelperstring) NSIMILAR(x string) qm.QueryMod {
-	return qm.Where(w.field+" NOT SIMILAR TO ?", x)
-}
-func (w whereHelperstring) IN(slice []string) qm.QueryMod {
-	values := make([]any, 0, len(slice))
-	for _, value := range slice {
-		values = append(values, value)
-	}
-	return qm.WhereIn(fmt.Sprintf("%s IN ?", w.field), values...)
-}
-func (w whereHelperstring) NIN(slice []string) qm.QueryMod {
-	values := make([]any, 0, len(slice))
-	for _, value := range slice {
-		values = append(values, value)
-	}
-	return qm.WhereNotIn(fmt.Sprintf("%s NOT IN ?", w.field), values...)
-}
-
-type whereHelperint64 struct{ field string }
-
-func (w whereHelperint64) EQ(x int64) qm.QueryMod  { return qmhelper.Where(w.field, qmhelper.EQ, x) }
-func (w whereHelperint64) NEQ(x int64) qm.QueryMod { return qmhelper.Where(w.field, qmhelper.NEQ, x) }
-func (w whereHelperint64) LT(x int64) qm.QueryMod  { return qmhelper.Where(w.field, qmhelper.LT, x) }
-func (w whereHelperint64) LTE(x int64) qm.QueryMod { return qmhelper.Where(w.field, qmhelper.LTE, x) }
-func (w whereHelperint64) GT(x int64) qm.QueryMod  { return qmhelper.Where(w.field, qmhelper.GT, x) }
-func (w whereHelperint64) GTE(x int64) qm.QueryMod { return qmhelper.Where(w.field, qmhelper.GTE, x) }
-func (w whereHelperint64) IN(slice []int64) qm.QueryMod {
-	values := make([]any, 0, len(slice))
-	for _, value := range slice {
-		values = append(values, value)
-	}
-	return qm.WhereIn(fmt.Sprintf("%s IN ?", w.field), values...)
-}
-func (w whereHelperint64) NIN(slice []int64) qm.QueryMod {
-	values := make([]any, 0, len(slice))
-	for _, value := range slice {
-		values = append(values, value)
-	}
-	return qm.WhereNotIn(fmt.Sprintf("%s NOT IN ?", w.field), values...)
-}
-
-type whereHelpertime_Time struct{ field string }
-
-func (w whereHelpertime_Time) EQ(x time.Time) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.EQ, x)
-}
-func (w whereHelpertime_Time) NEQ(x time.Time) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.NEQ, x)
-}
-func (w whereHelpertime_Time) LT(x time.Time) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.LT, x)
-}
-func (w whereHelpertime_Time) LTE(x time.Time) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.LTE, x)
-}
-func (w whereHelpertime_Time) GT(x time.Time) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.GT, x)
-}
-func (w whereHelpertime_Time) GTE(x time.Time) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.GTE, x)
-}
-
-type whereHelperint struct{ field string }
-
-func (w whereHelperint) EQ(x int) qm.QueryMod  { return qmhelper.Where(w.field, qmhelper.EQ, x) }
-func (w whereHelperint) NEQ(x int) qm.QueryMod { return qmhelper.Where(w.field, qmhelper.NEQ, x) }
-func (w whereHelperint) LT(x int) qm.QueryMod  { return qmhelper.Where(w.field, qmhelper.LT, x) }
-func (w whereHelperint) LTE(x int) qm.QueryMod { return qmhelper.Where(w.field, qmhelper.LTE, x) }
-func (w whereHelperint) GT(x int) qm.QueryMod  { return qmhelper.Where(w.field, qmhelper.GT, x) }
-func (w whereHelperint) GTE(x int) qm.QueryMod { return qmhelper.Where(w.field, qmhelper.GTE, x) }
-func (w whereHelperint) IN(slice []int) qm.QueryMod {
-	values := make([]any, 0, len(slice))
-	for _, value := range slice {
-		values = append(values, value)
-	}
-	return qm.WhereIn(fmt.Sprintf("%s IN ?", w.field), values...)
-}
-func (w whereHelperint) NIN(slice []int) qm.QueryMod {
-	values := make([]any, 0, len(slice))
-	for _, value := range slice {
-		values = append(values, value)
-	}
-	return qm.WhereNotIn(fmt.Sprintf("%s NOT IN ?", w.field), values...)
-}
-
-type whereHelpernull_Float64 struct{ field string }
-
-func (w whereHelpernull_Float64) EQ(x null.Float64) qm.QueryMod {
-	return qmhelper.WhereNullEQ(w.field, false, x)
-}
-func (w whereHelpernull_Float64) NEQ(x null.Float64) qm.QueryMod {
-	return qmhelper.WhereNullEQ(w.field, true, x)
-}
-func (w whereHelpernull_Float64) LT(x null.Float64) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.LT, x)
-}
-func (w whereHelpernull_Float64) LTE(x null.Float64) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.LTE, x)
-}
-func (w whereHelpernull_Float64) GT(x null.Float64) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.GT, x)
-}
-func (w whereHelpernull_Float64) GTE(x null.Float64) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.GTE, x)
-}
-func (w whereHelpernull_Float64) IN(slice []float64) qm.QueryMod {
-	values := make([]any, 0, len(slice))
-	for _, value := range slice {
-		values = append(values, value)
-	}
-	return qm.WhereIn(fmt.Sprintf("%s IN ?", w.field), values...)
-}
-func (w whereHelpernull_Float64) NIN(slice []float64) qm.QueryMod {
-	values := make([]any, 0, len(slice))
-	for _, value := range slice {
-		values = append(values, value)
-	}
-	return qm.WhereNotIn(fmt.Sprintf("%s NOT IN ?", w.field), values...)
-}
-
-func (w whereHelpernull_Float64) IsNull() qm.QueryMod    { return qmhelper.WhereIsNull(w.field) }
-func (w whereHelpernull_Float64) IsNotNull() qm.QueryMod { return qmhelper.WhereIsNotNull(w.field) }
-
 type whereHelperfloat64 struct{ field string }
 
 func (w whereHelperfloat64) EQ(x float64) qm.QueryMod { return qmhelper.Where(w.field, qmhelper.EQ, x) }
@@ -302,22 +166,22 @@ var GeofencePassWhere = struct {
 	CreatedAt   whereHelpertime_Time
 	ObdRunTimeS whereHelpernull_Float64
 }{
-	GeofenceID:  whereHelperstring{field: "\"geofence_passes\".\"geofence_id\""},
-	TenantID:    whereHelperstring{field: "\"geofence_passes\".\"tenant_id\""},
-	TokenID:     whereHelperint64{field: "\"geofence_passes\".\"token_id\""},
-	EnteredAt:   whereHelpertime_Time{field: "\"geofence_passes\".\"entered_at\""},
-	ExitedAt:    whereHelpertime_Time{field: "\"geofence_passes\".\"exited_at\""},
-	DwellS:      whereHelperint{field: "\"geofence_passes\".\"dwell_s\""},
-	MaxSpeedKPH: whereHelpernull_Float64{field: "\"geofence_passes\".\"max_speed_kph\""},
-	EntryLat:    whereHelperfloat64{field: "\"geofence_passes\".\"entry_lat\""},
-	EntryLNG:    whereHelperfloat64{field: "\"geofence_passes\".\"entry_lng\""},
-	ExitLat:     whereHelperfloat64{field: "\"geofence_passes\".\"exit_lat\""},
-	ExitLNG:     whereHelperfloat64{field: "\"geofence_passes\".\"exit_lng\""},
-	MaxSpeedLat: whereHelpernull_Float64{field: "\"geofence_passes\".\"max_speed_lat\""},
-	MaxSpeedLNG: whereHelpernull_Float64{field: "\"geofence_passes\".\"max_speed_lng\""},
-	NumSamples:  whereHelperint{field: "\"geofence_passes\".\"num_samples\""},
-	CreatedAt:   whereHelpertime_Time{field: "\"geofence_passes\".\"created_at\""},
-	ObdRunTimeS: whereHelpernull_Float64{field: "\"geofence_passes\".\"obd_run_time_s\""},
+	GeofenceID:  whereHelperstring{field: "\"fleet_lite_app\".\"geofence_passes\".\"geofence_id\""},
+	TenantID:    whereHelperstring{field: "\"fleet_lite_app\".\"geofence_passes\".\"tenant_id\""},
+	TokenID:     whereHelperint64{field: "\"fleet_lite_app\".\"geofence_passes\".\"token_id\""},
+	EnteredAt:   whereHelpertime_Time{field: "\"fleet_lite_app\".\"geofence_passes\".\"entered_at\""},
+	ExitedAt:    whereHelpertime_Time{field: "\"fleet_lite_app\".\"geofence_passes\".\"exited_at\""},
+	DwellS:      whereHelperint{field: "\"fleet_lite_app\".\"geofence_passes\".\"dwell_s\""},
+	MaxSpeedKPH: whereHelpernull_Float64{field: "\"fleet_lite_app\".\"geofence_passes\".\"max_speed_kph\""},
+	EntryLat:    whereHelperfloat64{field: "\"fleet_lite_app\".\"geofence_passes\".\"entry_lat\""},
+	EntryLNG:    whereHelperfloat64{field: "\"fleet_lite_app\".\"geofence_passes\".\"entry_lng\""},
+	ExitLat:     whereHelperfloat64{field: "\"fleet_lite_app\".\"geofence_passes\".\"exit_lat\""},
+	ExitLNG:     whereHelperfloat64{field: "\"fleet_lite_app\".\"geofence_passes\".\"exit_lng\""},
+	MaxSpeedLat: whereHelpernull_Float64{field: "\"fleet_lite_app\".\"geofence_passes\".\"max_speed_lat\""},
+	MaxSpeedLNG: whereHelpernull_Float64{field: "\"fleet_lite_app\".\"geofence_passes\".\"max_speed_lng\""},
+	NumSamples:  whereHelperint{field: "\"fleet_lite_app\".\"geofence_passes\".\"num_samples\""},
+	CreatedAt:   whereHelpertime_Time{field: "\"fleet_lite_app\".\"geofence_passes\".\"created_at\""},
+	ObdRunTimeS: whereHelpernull_Float64{field: "\"fleet_lite_app\".\"geofence_passes\".\"obd_run_time_s\""},
 }
 
 // GeofencePassRels is where relationship names are stored.
@@ -738,8 +602,8 @@ func (geofencePassL) LoadGeofence(ctx context.Context, e boil.ContextExecutor, s
 	}
 
 	query := NewQuery(
-		qm.From(`geofences`),
-		qm.WhereIn(`geofences.id in ?`, argsSlice...),
+		qm.From(`fleet_lite_app.geofences`),
+		qm.WhereIn(`fleet_lite_app.geofences.id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -812,7 +676,7 @@ func (o *GeofencePass) SetGeofence(ctx context.Context, exec boil.ContextExecuto
 	}
 
 	updateQuery := fmt.Sprintf(
-		"UPDATE \"geofence_passes\" SET %s WHERE %s",
+		"UPDATE \"fleet_lite_app\".\"geofence_passes\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, []string{"geofence_id"}),
 		strmangle.WhereClause("\"", "\"", 2, geofencePassPrimaryKeyColumns),
 	)
@@ -849,10 +713,10 @@ func (o *GeofencePass) SetGeofence(ctx context.Context, exec boil.ContextExecuto
 
 // GeofencePasses retrieves all the records using an executor.
 func GeofencePasses(mods ...qm.QueryMod) geofencePassQuery {
-	mods = append(mods, qm.From("\"geofence_passes\""))
+	mods = append(mods, qm.From("\"fleet_lite_app\".\"geofence_passes\""))
 	q := NewQuery(mods...)
 	if len(queries.GetSelect(q)) == 0 {
-		queries.SetSelect(q, []string{"\"geofence_passes\".*"})
+		queries.SetSelect(q, []string{"\"fleet_lite_app\".\"geofence_passes\".*"})
 	}
 
 	return geofencePassQuery{q}
@@ -868,7 +732,7 @@ func FindGeofencePass(ctx context.Context, exec boil.ContextExecutor, geofenceID
 		sel = strings.Join(strmangle.IdentQuoteSlice(dialect.LQ, dialect.RQ, selectCols), ",")
 	}
 	query := fmt.Sprintf(
-		"select %s from \"geofence_passes\" where \"geofence_id\"=$1 AND \"token_id\"=$2 AND \"entered_at\"=$3", sel,
+		"select %s from \"fleet_lite_app\".\"geofence_passes\" where \"geofence_id\"=$1 AND \"token_id\"=$2 AND \"entered_at\"=$3", sel,
 	)
 
 	q := queries.Raw(query, geofenceID, tokenID, enteredAt)
@@ -932,9 +796,9 @@ func (o *GeofencePass) Insert(ctx context.Context, exec boil.ContextExecutor, co
 			return err
 		}
 		if len(wl) != 0 {
-			cache.query = fmt.Sprintf("INSERT INTO \"geofence_passes\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
+			cache.query = fmt.Sprintf("INSERT INTO \"fleet_lite_app\".\"geofence_passes\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
 		} else {
-			cache.query = "INSERT INTO \"geofence_passes\" %sDEFAULT VALUES%s"
+			cache.query = "INSERT INTO \"fleet_lite_app\".\"geofence_passes\" %sDEFAULT VALUES%s"
 		}
 
 		var queryOutput, queryReturning string
@@ -1000,7 +864,7 @@ func (o *GeofencePass) Update(ctx context.Context, exec boil.ContextExecutor, co
 			return 0, errors.New("models: unable to update geofence_passes, could not build whitelist")
 		}
 
-		cache.query = fmt.Sprintf("UPDATE \"geofence_passes\" SET %s WHERE %s",
+		cache.query = fmt.Sprintf("UPDATE \"fleet_lite_app\".\"geofence_passes\" SET %s WHERE %s",
 			strmangle.SetParamNames("\"", "\"", 1, wl),
 			strmangle.WhereClause("\"", "\"", len(wl)+1, geofencePassPrimaryKeyColumns),
 		)
@@ -1081,7 +945,7 @@ func (o GeofencePassSlice) UpdateAll(ctx context.Context, exec boil.ContextExecu
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := fmt.Sprintf("UPDATE \"geofence_passes\" SET %s WHERE %s",
+	sql := fmt.Sprintf("UPDATE \"fleet_lite_app\".\"geofence_passes\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, colNames),
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), len(colNames)+1, geofencePassPrimaryKeyColumns, len(o)))
 
@@ -1184,7 +1048,7 @@ func (o *GeofencePass) Upsert(ctx context.Context, exec boil.ContextExecutor, up
 			conflict = make([]string, len(geofencePassPrimaryKeyColumns))
 			copy(conflict, geofencePassPrimaryKeyColumns)
 		}
-		cache.query = buildUpsertQueryPostgres(dialect, "\"geofence_passes\"", updateOnConflict, ret, update, conflict, insert, opts...)
+		cache.query = buildUpsertQueryPostgres(dialect, "\"fleet_lite_app\".\"geofence_passes\"", updateOnConflict, ret, update, conflict, insert, opts...)
 
 		cache.valueMapping, err = queries.BindMapping(geofencePassType, geofencePassMapping, insert)
 		if err != nil {
@@ -1200,7 +1064,7 @@ func (o *GeofencePass) Upsert(ctx context.Context, exec boil.ContextExecutor, up
 
 	value := reflect.Indirect(reflect.ValueOf(o))
 	vals := queries.ValuesFromMapping(value, cache.valueMapping)
-	var returns []interface{}
+	var returns []any
 	if len(cache.retMapping) != 0 {
 		returns = queries.PtrsFromMapping(value, cache.retMapping)
 	}
@@ -1243,7 +1107,7 @@ func (o *GeofencePass) Delete(ctx context.Context, exec boil.ContextExecutor) (i
 	}
 
 	args := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(o)), geofencePassPrimaryKeyMapping)
-	sql := "DELETE FROM \"geofence_passes\" WHERE \"geofence_id\"=$1 AND \"token_id\"=$2 AND \"entered_at\"=$3"
+	sql := "DELETE FROM \"fleet_lite_app\".\"geofence_passes\" WHERE \"geofence_id\"=$1 AND \"token_id\"=$2 AND \"entered_at\"=$3"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1308,7 +1172,7 @@ func (o GeofencePassSlice) DeleteAll(ctx context.Context, exec boil.ContextExecu
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "DELETE FROM \"geofence_passes\" WHERE " +
+	sql := "DELETE FROM \"fleet_lite_app\".\"geofence_passes\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, geofencePassPrimaryKeyColumns, len(o))
 
 	if boil.IsDebug(ctx) {
@@ -1363,7 +1227,7 @@ func (o *GeofencePassSlice) ReloadAll(ctx context.Context, exec boil.ContextExec
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "SELECT \"geofence_passes\".* FROM \"geofence_passes\" WHERE " +
+	sql := "SELECT \"fleet_lite_app\".\"geofence_passes\".* FROM \"fleet_lite_app\".\"geofence_passes\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, geofencePassPrimaryKeyColumns, len(*o))
 
 	q := queries.Raw(sql, args...)
@@ -1381,7 +1245,7 @@ func (o *GeofencePassSlice) ReloadAll(ctx context.Context, exec boil.ContextExec
 // GeofencePassExists checks if the GeofencePass row exists.
 func GeofencePassExists(ctx context.Context, exec boil.ContextExecutor, geofenceID string, tokenID int64, enteredAt time.Time) (bool, error) {
 	var exists bool
-	sql := "select exists(select 1 from \"geofence_passes\" where \"geofence_id\"=$1 AND \"token_id\"=$2 AND \"entered_at\"=$3 limit 1)"
+	sql := "select exists(select 1 from \"fleet_lite_app\".\"geofence_passes\" where \"geofence_id\"=$1 AND \"token_id\"=$2 AND \"entered_at\"=$3 limit 1)"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)

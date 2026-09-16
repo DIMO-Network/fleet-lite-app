@@ -58,9 +58,9 @@ var VehicleFavoriteWhere = struct {
 	TokenID   whereHelperint64
 	CreatedAt whereHelpertime_Time
 }{
-	TenantID:  whereHelperstring{field: "\"vehicle_favorites\".\"tenant_id\""},
-	TokenID:   whereHelperint64{field: "\"vehicle_favorites\".\"token_id\""},
-	CreatedAt: whereHelpertime_Time{field: "\"vehicle_favorites\".\"created_at\""},
+	TenantID:  whereHelperstring{field: "\"fleet_lite_app\".\"vehicle_favorites\".\"tenant_id\""},
+	TokenID:   whereHelperint64{field: "\"fleet_lite_app\".\"vehicle_favorites\".\"token_id\""},
+	CreatedAt: whereHelpertime_Time{field: "\"fleet_lite_app\".\"vehicle_favorites\".\"created_at\""},
 }
 
 // VehicleFavoriteRels is where relationship names are stored.
@@ -481,8 +481,8 @@ func (vehicleFavoriteL) LoadTenant(ctx context.Context, e boil.ContextExecutor, 
 	}
 
 	query := NewQuery(
-		qm.From(`tenants`),
-		qm.WhereIn(`tenants.id in ?`, argsSlice...),
+		qm.From(`fleet_lite_app.tenants`),
+		qm.WhereIn(`fleet_lite_app.tenants.id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -555,7 +555,7 @@ func (o *VehicleFavorite) SetTenant(ctx context.Context, exec boil.ContextExecut
 	}
 
 	updateQuery := fmt.Sprintf(
-		"UPDATE \"vehicle_favorites\" SET %s WHERE %s",
+		"UPDATE \"fleet_lite_app\".\"vehicle_favorites\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, []string{"tenant_id"}),
 		strmangle.WhereClause("\"", "\"", 2, vehicleFavoritePrimaryKeyColumns),
 	)
@@ -592,10 +592,10 @@ func (o *VehicleFavorite) SetTenant(ctx context.Context, exec boil.ContextExecut
 
 // VehicleFavorites retrieves all the records using an executor.
 func VehicleFavorites(mods ...qm.QueryMod) vehicleFavoriteQuery {
-	mods = append(mods, qm.From("\"vehicle_favorites\""))
+	mods = append(mods, qm.From("\"fleet_lite_app\".\"vehicle_favorites\""))
 	q := NewQuery(mods...)
 	if len(queries.GetSelect(q)) == 0 {
-		queries.SetSelect(q, []string{"\"vehicle_favorites\".*"})
+		queries.SetSelect(q, []string{"\"fleet_lite_app\".\"vehicle_favorites\".*"})
 	}
 
 	return vehicleFavoriteQuery{q}
@@ -611,7 +611,7 @@ func FindVehicleFavorite(ctx context.Context, exec boil.ContextExecutor, tenantI
 		sel = strings.Join(strmangle.IdentQuoteSlice(dialect.LQ, dialect.RQ, selectCols), ",")
 	}
 	query := fmt.Sprintf(
-		"select %s from \"vehicle_favorites\" where \"tenant_id\"=$1 AND \"token_id\"=$2", sel,
+		"select %s from \"fleet_lite_app\".\"vehicle_favorites\" where \"tenant_id\"=$1 AND \"token_id\"=$2", sel,
 	)
 
 	q := queries.Raw(query, tenantID, tokenID)
@@ -675,9 +675,9 @@ func (o *VehicleFavorite) Insert(ctx context.Context, exec boil.ContextExecutor,
 			return err
 		}
 		if len(wl) != 0 {
-			cache.query = fmt.Sprintf("INSERT INTO \"vehicle_favorites\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
+			cache.query = fmt.Sprintf("INSERT INTO \"fleet_lite_app\".\"vehicle_favorites\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
 		} else {
-			cache.query = "INSERT INTO \"vehicle_favorites\" %sDEFAULT VALUES%s"
+			cache.query = "INSERT INTO \"fleet_lite_app\".\"vehicle_favorites\" %sDEFAULT VALUES%s"
 		}
 
 		var queryOutput, queryReturning string
@@ -743,7 +743,7 @@ func (o *VehicleFavorite) Update(ctx context.Context, exec boil.ContextExecutor,
 			return 0, errors.New("models: unable to update vehicle_favorites, could not build whitelist")
 		}
 
-		cache.query = fmt.Sprintf("UPDATE \"vehicle_favorites\" SET %s WHERE %s",
+		cache.query = fmt.Sprintf("UPDATE \"fleet_lite_app\".\"vehicle_favorites\" SET %s WHERE %s",
 			strmangle.SetParamNames("\"", "\"", 1, wl),
 			strmangle.WhereClause("\"", "\"", len(wl)+1, vehicleFavoritePrimaryKeyColumns),
 		)
@@ -824,7 +824,7 @@ func (o VehicleFavoriteSlice) UpdateAll(ctx context.Context, exec boil.ContextEx
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := fmt.Sprintf("UPDATE \"vehicle_favorites\" SET %s WHERE %s",
+	sql := fmt.Sprintf("UPDATE \"fleet_lite_app\".\"vehicle_favorites\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, colNames),
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), len(colNames)+1, vehicleFavoritePrimaryKeyColumns, len(o)))
 
@@ -927,7 +927,7 @@ func (o *VehicleFavorite) Upsert(ctx context.Context, exec boil.ContextExecutor,
 			conflict = make([]string, len(vehicleFavoritePrimaryKeyColumns))
 			copy(conflict, vehicleFavoritePrimaryKeyColumns)
 		}
-		cache.query = buildUpsertQueryPostgres(dialect, "\"vehicle_favorites\"", updateOnConflict, ret, update, conflict, insert, opts...)
+		cache.query = buildUpsertQueryPostgres(dialect, "\"fleet_lite_app\".\"vehicle_favorites\"", updateOnConflict, ret, update, conflict, insert, opts...)
 
 		cache.valueMapping, err = queries.BindMapping(vehicleFavoriteType, vehicleFavoriteMapping, insert)
 		if err != nil {
@@ -943,7 +943,7 @@ func (o *VehicleFavorite) Upsert(ctx context.Context, exec boil.ContextExecutor,
 
 	value := reflect.Indirect(reflect.ValueOf(o))
 	vals := queries.ValuesFromMapping(value, cache.valueMapping)
-	var returns []interface{}
+	var returns []any
 	if len(cache.retMapping) != 0 {
 		returns = queries.PtrsFromMapping(value, cache.retMapping)
 	}
@@ -986,7 +986,7 @@ func (o *VehicleFavorite) Delete(ctx context.Context, exec boil.ContextExecutor)
 	}
 
 	args := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(o)), vehicleFavoritePrimaryKeyMapping)
-	sql := "DELETE FROM \"vehicle_favorites\" WHERE \"tenant_id\"=$1 AND \"token_id\"=$2"
+	sql := "DELETE FROM \"fleet_lite_app\".\"vehicle_favorites\" WHERE \"tenant_id\"=$1 AND \"token_id\"=$2"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1051,7 +1051,7 @@ func (o VehicleFavoriteSlice) DeleteAll(ctx context.Context, exec boil.ContextEx
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "DELETE FROM \"vehicle_favorites\" WHERE " +
+	sql := "DELETE FROM \"fleet_lite_app\".\"vehicle_favorites\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, vehicleFavoritePrimaryKeyColumns, len(o))
 
 	if boil.IsDebug(ctx) {
@@ -1106,7 +1106,7 @@ func (o *VehicleFavoriteSlice) ReloadAll(ctx context.Context, exec boil.ContextE
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "SELECT \"vehicle_favorites\".* FROM \"vehicle_favorites\" WHERE " +
+	sql := "SELECT \"fleet_lite_app\".\"vehicle_favorites\".* FROM \"fleet_lite_app\".\"vehicle_favorites\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, vehicleFavoritePrimaryKeyColumns, len(*o))
 
 	q := queries.Raw(sql, args...)
@@ -1124,7 +1124,7 @@ func (o *VehicleFavoriteSlice) ReloadAll(ctx context.Context, exec boil.ContextE
 // VehicleFavoriteExists checks if the VehicleFavorite row exists.
 func VehicleFavoriteExists(ctx context.Context, exec boil.ContextExecutor, tenantID string, tokenID int64) (bool, error) {
 	var exists bool
-	sql := "select exists(select 1 from \"vehicle_favorites\" where \"tenant_id\"=$1 AND \"token_id\"=$2 limit 1)"
+	sql := "select exists(select 1 from \"fleet_lite_app\".\"vehicle_favorites\" where \"tenant_id\"=$1 AND \"token_id\"=$2 limit 1)"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)

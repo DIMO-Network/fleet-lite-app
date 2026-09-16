@@ -80,32 +80,6 @@ var VehicleTcoSettingTableColumns = struct {
 
 // Generated where
 
-type whereHelpertypes_NullDecimal struct{ field string }
-
-func (w whereHelpertypes_NullDecimal) EQ(x types.NullDecimal) qm.QueryMod {
-	return qmhelper.WhereNullEQ(w.field, false, x)
-}
-func (w whereHelpertypes_NullDecimal) NEQ(x types.NullDecimal) qm.QueryMod {
-	return qmhelper.WhereNullEQ(w.field, true, x)
-}
-func (w whereHelpertypes_NullDecimal) LT(x types.NullDecimal) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.LT, x)
-}
-func (w whereHelpertypes_NullDecimal) LTE(x types.NullDecimal) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.LTE, x)
-}
-func (w whereHelpertypes_NullDecimal) GT(x types.NullDecimal) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.GT, x)
-}
-func (w whereHelpertypes_NullDecimal) GTE(x types.NullDecimal) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.GTE, x)
-}
-
-func (w whereHelpertypes_NullDecimal) IsNull() qm.QueryMod { return qmhelper.WhereIsNull(w.field) }
-func (w whereHelpertypes_NullDecimal) IsNotNull() qm.QueryMod {
-	return qmhelper.WhereIsNotNull(w.field)
-}
-
 var VehicleTcoSettingWhere = struct {
 	TenantID        whereHelperstring
 	TokenID         whereHelperint64
@@ -116,14 +90,14 @@ var VehicleTcoSettingWhere = struct {
 	CreatedAt       whereHelpertime_Time
 	UpdatedAt       whereHelpertime_Time
 }{
-	TenantID:        whereHelperstring{field: "\"vehicle_tco_settings\".\"tenant_id\""},
-	TokenID:         whereHelperint64{field: "\"vehicle_tco_settings\".\"token_id\""},
-	PurchasePrice:   whereHelpertypes_NullDecimal{field: "\"vehicle_tco_settings\".\"purchase_price\""},
-	PurchaseDate:    whereHelpernull_Time{field: "\"vehicle_tco_settings\".\"purchase_date\""},
-	UsefulLifeYears: whereHelpernull_Int{field: "\"vehicle_tco_settings\".\"useful_life_years\""},
-	Currency:        whereHelperstring{field: "\"vehicle_tco_settings\".\"currency\""},
-	CreatedAt:       whereHelpertime_Time{field: "\"vehicle_tco_settings\".\"created_at\""},
-	UpdatedAt:       whereHelpertime_Time{field: "\"vehicle_tco_settings\".\"updated_at\""},
+	TenantID:        whereHelperstring{field: "\"fleet_lite_app\".\"vehicle_tco_settings\".\"tenant_id\""},
+	TokenID:         whereHelperint64{field: "\"fleet_lite_app\".\"vehicle_tco_settings\".\"token_id\""},
+	PurchasePrice:   whereHelpertypes_NullDecimal{field: "\"fleet_lite_app\".\"vehicle_tco_settings\".\"purchase_price\""},
+	PurchaseDate:    whereHelpernull_Time{field: "\"fleet_lite_app\".\"vehicle_tco_settings\".\"purchase_date\""},
+	UsefulLifeYears: whereHelpernull_Int{field: "\"fleet_lite_app\".\"vehicle_tco_settings\".\"useful_life_years\""},
+	Currency:        whereHelperstring{field: "\"fleet_lite_app\".\"vehicle_tco_settings\".\"currency\""},
+	CreatedAt:       whereHelpertime_Time{field: "\"fleet_lite_app\".\"vehicle_tco_settings\".\"created_at\""},
+	UpdatedAt:       whereHelpertime_Time{field: "\"fleet_lite_app\".\"vehicle_tco_settings\".\"updated_at\""},
 }
 
 // VehicleTcoSettingRels is where relationship names are stored.
@@ -544,8 +518,8 @@ func (vehicleTcoSettingL) LoadTenant(ctx context.Context, e boil.ContextExecutor
 	}
 
 	query := NewQuery(
-		qm.From(`tenants`),
-		qm.WhereIn(`tenants.id in ?`, argsSlice...),
+		qm.From(`fleet_lite_app.tenants`),
+		qm.WhereIn(`fleet_lite_app.tenants.id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -618,7 +592,7 @@ func (o *VehicleTcoSetting) SetTenant(ctx context.Context, exec boil.ContextExec
 	}
 
 	updateQuery := fmt.Sprintf(
-		"UPDATE \"vehicle_tco_settings\" SET %s WHERE %s",
+		"UPDATE \"fleet_lite_app\".\"vehicle_tco_settings\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, []string{"tenant_id"}),
 		strmangle.WhereClause("\"", "\"", 2, vehicleTcoSettingPrimaryKeyColumns),
 	)
@@ -655,10 +629,10 @@ func (o *VehicleTcoSetting) SetTenant(ctx context.Context, exec boil.ContextExec
 
 // VehicleTcoSettings retrieves all the records using an executor.
 func VehicleTcoSettings(mods ...qm.QueryMod) vehicleTcoSettingQuery {
-	mods = append(mods, qm.From("\"vehicle_tco_settings\""))
+	mods = append(mods, qm.From("\"fleet_lite_app\".\"vehicle_tco_settings\""))
 	q := NewQuery(mods...)
 	if len(queries.GetSelect(q)) == 0 {
-		queries.SetSelect(q, []string{"\"vehicle_tco_settings\".*"})
+		queries.SetSelect(q, []string{"\"fleet_lite_app\".\"vehicle_tco_settings\".*"})
 	}
 
 	return vehicleTcoSettingQuery{q}
@@ -674,7 +648,7 @@ func FindVehicleTcoSetting(ctx context.Context, exec boil.ContextExecutor, tenan
 		sel = strings.Join(strmangle.IdentQuoteSlice(dialect.LQ, dialect.RQ, selectCols), ",")
 	}
 	query := fmt.Sprintf(
-		"select %s from \"vehicle_tco_settings\" where \"tenant_id\"=$1 AND \"token_id\"=$2", sel,
+		"select %s from \"fleet_lite_app\".\"vehicle_tco_settings\" where \"tenant_id\"=$1 AND \"token_id\"=$2", sel,
 	)
 
 	q := queries.Raw(query, tenantID, tokenID)
@@ -741,9 +715,9 @@ func (o *VehicleTcoSetting) Insert(ctx context.Context, exec boil.ContextExecuto
 			return err
 		}
 		if len(wl) != 0 {
-			cache.query = fmt.Sprintf("INSERT INTO \"vehicle_tco_settings\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
+			cache.query = fmt.Sprintf("INSERT INTO \"fleet_lite_app\".\"vehicle_tco_settings\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
 		} else {
-			cache.query = "INSERT INTO \"vehicle_tco_settings\" %sDEFAULT VALUES%s"
+			cache.query = "INSERT INTO \"fleet_lite_app\".\"vehicle_tco_settings\" %sDEFAULT VALUES%s"
 		}
 
 		var queryOutput, queryReturning string
@@ -815,7 +789,7 @@ func (o *VehicleTcoSetting) Update(ctx context.Context, exec boil.ContextExecuto
 			return 0, errors.New("models: unable to update vehicle_tco_settings, could not build whitelist")
 		}
 
-		cache.query = fmt.Sprintf("UPDATE \"vehicle_tco_settings\" SET %s WHERE %s",
+		cache.query = fmt.Sprintf("UPDATE \"fleet_lite_app\".\"vehicle_tco_settings\" SET %s WHERE %s",
 			strmangle.SetParamNames("\"", "\"", 1, wl),
 			strmangle.WhereClause("\"", "\"", len(wl)+1, vehicleTcoSettingPrimaryKeyColumns),
 		)
@@ -896,7 +870,7 @@ func (o VehicleTcoSettingSlice) UpdateAll(ctx context.Context, exec boil.Context
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := fmt.Sprintf("UPDATE \"vehicle_tco_settings\" SET %s WHERE %s",
+	sql := fmt.Sprintf("UPDATE \"fleet_lite_app\".\"vehicle_tco_settings\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, colNames),
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), len(colNames)+1, vehicleTcoSettingPrimaryKeyColumns, len(o)))
 
@@ -1000,7 +974,7 @@ func (o *VehicleTcoSetting) Upsert(ctx context.Context, exec boil.ContextExecuto
 			conflict = make([]string, len(vehicleTcoSettingPrimaryKeyColumns))
 			copy(conflict, vehicleTcoSettingPrimaryKeyColumns)
 		}
-		cache.query = buildUpsertQueryPostgres(dialect, "\"vehicle_tco_settings\"", updateOnConflict, ret, update, conflict, insert, opts...)
+		cache.query = buildUpsertQueryPostgres(dialect, "\"fleet_lite_app\".\"vehicle_tco_settings\"", updateOnConflict, ret, update, conflict, insert, opts...)
 
 		cache.valueMapping, err = queries.BindMapping(vehicleTcoSettingType, vehicleTcoSettingMapping, insert)
 		if err != nil {
@@ -1016,7 +990,7 @@ func (o *VehicleTcoSetting) Upsert(ctx context.Context, exec boil.ContextExecuto
 
 	value := reflect.Indirect(reflect.ValueOf(o))
 	vals := queries.ValuesFromMapping(value, cache.valueMapping)
-	var returns []interface{}
+	var returns []any
 	if len(cache.retMapping) != 0 {
 		returns = queries.PtrsFromMapping(value, cache.retMapping)
 	}
@@ -1059,7 +1033,7 @@ func (o *VehicleTcoSetting) Delete(ctx context.Context, exec boil.ContextExecuto
 	}
 
 	args := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(o)), vehicleTcoSettingPrimaryKeyMapping)
-	sql := "DELETE FROM \"vehicle_tco_settings\" WHERE \"tenant_id\"=$1 AND \"token_id\"=$2"
+	sql := "DELETE FROM \"fleet_lite_app\".\"vehicle_tco_settings\" WHERE \"tenant_id\"=$1 AND \"token_id\"=$2"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1124,7 +1098,7 @@ func (o VehicleTcoSettingSlice) DeleteAll(ctx context.Context, exec boil.Context
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "DELETE FROM \"vehicle_tco_settings\" WHERE " +
+	sql := "DELETE FROM \"fleet_lite_app\".\"vehicle_tco_settings\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, vehicleTcoSettingPrimaryKeyColumns, len(o))
 
 	if boil.IsDebug(ctx) {
@@ -1179,7 +1153,7 @@ func (o *VehicleTcoSettingSlice) ReloadAll(ctx context.Context, exec boil.Contex
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "SELECT \"vehicle_tco_settings\".* FROM \"vehicle_tco_settings\" WHERE " +
+	sql := "SELECT \"fleet_lite_app\".\"vehicle_tco_settings\".* FROM \"fleet_lite_app\".\"vehicle_tco_settings\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, vehicleTcoSettingPrimaryKeyColumns, len(*o))
 
 	q := queries.Raw(sql, args...)
@@ -1197,7 +1171,7 @@ func (o *VehicleTcoSettingSlice) ReloadAll(ctx context.Context, exec boil.Contex
 // VehicleTcoSettingExists checks if the VehicleTcoSetting row exists.
 func VehicleTcoSettingExists(ctx context.Context, exec boil.ContextExecutor, tenantID string, tokenID int64) (bool, error) {
 	var exists bool
-	sql := "select exists(select 1 from \"vehicle_tco_settings\" where \"tenant_id\"=$1 AND \"token_id\"=$2 limit 1)"
+	sql := "select exists(select 1 from \"fleet_lite_app\".\"vehicle_tco_settings\" where \"tenant_id\"=$1 AND \"token_id\"=$2 limit 1)"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
