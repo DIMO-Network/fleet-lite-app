@@ -29,7 +29,8 @@
 - Generated (do not hand-edit): `api/internal/db/models/charging_session.go`, `api/internal/db/models/charging_scan_coverage.go`, `api/internal/db/models/tenant_charging_setting.go`
 
 **Interfaces:**
-- Produces: SQLBoiler models `dbmodels.ChargingSession` (fields `TenantID string`, `TokenID int64`, `StartedAt time.Time`, `EndedAt time.Time`, `AddedEnergyKwh null.Float64`, `AvgPowerKw null.Float64`, `SocStartPct null.Float64`, `SocEndPct null.Float64`, `Lat null.Float64`, `Lng null.Float64`, `NumSamples int`, `CreatedAt time.Time`), `dbmodels.ChargingSessionColumns`, query builder `dbmodels.ChargingSessions(mods...)`; `dbmodels.ChargingScanCoverage` (`TenantID`, `TokenID`, `ScannedFrom time.Time`, `ScannedTo time.Time`, `CreatedAt time.Time`), `dbmodels.ChargingScanCoverages(mods...)`; `dbmodels.TenantChargingSetting` (`TenantID string`, `ElectricityRate types.NullDecimal`, `GasPrice types.NullDecimal`, `GasMpgEquivalent types.NullDecimal`, `VehicleKwhPerMile types.NullDecimal`, `Currency string`, `CreatedAt`, `UpdatedAt`), `dbmodels.TenantChargingSettingColumns`, `dbmodels.FindTenantChargingSetting(ctx, exec, tenantID string, selectCols ...string) (*TenantChargingSetting, error)`. Tasks 3–5 consume these.
+- Produces: SQLBoiler models `dbmodels.ChargingSession` (fields `TenantID string`, `TokenID int64`, `StartedAt time.Time`, `EndedAt time.Time`, `AddedEnergyKWH null.Float64`, `AvgPowerKW null.Float64`, `SocStartPCT null.Float64`, `SocEndPCT null.Float64`, `Lat null.Float64`, `LNG null.Float64`, `NumSamples int`, `CreatedAt time.Time`), `dbmodels.ChargingSessionColumns`, query builder `dbmodels.ChargingSessions(mods...)`; `dbmodels.ChargingScanCoverage` (`TenantID`, `TokenID`, `ScannedFrom time.Time`, `ScannedTo time.Time`, `CreatedAt time.Time`), `dbmodels.ChargingScanCoverages(mods...)`; `dbmodels.TenantChargingSetting` (`TenantID string`, `ElectricityRate types.NullDecimal`, `GasPrice types.NullDecimal`, `GasMPGEquivalent types.NullDecimal`, `VehicleKWHPerMile types.NullDecimal`, `Currency string`, `CreatedAt`, `UpdatedAt`), `dbmodels.TenantChargingSettingColumns`, `dbmodels.FindTenantChargingSetting(ctx, exec, tenantID string, selectCols ...string) (*TenantChargingSetting, error)`. Tasks 3–5 consume these.
+  **Note (post-Task-1 correction):** SQLBoiler capitalizes multi-letter acronyms fully (`KWH`, `KW`, `PCT`, `LNG`, `MPG`), not title-case (`Kwh`, `Kw`, `Pct`, `Lng`, `Mpg`) — verified against Task 1's actual generated output. Every `dbmodels.*` field reference below uses the corrected casing. This does NOT apply to hand-written structs (`ChargingSample`, `ChargingSettings`, `ChargingSessionView`, etc.) — those keep their original casing; only generated-model field names changed.
 
 - [ ] **Step 1: Write the migration**
 
@@ -627,12 +628,12 @@ func (s *ChargingDetectionService) persistSessions(ctx context.Context, tenantID
 			TokenID:        tokenID,
 			StartedAt:      d.startedAt,
 			EndedAt:        d.endedAt,
-			AddedEnergyKwh: null.Float64FromPtr(d.addedEnergyKwh()),
-			AvgPowerKw:     null.Float64FromPtr(d.avgPowerKw()),
-			SocStartPct:    null.Float64FromPtr(d.socStart),
-			SocEndPct:      null.Float64FromPtr(d.socEnd),
+			AddedEnergyKWH: null.Float64FromPtr(d.addedEnergyKwh()),
+			AvgPowerKW:     null.Float64FromPtr(d.avgPowerKw()),
+			SocStartPCT:    null.Float64FromPtr(d.socStart),
+			SocEndPCT:      null.Float64FromPtr(d.socEnd),
 			Lat:            null.Float64FromPtr(d.lat),
-			Lng:            null.Float64FromPtr(d.lng),
+			LNG:            null.Float64FromPtr(d.lng),
 			NumSamples:     d.numSamples,
 		}
 		if err := m.Insert(ctx, writer, boil.Infer()); err != nil {
@@ -886,10 +887,10 @@ func (s *ChargingSettingsService) GetSettings(ctx context.Context, tenantID stri
 	if f, ok := decimalFloat(row.GasPrice); ok {
 		out.GasPrice = &f
 	}
-	if f, ok := decimalFloat(row.GasMpgEquivalent); ok {
+	if f, ok := decimalFloat(row.GasMPGEquivalent); ok {
 		out.GasMpgEquivalent = &f
 	}
-	if f, ok := decimalFloat(row.VehicleKwhPerMile); ok {
+	if f, ok := decimalFloat(row.VehicleKWHPerMile); ok {
 		out.VehicleKwhPerMile = &f
 	}
 	return out, nil
@@ -920,10 +921,10 @@ func (s *ChargingSettingsService) UpsertSettings(ctx context.Context, tenantID s
 		row.GasPrice = types.NewNullDecimal(new(decimal.Big).SetFloat64(*in.GasPrice))
 	}
 	if in.GasMpgEquivalent != nil {
-		row.GasMpgEquivalent = types.NewNullDecimal(new(decimal.Big).SetFloat64(*in.GasMpgEquivalent))
+		row.GasMPGEquivalent = types.NewNullDecimal(new(decimal.Big).SetFloat64(*in.GasMpgEquivalent))
 	}
 	if in.VehicleKwhPerMile != nil {
-		row.VehicleKwhPerMile = types.NewNullDecimal(new(decimal.Big).SetFloat64(*in.VehicleKwhPerMile))
+		row.VehicleKWHPerMile = types.NewNullDecimal(new(decimal.Big).SetFloat64(*in.VehicleKwhPerMile))
 	}
 	now := time.Now()
 	row.CreatedAt = now
@@ -933,8 +934,8 @@ func (s *ChargingSettingsService) UpsertSettings(ctx context.Context, tenantID s
 		boil.Whitelist(
 			dbmodels.TenantChargingSettingColumns.ElectricityRate,
 			dbmodels.TenantChargingSettingColumns.GasPrice,
-			dbmodels.TenantChargingSettingColumns.GasMpgEquivalent,
-			dbmodels.TenantChargingSettingColumns.VehicleKwhPerMile,
+			dbmodels.TenantChargingSettingColumns.GasMPGEquivalent,
+			dbmodels.TenantChargingSettingColumns.VehicleKWHPerMile,
 			dbmodels.TenantChargingSettingColumns.Currency,
 			dbmodels.TenantChargingSettingColumns.UpdatedAt,
 		),
@@ -1036,7 +1037,7 @@ func NewChargingService(logger *zerolog.Logger, detectionSvc *ChargingDetectionS
 }
 
 func toView(row dbmodels.ChargingSession, label, vin string, settings ChargingSettings) ChargingSessionView {
-	energy := row.AddedEnergyKwh.Ptr()
+	energy := row.AddedEnergyKWH.Ptr()
 	v := ChargingSessionView{
 		VehicleTokenID:      row.TokenID,
 		VehicleLabel:        label,
@@ -1044,11 +1045,11 @@ func toView(row dbmodels.ChargingSession, label, vin string, settings ChargingSe
 		StartedAt:           row.StartedAt,
 		EndedAt:             row.EndedAt,
 		AddedEnergyKwh:      energy,
-		AvgPowerKw:          row.AvgPowerKw.Ptr(),
-		SocStartPct:         row.SocStartPct.Ptr(),
-		SocEndPct:           row.SocEndPct.Ptr(),
+		AvgPowerKw:          row.AvgPowerKW.Ptr(),
+		SocStartPct:         row.SocStartPCT.Ptr(),
+		SocEndPct:           row.SocEndPCT.Ptr(),
 		Lat:                 row.Lat.Ptr(),
-		Lng:                 row.Lng.Ptr(),
+		Lng:                 row.LNG.Ptr(),
 		Currency:            settings.Currency,
 		ChargingSessionCost: computeSessionCost(energy, settings),
 	}
