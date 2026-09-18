@@ -238,12 +238,12 @@ export class ChargingView extends LitElement {
             <div id="charging-map"></div>
             <form class="settings-panel" @submit=${(e: Event) => this.saveSettings(e)}>
                 <label>
-                    ${msg('Electricity rate ($/kWh)')}
+                    ${msg('Electricity rate (per kWh)')}
                     <input type="number" step="0.01" .value=${this.settings.electricityRate?.toString() ?? ''}
                         @input=${(e: InputEvent) => this.updateSetting('electricityRate', (e.target as HTMLInputElement).value)} />
                 </label>
                 <label>
-                    ${msg('Gas price ($/gallon)')}
+                    ${msg('Gas price (per gallon)')}
                     <input type="number" step="0.01" .value=${this.settings.gasPrice?.toString() ?? ''}
                         @input=${(e: InputEvent) => this.updateSetting('gasPrice', (e.target as HTMLInputElement).value)} />
                 </label>

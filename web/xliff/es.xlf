@@ -1905,12 +1905,6 @@
 <trans-unit id="saecc57a149cb6f09">
   <source>Saved vs. gasoline</source>
 </trans-unit>
-<trans-unit id="s3d1228b1ceff2348">
-  <source>Electricity rate ($/kWh)</source>
-</trans-unit>
-<trans-unit id="s0aba4e678255645e">
-  <source>Gas price ($/gallon)</source>
-</trans-unit>
 <trans-unit id="se81fdbeb35dd29dc">
   <source>Gas MPG equivalent</source>
 </trans-unit>
@@ -1931,6 +1925,12 @@
 </trans-unit>
 <trans-unit id="s367d079d1aed1358">
   <source>Cost</source>
+</trans-unit>
+<trans-unit id="s97cedfd3f0d112ac">
+  <source>Electricity rate (per kWh)</source>
+</trans-unit>
+<trans-unit id="sd718caba2093c04e">
+  <source>Gas price (per gallon)</source>
 </trans-unit>
 </body>
 </file>
