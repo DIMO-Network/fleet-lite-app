@@ -5,3 +5,4 @@ export * from './glovebox.ts';
 export * from './account-settings.ts';
 export * from './onboard-tenant.ts';
 export * from './tco-view.ts';
+export * from './charging-view.ts';

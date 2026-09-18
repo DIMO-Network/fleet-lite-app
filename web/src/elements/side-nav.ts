@@ -5,7 +5,7 @@ import { themeService } from '../services/theme-service.ts';
 import { sharedStyles } from '../global-styles.ts';
 import { logout } from '../utils/token.ts';
 
-type NavKey = 'vehicles' | 'stats' | 'groups' | 'geofences' | 'glovebox' | 'tco' | 'settings';
+type NavKey = 'vehicles' | 'stats' | 'groups' | 'geofences' | 'glovebox' | 'tco' | 'charging' | 'settings';
 
 // `suffix` is appended to the current tenant prefix (`#/<tenantId>`) to form the
 // link, so all nav stays within the active tenant's routes.
@@ -19,6 +19,7 @@ const ITEMS: { key: NavKey; icon: string; label: () => string; suffix: string }[
     { key: 'geofences', icon: 'fence',         label: () => msg('Geofences'), suffix: '/geofences' },
     { key: 'glovebox', icon: 'inventory_2',    label: () => msg('Glovebox'), suffix: '/glovebox' },
     { key: 'tco',      icon: 'payments',       label: () => msg('TCO'),      suffix: '/tco' },
+    { key: 'charging', icon: 'ev_station',    label: () => msg('Charging'), suffix: '/charging' },
     { key: 'settings', icon: 'settings',       label: () => msg('Settings'), suffix: '/settings' },
 ];
 
