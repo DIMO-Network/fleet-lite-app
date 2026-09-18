@@ -1,9 +1,11 @@
 // web/src/views/charging-view.ts
-import { LitElement, html, css, nothing } from 'lit';
-import { msg } from '@lit/localize';
+import { LitElement, html, css, unsafeCSS, nothing } from 'lit';
+import { msg, str } from '@lit/localize';
 import { customElement, property, state } from 'lit/decorators.js';
 import L from 'leaflet';
+import leafletCss from 'leaflet/dist/leaflet.css?inline';
 import 'leaflet.markercluster';
+import markerClusterCss from 'leaflet.markercluster/dist/MarkerCluster.css?inline';
 import { sharedStyles } from '../global-styles.ts';
 import { themeService } from '../services/theme-service.ts';
 import { ChargingCache } from '../services/charging-cache.ts';
@@ -11,9 +13,9 @@ import { ChargingService } from '../services/charging-service.ts';
 import { ChargingFleetSummary, ChargingSettings, ChargingSessionView } from '../types/charging.ts';
 import { createFleetMap, applyTileTheme } from '../utils/fleet-map.ts';
 
-function formatMoney(n?: number): string {
+function formatMoney(n?: number, currency = 'USD'): string {
     if (n == null) return '—';
-    return n.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
+    return n.toLocaleString(undefined, { style: 'currency', currency });
 }
 
 function formatKwh(n?: number): string {
@@ -39,6 +41,7 @@ export class ChargingView extends LitElement {
     private leafletMap: L.Map | null = null;
     private tileLayer: L.TileLayer | null = null;
     private markers: L.MarkerClusterGroup | null = null;
+    private renderedSummary: ChargingFleetSummary | null = null;
 
     private boundOnThemeChange = (e: Event) => {
         const { theme } = (e as CustomEvent<{ theme: 'dark' | 'light' }>).detail;
@@ -53,6 +56,8 @@ export class ChargingView extends LitElement {
 
     static styles = [
         sharedStyles,
+        unsafeCSS(leafletCss),
+        unsafeCSS(markerClusterCss),
         css`
             :host {
                 display: flex;
@@ -91,13 +96,13 @@ export class ChargingView extends LitElement {
         `,
     ];
 
-    connectedCallback(): void {
+    override connectedCallback(): void {
         super.connectedCallback();
         window.addEventListener('theme-change', this.boundOnThemeChange);
         this.load();
     }
 
-    disconnectedCallback(): void {
+    override disconnectedCallback(): void {
         super.disconnectedCallback();
         window.removeEventListener('theme-change', this.boundOnThemeChange);
         this.leafletMap?.remove();
@@ -129,7 +134,7 @@ export class ChargingView extends LitElement {
         }
     }
 
-    protected updated(): void {
+    protected override updated(): void {
         const el = this.renderRoot.querySelector('#charging-map') as HTMLElement | null;
         if (el && !this.leafletMap) {
             this.leafletMap = createFleetMap(el, { zoomControl: true });
@@ -137,7 +142,24 @@ export class ChargingView extends LitElement {
             this.markers = L.markerClusterGroup();
             this.leafletMap.addLayer(this.markers);
         }
-        this.renderMarkers();
+        if (this.summary !== this.renderedSummary) {
+            this.renderMarkers();
+            this.renderedSummary = this.summary;
+        }
+    }
+
+    private buildPopupContent(s: ChargingSessionView): HTMLElement {
+        const container = document.createElement('div');
+        const label = document.createElement('div');
+        label.textContent = s.vehicleLabel;
+        const energy = document.createElement('div');
+        energy.textContent = formatKwh(s.addedEnergyKwh);
+        const costSaved = document.createElement('div');
+        costSaved.textContent = msg(
+            str`${formatMoney(s.cost, s.currency)} spent / ${formatMoney(s.savings, s.currency)} saved`,
+        );
+        container.append(label, energy, costSaved);
+        return container;
     }
 
     private renderMarkers(): void {
@@ -148,9 +170,7 @@ export class ChargingView extends LitElement {
             const marker = L.circleMarker([s.lat, s.lng], {
                 radius: 6, fillColor: '#69dbad', color: '#fff', weight: 1.5, fillOpacity: 0.85,
             });
-            marker.bindPopup(
-                `${s.vehicleLabel}<br>${formatKwh(s.addedEnergyKwh)}<br>${formatMoney(s.cost)} spent / ${formatMoney(s.savings)} saved`,
-            );
+            marker.bindPopup(this.buildPopupContent(s));
             marker.on('click', () => { this.selectedTokenId = s.tokenId; });
             this.markers.addLayer(marker);
         }
@@ -188,7 +208,7 @@ export class ChargingView extends LitElement {
         }
     }
 
-    render() {
+    override render() {
         const fleet = this.summary?.fleet;
         const sessions = this.selectedTokenId
             ? (this.summary?.sessions ?? []).filter((s) => s.tokenId === this.selectedTokenId)
@@ -207,11 +227,11 @@ export class ChargingView extends LitElement {
                     <span class="label">${msg('Energy added')}</span>
                 </div>
                 <div class="stat">
-                    <span class="value">${formatMoney(fleet?.cost)}</span>
+                    <span class="value">${formatMoney(fleet?.cost, this.settings.currency)}</span>
                     <span class="label">${msg('Spent on electricity')}</span>
                 </div>
                 <div class="stat">
-                    <span class="value">${formatMoney(fleet?.savings)}</span>
+                    <span class="value">${formatMoney(fleet?.savings, this.settings.currency)}</span>
                     <span class="label">${msg('Saved vs. gasoline')}</span>
                 </div>
             </div>
@@ -263,8 +283,8 @@ export class ChargingView extends LitElement {
                                         <td>${s.vehicleLabel}</td>
                                         <td>${new Date(s.startedAt).toLocaleString()}</td>
                                         <td>${formatKwh(s.addedEnergyKwh)}</td>
-                                        <td>${formatMoney(s.cost)}</td>
-                                        <td>${formatMoney(s.savings)}</td>
+                                        <td>${formatMoney(s.cost, s.currency)}</td>
+                                        <td>${formatMoney(s.savings, s.currency)}</td>
                                     </tr>
                                 `,
                             )}

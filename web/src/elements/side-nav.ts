@@ -19,7 +19,7 @@ const ITEMS: { key: NavKey; icon: string; label: () => string; suffix: string }[
     { key: 'geofences', icon: 'fence',         label: () => msg('Geofences'), suffix: '/geofences' },
     { key: 'glovebox', icon: 'inventory_2',    label: () => msg('Glovebox'), suffix: '/glovebox' },
     { key: 'tco',      icon: 'payments',       label: () => msg('TCO'),      suffix: '/tco' },
-    { key: 'charging', icon: 'ev_station',    label: () => msg('Charging'), suffix: '/charging' },
+    { key: 'charging', icon: 'ev_station',     label: () => msg('Charging'), suffix: '/charging' },
     { key: 'settings', icon: 'settings',       label: () => msg('Settings'), suffix: '/settings' },
 ];
 
