@@ -12,6 +12,11 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// maxChargingWindow bounds the [from, to] window a caller may request —
+// charging telemetry scans are per-vehicle, so an unbounded window is a DoS
+// surface against the telemetry API and the detection sweep.
+const maxChargingWindow = 90 * 24 * time.Hour
+
 type ChargingController struct {
 	logger      *zerolog.Logger
 	chargingSvc *service.ChargingService
@@ -50,6 +55,12 @@ func parseWindow(c *fiber.Ctx) (from, to time.Time, err error) {
 		if from, err = time.Parse(time.RFC3339, q); err != nil {
 			return from, to, fmt.Errorf("invalid from: %w", err)
 		}
+	}
+	if !from.Before(to) {
+		return from, to, fmt.Errorf("invalid window: from must be before to")
+	}
+	if to.Sub(from) > maxChargingWindow {
+		return from, to, fmt.Errorf("invalid window: exceeds maximum of %s", maxChargingWindow)
 	}
 	return from, to, nil
 }

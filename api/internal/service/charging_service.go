@@ -7,12 +7,18 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	dbmodels "github.com/DIMO-Network/fleet-lite-app/internal/db/models"
 	"github.com/DIMO-Network/fleet-lite-app/internal/models"
 	"github.com/rs/zerolog"
+	"golang.org/x/sync/errgroup"
 )
+
+// chargingFleetSummaryConcurrency bounds parallel per-vehicle telemetry
+// fetches in FleetSummary. Mirrors fleetLocationsConcurrency in telemetry_api.go.
+const chargingFleetSummaryConcurrency = 10
 
 // ChargingSessionView is one session, priced against current tenant
 // settings, shaped for the API and CSV export.
@@ -121,32 +127,54 @@ func (s *ChargingService) FleetSummary(ctx context.Context, tenant models.Tenant
 	if err != nil {
 		return nil, fmt.Errorf("get charging settings: %w", err)
 	}
-	out := &ChargingFleetSummary{Sessions: []ChargingSessionView{}}
+	var (
+		mu      sync.Mutex
+		allRows []ChargingSessionView
+	)
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(chargingFleetSummaryConcurrency)
 	for _, v := range vehicles {
-		rows, serr := s.detectionSvc.Sessions(ctx, tenant, v.TokenID, from, to)
-		if serr != nil {
-			s.logger.Warn().Err(serr).Int64("tokenID", v.TokenID).Msg("charging sessions failed, skipping")
-			continue
+		v := v
+		g.Go(func() error {
+			rows, serr := s.detectionSvc.Sessions(gctx, tenant, v.TokenID, from, to)
+			if serr != nil {
+				s.logger.Warn().Err(serr).Int64("tokenID", v.TokenID).Msg("charging sessions failed, skipping")
+				return nil
+			}
+			label := vehicleLabel(v)
+			views := make([]ChargingSessionView, len(rows))
+			for i, r := range rows {
+				views[i] = toView(r, label, v.VIN, settings)
+			}
+			mu.Lock()
+			allRows = append(allRows, views...)
+			mu.Unlock()
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
+	out := &ChargingFleetSummary{Sessions: allRows}
+	if out.Sessions == nil {
+		out.Sessions = []ChargingSessionView{}
+	}
+	for _, view := range out.Sessions {
+		if view.AddedEnergyKwh != nil {
+			out.Fleet.AddedEnergyKwh += *view.AddedEnergyKwh
 		}
-		label := vehicleLabel(v)
-		for _, r := range rows {
-			view := toView(r, label, v.VIN, settings)
-			out.Sessions = append(out.Sessions, view)
-			if view.AddedEnergyKwh != nil {
-				out.Fleet.AddedEnergyKwh += *view.AddedEnergyKwh
+		if view.Cost != nil {
+			if out.Fleet.Cost == nil {
+				out.Fleet.Cost = new(float64)
 			}
-			if view.Cost != nil {
-				if out.Fleet.Cost == nil {
-					out.Fleet.Cost = new(float64)
-				}
-				*out.Fleet.Cost += *view.Cost
+			*out.Fleet.Cost += *view.Cost
+		}
+		if view.Savings != nil {
+			if out.Fleet.Savings == nil {
+				out.Fleet.Savings = new(float64)
 			}
-			if view.Savings != nil {
-				if out.Fleet.Savings == nil {
-					out.Fleet.Savings = new(float64)
-				}
-				*out.Fleet.Savings += *view.Savings
-			}
+			*out.Fleet.Savings += *view.Savings
 		}
 	}
 	return out, nil

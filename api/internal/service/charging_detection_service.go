@@ -34,55 +34,91 @@ func NewChargingDetectionService(logger *zerolog.Logger, pdb *db.Store, telemetr
 }
 
 // Sessions returns a vehicle's charging sessions overlapping [from, to],
-// computing only the gap not already covered by charging_scan_coverage.
+// computing only the gaps not already covered by charging_scan_coverage.
 func (s *ChargingDetectionService) Sessions(ctx context.Context, tenant models.Tenant, tokenID int64, from, to time.Time) ([]dbmodels.ChargingSession, error) {
-	covered, err := s.isCovered(ctx, tokenID, from, to)
+	gaps, err := s.uncoveredGaps(ctx, tenant.ID, tokenID, from, to)
 	if err != nil {
 		return nil, err
 	}
-	if !covered {
-		samples, serr := s.telemetry.ChargingSamples(tenant, uint64(tokenID), rfc3339(from), rfc3339(to), chargingSampleInterval)
+	for _, gap := range gaps {
+		samples, serr := s.telemetry.ChargingSamples(tenant, uint64(tokenID), rfc3339(gap.from), rfc3339(gap.to), chargingSampleInterval)
 		if serr != nil {
 			return nil, fmt.Errorf("charging samples: %w", serr)
 		}
-		if perr := s.persistSessions(ctx, tenant.ID, tokenID, samples, from, to); perr != nil {
+		if perr := s.persistSessions(ctx, tenant.ID, tokenID, samples, gap.from, gap.to); perr != nil {
 			return nil, perr
 		}
-		if cerr := s.recordCoverage(ctx, tenant.ID, tokenID, from, to); cerr != nil {
+	}
+	if len(gaps) > 0 {
+		if cerr := s.mergeCoverage(ctx, tenant.ID, tokenID, from, to); cerr != nil {
 			return nil, cerr
 		}
 	}
-	return s.readSessions(ctx, tokenID, from, to)
+	return s.readSessions(ctx, tenant.ID, tokenID, from, to)
 }
 
-// isCovered reports whether an existing charging_scan_coverage row for this
-// vehicle already fully contains [from, to].
-func (s *ChargingDetectionService) isCovered(ctx context.Context, tokenID int64, from, to time.Time) (bool, error) {
+// coverageIntervals loads this vehicle's existing scanned ranges, coalesced.
+func (s *ChargingDetectionService) coverageIntervals(ctx context.Context, tenantID string, tokenID int64) ([]timeInterval, error) {
 	rows, err := dbmodels.ChargingScanCoverages(
+		dbmodels.ChargingScanCoverageWhere.TenantID.EQ(tenantID),
 		dbmodels.ChargingScanCoverageWhere.TokenID.EQ(tokenID),
 	).All(ctx, s.pdb.DBS().Reader)
 	if err != nil {
-		return false, fmt.Errorf("load charging scan coverage: %w", err)
+		return nil, fmt.Errorf("load charging scan coverage: %w", err)
 	}
-	for _, r := range rows {
-		if !r.ScannedFrom.After(from) && !r.ScannedTo.Before(to) {
-			return true, nil
-		}
+	ivs := make([]timeInterval, len(rows))
+	for i, r := range rows {
+		ivs[i] = timeInterval{r.ScannedFrom, r.ScannedTo}
 	}
-	return false, nil
+	return coalesce(ivs), nil
 }
 
-// persistSessions runs the detection sweep over samples and replaces any
-// previously-detected sessions in [from, to] with the fresh set — a re-scan
-// of an overlapping window can yield sessions with slightly shifted
-// started_at (telemetry-api buckets are window-relative), so deleting the
-// window first keeps exactly one copy and makes recompute idempotent.
-// Mirrors GeofenceDetectionService.persistPasses.
+// uncoveredGaps returns the sub-ranges of [from, to] not yet scanned.
+func (s *ChargingDetectionService) uncoveredGaps(ctx context.Context, tenantID string, tokenID int64, from, to time.Time) ([]timeInterval, error) {
+	existing, err := s.coverageIntervals(ctx, tenantID, tokenID)
+	if err != nil {
+		return nil, err
+	}
+	return computeGaps(existing, from, to), nil
+}
+
+// mergeCoverage records [from, to] as scanned, coalescing with existing
+// intervals so the coverage table stays a minimal set of disjoint ranges —
+// mirrors GeofenceDetectionService.mergeCoverage.
+func (s *ChargingDetectionService) mergeCoverage(ctx context.Context, tenantID string, tokenID int64, from, to time.Time) error {
+	existing, err := s.coverageIntervals(ctx, tenantID, tokenID)
+	if err != nil {
+		return err
+	}
+	merged := coalesce(append(existing, timeInterval{from, to}))
+	writer := s.pdb.DBS().Writer
+	if _, err := dbmodels.ChargingScanCoverages(
+		dbmodels.ChargingScanCoverageWhere.TenantID.EQ(tenantID),
+		dbmodels.ChargingScanCoverageWhere.TokenID.EQ(tokenID),
+	).DeleteAll(ctx, writer); err != nil {
+		return fmt.Errorf("clear charging coverage: %w", err)
+	}
+	for _, iv := range merged {
+		cov := &dbmodels.ChargingScanCoverage{TenantID: tenantID, TokenID: tokenID, ScannedFrom: iv.from, ScannedTo: iv.to}
+		if err := cov.Insert(ctx, writer, boil.Infer()); err != nil {
+			return fmt.Errorf("insert charging coverage: %w", err)
+		}
+	}
+	return nil
+}
+
+// persistSessions runs the detection sweep over samples for one gap and
+// replaces any previously-detected sessions in that gap with the fresh set —
+// a re-scan of an overlapping window can yield sessions with slightly
+// shifted started_at (telemetry-api buckets are window-relative), so
+// deleting the window first keeps exactly one copy and makes recompute
+// idempotent. Mirrors GeofenceDetectionService.persistPasses.
 func (s *ChargingDetectionService) persistSessions(ctx context.Context, tenantID string, tokenID int64, samples []ChargingSample, from, to time.Time) error {
 	detected := detectChargingSessions(samples)
 
 	writer := s.pdb.DBS().Writer
 	if _, err := dbmodels.ChargingSessions(
+		dbmodels.ChargingSessionWhere.TenantID.EQ(tenantID),
 		dbmodels.ChargingSessionWhere.TokenID.EQ(tokenID),
 		qm.Where("started_at >= ? AND started_at <= ?", from, to),
 	).DeleteAll(ctx, writer); err != nil {
@@ -109,23 +145,10 @@ func (s *ChargingDetectionService) persistSessions(ctx context.Context, tenantID
 	return nil
 }
 
-// recordCoverage marks [from, to] as scanned for this vehicle.
-func (s *ChargingDetectionService) recordCoverage(ctx context.Context, tenantID string, tokenID int64, from, to time.Time) error {
-	cov := &dbmodels.ChargingScanCoverage{
-		TenantID:    tenantID,
-		TokenID:     tokenID,
-		ScannedFrom: from,
-		ScannedTo:   to,
-	}
-	if err := cov.Upsert(ctx, s.pdb.DBS().Writer, true, []string{"tenant_id", "token_id", "scanned_from"}, boil.Whitelist("scanned_to"), boil.Infer()); err != nil {
-		return fmt.Errorf("upsert charging coverage: %w", err)
-	}
-	return nil
-}
-
 // readSessions reads persisted sessions for one vehicle overlapping [from, to].
-func (s *ChargingDetectionService) readSessions(ctx context.Context, tokenID int64, from, to time.Time) ([]dbmodels.ChargingSession, error) {
+func (s *ChargingDetectionService) readSessions(ctx context.Context, tenantID string, tokenID int64, from, to time.Time) ([]dbmodels.ChargingSession, error) {
 	rows, err := dbmodels.ChargingSessions(
+		dbmodels.ChargingSessionWhere.TenantID.EQ(tenantID),
 		dbmodels.ChargingSessionWhere.TokenID.EQ(tokenID),
 		qm.Where("started_at >= ? AND started_at <= ?", from, to),
 		qm.OrderBy(dbmodels.ChargingSessionColumns.StartedAt),
