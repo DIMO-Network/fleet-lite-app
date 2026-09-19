@@ -115,14 +115,14 @@ var TenantChargingSettingWhere = struct {
 	CreatedAt         whereHelpertime_Time
 	UpdatedAt         whereHelpertime_Time
 }{
-	TenantID:          whereHelperstring{field: "\"fleet_lite_app\".\"tenant_charging_settings\".\"tenant_id\""},
-	ElectricityRate:   whereHelpertypes_NullDecimal{field: "\"fleet_lite_app\".\"tenant_charging_settings\".\"electricity_rate\""},
-	GasPrice:          whereHelpertypes_NullDecimal{field: "\"fleet_lite_app\".\"tenant_charging_settings\".\"gas_price\""},
-	GasMPGEquivalent:  whereHelpertypes_NullDecimal{field: "\"fleet_lite_app\".\"tenant_charging_settings\".\"gas_mpg_equivalent\""},
-	VehicleKWHPerMile: whereHelpertypes_NullDecimal{field: "\"fleet_lite_app\".\"tenant_charging_settings\".\"vehicle_kwh_per_mile\""},
-	Currency:          whereHelperstring{field: "\"fleet_lite_app\".\"tenant_charging_settings\".\"currency\""},
-	CreatedAt:         whereHelpertime_Time{field: "\"fleet_lite_app\".\"tenant_charging_settings\".\"created_at\""},
-	UpdatedAt:         whereHelpertime_Time{field: "\"fleet_lite_app\".\"tenant_charging_settings\".\"updated_at\""},
+	TenantID:          whereHelperstring{field: "\"tenant_charging_settings\".\"tenant_id\""},
+	ElectricityRate:   whereHelpertypes_NullDecimal{field: "\"tenant_charging_settings\".\"electricity_rate\""},
+	GasPrice:          whereHelpertypes_NullDecimal{field: "\"tenant_charging_settings\".\"gas_price\""},
+	GasMPGEquivalent:  whereHelpertypes_NullDecimal{field: "\"tenant_charging_settings\".\"gas_mpg_equivalent\""},
+	VehicleKWHPerMile: whereHelpertypes_NullDecimal{field: "\"tenant_charging_settings\".\"vehicle_kwh_per_mile\""},
+	Currency:          whereHelperstring{field: "\"tenant_charging_settings\".\"currency\""},
+	CreatedAt:         whereHelpertime_Time{field: "\"tenant_charging_settings\".\"created_at\""},
+	UpdatedAt:         whereHelpertime_Time{field: "\"tenant_charging_settings\".\"updated_at\""},
 }
 
 // TenantChargingSettingRels is where relationship names are stored.
@@ -617,7 +617,7 @@ func (o *TenantChargingSetting) SetTenant(ctx context.Context, exec boil.Context
 	}
 
 	updateQuery := fmt.Sprintf(
-		"UPDATE \"fleet_lite_app\".\"tenant_charging_settings\" SET %s WHERE %s",
+		"UPDATE \"tenant_charging_settings\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, []string{"tenant_id"}),
 		strmangle.WhereClause("\"", "\"", 2, tenantChargingSettingPrimaryKeyColumns),
 	)
@@ -654,10 +654,10 @@ func (o *TenantChargingSetting) SetTenant(ctx context.Context, exec boil.Context
 
 // TenantChargingSettings retrieves all the records using an executor.
 func TenantChargingSettings(mods ...qm.QueryMod) tenantChargingSettingQuery {
-	mods = append(mods, qm.From("\"fleet_lite_app\".\"tenant_charging_settings\""))
+	mods = append(mods, qm.From("\"tenant_charging_settings\""))
 	q := NewQuery(mods...)
 	if len(queries.GetSelect(q)) == 0 {
-		queries.SetSelect(q, []string{"\"fleet_lite_app\".\"tenant_charging_settings\".*"})
+		queries.SetSelect(q, []string{"\"tenant_charging_settings\".*"})
 	}
 
 	return tenantChargingSettingQuery{q}
@@ -673,7 +673,7 @@ func FindTenantChargingSetting(ctx context.Context, exec boil.ContextExecutor, t
 		sel = strings.Join(strmangle.IdentQuoteSlice(dialect.LQ, dialect.RQ, selectCols), ",")
 	}
 	query := fmt.Sprintf(
-		"select %s from \"fleet_lite_app\".\"tenant_charging_settings\" where \"tenant_id\"=$1", sel,
+		"select %s from \"tenant_charging_settings\" where \"tenant_id\"=$1", sel,
 	)
 
 	q := queries.Raw(query, tenantID)
@@ -740,9 +740,9 @@ func (o *TenantChargingSetting) Insert(ctx context.Context, exec boil.ContextExe
 			return err
 		}
 		if len(wl) != 0 {
-			cache.query = fmt.Sprintf("INSERT INTO \"fleet_lite_app\".\"tenant_charging_settings\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
+			cache.query = fmt.Sprintf("INSERT INTO \"tenant_charging_settings\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
 		} else {
-			cache.query = "INSERT INTO \"fleet_lite_app\".\"tenant_charging_settings\" %sDEFAULT VALUES%s"
+			cache.query = "INSERT INTO \"tenant_charging_settings\" %sDEFAULT VALUES%s"
 		}
 
 		var queryOutput, queryReturning string
@@ -814,7 +814,7 @@ func (o *TenantChargingSetting) Update(ctx context.Context, exec boil.ContextExe
 			return 0, errors.New("models: unable to update tenant_charging_settings, could not build whitelist")
 		}
 
-		cache.query = fmt.Sprintf("UPDATE \"fleet_lite_app\".\"tenant_charging_settings\" SET %s WHERE %s",
+		cache.query = fmt.Sprintf("UPDATE \"tenant_charging_settings\" SET %s WHERE %s",
 			strmangle.SetParamNames("\"", "\"", 1, wl),
 			strmangle.WhereClause("\"", "\"", len(wl)+1, tenantChargingSettingPrimaryKeyColumns),
 		)
@@ -895,7 +895,7 @@ func (o TenantChargingSettingSlice) UpdateAll(ctx context.Context, exec boil.Con
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := fmt.Sprintf("UPDATE \"fleet_lite_app\".\"tenant_charging_settings\" SET %s WHERE %s",
+	sql := fmt.Sprintf("UPDATE \"tenant_charging_settings\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, colNames),
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), len(colNames)+1, tenantChargingSettingPrimaryKeyColumns, len(o)))
 
@@ -999,7 +999,7 @@ func (o *TenantChargingSetting) Upsert(ctx context.Context, exec boil.ContextExe
 			conflict = make([]string, len(tenantChargingSettingPrimaryKeyColumns))
 			copy(conflict, tenantChargingSettingPrimaryKeyColumns)
 		}
-		cache.query = buildUpsertQueryPostgres(dialect, "\"fleet_lite_app\".\"tenant_charging_settings\"", updateOnConflict, ret, update, conflict, insert, opts...)
+		cache.query = buildUpsertQueryPostgres(dialect, "\"tenant_charging_settings\"", updateOnConflict, ret, update, conflict, insert, opts...)
 
 		cache.valueMapping, err = queries.BindMapping(tenantChargingSettingType, tenantChargingSettingMapping, insert)
 		if err != nil {
@@ -1058,7 +1058,7 @@ func (o *TenantChargingSetting) Delete(ctx context.Context, exec boil.ContextExe
 	}
 
 	args := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(o)), tenantChargingSettingPrimaryKeyMapping)
-	sql := "DELETE FROM \"fleet_lite_app\".\"tenant_charging_settings\" WHERE \"tenant_id\"=$1"
+	sql := "DELETE FROM \"tenant_charging_settings\" WHERE \"tenant_id\"=$1"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1123,7 +1123,7 @@ func (o TenantChargingSettingSlice) DeleteAll(ctx context.Context, exec boil.Con
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "DELETE FROM \"fleet_lite_app\".\"tenant_charging_settings\" WHERE " +
+	sql := "DELETE FROM \"tenant_charging_settings\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, tenantChargingSettingPrimaryKeyColumns, len(o))
 
 	if boil.IsDebug(ctx) {
@@ -1178,7 +1178,7 @@ func (o *TenantChargingSettingSlice) ReloadAll(ctx context.Context, exec boil.Co
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "SELECT \"fleet_lite_app\".\"tenant_charging_settings\".* FROM \"fleet_lite_app\".\"tenant_charging_settings\" WHERE " +
+	sql := "SELECT \"tenant_charging_settings\".* FROM \"tenant_charging_settings\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, tenantChargingSettingPrimaryKeyColumns, len(*o))
 
 	q := queries.Raw(sql, args...)
@@ -1196,7 +1196,7 @@ func (o *TenantChargingSettingSlice) ReloadAll(ctx context.Context, exec boil.Co
 // TenantChargingSettingExists checks if the TenantChargingSetting row exists.
 func TenantChargingSettingExists(ctx context.Context, exec boil.ContextExecutor, tenantID string) (bool, error) {
 	var exists bool
-	sql := "select exists(select 1 from \"fleet_lite_app\".\"tenant_charging_settings\" where \"tenant_id\"=$1 limit 1)"
+	sql := "select exists(select 1 from \"tenant_charging_settings\" where \"tenant_id\"=$1 limit 1)"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)

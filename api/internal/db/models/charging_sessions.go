@@ -174,18 +174,18 @@ var ChargingSessionWhere = struct {
 	NumSamples     whereHelperint
 	CreatedAt      whereHelpertime_Time
 }{
-	TenantID:       whereHelperstring{field: "\"fleet_lite_app\".\"charging_sessions\".\"tenant_id\""},
-	TokenID:        whereHelperint64{field: "\"fleet_lite_app\".\"charging_sessions\".\"token_id\""},
-	StartedAt:      whereHelpertime_Time{field: "\"fleet_lite_app\".\"charging_sessions\".\"started_at\""},
-	EndedAt:        whereHelpertime_Time{field: "\"fleet_lite_app\".\"charging_sessions\".\"ended_at\""},
-	AddedEnergyKWH: whereHelpernull_Float64{field: "\"fleet_lite_app\".\"charging_sessions\".\"added_energy_kwh\""},
-	AvgPowerKW:     whereHelpernull_Float64{field: "\"fleet_lite_app\".\"charging_sessions\".\"avg_power_kw\""},
-	SocStartPCT:    whereHelpernull_Float64{field: "\"fleet_lite_app\".\"charging_sessions\".\"soc_start_pct\""},
-	SocEndPCT:      whereHelpernull_Float64{field: "\"fleet_lite_app\".\"charging_sessions\".\"soc_end_pct\""},
-	Lat:            whereHelpernull_Float64{field: "\"fleet_lite_app\".\"charging_sessions\".\"lat\""},
-	LNG:            whereHelpernull_Float64{field: "\"fleet_lite_app\".\"charging_sessions\".\"lng\""},
-	NumSamples:     whereHelperint{field: "\"fleet_lite_app\".\"charging_sessions\".\"num_samples\""},
-	CreatedAt:      whereHelpertime_Time{field: "\"fleet_lite_app\".\"charging_sessions\".\"created_at\""},
+	TenantID:       whereHelperstring{field: "\"charging_sessions\".\"tenant_id\""},
+	TokenID:        whereHelperint64{field: "\"charging_sessions\".\"token_id\""},
+	StartedAt:      whereHelpertime_Time{field: "\"charging_sessions\".\"started_at\""},
+	EndedAt:        whereHelpertime_Time{field: "\"charging_sessions\".\"ended_at\""},
+	AddedEnergyKWH: whereHelpernull_Float64{field: "\"charging_sessions\".\"added_energy_kwh\""},
+	AvgPowerKW:     whereHelpernull_Float64{field: "\"charging_sessions\".\"avg_power_kw\""},
+	SocStartPCT:    whereHelpernull_Float64{field: "\"charging_sessions\".\"soc_start_pct\""},
+	SocEndPCT:      whereHelpernull_Float64{field: "\"charging_sessions\".\"soc_end_pct\""},
+	Lat:            whereHelpernull_Float64{field: "\"charging_sessions\".\"lat\""},
+	LNG:            whereHelpernull_Float64{field: "\"charging_sessions\".\"lng\""},
+	NumSamples:     whereHelperint{field: "\"charging_sessions\".\"num_samples\""},
+	CreatedAt:      whereHelpertime_Time{field: "\"charging_sessions\".\"created_at\""},
 }
 
 // ChargingSessionRels is where relationship names are stored.
@@ -519,10 +519,10 @@ func (q chargingSessionQuery) Exists(ctx context.Context, exec boil.ContextExecu
 
 // ChargingSessions retrieves all the records using an executor.
 func ChargingSessions(mods ...qm.QueryMod) chargingSessionQuery {
-	mods = append(mods, qm.From("\"fleet_lite_app\".\"charging_sessions\""))
+	mods = append(mods, qm.From("\"charging_sessions\""))
 	q := NewQuery(mods...)
 	if len(queries.GetSelect(q)) == 0 {
-		queries.SetSelect(q, []string{"\"fleet_lite_app\".\"charging_sessions\".*"})
+		queries.SetSelect(q, []string{"\"charging_sessions\".*"})
 	}
 
 	return chargingSessionQuery{q}
@@ -538,7 +538,7 @@ func FindChargingSession(ctx context.Context, exec boil.ContextExecutor, tenantI
 		sel = strings.Join(strmangle.IdentQuoteSlice(dialect.LQ, dialect.RQ, selectCols), ",")
 	}
 	query := fmt.Sprintf(
-		"select %s from \"fleet_lite_app\".\"charging_sessions\" where \"tenant_id\"=$1 AND \"token_id\"=$2 AND \"started_at\"=$3", sel,
+		"select %s from \"charging_sessions\" where \"tenant_id\"=$1 AND \"token_id\"=$2 AND \"started_at\"=$3", sel,
 	)
 
 	q := queries.Raw(query, tenantID, tokenID, startedAt)
@@ -602,9 +602,9 @@ func (o *ChargingSession) Insert(ctx context.Context, exec boil.ContextExecutor,
 			return err
 		}
 		if len(wl) != 0 {
-			cache.query = fmt.Sprintf("INSERT INTO \"fleet_lite_app\".\"charging_sessions\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
+			cache.query = fmt.Sprintf("INSERT INTO \"charging_sessions\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
 		} else {
-			cache.query = "INSERT INTO \"fleet_lite_app\".\"charging_sessions\" %sDEFAULT VALUES%s"
+			cache.query = "INSERT INTO \"charging_sessions\" %sDEFAULT VALUES%s"
 		}
 
 		var queryOutput, queryReturning string
@@ -670,7 +670,7 @@ func (o *ChargingSession) Update(ctx context.Context, exec boil.ContextExecutor,
 			return 0, errors.New("models: unable to update charging_sessions, could not build whitelist")
 		}
 
-		cache.query = fmt.Sprintf("UPDATE \"fleet_lite_app\".\"charging_sessions\" SET %s WHERE %s",
+		cache.query = fmt.Sprintf("UPDATE \"charging_sessions\" SET %s WHERE %s",
 			strmangle.SetParamNames("\"", "\"", 1, wl),
 			strmangle.WhereClause("\"", "\"", len(wl)+1, chargingSessionPrimaryKeyColumns),
 		)
@@ -751,7 +751,7 @@ func (o ChargingSessionSlice) UpdateAll(ctx context.Context, exec boil.ContextEx
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := fmt.Sprintf("UPDATE \"fleet_lite_app\".\"charging_sessions\" SET %s WHERE %s",
+	sql := fmt.Sprintf("UPDATE \"charging_sessions\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, colNames),
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), len(colNames)+1, chargingSessionPrimaryKeyColumns, len(o)))
 
@@ -854,7 +854,7 @@ func (o *ChargingSession) Upsert(ctx context.Context, exec boil.ContextExecutor,
 			conflict = make([]string, len(chargingSessionPrimaryKeyColumns))
 			copy(conflict, chargingSessionPrimaryKeyColumns)
 		}
-		cache.query = buildUpsertQueryPostgres(dialect, "\"fleet_lite_app\".\"charging_sessions\"", updateOnConflict, ret, update, conflict, insert, opts...)
+		cache.query = buildUpsertQueryPostgres(dialect, "\"charging_sessions\"", updateOnConflict, ret, update, conflict, insert, opts...)
 
 		cache.valueMapping, err = queries.BindMapping(chargingSessionType, chargingSessionMapping, insert)
 		if err != nil {
@@ -913,7 +913,7 @@ func (o *ChargingSession) Delete(ctx context.Context, exec boil.ContextExecutor)
 	}
 
 	args := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(o)), chargingSessionPrimaryKeyMapping)
-	sql := "DELETE FROM \"fleet_lite_app\".\"charging_sessions\" WHERE \"tenant_id\"=$1 AND \"token_id\"=$2 AND \"started_at\"=$3"
+	sql := "DELETE FROM \"charging_sessions\" WHERE \"tenant_id\"=$1 AND \"token_id\"=$2 AND \"started_at\"=$3"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -978,7 +978,7 @@ func (o ChargingSessionSlice) DeleteAll(ctx context.Context, exec boil.ContextEx
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "DELETE FROM \"fleet_lite_app\".\"charging_sessions\" WHERE " +
+	sql := "DELETE FROM \"charging_sessions\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, chargingSessionPrimaryKeyColumns, len(o))
 
 	if boil.IsDebug(ctx) {
@@ -1033,7 +1033,7 @@ func (o *ChargingSessionSlice) ReloadAll(ctx context.Context, exec boil.ContextE
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "SELECT \"fleet_lite_app\".\"charging_sessions\".* FROM \"fleet_lite_app\".\"charging_sessions\" WHERE " +
+	sql := "SELECT \"charging_sessions\".* FROM \"charging_sessions\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, chargingSessionPrimaryKeyColumns, len(*o))
 
 	q := queries.Raw(sql, args...)
@@ -1051,7 +1051,7 @@ func (o *ChargingSessionSlice) ReloadAll(ctx context.Context, exec boil.ContextE
 // ChargingSessionExists checks if the ChargingSession row exists.
 func ChargingSessionExists(ctx context.Context, exec boil.ContextExecutor, tenantID string, tokenID int64, startedAt time.Time) (bool, error) {
 	var exists bool
-	sql := "select exists(select 1 from \"fleet_lite_app\".\"charging_sessions\" where \"tenant_id\"=$1 AND \"token_id\"=$2 AND \"started_at\"=$3 limit 1)"
+	sql := "select exists(select 1 from \"charging_sessions\" where \"tenant_id\"=$1 AND \"token_id\"=$2 AND \"started_at\"=$3 limit 1)"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
