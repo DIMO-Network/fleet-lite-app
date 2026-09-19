@@ -90,9 +90,89 @@ export class ChargingView extends LitElement {
             #charging-map { height: 360px; margin: 0 var(--gutter); border-radius: 8px; }
             table { width: 100%; border-collapse: collapse; margin-top: 16px; }
             th, td { text-align: left; padding: 8px 16px; border-bottom: 1px solid var(--border-color); }
-            .settings-panel { display: flex; gap: 12px; flex-wrap: wrap; padding: 16px var(--gutter); align-items: flex-end; }
-            .settings-panel label { display: flex; flex-direction: column; font-size: 0.8rem; gap: 4px; }
-            .error { color: var(--error-color, #d33); padding: 0 var(--gutter); }
+
+            .export-btn {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 10px 16px;
+                border-radius: var(--radius-md);
+                background: var(--primary);
+                color: var(--on-primary);
+                border: none;
+                font: var(--type-label-caps);
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                font-weight: 700;
+                cursor: pointer;
+                transition: opacity 0.15s ease;
+            }
+            .export-btn:hover { opacity: 0.9; }
+            .export-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+            .settings-form {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 16px;
+                align-items: flex-end;
+                margin: 16px var(--gutter);
+                padding: 16px;
+                background: var(--surface-container-low);
+                border: 1px solid var(--outline-variant);
+                border-radius: var(--radius-md);
+            }
+            .settings-form .field { display: flex; flex-direction: column; gap: 6px; }
+            .settings-form label {
+                font: var(--type-label-caps);
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                color: var(--on-surface-variant);
+            }
+            .settings-form input {
+                background: var(--surface-container);
+                color: var(--on-surface);
+                border: 1px solid var(--outline-variant);
+                border-radius: var(--radius-md);
+                padding: 10px 12px;
+                font-family: inherit;
+                font-size: 14px;
+            }
+            .settings-form input:focus { outline: 1px solid var(--primary); }
+            .settings-form .save-btn {
+                padding: 10px 16px;
+                border-radius: var(--radius-md);
+                background: var(--primary);
+                color: var(--on-primary);
+                border: none;
+                font: var(--type-label-caps);
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                font-weight: 700;
+                cursor: pointer;
+                transition: opacity 0.15s ease;
+            }
+            .settings-form .save-btn:hover { opacity: 0.9; }
+            .settings-form .save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+            .settings-form .form-error { font: var(--type-body-sm); color: var(--error); }
+
+            .secondary-btn {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                background: none;
+                border: 1px solid var(--outline-variant);
+                border-radius: var(--radius-md);
+                color: var(--on-surface-variant);
+                font: var(--type-body-sm);
+                padding: 8px 12px;
+                margin: 0 var(--gutter) 16px;
+                cursor: pointer;
+                transition: background 0.15s, color 0.15s, border-color 0.15s;
+                white-space: nowrap;
+            }
+            .secondary-btn:hover { background: var(--surface-container-high); color: var(--primary); }
+
+            .error { color: var(--error, #d33); padding: 0 var(--gutter); }
         `,
     ];
 
@@ -216,7 +296,7 @@ export class ChargingView extends LitElement {
         return html`
             <header class="top-bar">
                 <h1>${msg('Charging')}</h1>
-                <button ?disabled=${this.exporting} @click=${() => this.exportCsv()}>
+                <button class="export-btn" ?disabled=${this.exporting} @click=${() => this.exportCsv()}>
                     ${msg('Export CSV')}
                 </button>
             </header>
@@ -236,32 +316,32 @@ export class ChargingView extends LitElement {
                 </div>
             </div>
             <div id="charging-map"></div>
-            <form class="settings-panel" @submit=${(e: Event) => this.saveSettings(e)}>
-                <label>
-                    ${msg('Electricity rate (per kWh)')}
+            <form class="settings-form" @submit=${(e: Event) => this.saveSettings(e)}>
+                <div class="field">
+                    <label>${msg('Electricity rate (per kWh)')}</label>
                     <input type="number" step="0.01" .value=${this.settings.electricityRate?.toString() ?? ''}
                         @input=${(e: InputEvent) => this.updateSetting('electricityRate', (e.target as HTMLInputElement).value)} />
-                </label>
-                <label>
-                    ${msg('Gas price (per gallon)')}
+                </div>
+                <div class="field">
+                    <label>${msg('Gas price (per gallon)')}</label>
                     <input type="number" step="0.01" .value=${this.settings.gasPrice?.toString() ?? ''}
                         @input=${(e: InputEvent) => this.updateSetting('gasPrice', (e.target as HTMLInputElement).value)} />
-                </label>
-                <label>
-                    ${msg('Gas MPG equivalent')}
+                </div>
+                <div class="field">
+                    <label>${msg('Gas MPG equivalent')}</label>
                     <input type="number" step="1" .value=${this.settings.gasMpgEquivalent?.toString() ?? ''}
                         @input=${(e: InputEvent) => this.updateSetting('gasMpgEquivalent', (e.target as HTMLInputElement).value)} />
-                </label>
-                <label>
-                    ${msg('Vehicle efficiency (kWh/mile)')}
+                </div>
+                <div class="field">
+                    <label>${msg('Vehicle efficiency (kWh/mile)')}</label>
                     <input type="number" step="0.01" .value=${this.settings.vehicleKwhPerMile?.toString() ?? ''}
                         @input=${(e: InputEvent) => this.updateSetting('vehicleKwhPerMile', (e.target as HTMLInputElement).value)} />
-                </label>
-                <button type="submit" ?disabled=${this.savingSettings}>${msg('Save settings')}</button>
-                ${this.settingsError ? html`<span class="error">${this.settingsError}</span>` : nothing}
+                </div>
+                <button type="submit" class="save-btn" ?disabled=${this.savingSettings}>${msg('Save settings')}</button>
+                ${this.settingsError ? html`<span class="form-error">${this.settingsError}</span>` : nothing}
             </form>
             ${this.selectedTokenId
-                ? html`<button @click=${() => { this.selectedTokenId = null; }}>${msg('Show all vehicles')}</button>`
+                ? html`<button class="secondary-btn" @click=${() => { this.selectedTokenId = null; }}>${msg('Show all vehicles')}</button>`
                 : nothing}
             ${this.loading
                 ? html`<p>${msg('Loading…')}</p>`
