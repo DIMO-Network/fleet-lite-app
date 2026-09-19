@@ -145,11 +145,11 @@ var ChargingScanCoverageWhere = struct {
 	ScannedTo   whereHelpertime_Time
 	CreatedAt   whereHelpertime_Time
 }{
-	TenantID:    whereHelperstring{field: "\"fleet_lite_app\".\"charging_scan_coverage\".\"tenant_id\""},
-	TokenID:     whereHelperint64{field: "\"fleet_lite_app\".\"charging_scan_coverage\".\"token_id\""},
-	ScannedFrom: whereHelpertime_Time{field: "\"fleet_lite_app\".\"charging_scan_coverage\".\"scanned_from\""},
-	ScannedTo:   whereHelpertime_Time{field: "\"fleet_lite_app\".\"charging_scan_coverage\".\"scanned_to\""},
-	CreatedAt:   whereHelpertime_Time{field: "\"fleet_lite_app\".\"charging_scan_coverage\".\"created_at\""},
+	TenantID:    whereHelperstring{field: "\"charging_scan_coverage\".\"tenant_id\""},
+	TokenID:     whereHelperint64{field: "\"charging_scan_coverage\".\"token_id\""},
+	ScannedFrom: whereHelpertime_Time{field: "\"charging_scan_coverage\".\"scanned_from\""},
+	ScannedTo:   whereHelpertime_Time{field: "\"charging_scan_coverage\".\"scanned_to\""},
+	CreatedAt:   whereHelpertime_Time{field: "\"charging_scan_coverage\".\"created_at\""},
 }
 
 // ChargingScanCoverageRels is where relationship names are stored.
@@ -483,10 +483,10 @@ func (q chargingScanCoverageQuery) Exists(ctx context.Context, exec boil.Context
 
 // ChargingScanCoverages retrieves all the records using an executor.
 func ChargingScanCoverages(mods ...qm.QueryMod) chargingScanCoverageQuery {
-	mods = append(mods, qm.From("\"fleet_lite_app\".\"charging_scan_coverage\""))
+	mods = append(mods, qm.From("\"charging_scan_coverage\""))
 	q := NewQuery(mods...)
 	if len(queries.GetSelect(q)) == 0 {
-		queries.SetSelect(q, []string{"\"fleet_lite_app\".\"charging_scan_coverage\".*"})
+		queries.SetSelect(q, []string{"\"charging_scan_coverage\".*"})
 	}
 
 	return chargingScanCoverageQuery{q}
@@ -502,7 +502,7 @@ func FindChargingScanCoverage(ctx context.Context, exec boil.ContextExecutor, te
 		sel = strings.Join(strmangle.IdentQuoteSlice(dialect.LQ, dialect.RQ, selectCols), ",")
 	}
 	query := fmt.Sprintf(
-		"select %s from \"fleet_lite_app\".\"charging_scan_coverage\" where \"tenant_id\"=$1 AND \"token_id\"=$2 AND \"scanned_from\"=$3", sel,
+		"select %s from \"charging_scan_coverage\" where \"tenant_id\"=$1 AND \"token_id\"=$2 AND \"scanned_from\"=$3", sel,
 	)
 
 	q := queries.Raw(query, tenantID, tokenID, scannedFrom)
@@ -566,9 +566,9 @@ func (o *ChargingScanCoverage) Insert(ctx context.Context, exec boil.ContextExec
 			return err
 		}
 		if len(wl) != 0 {
-			cache.query = fmt.Sprintf("INSERT INTO \"fleet_lite_app\".\"charging_scan_coverage\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
+			cache.query = fmt.Sprintf("INSERT INTO \"charging_scan_coverage\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
 		} else {
-			cache.query = "INSERT INTO \"fleet_lite_app\".\"charging_scan_coverage\" %sDEFAULT VALUES%s"
+			cache.query = "INSERT INTO \"charging_scan_coverage\" %sDEFAULT VALUES%s"
 		}
 
 		var queryOutput, queryReturning string
@@ -634,7 +634,7 @@ func (o *ChargingScanCoverage) Update(ctx context.Context, exec boil.ContextExec
 			return 0, errors.New("models: unable to update charging_scan_coverage, could not build whitelist")
 		}
 
-		cache.query = fmt.Sprintf("UPDATE \"fleet_lite_app\".\"charging_scan_coverage\" SET %s WHERE %s",
+		cache.query = fmt.Sprintf("UPDATE \"charging_scan_coverage\" SET %s WHERE %s",
 			strmangle.SetParamNames("\"", "\"", 1, wl),
 			strmangle.WhereClause("\"", "\"", len(wl)+1, chargingScanCoveragePrimaryKeyColumns),
 		)
@@ -715,7 +715,7 @@ func (o ChargingScanCoverageSlice) UpdateAll(ctx context.Context, exec boil.Cont
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := fmt.Sprintf("UPDATE \"fleet_lite_app\".\"charging_scan_coverage\" SET %s WHERE %s",
+	sql := fmt.Sprintf("UPDATE \"charging_scan_coverage\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, colNames),
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), len(colNames)+1, chargingScanCoveragePrimaryKeyColumns, len(o)))
 
@@ -818,7 +818,7 @@ func (o *ChargingScanCoverage) Upsert(ctx context.Context, exec boil.ContextExec
 			conflict = make([]string, len(chargingScanCoveragePrimaryKeyColumns))
 			copy(conflict, chargingScanCoveragePrimaryKeyColumns)
 		}
-		cache.query = buildUpsertQueryPostgres(dialect, "\"fleet_lite_app\".\"charging_scan_coverage\"", updateOnConflict, ret, update, conflict, insert, opts...)
+		cache.query = buildUpsertQueryPostgres(dialect, "\"charging_scan_coverage\"", updateOnConflict, ret, update, conflict, insert, opts...)
 
 		cache.valueMapping, err = queries.BindMapping(chargingScanCoverageType, chargingScanCoverageMapping, insert)
 		if err != nil {
@@ -877,7 +877,7 @@ func (o *ChargingScanCoverage) Delete(ctx context.Context, exec boil.ContextExec
 	}
 
 	args := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(o)), chargingScanCoveragePrimaryKeyMapping)
-	sql := "DELETE FROM \"fleet_lite_app\".\"charging_scan_coverage\" WHERE \"tenant_id\"=$1 AND \"token_id\"=$2 AND \"scanned_from\"=$3"
+	sql := "DELETE FROM \"charging_scan_coverage\" WHERE \"tenant_id\"=$1 AND \"token_id\"=$2 AND \"scanned_from\"=$3"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -942,7 +942,7 @@ func (o ChargingScanCoverageSlice) DeleteAll(ctx context.Context, exec boil.Cont
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "DELETE FROM \"fleet_lite_app\".\"charging_scan_coverage\" WHERE " +
+	sql := "DELETE FROM \"charging_scan_coverage\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, chargingScanCoveragePrimaryKeyColumns, len(o))
 
 	if boil.IsDebug(ctx) {
@@ -997,7 +997,7 @@ func (o *ChargingScanCoverageSlice) ReloadAll(ctx context.Context, exec boil.Con
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "SELECT \"fleet_lite_app\".\"charging_scan_coverage\".* FROM \"fleet_lite_app\".\"charging_scan_coverage\" WHERE " +
+	sql := "SELECT \"charging_scan_coverage\".* FROM \"charging_scan_coverage\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, chargingScanCoveragePrimaryKeyColumns, len(*o))
 
 	q := queries.Raw(sql, args...)
@@ -1015,7 +1015,7 @@ func (o *ChargingScanCoverageSlice) ReloadAll(ctx context.Context, exec boil.Con
 // ChargingScanCoverageExists checks if the ChargingScanCoverage row exists.
 func ChargingScanCoverageExists(ctx context.Context, exec boil.ContextExecutor, tenantID string, tokenID int64, scannedFrom time.Time) (bool, error) {
 	var exists bool
-	sql := "select exists(select 1 from \"fleet_lite_app\".\"charging_scan_coverage\" where \"tenant_id\"=$1 AND \"token_id\"=$2 AND \"scanned_from\"=$3 limit 1)"
+	sql := "select exists(select 1 from \"charging_scan_coverage\" where \"tenant_id\"=$1 AND \"token_id\"=$2 AND \"scanned_from\"=$3 limit 1)"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)

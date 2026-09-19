@@ -194,18 +194,18 @@ var GeofenceWhere = struct {
 	CreatedAt     whereHelpertime_Time
 	UpdatedAt     whereHelpertime_Time
 }{
-	ID:            whereHelperstring{field: "\"fleet_lite_app\".\"geofences\".\"id\""},
-	TenantID:      whereHelperstring{field: "\"fleet_lite_app\".\"geofences\".\"tenant_id\""},
-	Name:          whereHelperstring{field: "\"fleet_lite_app\".\"geofences\".\"name\""},
-	Color:         whereHelperstring{field: "\"fleet_lite_app\".\"geofences\".\"color\""},
-	Geometry:      whereHelpertypes_JSON{field: "\"fleet_lite_app\".\"geofences\".\"geometry\""},
-	AreaM2:        whereHelperfloat64{field: "\"fleet_lite_app\".\"geofences\".\"area_m2\""},
-	SpeedLimitKPH: whereHelpernull_Int{field: "\"fleet_lite_app\".\"geofences\".\"speed_limit_kph\""},
-	Scope:         whereHelperstring{field: "\"fleet_lite_app\".\"geofences\".\"scope\""},
-	GroupIds:      whereHelpertypes_StringArray{field: "\"fleet_lite_app\".\"geofences\".\"group_ids\""},
-	CreatedBy:     whereHelperstring{field: "\"fleet_lite_app\".\"geofences\".\"created_by\""},
-	CreatedAt:     whereHelpertime_Time{field: "\"fleet_lite_app\".\"geofences\".\"created_at\""},
-	UpdatedAt:     whereHelpertime_Time{field: "\"fleet_lite_app\".\"geofences\".\"updated_at\""},
+	ID:            whereHelperstring{field: "\"geofences\".\"id\""},
+	TenantID:      whereHelperstring{field: "\"geofences\".\"tenant_id\""},
+	Name:          whereHelperstring{field: "\"geofences\".\"name\""},
+	Color:         whereHelperstring{field: "\"geofences\".\"color\""},
+	Geometry:      whereHelpertypes_JSON{field: "\"geofences\".\"geometry\""},
+	AreaM2:        whereHelperfloat64{field: "\"geofences\".\"area_m2\""},
+	SpeedLimitKPH: whereHelpernull_Int{field: "\"geofences\".\"speed_limit_kph\""},
+	Scope:         whereHelperstring{field: "\"geofences\".\"scope\""},
+	GroupIds:      whereHelpertypes_StringArray{field: "\"geofences\".\"group_ids\""},
+	CreatedBy:     whereHelperstring{field: "\"geofences\".\"created_by\""},
+	CreatedAt:     whereHelpertime_Time{field: "\"geofences\".\"created_at\""},
+	UpdatedAt:     whereHelpertime_Time{field: "\"geofences\".\"updated_at\""},
 }
 
 // GeofenceRels is where relationship names are stored.
@@ -633,7 +633,7 @@ func (o *Geofence) GeofencePasses(mods ...qm.QueryMod) geofencePassQuery {
 	}
 
 	queryMods = append(queryMods,
-		qm.Where("\"fleet_lite_app\".\"geofence_passes\".\"geofence_id\"=?", o.ID),
+		qm.Where("\"geofence_passes\".\"geofence_id\"=?", o.ID),
 	)
 
 	return GeofencePasses(queryMods...)
@@ -647,7 +647,7 @@ func (o *Geofence) GeofenceScanCoverages(mods ...qm.QueryMod) geofenceScanCovera
 	}
 
 	queryMods = append(queryMods,
-		qm.Where("\"fleet_lite_app\".\"geofence_scan_coverage\".\"geofence_id\"=?", o.ID),
+		qm.Where("\"geofence_scan_coverage\".\"geofence_id\"=?", o.ID),
 	)
 
 	return GeofenceScanCoverages(queryMods...)
@@ -661,7 +661,7 @@ func (o *Geofence) VehicleGeofences(mods ...qm.QueryMod) vehicleGeofenceQuery {
 	}
 
 	queryMods = append(queryMods,
-		qm.Where("\"fleet_lite_app\".\"vehicle_geofences\".\"geofence_id\"=?", o.ID),
+		qm.Where("\"vehicle_geofences\".\"geofence_id\"=?", o.ID),
 	)
 
 	return VehicleGeofences(queryMods...)
@@ -725,8 +725,8 @@ func (geofenceL) LoadTenant(ctx context.Context, e boil.ContextExecutor, singula
 	}
 
 	query := NewQuery(
-		qm.From(`fleet_lite_app.tenants`),
-		qm.WhereIn(`fleet_lite_app.tenants.id in ?`, argsSlice...),
+		qm.From(`tenants`),
+		qm.WhereIn(`tenants.id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -842,8 +842,8 @@ func (geofenceL) LoadGeofencePasses(ctx context.Context, e boil.ContextExecutor,
 	}
 
 	query := NewQuery(
-		qm.From(`fleet_lite_app.geofence_passes`),
-		qm.WhereIn(`fleet_lite_app.geofence_passes.geofence_id in ?`, argsSlice...),
+		qm.From(`geofence_passes`),
+		qm.WhereIn(`geofence_passes.geofence_id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -955,8 +955,8 @@ func (geofenceL) LoadGeofenceScanCoverages(ctx context.Context, e boil.ContextEx
 	}
 
 	query := NewQuery(
-		qm.From(`fleet_lite_app.geofence_scan_coverage`),
-		qm.WhereIn(`fleet_lite_app.geofence_scan_coverage.geofence_id in ?`, argsSlice...),
+		qm.From(`geofence_scan_coverage`),
+		qm.WhereIn(`geofence_scan_coverage.geofence_id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -1068,8 +1068,8 @@ func (geofenceL) LoadVehicleGeofences(ctx context.Context, e boil.ContextExecuto
 	}
 
 	query := NewQuery(
-		qm.From(`fleet_lite_app.vehicle_geofences`),
-		qm.WhereIn(`fleet_lite_app.vehicle_geofences.geofence_id in ?`, argsSlice...),
+		qm.From(`vehicle_geofences`),
+		qm.WhereIn(`vehicle_geofences.geofence_id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -1138,7 +1138,7 @@ func (o *Geofence) SetTenant(ctx context.Context, exec boil.ContextExecutor, ins
 	}
 
 	updateQuery := fmt.Sprintf(
-		"UPDATE \"fleet_lite_app\".\"geofences\" SET %s WHERE %s",
+		"UPDATE \"geofences\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, []string{"tenant_id"}),
 		strmangle.WhereClause("\"", "\"", 2, geofencePrimaryKeyColumns),
 	)
@@ -1187,7 +1187,7 @@ func (o *Geofence) AddGeofencePasses(ctx context.Context, exec boil.ContextExecu
 			}
 		} else {
 			updateQuery := fmt.Sprintf(
-				"UPDATE \"fleet_lite_app\".\"geofence_passes\" SET %s WHERE %s",
+				"UPDATE \"geofence_passes\" SET %s WHERE %s",
 				strmangle.SetParamNames("\"", "\"", 1, []string{"geofence_id"}),
 				strmangle.WhereClause("\"", "\"", 2, geofencePassPrimaryKeyColumns),
 			)
@@ -1240,7 +1240,7 @@ func (o *Geofence) AddGeofenceScanCoverages(ctx context.Context, exec boil.Conte
 			}
 		} else {
 			updateQuery := fmt.Sprintf(
-				"UPDATE \"fleet_lite_app\".\"geofence_scan_coverage\" SET %s WHERE %s",
+				"UPDATE \"geofence_scan_coverage\" SET %s WHERE %s",
 				strmangle.SetParamNames("\"", "\"", 1, []string{"geofence_id"}),
 				strmangle.WhereClause("\"", "\"", 2, geofenceScanCoveragePrimaryKeyColumns),
 			)
@@ -1293,7 +1293,7 @@ func (o *Geofence) AddVehicleGeofences(ctx context.Context, exec boil.ContextExe
 			}
 		} else {
 			updateQuery := fmt.Sprintf(
-				"UPDATE \"fleet_lite_app\".\"vehicle_geofences\" SET %s WHERE %s",
+				"UPDATE \"vehicle_geofences\" SET %s WHERE %s",
 				strmangle.SetParamNames("\"", "\"", 1, []string{"geofence_id"}),
 				strmangle.WhereClause("\"", "\"", 2, vehicleGeofencePrimaryKeyColumns),
 			)
@@ -1334,10 +1334,10 @@ func (o *Geofence) AddVehicleGeofences(ctx context.Context, exec boil.ContextExe
 
 // Geofences retrieves all the records using an executor.
 func Geofences(mods ...qm.QueryMod) geofenceQuery {
-	mods = append(mods, qm.From("\"fleet_lite_app\".\"geofences\""))
+	mods = append(mods, qm.From("\"geofences\""))
 	q := NewQuery(mods...)
 	if len(queries.GetSelect(q)) == 0 {
-		queries.SetSelect(q, []string{"\"fleet_lite_app\".\"geofences\".*"})
+		queries.SetSelect(q, []string{"\"geofences\".*"})
 	}
 
 	return geofenceQuery{q}
@@ -1353,7 +1353,7 @@ func FindGeofence(ctx context.Context, exec boil.ContextExecutor, iD string, sel
 		sel = strings.Join(strmangle.IdentQuoteSlice(dialect.LQ, dialect.RQ, selectCols), ",")
 	}
 	query := fmt.Sprintf(
-		"select %s from \"fleet_lite_app\".\"geofences\" where \"id\"=$1", sel,
+		"select %s from \"geofences\" where \"id\"=$1", sel,
 	)
 
 	q := queries.Raw(query, iD)
@@ -1420,9 +1420,9 @@ func (o *Geofence) Insert(ctx context.Context, exec boil.ContextExecutor, column
 			return err
 		}
 		if len(wl) != 0 {
-			cache.query = fmt.Sprintf("INSERT INTO \"fleet_lite_app\".\"geofences\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
+			cache.query = fmt.Sprintf("INSERT INTO \"geofences\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
 		} else {
-			cache.query = "INSERT INTO \"fleet_lite_app\".\"geofences\" %sDEFAULT VALUES%s"
+			cache.query = "INSERT INTO \"geofences\" %sDEFAULT VALUES%s"
 		}
 
 		var queryOutput, queryReturning string
@@ -1494,7 +1494,7 @@ func (o *Geofence) Update(ctx context.Context, exec boil.ContextExecutor, column
 			return 0, errors.New("models: unable to update geofences, could not build whitelist")
 		}
 
-		cache.query = fmt.Sprintf("UPDATE \"fleet_lite_app\".\"geofences\" SET %s WHERE %s",
+		cache.query = fmt.Sprintf("UPDATE \"geofences\" SET %s WHERE %s",
 			strmangle.SetParamNames("\"", "\"", 1, wl),
 			strmangle.WhereClause("\"", "\"", len(wl)+1, geofencePrimaryKeyColumns),
 		)
@@ -1575,7 +1575,7 @@ func (o GeofenceSlice) UpdateAll(ctx context.Context, exec boil.ContextExecutor,
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := fmt.Sprintf("UPDATE \"fleet_lite_app\".\"geofences\" SET %s WHERE %s",
+	sql := fmt.Sprintf("UPDATE \"geofences\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, colNames),
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), len(colNames)+1, geofencePrimaryKeyColumns, len(o)))
 
@@ -1679,7 +1679,7 @@ func (o *Geofence) Upsert(ctx context.Context, exec boil.ContextExecutor, update
 			conflict = make([]string, len(geofencePrimaryKeyColumns))
 			copy(conflict, geofencePrimaryKeyColumns)
 		}
-		cache.query = buildUpsertQueryPostgres(dialect, "\"fleet_lite_app\".\"geofences\"", updateOnConflict, ret, update, conflict, insert, opts...)
+		cache.query = buildUpsertQueryPostgres(dialect, "\"geofences\"", updateOnConflict, ret, update, conflict, insert, opts...)
 
 		cache.valueMapping, err = queries.BindMapping(geofenceType, geofenceMapping, insert)
 		if err != nil {
@@ -1738,7 +1738,7 @@ func (o *Geofence) Delete(ctx context.Context, exec boil.ContextExecutor) (int64
 	}
 
 	args := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(o)), geofencePrimaryKeyMapping)
-	sql := "DELETE FROM \"fleet_lite_app\".\"geofences\" WHERE \"id\"=$1"
+	sql := "DELETE FROM \"geofences\" WHERE \"id\"=$1"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1803,7 +1803,7 @@ func (o GeofenceSlice) DeleteAll(ctx context.Context, exec boil.ContextExecutor)
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "DELETE FROM \"fleet_lite_app\".\"geofences\" WHERE " +
+	sql := "DELETE FROM \"geofences\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, geofencePrimaryKeyColumns, len(o))
 
 	if boil.IsDebug(ctx) {
@@ -1858,7 +1858,7 @@ func (o *GeofenceSlice) ReloadAll(ctx context.Context, exec boil.ContextExecutor
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "SELECT \"fleet_lite_app\".\"geofences\".* FROM \"fleet_lite_app\".\"geofences\" WHERE " +
+	sql := "SELECT \"geofences\".* FROM \"geofences\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, geofencePrimaryKeyColumns, len(*o))
 
 	q := queries.Raw(sql, args...)
@@ -1876,7 +1876,7 @@ func (o *GeofenceSlice) ReloadAll(ctx context.Context, exec boil.ContextExecutor
 // GeofenceExists checks if the Geofence row exists.
 func GeofenceExists(ctx context.Context, exec boil.ContextExecutor, iD string) (bool, error) {
 	var exists bool
-	sql := "select exists(select 1 from \"fleet_lite_app\".\"geofences\" where \"id\"=$1 limit 1)"
+	sql := "select exists(select 1 from \"geofences\" where \"id\"=$1 limit 1)"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
