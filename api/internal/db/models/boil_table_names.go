@@ -4,25 +4,31 @@
 package models
 
 var TableNames = struct {
-	GeofencePasses       string
-	GeofenceScanCoverage string
-	Geofences            string
-	TenantUsers          string
-	Tenants              string
-	UserPreferences      string
-	VehicleFavorites     string
-	VehicleGeofences     string
-	VehicleTcoSettings   string
-	Vehicles             string
+	ChargingScanCoverage   string
+	ChargingSessions       string
+	GeofencePasses         string
+	GeofenceScanCoverage   string
+	Geofences              string
+	TenantChargingSettings string
+	TenantUsers            string
+	Tenants                string
+	UserPreferences        string
+	VehicleFavorites       string
+	VehicleGeofences       string
+	VehicleTcoSettings     string
+	Vehicles               string
 }{
-	GeofencePasses:       "geofence_passes",
-	GeofenceScanCoverage: "geofence_scan_coverage",
-	Geofences:            "geofences",
-	TenantUsers:          "tenant_users",
-	Tenants:              "tenants",
-	UserPreferences:      "user_preferences",
-	VehicleFavorites:     "vehicle_favorites",
-	VehicleGeofences:     "vehicle_geofences",
-	VehicleTcoSettings:   "vehicle_tco_settings",
-	Vehicles:             "vehicles",
+	ChargingScanCoverage:   "charging_scan_coverage",
+	ChargingSessions:       "charging_sessions",
+	GeofencePasses:         "geofence_passes",
+	GeofenceScanCoverage:   "geofence_scan_coverage",
+	Geofences:              "geofences",
+	TenantChargingSettings: "tenant_charging_settings",
+	TenantUsers:            "tenant_users",
+	Tenants:                "tenants",
+	UserPreferences:        "user_preferences",
+	VehicleFavorites:       "vehicle_favorites",
+	VehicleGeofences:       "vehicle_geofences",
+	VehicleTcoSettings:     "vehicle_tco_settings",
+	Vehicles:               "vehicles",
 }

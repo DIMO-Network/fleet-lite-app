@@ -77,41 +77,60 @@ var TenantWhere = struct {
 	CreatedAt     whereHelpertime_Time
 	UpdatedAt     whereHelpertime_Time
 }{
-	ID:            whereHelperstring{field: "\"tenants\".\"id\""},
-	Name:          whereHelperstring{field: "\"tenants\".\"name\""},
-	DimoClientID:  whereHelpernull_String{field: "\"tenants\".\"dimo_client_id\""},
-	DimoAPIKeyEnc: whereHelpernull_String{field: "\"tenants\".\"dimo_api_key_enc\""},
-	CreatedAt:     whereHelpertime_Time{field: "\"tenants\".\"created_at\""},
-	UpdatedAt:     whereHelpertime_Time{field: "\"tenants\".\"updated_at\""},
+	ID:            whereHelperstring{field: "\"fleet_lite_app\".\"tenants\".\"id\""},
+	Name:          whereHelperstring{field: "\"fleet_lite_app\".\"tenants\".\"name\""},
+	DimoClientID:  whereHelpernull_String{field: "\"fleet_lite_app\".\"tenants\".\"dimo_client_id\""},
+	DimoAPIKeyEnc: whereHelpernull_String{field: "\"fleet_lite_app\".\"tenants\".\"dimo_api_key_enc\""},
+	CreatedAt:     whereHelpertime_Time{field: "\"fleet_lite_app\".\"tenants\".\"created_at\""},
+	UpdatedAt:     whereHelpertime_Time{field: "\"fleet_lite_app\".\"tenants\".\"updated_at\""},
 }
 
 // TenantRels is where relationship names are stored.
 var TenantRels = struct {
-	Geofences          string
-	TenantUsers        string
-	VehicleFavorites   string
-	VehicleTcoSettings string
-	Vehicles           string
+	TenantChargingSetting string
+	Geofences             string
+	TenantUsers           string
+	VehicleFavorites      string
+	VehicleTcoSettings    string
+	Vehicles              string
 }{
-	Geofences:          "Geofences",
-	TenantUsers:        "TenantUsers",
-	VehicleFavorites:   "VehicleFavorites",
-	VehicleTcoSettings: "VehicleTcoSettings",
-	Vehicles:           "Vehicles",
+	TenantChargingSetting: "TenantChargingSetting",
+	Geofences:             "Geofences",
+	TenantUsers:           "TenantUsers",
+	VehicleFavorites:      "VehicleFavorites",
+	VehicleTcoSettings:    "VehicleTcoSettings",
+	Vehicles:              "Vehicles",
 }
 
 // tenantR is where relationships are stored.
 type tenantR struct {
-	Geofences          GeofenceSlice          `boil:"Geofences" json:"Geofences" toml:"Geofences" yaml:"Geofences"`
-	TenantUsers        TenantUserSlice        `boil:"TenantUsers" json:"TenantUsers" toml:"TenantUsers" yaml:"TenantUsers"`
-	VehicleFavorites   VehicleFavoriteSlice   `boil:"VehicleFavorites" json:"VehicleFavorites" toml:"VehicleFavorites" yaml:"VehicleFavorites"`
-	VehicleTcoSettings VehicleTcoSettingSlice `boil:"VehicleTcoSettings" json:"VehicleTcoSettings" toml:"VehicleTcoSettings" yaml:"VehicleTcoSettings"`
-	Vehicles           VehicleSlice           `boil:"Vehicles" json:"Vehicles" toml:"Vehicles" yaml:"Vehicles"`
+	TenantChargingSetting *TenantChargingSetting `boil:"TenantChargingSetting" json:"TenantChargingSetting" toml:"TenantChargingSetting" yaml:"TenantChargingSetting"`
+	Geofences             GeofenceSlice          `boil:"Geofences" json:"Geofences" toml:"Geofences" yaml:"Geofences"`
+	TenantUsers           TenantUserSlice        `boil:"TenantUsers" json:"TenantUsers" toml:"TenantUsers" yaml:"TenantUsers"`
+	VehicleFavorites      VehicleFavoriteSlice   `boil:"VehicleFavorites" json:"VehicleFavorites" toml:"VehicleFavorites" yaml:"VehicleFavorites"`
+	VehicleTcoSettings    VehicleTcoSettingSlice `boil:"VehicleTcoSettings" json:"VehicleTcoSettings" toml:"VehicleTcoSettings" yaml:"VehicleTcoSettings"`
+	Vehicles              VehicleSlice           `boil:"Vehicles" json:"Vehicles" toml:"Vehicles" yaml:"Vehicles"`
 }
 
 // NewStruct creates a new relationship struct
 func (*tenantR) NewStruct() *tenantR {
 	return &tenantR{}
+}
+
+func (o *Tenant) GetTenantChargingSetting() *TenantChargingSetting {
+	if o == nil {
+		return nil
+	}
+
+	return o.R.GetTenantChargingSetting()
+}
+
+func (r *tenantR) GetTenantChargingSetting() *TenantChargingSetting {
+	if r == nil {
+		return nil
+	}
+
+	return r.TenantChargingSetting
 }
 
 func (o *Tenant) GetGeofences() GeofenceSlice {
@@ -510,6 +529,17 @@ func (q tenantQuery) Exists(ctx context.Context, exec boil.ContextExecutor) (boo
 	return count > 0, nil
 }
 
+// TenantChargingSetting pointed to by the foreign key.
+func (o *Tenant) TenantChargingSetting(mods ...qm.QueryMod) tenantChargingSettingQuery {
+	queryMods := []qm.QueryMod{
+		qm.Where("\"tenant_id\" = ?", o.ID),
+	}
+
+	queryMods = append(queryMods, mods...)
+
+	return TenantChargingSettings(queryMods...)
+}
+
 // Geofences retrieves all the geofence's Geofences with an executor.
 func (o *Tenant) Geofences(mods ...qm.QueryMod) geofenceQuery {
 	var queryMods []qm.QueryMod
@@ -518,7 +548,7 @@ func (o *Tenant) Geofences(mods ...qm.QueryMod) geofenceQuery {
 	}
 
 	queryMods = append(queryMods,
-		qm.Where("\"geofences\".\"tenant_id\"=?", o.ID),
+		qm.Where("\"fleet_lite_app\".\"geofences\".\"tenant_id\"=?", o.ID),
 	)
 
 	return Geofences(queryMods...)
@@ -532,7 +562,7 @@ func (o *Tenant) TenantUsers(mods ...qm.QueryMod) tenantUserQuery {
 	}
 
 	queryMods = append(queryMods,
-		qm.Where("\"tenant_users\".\"tenant_id\"=?", o.ID),
+		qm.Where("\"fleet_lite_app\".\"tenant_users\".\"tenant_id\"=?", o.ID),
 	)
 
 	return TenantUsers(queryMods...)
@@ -546,7 +576,7 @@ func (o *Tenant) VehicleFavorites(mods ...qm.QueryMod) vehicleFavoriteQuery {
 	}
 
 	queryMods = append(queryMods,
-		qm.Where("\"vehicle_favorites\".\"tenant_id\"=?", o.ID),
+		qm.Where("\"fleet_lite_app\".\"vehicle_favorites\".\"tenant_id\"=?", o.ID),
 	)
 
 	return VehicleFavorites(queryMods...)
@@ -560,7 +590,7 @@ func (o *Tenant) VehicleTcoSettings(mods ...qm.QueryMod) vehicleTcoSettingQuery 
 	}
 
 	queryMods = append(queryMods,
-		qm.Where("\"vehicle_tco_settings\".\"tenant_id\"=?", o.ID),
+		qm.Where("\"fleet_lite_app\".\"vehicle_tco_settings\".\"tenant_id\"=?", o.ID),
 	)
 
 	return VehicleTcoSettings(queryMods...)
@@ -574,10 +604,127 @@ func (o *Tenant) Vehicles(mods ...qm.QueryMod) vehicleQuery {
 	}
 
 	queryMods = append(queryMods,
-		qm.Where("\"vehicles\".\"tenant_id\"=?", o.ID),
+		qm.Where("\"fleet_lite_app\".\"vehicles\".\"tenant_id\"=?", o.ID),
 	)
 
 	return Vehicles(queryMods...)
+}
+
+// LoadTenantChargingSetting allows an eager lookup of values, cached into the
+// loaded structs of the objects. This is for a 1-1 relationship.
+func (tenantL) LoadTenantChargingSetting(ctx context.Context, e boil.ContextExecutor, singular bool, maybeTenant any, mods queries.Applicator) error {
+	var slice []*Tenant
+	var object *Tenant
+
+	if singular {
+		var ok bool
+		object, ok = maybeTenant.(*Tenant)
+		if !ok {
+			object = new(Tenant)
+			ok = queries.SetFromEmbeddedStruct(&object, &maybeTenant)
+			if !ok {
+				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", object, maybeTenant))
+			}
+		}
+	} else {
+		s, ok := maybeTenant.(*[]*Tenant)
+		if ok {
+			slice = *s
+		} else {
+			ok = queries.SetFromEmbeddedStruct(&slice, maybeTenant)
+			if !ok {
+				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", slice, maybeTenant))
+			}
+		}
+	}
+
+	args := make(map[any]struct{})
+	if singular {
+		if object.R == nil {
+			object.R = &tenantR{}
+		}
+		args[object.ID] = struct{}{}
+	} else {
+		for _, obj := range slice {
+			if obj.R == nil {
+				obj.R = &tenantR{}
+			}
+
+			args[obj.ID] = struct{}{}
+		}
+	}
+
+	if len(args) == 0 {
+		return nil
+	}
+
+	argsSlice := make([]any, len(args))
+	i := 0
+	for arg := range args {
+		argsSlice[i] = arg
+		i++
+	}
+
+	query := NewQuery(
+		qm.From(`fleet_lite_app.tenant_charging_settings`),
+		qm.WhereIn(`fleet_lite_app.tenant_charging_settings.tenant_id in ?`, argsSlice...),
+	)
+	if mods != nil {
+		mods.Apply(query)
+	}
+
+	results, err := query.QueryContext(ctx, e)
+	if err != nil {
+		return errors.Wrap(err, "failed to eager load TenantChargingSetting")
+	}
+
+	var resultSlice []*TenantChargingSetting
+	if err = queries.Bind(results, &resultSlice); err != nil {
+		return errors.Wrap(err, "failed to bind eager loaded slice TenantChargingSetting")
+	}
+
+	if err = results.Close(); err != nil {
+		return errors.Wrap(err, "failed to close results of eager load for tenant_charging_settings")
+	}
+	if err = results.Err(); err != nil {
+		return errors.Wrap(err, "error occurred during iteration of eager loaded relations for tenant_charging_settings")
+	}
+
+	if len(tenantChargingSettingAfterSelectHooks) != 0 {
+		for _, obj := range resultSlice {
+			if err := obj.doAfterSelectHooks(ctx, e); err != nil {
+				return err
+			}
+		}
+	}
+
+	if len(resultSlice) == 0 {
+		return nil
+	}
+
+	if singular {
+		foreign := resultSlice[0]
+		object.R.TenantChargingSetting = foreign
+		if foreign.R == nil {
+			foreign.R = &tenantChargingSettingR{}
+		}
+		foreign.R.Tenant = object
+	}
+
+	for _, local := range slice {
+		for _, foreign := range resultSlice {
+			if local.ID == foreign.TenantID {
+				local.R.TenantChargingSetting = foreign
+				if foreign.R == nil {
+					foreign.R = &tenantChargingSettingR{}
+				}
+				foreign.R.Tenant = local
+				break
+			}
+		}
+	}
+
+	return nil
 }
 
 // LoadGeofences allows an eager lookup of values, cached into the
@@ -635,8 +782,8 @@ func (tenantL) LoadGeofences(ctx context.Context, e boil.ContextExecutor, singul
 	}
 
 	query := NewQuery(
-		qm.From(`geofences`),
-		qm.WhereIn(`geofences.tenant_id in ?`, argsSlice...),
+		qm.From(`fleet_lite_app.geofences`),
+		qm.WhereIn(`fleet_lite_app.geofences.tenant_id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -748,8 +895,8 @@ func (tenantL) LoadTenantUsers(ctx context.Context, e boil.ContextExecutor, sing
 	}
 
 	query := NewQuery(
-		qm.From(`tenant_users`),
-		qm.WhereIn(`tenant_users.tenant_id in ?`, argsSlice...),
+		qm.From(`fleet_lite_app.tenant_users`),
+		qm.WhereIn(`fleet_lite_app.tenant_users.tenant_id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -861,8 +1008,8 @@ func (tenantL) LoadVehicleFavorites(ctx context.Context, e boil.ContextExecutor,
 	}
 
 	query := NewQuery(
-		qm.From(`vehicle_favorites`),
-		qm.WhereIn(`vehicle_favorites.tenant_id in ?`, argsSlice...),
+		qm.From(`fleet_lite_app.vehicle_favorites`),
+		qm.WhereIn(`fleet_lite_app.vehicle_favorites.tenant_id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -974,8 +1121,8 @@ func (tenantL) LoadVehicleTcoSettings(ctx context.Context, e boil.ContextExecuto
 	}
 
 	query := NewQuery(
-		qm.From(`vehicle_tco_settings`),
-		qm.WhereIn(`vehicle_tco_settings.tenant_id in ?`, argsSlice...),
+		qm.From(`fleet_lite_app.vehicle_tco_settings`),
+		qm.WhereIn(`fleet_lite_app.vehicle_tco_settings.tenant_id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -1087,8 +1234,8 @@ func (tenantL) LoadVehicles(ctx context.Context, e boil.ContextExecutor, singula
 	}
 
 	query := NewQuery(
-		qm.From(`vehicles`),
-		qm.WhereIn(`vehicles.tenant_id in ?`, argsSlice...),
+		qm.From(`fleet_lite_app.vehicles`),
+		qm.WhereIn(`fleet_lite_app.vehicles.tenant_id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -1145,6 +1292,56 @@ func (tenantL) LoadVehicles(ctx context.Context, e boil.ContextExecutor, singula
 	return nil
 }
 
+// SetTenantChargingSetting of the tenant to the related item.
+// Sets o.R.TenantChargingSetting to related.
+// Adds o to related.R.Tenant.
+func (o *Tenant) SetTenantChargingSetting(ctx context.Context, exec boil.ContextExecutor, insert bool, related *TenantChargingSetting) error {
+	var err error
+
+	if insert {
+		related.TenantID = o.ID
+
+		if err = related.Insert(ctx, exec, boil.Infer()); err != nil {
+			return errors.Wrap(err, "failed to insert into foreign table")
+		}
+	} else {
+		updateQuery := fmt.Sprintf(
+			"UPDATE \"fleet_lite_app\".\"tenant_charging_settings\" SET %s WHERE %s",
+			strmangle.SetParamNames("\"", "\"", 1, []string{"tenant_id"}),
+			strmangle.WhereClause("\"", "\"", 2, tenantChargingSettingPrimaryKeyColumns),
+		)
+		values := []any{o.ID, related.TenantID}
+
+		if boil.IsDebug(ctx) {
+			writer := boil.DebugWriterFrom(ctx)
+			fmt.Fprintln(writer, updateQuery)
+			fmt.Fprintln(writer, values)
+		}
+		if _, err = exec.ExecContext(ctx, updateQuery, values...); err != nil {
+			return errors.Wrap(err, "failed to update foreign table")
+		}
+
+		related.TenantID = o.ID
+	}
+
+	if o.R == nil {
+		o.R = &tenantR{
+			TenantChargingSetting: related,
+		}
+	} else {
+		o.R.TenantChargingSetting = related
+	}
+
+	if related.R == nil {
+		related.R = &tenantChargingSettingR{
+			Tenant: o,
+		}
+	} else {
+		related.R.Tenant = o
+	}
+	return nil
+}
+
 // AddGeofences adds the given related objects to the existing relationships
 // of the tenant, optionally inserting them as new records.
 // Appends related to o.R.Geofences.
@@ -1159,7 +1356,7 @@ func (o *Tenant) AddGeofences(ctx context.Context, exec boil.ContextExecutor, in
 			}
 		} else {
 			updateQuery := fmt.Sprintf(
-				"UPDATE \"geofences\" SET %s WHERE %s",
+				"UPDATE \"fleet_lite_app\".\"geofences\" SET %s WHERE %s",
 				strmangle.SetParamNames("\"", "\"", 1, []string{"tenant_id"}),
 				strmangle.WhereClause("\"", "\"", 2, geofencePrimaryKeyColumns),
 			)
@@ -1212,7 +1409,7 @@ func (o *Tenant) AddTenantUsers(ctx context.Context, exec boil.ContextExecutor, 
 			}
 		} else {
 			updateQuery := fmt.Sprintf(
-				"UPDATE \"tenant_users\" SET %s WHERE %s",
+				"UPDATE \"fleet_lite_app\".\"tenant_users\" SET %s WHERE %s",
 				strmangle.SetParamNames("\"", "\"", 1, []string{"tenant_id"}),
 				strmangle.WhereClause("\"", "\"", 2, tenantUserPrimaryKeyColumns),
 			)
@@ -1265,7 +1462,7 @@ func (o *Tenant) AddVehicleFavorites(ctx context.Context, exec boil.ContextExecu
 			}
 		} else {
 			updateQuery := fmt.Sprintf(
-				"UPDATE \"vehicle_favorites\" SET %s WHERE %s",
+				"UPDATE \"fleet_lite_app\".\"vehicle_favorites\" SET %s WHERE %s",
 				strmangle.SetParamNames("\"", "\"", 1, []string{"tenant_id"}),
 				strmangle.WhereClause("\"", "\"", 2, vehicleFavoritePrimaryKeyColumns),
 			)
@@ -1318,7 +1515,7 @@ func (o *Tenant) AddVehicleTcoSettings(ctx context.Context, exec boil.ContextExe
 			}
 		} else {
 			updateQuery := fmt.Sprintf(
-				"UPDATE \"vehicle_tco_settings\" SET %s WHERE %s",
+				"UPDATE \"fleet_lite_app\".\"vehicle_tco_settings\" SET %s WHERE %s",
 				strmangle.SetParamNames("\"", "\"", 1, []string{"tenant_id"}),
 				strmangle.WhereClause("\"", "\"", 2, vehicleTcoSettingPrimaryKeyColumns),
 			)
@@ -1371,7 +1568,7 @@ func (o *Tenant) AddVehicles(ctx context.Context, exec boil.ContextExecutor, ins
 			}
 		} else {
 			updateQuery := fmt.Sprintf(
-				"UPDATE \"vehicles\" SET %s WHERE %s",
+				"UPDATE \"fleet_lite_app\".\"vehicles\" SET %s WHERE %s",
 				strmangle.SetParamNames("\"", "\"", 1, []string{"tenant_id"}),
 				strmangle.WhereClause("\"", "\"", 2, vehiclePrimaryKeyColumns),
 			)
@@ -1412,10 +1609,10 @@ func (o *Tenant) AddVehicles(ctx context.Context, exec boil.ContextExecutor, ins
 
 // Tenants retrieves all the records using an executor.
 func Tenants(mods ...qm.QueryMod) tenantQuery {
-	mods = append(mods, qm.From("\"tenants\""))
+	mods = append(mods, qm.From("\"fleet_lite_app\".\"tenants\""))
 	q := NewQuery(mods...)
 	if len(queries.GetSelect(q)) == 0 {
-		queries.SetSelect(q, []string{"\"tenants\".*"})
+		queries.SetSelect(q, []string{"\"fleet_lite_app\".\"tenants\".*"})
 	}
 
 	return tenantQuery{q}
@@ -1431,7 +1628,7 @@ func FindTenant(ctx context.Context, exec boil.ContextExecutor, iD string, selec
 		sel = strings.Join(strmangle.IdentQuoteSlice(dialect.LQ, dialect.RQ, selectCols), ",")
 	}
 	query := fmt.Sprintf(
-		"select %s from \"tenants\" where \"id\"=$1", sel,
+		"select %s from \"fleet_lite_app\".\"tenants\" where \"id\"=$1", sel,
 	)
 
 	q := queries.Raw(query, iD)
@@ -1498,9 +1695,9 @@ func (o *Tenant) Insert(ctx context.Context, exec boil.ContextExecutor, columns 
 			return err
 		}
 		if len(wl) != 0 {
-			cache.query = fmt.Sprintf("INSERT INTO \"tenants\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
+			cache.query = fmt.Sprintf("INSERT INTO \"fleet_lite_app\".\"tenants\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
 		} else {
-			cache.query = "INSERT INTO \"tenants\" %sDEFAULT VALUES%s"
+			cache.query = "INSERT INTO \"fleet_lite_app\".\"tenants\" %sDEFAULT VALUES%s"
 		}
 
 		var queryOutput, queryReturning string
@@ -1572,7 +1769,7 @@ func (o *Tenant) Update(ctx context.Context, exec boil.ContextExecutor, columns 
 			return 0, errors.New("models: unable to update tenants, could not build whitelist")
 		}
 
-		cache.query = fmt.Sprintf("UPDATE \"tenants\" SET %s WHERE %s",
+		cache.query = fmt.Sprintf("UPDATE \"fleet_lite_app\".\"tenants\" SET %s WHERE %s",
 			strmangle.SetParamNames("\"", "\"", 1, wl),
 			strmangle.WhereClause("\"", "\"", len(wl)+1, tenantPrimaryKeyColumns),
 		)
@@ -1653,7 +1850,7 @@ func (o TenantSlice) UpdateAll(ctx context.Context, exec boil.ContextExecutor, c
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := fmt.Sprintf("UPDATE \"tenants\" SET %s WHERE %s",
+	sql := fmt.Sprintf("UPDATE \"fleet_lite_app\".\"tenants\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, colNames),
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), len(colNames)+1, tenantPrimaryKeyColumns, len(o)))
 
@@ -1757,7 +1954,7 @@ func (o *Tenant) Upsert(ctx context.Context, exec boil.ContextExecutor, updateOn
 			conflict = make([]string, len(tenantPrimaryKeyColumns))
 			copy(conflict, tenantPrimaryKeyColumns)
 		}
-		cache.query = buildUpsertQueryPostgres(dialect, "\"tenants\"", updateOnConflict, ret, update, conflict, insert, opts...)
+		cache.query = buildUpsertQueryPostgres(dialect, "\"fleet_lite_app\".\"tenants\"", updateOnConflict, ret, update, conflict, insert, opts...)
 
 		cache.valueMapping, err = queries.BindMapping(tenantType, tenantMapping, insert)
 		if err != nil {
@@ -1773,7 +1970,7 @@ func (o *Tenant) Upsert(ctx context.Context, exec boil.ContextExecutor, updateOn
 
 	value := reflect.Indirect(reflect.ValueOf(o))
 	vals := queries.ValuesFromMapping(value, cache.valueMapping)
-	var returns []interface{}
+	var returns []any
 	if len(cache.retMapping) != 0 {
 		returns = queries.PtrsFromMapping(value, cache.retMapping)
 	}
@@ -1816,7 +2013,7 @@ func (o *Tenant) Delete(ctx context.Context, exec boil.ContextExecutor) (int64, 
 	}
 
 	args := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(o)), tenantPrimaryKeyMapping)
-	sql := "DELETE FROM \"tenants\" WHERE \"id\"=$1"
+	sql := "DELETE FROM \"fleet_lite_app\".\"tenants\" WHERE \"id\"=$1"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1881,7 +2078,7 @@ func (o TenantSlice) DeleteAll(ctx context.Context, exec boil.ContextExecutor) (
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "DELETE FROM \"tenants\" WHERE " +
+	sql := "DELETE FROM \"fleet_lite_app\".\"tenants\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, tenantPrimaryKeyColumns, len(o))
 
 	if boil.IsDebug(ctx) {
@@ -1936,7 +2133,7 @@ func (o *TenantSlice) ReloadAll(ctx context.Context, exec boil.ContextExecutor) 
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "SELECT \"tenants\".* FROM \"tenants\" WHERE " +
+	sql := "SELECT \"fleet_lite_app\".\"tenants\".* FROM \"fleet_lite_app\".\"tenants\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, tenantPrimaryKeyColumns, len(*o))
 
 	q := queries.Raw(sql, args...)
@@ -1954,7 +2151,7 @@ func (o *TenantSlice) ReloadAll(ctx context.Context, exec boil.ContextExecutor) 
 // TenantExists checks if the Tenant row exists.
 func TenantExists(ctx context.Context, exec boil.ContextExecutor, iD string) (bool, error) {
 	var exists bool
-	sql := "select exists(select 1 from \"tenants\" where \"id\"=$1 limit 1)"
+	sql := "select exists(select 1 from \"fleet_lite_app\".\"tenants\" where \"id\"=$1 limit 1)"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)

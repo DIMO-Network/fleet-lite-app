@@ -65,10 +65,10 @@ var UserPreferenceWhere = struct {
 	CreatedAt whereHelpertime_Time
 	UpdatedAt whereHelpertime_Time
 }{
-	Wallet:    whereHelperstring{field: "\"user_preferences\".\"wallet\""},
-	Prefs:     whereHelpertypes_JSON{field: "\"user_preferences\".\"prefs\""},
-	CreatedAt: whereHelpertime_Time{field: "\"user_preferences\".\"created_at\""},
-	UpdatedAt: whereHelpertime_Time{field: "\"user_preferences\".\"updated_at\""},
+	Wallet:    whereHelperstring{field: "\"fleet_lite_app\".\"user_preferences\".\"wallet\""},
+	Prefs:     whereHelpertypes_JSON{field: "\"fleet_lite_app\".\"user_preferences\".\"prefs\""},
+	CreatedAt: whereHelpertime_Time{field: "\"fleet_lite_app\".\"user_preferences\".\"created_at\""},
+	UpdatedAt: whereHelpertime_Time{field: "\"fleet_lite_app\".\"user_preferences\".\"updated_at\""},
 }
 
 // UserPreferenceRels is where relationship names are stored.
@@ -402,10 +402,10 @@ func (q userPreferenceQuery) Exists(ctx context.Context, exec boil.ContextExecut
 
 // UserPreferences retrieves all the records using an executor.
 func UserPreferences(mods ...qm.QueryMod) userPreferenceQuery {
-	mods = append(mods, qm.From("\"user_preferences\""))
+	mods = append(mods, qm.From("\"fleet_lite_app\".\"user_preferences\""))
 	q := NewQuery(mods...)
 	if len(queries.GetSelect(q)) == 0 {
-		queries.SetSelect(q, []string{"\"user_preferences\".*"})
+		queries.SetSelect(q, []string{"\"fleet_lite_app\".\"user_preferences\".*"})
 	}
 
 	return userPreferenceQuery{q}
@@ -421,7 +421,7 @@ func FindUserPreference(ctx context.Context, exec boil.ContextExecutor, wallet s
 		sel = strings.Join(strmangle.IdentQuoteSlice(dialect.LQ, dialect.RQ, selectCols), ",")
 	}
 	query := fmt.Sprintf(
-		"select %s from \"user_preferences\" where \"wallet\"=$1", sel,
+		"select %s from \"fleet_lite_app\".\"user_preferences\" where \"wallet\"=$1", sel,
 	)
 
 	q := queries.Raw(query, wallet)
@@ -488,9 +488,9 @@ func (o *UserPreference) Insert(ctx context.Context, exec boil.ContextExecutor, 
 			return err
 		}
 		if len(wl) != 0 {
-			cache.query = fmt.Sprintf("INSERT INTO \"user_preferences\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
+			cache.query = fmt.Sprintf("INSERT INTO \"fleet_lite_app\".\"user_preferences\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
 		} else {
-			cache.query = "INSERT INTO \"user_preferences\" %sDEFAULT VALUES%s"
+			cache.query = "INSERT INTO \"fleet_lite_app\".\"user_preferences\" %sDEFAULT VALUES%s"
 		}
 
 		var queryOutput, queryReturning string
@@ -562,7 +562,7 @@ func (o *UserPreference) Update(ctx context.Context, exec boil.ContextExecutor, 
 			return 0, errors.New("models: unable to update user_preferences, could not build whitelist")
 		}
 
-		cache.query = fmt.Sprintf("UPDATE \"user_preferences\" SET %s WHERE %s",
+		cache.query = fmt.Sprintf("UPDATE \"fleet_lite_app\".\"user_preferences\" SET %s WHERE %s",
 			strmangle.SetParamNames("\"", "\"", 1, wl),
 			strmangle.WhereClause("\"", "\"", len(wl)+1, userPreferencePrimaryKeyColumns),
 		)
@@ -643,7 +643,7 @@ func (o UserPreferenceSlice) UpdateAll(ctx context.Context, exec boil.ContextExe
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := fmt.Sprintf("UPDATE \"user_preferences\" SET %s WHERE %s",
+	sql := fmt.Sprintf("UPDATE \"fleet_lite_app\".\"user_preferences\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, colNames),
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), len(colNames)+1, userPreferencePrimaryKeyColumns, len(o)))
 
@@ -747,7 +747,7 @@ func (o *UserPreference) Upsert(ctx context.Context, exec boil.ContextExecutor, 
 			conflict = make([]string, len(userPreferencePrimaryKeyColumns))
 			copy(conflict, userPreferencePrimaryKeyColumns)
 		}
-		cache.query = buildUpsertQueryPostgres(dialect, "\"user_preferences\"", updateOnConflict, ret, update, conflict, insert, opts...)
+		cache.query = buildUpsertQueryPostgres(dialect, "\"fleet_lite_app\".\"user_preferences\"", updateOnConflict, ret, update, conflict, insert, opts...)
 
 		cache.valueMapping, err = queries.BindMapping(userPreferenceType, userPreferenceMapping, insert)
 		if err != nil {
@@ -763,7 +763,7 @@ func (o *UserPreference) Upsert(ctx context.Context, exec boil.ContextExecutor, 
 
 	value := reflect.Indirect(reflect.ValueOf(o))
 	vals := queries.ValuesFromMapping(value, cache.valueMapping)
-	var returns []interface{}
+	var returns []any
 	if len(cache.retMapping) != 0 {
 		returns = queries.PtrsFromMapping(value, cache.retMapping)
 	}
@@ -806,7 +806,7 @@ func (o *UserPreference) Delete(ctx context.Context, exec boil.ContextExecutor) 
 	}
 
 	args := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(o)), userPreferencePrimaryKeyMapping)
-	sql := "DELETE FROM \"user_preferences\" WHERE \"wallet\"=$1"
+	sql := "DELETE FROM \"fleet_lite_app\".\"user_preferences\" WHERE \"wallet\"=$1"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -871,7 +871,7 @@ func (o UserPreferenceSlice) DeleteAll(ctx context.Context, exec boil.ContextExe
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "DELETE FROM \"user_preferences\" WHERE " +
+	sql := "DELETE FROM \"fleet_lite_app\".\"user_preferences\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, userPreferencePrimaryKeyColumns, len(o))
 
 	if boil.IsDebug(ctx) {
@@ -926,7 +926,7 @@ func (o *UserPreferenceSlice) ReloadAll(ctx context.Context, exec boil.ContextEx
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "SELECT \"user_preferences\".* FROM \"user_preferences\" WHERE " +
+	sql := "SELECT \"fleet_lite_app\".\"user_preferences\".* FROM \"fleet_lite_app\".\"user_preferences\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, userPreferencePrimaryKeyColumns, len(*o))
 
 	q := queries.Raw(sql, args...)
@@ -944,7 +944,7 @@ func (o *UserPreferenceSlice) ReloadAll(ctx context.Context, exec boil.ContextEx
 // UserPreferenceExists checks if the UserPreference row exists.
 func UserPreferenceExists(ctx context.Context, exec boil.ContextExecutor, wallet string) (bool, error) {
 	var exists bool
-	sql := "select exists(select 1 from \"user_preferences\" where \"wallet\"=$1 limit 1)"
+	sql := "select exists(select 1 from \"fleet_lite_app\".\"user_preferences\" where \"wallet\"=$1 limit 1)"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)

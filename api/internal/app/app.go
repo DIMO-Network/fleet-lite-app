@@ -299,6 +299,18 @@ func App(
 	tenantApp.Get("/tco/export.csv", tcoCtrl.ExportCSV)
 	tenantApp.Put("/tco/vehicle/:tokenId/backfill/:documentId", tcoCtrl.BackfillAmount)
 
+	// EV charging reporting (session detection from telemetry + tenant
+	// electricity-rate/gas-comparison settings).
+	chargingDetectionSvc := service.NewChargingDetectionService(logger, pdb, telemetryAPI)
+	chargingSettingsSvc := service.NewChargingSettingsService(pdb)
+	chargingSvc := service.NewChargingService(logger, chargingDetectionSvc, chargingSettingsSvc, vehicleSvc)
+	chargingCtrl := controllers.NewChargingController(logger, chargingSvc, chargingSettingsSvc, vehicleSvc)
+	tenantApp.Get("/charging/settings", chargingCtrl.GetSettings)
+	tenantApp.Put("/charging/settings", chargingCtrl.PutSettings)
+	tenantApp.Get("/charging/summary", chargingCtrl.GetSummary)
+	tenantApp.Get("/charging/:tokenId/sessions", chargingCtrl.GetVehicleSessions)
+	tenantApp.Get("/charging/export.csv", chargingCtrl.ExportCSV)
+
 	return app
 }
 
