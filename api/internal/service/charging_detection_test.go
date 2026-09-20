@@ -77,10 +77,11 @@ func TestDetectChargingSessions_CableConnectedNotChargingOpensNoSession(t *testi
 	}
 }
 
-func TestDetectChargingSessions_BriefDropoutSplitsSession(t *testing.T) {
-	// isCharging flickers false for one sample mid-session. Documented
-	// limitation, same as GeofenceDetectionService.detectPasses: a gap of
-	// any length ends the current run. Two 2-sample sessions, not one.
+func TestDetectChargingSessions_ExplicitFalseSplitsSession(t *testing.T) {
+	// isCharging reports an EXPLICIT false for one sample mid-session (not a
+	// missing/nil report) — that ends the current run. Two 2-sample
+	// sessions, not one. Contrast with GapBetweenTrueSamplesDoesNotSplit,
+	// where the middle sample is nil (no report) rather than false.
 	samples := []ChargingSample{
 		chargingSample(0, bptr(true), f64ptr(1.0), f64ptr(7.0), nil, nil, nil),
 		chargingSample(30, bptr(true), f64ptr(2.0), f64ptr(7.0), nil, nil, nil),
@@ -112,12 +113,44 @@ func TestDetectChargingSessions_EnergyCounterResetYieldsNilEnergy(t *testing.T) 
 	}
 }
 
-func TestDetectChargingSessions_NilIsChargingTreatedAsNotCharging(t *testing.T) {
+func TestDetectChargingSessions_NilIsChargingNeverOpensSession(t *testing.T) {
+	// A vehicle that never reports the signal at all (nil throughout) must
+	// never open a session — nil is "no information", not "charging".
 	samples := []ChargingSample{
 		chargingSample(0, nil, nil, nil, nil, nil, nil),
 		chargingSample(30, nil, nil, nil, nil, nil, nil),
 	}
 	if got := detectChargingSessions(samples); len(got) != 0 {
 		t.Fatalf("got %d sessions, want 0", len(got))
+	}
+}
+
+func TestDetectChargingSessions_GapBetweenTrueSamplesDoesNotSplit(t *testing.T) {
+	// telemetry-api's interval buckets are sparse, not forward-filled: a
+	// connection that only phones home once a day reports nil for nearly
+	// every bucket even while actively charging. A missing report must not
+	// end a session — only an explicit false does (see
+	// ExplicitFalseSplitsSession). One session spanning the gap, counting
+	// only the two actual true samples.
+	samples := []ChargingSample{
+		chargingSample(0, bptr(true), f64ptr(1.0), f64ptr(7.0), f64ptr(40), nil, nil),
+		chargingSample(30, nil, nil, nil, nil, nil, nil),
+		chargingSample(60, nil, nil, nil, nil, nil, nil),
+		chargingSample(90, nil, nil, nil, nil, nil, nil),
+		chargingSample(120, bptr(true), f64ptr(9.0), f64ptr(7.0), f64ptr(55), nil, nil),
+	}
+	sessions := detectChargingSessions(samples)
+	if len(sessions) != 1 {
+		t.Fatalf("got %d sessions, want 1", len(sessions))
+	}
+	s := sessions[0]
+	if s.numSamples != 2 {
+		t.Fatalf("numSamples = %d, want 2 (only the two true samples counted, not the nil gaps)", s.numSamples)
+	}
+	if !s.endedAt.Equal(chargingSample(120, nil, nil, nil, nil, nil, nil).Time) {
+		t.Fatalf("endedAt = %v, want the last true sample's time", s.endedAt)
+	}
+	if got := s.addedEnergyKwh(); got == nil || *got != 8.0 {
+		t.Fatalf("addedEnergyKwh = %v, want 8.0", got)
 	}
 }
