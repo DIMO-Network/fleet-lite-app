@@ -46,13 +46,17 @@ func (s detectedChargingSession) avgPowerKw() *float64 {
 }
 
 // detectChargingSessions sweeps ordered samples and emits one session per
-// maximal run of consecutive IsCharging=true samples (nil treated as false —
-// a vehicle with no charging-signal support simply never opens a session).
-// A run shorter than 2 samples is discarded: a single point can't measure an
-// energy delta. Mirrors GeofenceDetectionService.detectPasses; the same
-// documented limitation applies — a brief signal dropout mid-session (one
-// sample flickering false) splits it into two sessions rather than being
-// bridged.
+// maximal run of IsCharging=true samples, tolerant of gaps where the vehicle
+// simply didn't report (nil). A session ends only on an EXPLICIT false —
+// never on a missing sample. This matters because telemetry-api's interval
+// buckets are sparse, not forward-filled: a connection that phones home only
+// once a day reports nil for nearly every 30s bucket even while actively
+// charging, so treating nil the same as false (the original implementation)
+// meant a real multi-hour session fragmented into isolated single-true-
+// sample runs that the <2-samples rule discarded — no charging session was
+// ever detected for any connection that doesn't report continuously.
+// A run shorter than 2 (non-nil, true) samples is discarded: a single point
+// can't measure an energy delta.
 func detectChargingSessions(samples []ChargingSample) []detectedChargingSession {
 	var sessions []detectedChargingSession
 	var cur *detectedChargingSession
@@ -63,8 +67,12 @@ func detectChargingSessions(samples []ChargingSample) []detectedChargingSession 
 		cur = nil
 	}
 	for _, smp := range samples {
-		charging := smp.IsCharging != nil && *smp.IsCharging
-		if !charging {
+		if smp.IsCharging == nil {
+			// No report this bucket — carry any open session forward without
+			// counting it as a sample. Only an explicit false ends a session.
+			continue
+		}
+		if !*smp.IsCharging {
 			flush()
 			continue
 		}
