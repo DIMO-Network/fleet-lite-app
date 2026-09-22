@@ -1,6 +1,55 @@
 package service
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
+
+func TestFlexBool_UnmarshalJSON(t *testing.T) {
+	cases := []struct {
+		name    string
+		raw     string
+		want    bool
+		wantErr bool
+	}{
+		{"native true", `true`, true, false},
+		{"native false", `false`, false, false},
+		{"numeric zero", `0`, false, false},
+		{"numeric one", `1`, true, false},
+		{"numeric other nonzero", `2`, true, false},
+		{"invalid string", `"charging"`, false, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var b flexBool
+			err := json.Unmarshal([]byte(tc.raw), &b)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("got nil error, want one")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if bool(b) != tc.want {
+				t.Fatalf("got %v, want %v", bool(b), tc.want)
+			}
+		})
+	}
+}
+
+func TestFlexBool_NilPointerOnJSONNull(t *testing.T) {
+	var target struct {
+		V *flexBool `json:"v"`
+	}
+	if err := json.Unmarshal([]byte(`{"v": null}`), &target); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if target.V != nil {
+		t.Fatalf("got %v, want nil (JSON null must not invoke UnmarshalJSON)", target.V)
+	}
+}
 
 func TestParseVINVCResponse(t *testing.T) {
 	cases := []struct {
