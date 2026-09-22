@@ -855,6 +855,34 @@ func (t *telemetryAPIService) GeofenceSamples(tenant models.Tenant, tokenID uint
 // window for charging-session detection. All signals default to LAST within the
 // bucket — charging state, energy added, power, and SOC. Location is included
 // for map placement of detected sessions.
+// flexBool decodes a JSON boolean OR a JSON number (0 = false, nonzero =
+// true) into a bool. DIMO's telemetry-api represents some boolean-shaped
+// signals — observed: powertrainTractionBatteryChargingIsCharging — as a raw
+// 0/1 number rather than a native JSON boolean, depending on the reporting
+// connection. A plain *bool target fails json.Unmarshal outright the moment
+// it hits a numeric encoding, which silently broke ChargingSamples for every
+// vehicle on such a connection (the error propagates up and gets caught +
+// skipped per-vehicle by FleetSummary, so the fleet just looked empty).
+type flexBool bool
+
+func (b *flexBool) UnmarshalJSON(data []byte) error {
+	switch s := strings.TrimSpace(string(data)); s {
+	case "true":
+		*b = true
+		return nil
+	case "false":
+		*b = false
+		return nil
+	default:
+		var n float64
+		if err := json.Unmarshal(data, &n); err != nil {
+			return fmt.Errorf("flexBool: not a bool or number: %s", s)
+		}
+		*b = n != 0
+		return nil
+	}
+}
+
 func (t *telemetryAPIService) ChargingSamples(tenant models.Tenant, tokenID uint64, from, to, interval string) ([]ChargingSample, error) {
 	if interval == "" {
 		interval = "30s"
@@ -878,8 +906,8 @@ func (t *telemetryAPIService) ChargingSamples(tenant models.Tenant, tokenID uint
 	var resp struct {
 		Data struct {
 			Samples []struct {
-				Timestamp                                     string   `json:"timestamp"`
-				PowertrainTractionBatteryChargingIsCharging   *bool    `json:"powertrainTractionBatteryChargingIsCharging"`
+				Timestamp                                     string    `json:"timestamp"`
+				PowertrainTractionBatteryChargingIsCharging   *flexBool `json:"powertrainTractionBatteryChargingIsCharging"`
 				PowertrainTractionBatteryChargingAddedEnergy  *float64 `json:"powertrainTractionBatteryChargingAddedEnergy"`
 				PowertrainTractionBatteryChargingPower        *float64 `json:"powertrainTractionBatteryChargingPower"`
 				PowertrainTractionBatteryStateOfChargeCurrent *float64 `json:"powertrainTractionBatteryStateOfChargeCurrent"`
@@ -900,9 +928,14 @@ func (t *telemetryAPIService) ChargingSamples(tenant models.Tenant, tokenID uint
 		if perr != nil {
 			continue
 		}
+		var isCharging *bool
+		if s.PowertrainTractionBatteryChargingIsCharging != nil {
+			v := bool(*s.PowertrainTractionBatteryChargingIsCharging)
+			isCharging = &v
+		}
 		cs := ChargingSample{
 			Time:           ts,
-			IsCharging:     s.PowertrainTractionBatteryChargingIsCharging,
+			IsCharging:     isCharging,
 			AddedEnergyKwh: s.PowertrainTractionBatteryChargingAddedEnergy,
 			PowerKw:        s.PowertrainTractionBatteryChargingPower,
 			SocPct:         s.PowertrainTractionBatteryStateOfChargeCurrent,
