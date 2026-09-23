@@ -575,9 +575,10 @@ export class VehicleTripsPanel extends LitElement {
 
     private renderRow(trip: Trip) {
         const selected = this.selectedTrip === trip;
+        const isRecharge = PrefsService.getInstance().getTripMechanism() === 'recharge';
         const dist = tripDistanceKm(trip);
-        const avg = tripSignal(trip, 'speed', 'AVG');
-        const max = tripSignal(trip, 'speed', 'MAX');
+        const avg = isRecharge ? null : tripSignal(trip, 'speed', 'AVG');
+        const max = isRecharge ? null : tripSignal(trip, 'speed', 'MAX');
         const distFv = dist != null ? formatDistance(dist, 1) : null;
         const avgFv = avg != null ? formatSpeed(avg) : null;
         const maxFv = max != null ? formatSpeed(max) : null;
