@@ -3,8 +3,12 @@ package service
 
 import "time"
 
-// detectedChargingSession is the internal result of the isCharging sweep
-// before persistence.
+// detectedChargingSession is one charging session as reported by
+// telemetry-api's native `recharge` segmentation, mapped into the shape
+// ChargingDetectionService persists. telemetry-api owns run detection
+// (including tolerance for reporting gaps and filtering of connector
+// self-check / relay-click noise) — this package no longer re-derives it
+// from raw samples.
 type detectedChargingSession struct {
 	startedAt      time.Time
 	endedAt        time.Time
@@ -12,17 +16,15 @@ type detectedChargingSession struct {
 	lng            *float64
 	socStart       *float64
 	socEnd         *float64
-	numSamples     int
 	firstEnergyKwh *float64
 	lastEnergyKwh  *float64
-	powerSumKw     float64
-	powerSamples   int
+	avgPowerKw     *float64
 }
 
 // addedEnergyKwh is the session's last-minus-first AddedEnergyKwh reading.
-// Returns nil when fewer than one energy reading was seen, or when the delta
-// is negative (the counter reset mid-session — e.g. a new charge cycle
-// re-zeroed it) — a negative number would be meaningless, mirroring
+// Returns nil when either end is missing, or when the delta is negative (the
+// counter reset mid-session — e.g. a new charge cycle re-zeroed it) — a
+// negative number would be meaningless, mirroring
 // GeofenceDetectionService's engineRuntimeS guard.
 func (s detectedChargingSession) addedEnergyKwh() *float64 {
 	if s.firstEnergyKwh == nil || s.lastEnergyKwh == nil {
@@ -35,75 +37,28 @@ func (s detectedChargingSession) addedEnergyKwh() *float64 {
 	return &d
 }
 
-// avgPowerKw averages every PowerKw reading seen during the session. Returns
-// nil when the vehicle never reported it.
-func (s detectedChargingSession) avgPowerKw() *float64 {
-	if s.powerSamples == 0 {
-		return nil
+// sessionFromSegment maps one telemetry-api recharge Segment into a
+// detectedChargingSession ready for pricing/persistence.
+func sessionFromSegment(seg Segment) detectedChargingSession {
+	parseTime := func(ts string) time.Time {
+		t, err := time.Parse(time.RFC3339, ts)
+		if err != nil {
+			return time.Time{}
+		}
+		return t
 	}
-	avg := s.powerSumKw / float64(s.powerSamples)
-	return &avg
-}
-
-// detectChargingSessions sweeps ordered samples and emits one session per
-// maximal run of IsCharging=true samples, tolerant of gaps where the vehicle
-// simply didn't report (nil). A session ends only on an EXPLICIT false —
-// never on a missing sample. This matters because telemetry-api's interval
-// buckets are sparse, not forward-filled: a connection that phones home only
-// once a day reports nil for nearly every 30s bucket even while actively
-// charging, so treating nil the same as false (the original implementation)
-// meant a real multi-hour session fragmented into isolated single-true-
-// sample runs that the <2-samples rule discarded — no charging session was
-// ever detected for any connection that doesn't report continuously.
-// A run shorter than 2 (non-nil, true) samples is discarded: a single point
-// can't measure an energy delta.
-func detectChargingSessions(samples []ChargingSample) []detectedChargingSession {
-	var sessions []detectedChargingSession
-	var cur *detectedChargingSession
-	flush := func() {
-		if cur != nil && cur.numSamples >= 2 {
-			sessions = append(sessions, *cur)
-		}
-		cur = nil
+	d := detectedChargingSession{
+		startedAt:      parseTime(seg.Start.Timestamp),
+		endedAt:        parseTime(seg.End.Timestamp),
+		firstEnergyKwh: segmentSignalValue(seg.Signals, "powertrainTractionBatteryChargingAddedEnergy", "FIRST"),
+		lastEnergyKwh:  segmentSignalValue(seg.Signals, "powertrainTractionBatteryChargingAddedEnergy", "LAST"),
+		avgPowerKw:     segmentSignalValue(seg.Signals, "powertrainTractionBatteryChargingPower", "AVG"),
+		socStart:       segmentSignalValue(seg.Signals, "powertrainTractionBatteryStateOfChargeCurrent", "FIRST"),
+		socEnd:         segmentSignalValue(seg.Signals, "powertrainTractionBatteryStateOfChargeCurrent", "LAST"),
 	}
-	for _, smp := range samples {
-		if smp.IsCharging == nil {
-			// No report this bucket — carry any open session forward without
-			// counting it as a sample. Only an explicit false ends a session.
-			continue
-		}
-		if !*smp.IsCharging {
-			flush()
-			continue
-		}
-		if cur == nil {
-			cur = &detectedChargingSession{startedAt: smp.Time}
-		}
-		cur.endedAt = smp.Time
-		cur.numSamples++
-		if smp.Lat != nil && smp.Lng != nil {
-			lat, lng := *smp.Lat, *smp.Lng
-			cur.lat, cur.lng = &lat, &lng
-		}
-		if smp.SocPct != nil {
-			v := *smp.SocPct
-			if cur.socStart == nil {
-				cur.socStart = &v
-			}
-			cur.socEnd = &v
-		}
-		if smp.AddedEnergyKwh != nil {
-			v := *smp.AddedEnergyKwh
-			if cur.firstEnergyKwh == nil {
-				cur.firstEnergyKwh = &v
-			}
-			cur.lastEnergyKwh = &v
-		}
-		if smp.PowerKw != nil {
-			cur.powerSumKw += *smp.PowerKw
-			cur.powerSamples++
-		}
+	if seg.Start.Value.Latitude != 0 || seg.Start.Value.Longitude != 0 {
+		lat, lng := seg.Start.Value.Latitude, seg.Start.Value.Longitude
+		d.lat, d.lng = &lat, &lng
 	}
-	flush()
-	return sessions
+	return d
 }

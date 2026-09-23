@@ -34,7 +34,6 @@ type ChargingSession struct {
 	SocEndPCT      null.Float64 `boil:"soc_end_pct" json:"soc_end_pct,omitempty" toml:"soc_end_pct" yaml:"soc_end_pct,omitempty"`
 	Lat            null.Float64 `boil:"lat" json:"lat,omitempty" toml:"lat" yaml:"lat,omitempty"`
 	LNG            null.Float64 `boil:"lng" json:"lng,omitempty" toml:"lng" yaml:"lng,omitempty"`
-	NumSamples     int          `boil:"num_samples" json:"num_samples" toml:"num_samples" yaml:"num_samples"`
 	CreatedAt      time.Time    `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
 
 	R *chargingSessionR `boil:"-" json:"-" toml:"-" yaml:"-"`
@@ -52,7 +51,6 @@ var ChargingSessionColumns = struct {
 	SocEndPCT      string
 	Lat            string
 	LNG            string
-	NumSamples     string
 	CreatedAt      string
 }{
 	TenantID:       "tenant_id",
@@ -65,7 +63,6 @@ var ChargingSessionColumns = struct {
 	SocEndPCT:      "soc_end_pct",
 	Lat:            "lat",
 	LNG:            "lng",
-	NumSamples:     "num_samples",
 	CreatedAt:      "created_at",
 }
 
@@ -80,7 +77,6 @@ var ChargingSessionTableColumns = struct {
 	SocEndPCT      string
 	Lat            string
 	LNG            string
-	NumSamples     string
 	CreatedAt      string
 }{
 	TenantID:       "charging_sessions.tenant_id",
@@ -93,7 +89,6 @@ var ChargingSessionTableColumns = struct {
 	SocEndPCT:      "charging_sessions.soc_end_pct",
 	Lat:            "charging_sessions.lat",
 	LNG:            "charging_sessions.lng",
-	NumSamples:     "charging_sessions.num_samples",
 	CreatedAt:      "charging_sessions.created_at",
 }
 
@@ -171,7 +166,6 @@ var ChargingSessionWhere = struct {
 	SocEndPCT      whereHelpernull_Float64
 	Lat            whereHelpernull_Float64
 	LNG            whereHelpernull_Float64
-	NumSamples     whereHelperint
 	CreatedAt      whereHelpertime_Time
 }{
 	TenantID:       whereHelperstring{field: "\"charging_sessions\".\"tenant_id\""},
@@ -184,7 +178,6 @@ var ChargingSessionWhere = struct {
 	SocEndPCT:      whereHelpernull_Float64{field: "\"charging_sessions\".\"soc_end_pct\""},
 	Lat:            whereHelpernull_Float64{field: "\"charging_sessions\".\"lat\""},
 	LNG:            whereHelpernull_Float64{field: "\"charging_sessions\".\"lng\""},
-	NumSamples:     whereHelperint{field: "\"charging_sessions\".\"num_samples\""},
 	CreatedAt:      whereHelpertime_Time{field: "\"charging_sessions\".\"created_at\""},
 }
 
@@ -205,8 +198,8 @@ func (*chargingSessionR) NewStruct() *chargingSessionR {
 type chargingSessionL struct{}
 
 var (
-	chargingSessionAllColumns            = []string{"tenant_id", "token_id", "started_at", "ended_at", "added_energy_kwh", "avg_power_kw", "soc_start_pct", "soc_end_pct", "lat", "lng", "num_samples", "created_at"}
-	chargingSessionColumnsWithoutDefault = []string{"tenant_id", "token_id", "started_at", "ended_at", "num_samples"}
+	chargingSessionAllColumns            = []string{"tenant_id", "token_id", "started_at", "ended_at", "added_energy_kwh", "avg_power_kw", "soc_start_pct", "soc_end_pct", "lat", "lng", "created_at"}
+	chargingSessionColumnsWithoutDefault = []string{"tenant_id", "token_id", "started_at", "ended_at"}
 	chargingSessionColumnsWithDefault    = []string{"added_energy_kwh", "avg_power_kw", "soc_start_pct", "soc_end_pct", "lat", "lng", "created_at"}
 	chargingSessionPrimaryKeyColumns     = []string{"tenant_id", "token_id", "started_at"}
 	chargingSessionGeneratedColumns      = []string{}
