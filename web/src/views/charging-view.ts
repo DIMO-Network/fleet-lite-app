@@ -290,9 +290,10 @@ export class ChargingView extends LitElement {
 
     override render() {
         const fleet = this.summary?.fleet;
-        const sessions = this.selectedTokenId
-            ? (this.summary?.sessions ?? []).filter((s) => s.tokenId === this.selectedTokenId)
-            : (this.summary?.sessions ?? []);
+        const sessions = (this.summary?.sessions ?? [])
+            .filter((s) => this.selectedTokenId == null || s.tokenId === this.selectedTokenId)
+            .filter((s) => s.addedEnergyKwh != null)
+            .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
         return html`
             <header class="top-bar">
                 <h1>${msg('Charging')}</h1>
