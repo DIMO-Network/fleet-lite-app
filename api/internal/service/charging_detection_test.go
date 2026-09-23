@@ -1,156 +1,81 @@
 // api/internal/service/charging_detection_test.go
 package service
 
-import (
-	"testing"
-	"time"
-)
+import "testing"
 
-func chargingSample(sec int, charging *bool, addedEnergy, power, soc, lat, lng *float64) ChargingSample {
-	return ChargingSample{
-		Time:           time.Date(2026, 9, 1, 8, 0, sec, 0, time.UTC),
-		IsCharging:     charging,
-		AddedEnergyKwh: addedEnergy,
-		PowerKw:        power,
-		SocPct:         soc,
-		Lat:            lat,
-		Lng:            lng,
+func segment(startTS, endTS string, lat, lng float64, energyFirst, energyLast, avgPower, socFirst, socLast *float64) Segment {
+	seg := Segment{
+		Start: SegmentPoint{Timestamp: startTS},
+		End:   SegmentPoint{Timestamp: endTS},
 	}
+	seg.Start.Value.Latitude = lat
+	seg.Start.Value.Longitude = lng
+	add := func(name, agg string, v *float64) {
+		if v == nil {
+			return
+		}
+		seg.Signals = append(seg.Signals, SegmentSignal{Name: name, Agg: agg, Value: *v})
+	}
+	add("powertrainTractionBatteryChargingAddedEnergy", "FIRST", energyFirst)
+	add("powertrainTractionBatteryChargingAddedEnergy", "LAST", energyLast)
+	add("powertrainTractionBatteryChargingPower", "AVG", avgPower)
+	add("powertrainTractionBatteryStateOfChargeCurrent", "FIRST", socFirst)
+	add("powertrainTractionBatteryStateOfChargeCurrent", "LAST", socLast)
+	return seg
 }
 
-func bptr(b bool) *bool       { return &b }
 func f64ptr(f float64) *float64 { return &f }
 
-func TestDetectChargingSessions_SingleSession(t *testing.T) {
-	lat, lng := 37.7749, -122.4194
-	samples := []ChargingSample{
-		chargingSample(0, bptr(false), nil, nil, f64ptr(40), nil, nil),
-		chargingSample(30, bptr(true), f64ptr(10.0), f64ptr(7.1), f64ptr(41), &lat, &lng),
-		chargingSample(60, bptr(true), f64ptr(15.5), f64ptr(7.0), f64ptr(48), &lat, &lng),
-		chargingSample(90, bptr(true), f64ptr(20.0), f64ptr(6.8), f64ptr(55), &lat, &lng),
-		chargingSample(120, bptr(false), nil, nil, f64ptr(55), nil, nil),
-	}
-	sessions := detectChargingSessions(samples)
-	if len(sessions) != 1 {
-		t.Fatalf("got %d sessions, want 1", len(sessions))
-	}
-	s := sessions[0]
-	if s.numSamples != 3 {
-		t.Fatalf("numSamples = %d, want 3", s.numSamples)
-	}
+func TestSessionFromSegment_MapsFieldsFromSignals(t *testing.T) {
+	seg := segment(
+		"2026-09-01T08:00:00Z", "2026-09-01T08:30:00Z",
+		37.7749, -122.4194,
+		f64ptr(10.0), f64ptr(20.0), f64ptr(6.97), f64ptr(41), f64ptr(55),
+	)
+	s := sessionFromSegment(seg)
+
 	if got := s.addedEnergyKwh(); got == nil || *got != 10.0 {
 		t.Fatalf("addedEnergyKwh = %v, want 10.0", got)
 	}
-	if got := s.avgPowerKw(); got == nil || *got != 6.96666666666666589691 {
-		t.Fatalf("avgPowerKw = %v, want ~6.97", got)
+	if s.avgPowerKw == nil || *s.avgPowerKw != 6.97 {
+		t.Fatalf("avgPowerKw = %v, want 6.97", s.avgPowerKw)
 	}
 	if s.socStart == nil || *s.socStart != 41 || s.socEnd == nil || *s.socEnd != 55 {
 		t.Fatalf("soc start/end = %v/%v, want 41/55", s.socStart, s.socEnd)
 	}
-	if s.lat == nil || *s.lat != lat {
-		t.Fatalf("lat = %v, want %v", s.lat, lat)
+	if s.lat == nil || *s.lat != 37.7749 || s.lng == nil || *s.lng != -122.4194 {
+		t.Fatalf("lat/lng = %v/%v, want 37.7749/-122.4194", s.lat, s.lng)
+	}
+	if s.startedAt.IsZero() || s.endedAt.IsZero() {
+		t.Fatalf("startedAt/endedAt not parsed: %v / %v", s.startedAt, s.endedAt)
 	}
 }
 
-func TestDetectChargingSessions_TooFewSamplesDiscarded(t *testing.T) {
-	samples := []ChargingSample{
-		chargingSample(0, bptr(false), nil, nil, nil, nil, nil),
-		chargingSample(30, bptr(true), f64ptr(5.0), f64ptr(7.0), nil, nil, nil),
-		chargingSample(60, bptr(false), nil, nil, nil, nil, nil),
+func TestSessionFromSegment_MissingSignalsYieldNilFields(t *testing.T) {
+	seg := segment("2026-09-01T08:00:00Z", "2026-09-01T08:05:00Z", 0, 0, nil, nil, nil, nil, nil)
+	s := sessionFromSegment(seg)
+
+	if got := s.addedEnergyKwh(); got != nil {
+		t.Fatalf("addedEnergyKwh = %v, want nil", got)
 	}
-	if got := detectChargingSessions(samples); len(got) != 0 {
-		t.Fatalf("got %d sessions, want 0 (single-sample session discarded)", len(got))
+	if s.avgPowerKw != nil {
+		t.Fatalf("avgPowerKw = %v, want nil", s.avgPowerKw)
+	}
+	if s.socStart != nil || s.socEnd != nil {
+		t.Fatalf("soc start/end = %v/%v, want nil/nil", s.socStart, s.socEnd)
+	}
+	if s.lat != nil || s.lng != nil {
+		t.Fatalf("lat/lng = %v/%v, want nil/nil (no location reported)", s.lat, s.lng)
 	}
 }
 
-func TestDetectChargingSessions_CableConnectedNotChargingOpensNoSession(t *testing.T) {
-	// IsCharging false throughout — a connected-but-not-charging vehicle
-	// (e.g. finished charging, or on a schedule delay) must not open a
-	// session even though it may be plugged in.
-	samples := []ChargingSample{
-		chargingSample(0, bptr(false), nil, nil, nil, nil, nil),
-		chargingSample(30, bptr(false), nil, nil, nil, nil, nil),
-		chargingSample(60, bptr(false), nil, nil, nil, nil, nil),
-	}
-	if got := detectChargingSessions(samples); len(got) != 0 {
-		t.Fatalf("got %d sessions, want 0", len(got))
-	}
-}
-
-func TestDetectChargingSessions_ExplicitFalseSplitsSession(t *testing.T) {
-	// isCharging reports an EXPLICIT false for one sample mid-session (not a
-	// missing/nil report) — that ends the current run. Two 2-sample
-	// sessions, not one. Contrast with GapBetweenTrueSamplesDoesNotSplit,
-	// where the middle sample is nil (no report) rather than false.
-	samples := []ChargingSample{
-		chargingSample(0, bptr(true), f64ptr(1.0), f64ptr(7.0), nil, nil, nil),
-		chargingSample(30, bptr(true), f64ptr(2.0), f64ptr(7.0), nil, nil, nil),
-		chargingSample(60, bptr(false), nil, nil, nil, nil, nil),
-		chargingSample(90, bptr(true), f64ptr(3.0), f64ptr(7.0), nil, nil, nil),
-		chargingSample(120, bptr(true), f64ptr(4.0), f64ptr(7.0), nil, nil, nil),
-	}
-	sessions := detectChargingSessions(samples)
-	if len(sessions) != 2 {
-		t.Fatalf("got %d sessions, want 2", len(sessions))
-	}
-}
-
-func TestDetectChargingSessions_EnergyCounterResetYieldsNilEnergy(t *testing.T) {
+func TestAddedEnergyKwh_NegativeDeltaYieldsNil(t *testing.T) {
 	// AddedEnergy counter resets mid-session (e.g. a new charge cycle
 	// re-zeroed it) — last-minus-first goes negative. Same guard as
 	// GeofenceDetectionService.engineRuntimeS: report nil, never a negative.
-	samples := []ChargingSample{
-		chargingSample(0, bptr(true), f64ptr(18.0), nil, nil, nil, nil),
-		chargingSample(30, bptr(true), f64ptr(2.0), nil, nil, nil, nil),
-		chargingSample(60, bptr(true), f64ptr(4.0), nil, nil, nil, nil),
-	}
-	sessions := detectChargingSessions(samples)
-	if len(sessions) != 1 {
-		t.Fatalf("got %d sessions, want 1", len(sessions))
-	}
-	if got := sessions[0].addedEnergyKwh(); got != nil {
+	seg := segment("2026-09-01T08:00:00Z", "2026-09-01T08:06:00Z", 0, 0, f64ptr(18.0), f64ptr(4.0), nil, nil, nil)
+	s := sessionFromSegment(seg)
+	if got := s.addedEnergyKwh(); got != nil {
 		t.Fatalf("addedEnergyKwh = %v, want nil", got)
-	}
-}
-
-func TestDetectChargingSessions_NilIsChargingNeverOpensSession(t *testing.T) {
-	// A vehicle that never reports the signal at all (nil throughout) must
-	// never open a session — nil is "no information", not "charging".
-	samples := []ChargingSample{
-		chargingSample(0, nil, nil, nil, nil, nil, nil),
-		chargingSample(30, nil, nil, nil, nil, nil, nil),
-	}
-	if got := detectChargingSessions(samples); len(got) != 0 {
-		t.Fatalf("got %d sessions, want 0", len(got))
-	}
-}
-
-func TestDetectChargingSessions_GapBetweenTrueSamplesDoesNotSplit(t *testing.T) {
-	// telemetry-api's interval buckets are sparse, not forward-filled: a
-	// connection that only phones home once a day reports nil for nearly
-	// every bucket even while actively charging. A missing report must not
-	// end a session — only an explicit false does (see
-	// ExplicitFalseSplitsSession). One session spanning the gap, counting
-	// only the two actual true samples.
-	samples := []ChargingSample{
-		chargingSample(0, bptr(true), f64ptr(1.0), f64ptr(7.0), f64ptr(40), nil, nil),
-		chargingSample(30, nil, nil, nil, nil, nil, nil),
-		chargingSample(60, nil, nil, nil, nil, nil, nil),
-		chargingSample(90, nil, nil, nil, nil, nil, nil),
-		chargingSample(120, bptr(true), f64ptr(9.0), f64ptr(7.0), f64ptr(55), nil, nil),
-	}
-	sessions := detectChargingSessions(samples)
-	if len(sessions) != 1 {
-		t.Fatalf("got %d sessions, want 1", len(sessions))
-	}
-	s := sessions[0]
-	if s.numSamples != 2 {
-		t.Fatalf("numSamples = %d, want 2 (only the two true samples counted, not the nil gaps)", s.numSamples)
-	}
-	if !s.endedAt.Equal(chargingSample(120, nil, nil, nil, nil, nil, nil).Time) {
-		t.Fatalf("endedAt = %v, want the last true sample's time", s.endedAt)
-	}
-	if got := s.addedEnergyKwh(); got == nil || *got != 8.0 {
-		t.Fatalf("addedEnergyKwh = %v, want 8.0", got)
 	}
 }

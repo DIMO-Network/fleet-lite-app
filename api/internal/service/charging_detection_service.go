@@ -14,10 +14,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// chargingSampleInterval matches geofenceSampleInterval — same telemetry
-// bucketing cadence used for trip-replay and geofence detection.
-const chargingSampleInterval = "30s"
-
 // ChargingDetectionService computes EV charging sessions from telemetry and
 // caches them, on demand. Past telemetry is immutable, so a computed session
 // never goes stale; a scan-coverage ledger prevents recomputation. Mirrors
@@ -41,11 +37,11 @@ func (s *ChargingDetectionService) Sessions(ctx context.Context, tenant models.T
 		return nil, err
 	}
 	for _, gap := range gaps {
-		samples, serr := s.telemetry.ChargingSamples(tenant, uint64(tokenID), rfc3339(gap.from), rfc3339(gap.to), chargingSampleInterval)
+		segments, serr := s.telemetry.RechargeSegments(tenant, uint64(tokenID), rfc3339(gap.from), rfc3339(gap.to))
 		if serr != nil {
-			return nil, fmt.Errorf("charging samples: %w", serr)
+			return nil, fmt.Errorf("recharge segments: %w", serr)
 		}
-		if perr := s.persistSessions(ctx, tenant.ID, tokenID, samples, gap.from, gap.to); perr != nil {
+		if perr := s.persistSessions(ctx, tenant.ID, tokenID, segments, gap.from, gap.to); perr != nil {
 			return nil, perr
 		}
 	}
@@ -113,8 +109,11 @@ func (s *ChargingDetectionService) mergeCoverage(ctx context.Context, tenantID s
 // shifted started_at (telemetry-api buckets are window-relative), so
 // deleting the window first keeps exactly one copy and makes recompute
 // idempotent. Mirrors GeofenceDetectionService.persistPasses.
-func (s *ChargingDetectionService) persistSessions(ctx context.Context, tenantID string, tokenID int64, samples []ChargingSample, from, to time.Time) error {
-	detected := detectChargingSessions(samples)
+func (s *ChargingDetectionService) persistSessions(ctx context.Context, tenantID string, tokenID int64, segments []Segment, from, to time.Time) error {
+	detected := make([]detectedChargingSession, len(segments))
+	for i, seg := range segments {
+		detected[i] = sessionFromSegment(seg)
+	}
 
 	writer := s.pdb.DBS().Writer
 	if _, err := dbmodels.ChargingSessions(
@@ -131,12 +130,11 @@ func (s *ChargingDetectionService) persistSessions(ctx context.Context, tenantID
 			StartedAt:      d.startedAt,
 			EndedAt:        d.endedAt,
 			AddedEnergyKWH: null.Float64FromPtr(d.addedEnergyKwh()),
-			AvgPowerKW:     null.Float64FromPtr(d.avgPowerKw()),
+			AvgPowerKW:     null.Float64FromPtr(d.avgPowerKw),
 			SocStartPCT:    null.Float64FromPtr(d.socStart),
 			SocEndPCT:      null.Float64FromPtr(d.socEnd),
 			Lat:            null.Float64FromPtr(d.lat),
 			LNG:            null.Float64FromPtr(d.lng),
-			NumSamples:     d.numSamples,
 		}
 		if err := m.Insert(ctx, writer, boil.Infer()); err != nil {
 			return fmt.Errorf("insert charging session: %w", err)

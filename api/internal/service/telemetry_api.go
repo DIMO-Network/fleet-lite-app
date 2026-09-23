@@ -93,21 +93,6 @@ type GeoSample struct {
 	ObdRunTimeS *float64
 }
 
-// ChargingSample is one interval-bucketed telemetry reading used for
-// charging-session detection. Location is included when reported so a
-// detected session can be placed on the map; Cable-connected is deliberately
-// not queried — nothing downstream consumes it, since a session is defined
-// purely by IsCharging.
-type ChargingSample struct {
-	Time           time.Time
-	IsCharging     *bool
-	AddedEnergyKwh *float64
-	PowerKw        *float64
-	SocPct         *float64
-	Lat            *float64
-	Lng            *float64
-}
-
 // FleetLocationsResult separates vehicles with accessible location data from
 // those where the developer license lacks SACD permissions.
 type FleetLocationsResult struct {
@@ -148,10 +133,12 @@ type TelemetryAPIService interface {
 	// detection. interval is a telemetry-api duration (e.g. "30s"); coordinates
 	// and speed come from one bucketed `signals` query.
 	GeofenceSamples(tenant models.Tenant, tokenID uint64, from, to, interval string) ([]GeoSample, error)
-	// ChargingSamples returns interval-bucketed EV charging-signal readings
-	// over a window, ordered by time — the input to charging-session
-	// detection. interval is a telemetry-api duration (e.g. "30s").
-	ChargingSamples(tenant models.Tenant, tokenID uint64, from, to, interval string) ([]ChargingSample, error)
+	// RechargeSegments queries telemetry-api's native `recharge` segmentation
+	// — the same detector the Trips panel offers under "Recharge" — instead
+	// of sweeping raw IsCharging samples ourselves. Each returned Segment is
+	// one already-detected charging session; ChargingDetectionService prices
+	// and persists them as-is.
+	RechargeSegments(tenant models.Tenant, tokenID uint64, from, to string) ([]Segment, error)
 	// FleetLocations checks per-vehicle JWT availability to determine which
 	// vehicles the tenant's dev license has SACD permissions for, then fetches
 	// each permitted vehicle's coordinates with its own JWT (telemetry-api
@@ -552,6 +539,62 @@ func (t *telemetryAPIService) Segments(tenant models.Tenant, tokenID uint64, fro
 	return resp.Data.Segments, nil
 }
 
+// RechargeSegments queries telemetry-api's `recharge` segmentation directly —
+// the same detector the Trips panel offers under "Recharge" — requesting the
+// charging-specific aggregations ChargingDetectionService needs instead of
+// the distance/speed pair Segments requests for driving trips. No
+// eventRequests: driver-behaviour events don't occur while charging.
+func (t *telemetryAPIService) RechargeSegments(tenant models.Tenant, tokenID uint64, from, to string) ([]Segment, error) {
+	q := fmt.Sprintf(`query {
+		segments(
+			tokenId: %d
+			from: %q
+			to: %q
+			mechanism: recharge
+			limit: 60
+			signalRequests: [
+				{ name: "powertrainTractionBatteryChargingAddedEnergy", agg: FIRST }
+				{ name: "powertrainTractionBatteryChargingAddedEnergy", agg: LAST }
+				{ name: "powertrainTractionBatteryChargingPower", agg: AVG }
+				{ name: "powertrainTractionBatteryStateOfChargeCurrent", agg: FIRST }
+				{ name: "powertrainTractionBatteryStateOfChargeCurrent", agg: LAST }
+			]
+		) {
+			start { value { latitude longitude } timestamp }
+			end { value { latitude longitude } timestamp }
+			isOngoing
+			signals { name agg value }
+		}
+	}`, tokenID, from, to)
+
+	raw, err := t.query(tenant, tokenID, q)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp struct {
+		Data struct {
+			Segments []Segment `json:"segments"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, fmt.Errorf("parse recharge segments: %w", err)
+	}
+	return resp.Data.Segments, nil
+}
+
+// segmentSignalValue returns the value of the named/aggregated signal from a
+// segment's Signals, or nil when the segment's window never reported it.
+func segmentSignalValue(signals []SegmentSignal, name, agg string) *float64 {
+	for _, s := range signals {
+		if s.Name == name && s.Agg == agg {
+			v := s.Value
+			return &v
+		}
+	}
+	return nil
+}
+
 // Behavior runs `dataSummary` and `dailyActivity` in one request. Day
 // boundaries follow tz (passed as dailyActivity's `timezone`), so the bars the
 // frontend draws line up with the user's calendar days.
@@ -847,109 +890,6 @@ func (t *telemetryAPIService) GeofenceSamples(tenant models.Tenant, tokenID uint
 
 	t.logger.Info().Uint64("tokenID", tokenID).Str("from", from).Str("to", to).
 		Int("samples", len(out)).Msg("telemetry geofence samples fetched")
-
-	return out, nil
-}
-
-// ChargingSamples fetches interval-bucketed EV charging-signal readings over a
-// window for charging-session detection. All signals default to LAST within the
-// bucket — charging state, energy added, power, and SOC. Location is included
-// for map placement of detected sessions.
-// flexBool decodes a JSON boolean OR a JSON number (0 = false, nonzero =
-// true) into a bool. DIMO's telemetry-api represents some boolean-shaped
-// signals — observed: powertrainTractionBatteryChargingIsCharging — as a raw
-// 0/1 number rather than a native JSON boolean, depending on the reporting
-// connection. A plain *bool target fails json.Unmarshal outright the moment
-// it hits a numeric encoding, which silently broke ChargingSamples for every
-// vehicle on such a connection (the error propagates up and gets caught +
-// skipped per-vehicle by FleetSummary, so the fleet just looked empty).
-type flexBool bool
-
-func (b *flexBool) UnmarshalJSON(data []byte) error {
-	switch s := strings.TrimSpace(string(data)); s {
-	case "true":
-		*b = true
-		return nil
-	case "false":
-		*b = false
-		return nil
-	default:
-		var n float64
-		if err := json.Unmarshal(data, &n); err != nil {
-			return fmt.Errorf("flexBool: not a bool or number: %s", s)
-		}
-		*b = n != 0
-		return nil
-	}
-}
-
-func (t *telemetryAPIService) ChargingSamples(tenant models.Tenant, tokenID uint64, from, to, interval string) ([]ChargingSample, error) {
-	if interval == "" {
-		interval = "30s"
-	}
-	q := fmt.Sprintf(`query {
-		samples: signals(tokenId: %d, from: %q, to: %q, interval: %q) {
-			timestamp
-			powertrainTractionBatteryChargingIsCharging(agg: LAST)
-			powertrainTractionBatteryChargingAddedEnergy(agg: LAST)
-			powertrainTractionBatteryChargingPower(agg: LAST)
-			powertrainTractionBatteryStateOfChargeCurrent(agg: LAST)
-			currentLocationCoordinates(agg: LAST) { latitude longitude }
-		}
-	}`, tokenID, from, to, interval)
-
-	raw, err := t.query(tenant, tokenID, q)
-	if err != nil {
-		return nil, err
-	}
-
-	var resp struct {
-		Data struct {
-			Samples []struct {
-				Timestamp                                     string    `json:"timestamp"`
-				PowertrainTractionBatteryChargingIsCharging   *flexBool `json:"powertrainTractionBatteryChargingIsCharging"`
-				PowertrainTractionBatteryChargingAddedEnergy  *float64 `json:"powertrainTractionBatteryChargingAddedEnergy"`
-				PowertrainTractionBatteryChargingPower        *float64 `json:"powertrainTractionBatteryChargingPower"`
-				PowertrainTractionBatteryStateOfChargeCurrent *float64 `json:"powertrainTractionBatteryStateOfChargeCurrent"`
-				CurrentLocationCoordinates                    *struct {
-					Latitude  float64 `json:"latitude"`
-					Longitude float64 `json:"longitude"`
-				} `json:"currentLocationCoordinates"`
-			} `json:"samples"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(raw, &resp); err != nil {
-		return nil, fmt.Errorf("parse charging samples: %w", err)
-	}
-
-	out := make([]ChargingSample, 0, len(resp.Data.Samples))
-	for _, s := range resp.Data.Samples {
-		ts, perr := time.Parse(time.RFC3339, s.Timestamp)
-		if perr != nil {
-			continue
-		}
-		var isCharging *bool
-		if s.PowertrainTractionBatteryChargingIsCharging != nil {
-			v := bool(*s.PowertrainTractionBatteryChargingIsCharging)
-			isCharging = &v
-		}
-		cs := ChargingSample{
-			Time:           ts,
-			IsCharging:     isCharging,
-			AddedEnergyKwh: s.PowertrainTractionBatteryChargingAddedEnergy,
-			PowerKw:        s.PowertrainTractionBatteryChargingPower,
-			SocPct:         s.PowertrainTractionBatteryStateOfChargeCurrent,
-		}
-		if s.CurrentLocationCoordinates != nil {
-			lat, lng := s.CurrentLocationCoordinates.Latitude, s.CurrentLocationCoordinates.Longitude
-			cs.Lat, cs.Lng = &lat, &lng
-		}
-		out = append(out, cs)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Time.Before(out[j].Time) })
-
-	t.logger.Info().Uint64("tokenID", tokenID).Str("from", from).Str("to", to).
-		Int("samples", len(out)).Msg("telemetry charging samples fetched")
 
 	return out, nil
 }
