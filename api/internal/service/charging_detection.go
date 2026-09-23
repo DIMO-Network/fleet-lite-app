@@ -56,14 +56,32 @@ func (s detectedChargingSession) avgPowerKw() *float64 {
 // sample runs that the <2-samples rule discarded — no charging session was
 // ever detected for any connection that doesn't report continuously.
 // A run shorter than 2 (non-nil, true) samples is discarded: a single point
-// can't measure an energy delta.
+// can't measure an energy delta. A run that IS 2+ samples but transferred no
+// measurable energy and lasted under minChargingSessionDuration is also
+// discarded — a real (if brief) top-up still adds some energy, so a
+// zero-energy, sub-threshold run is noise: a connector self-check, a relay
+// click, a brief preconditioning blip. Observed on a real vehicle: dozens of
+// exactly-60-second, zero-kWh, unchanged-SOC "sessions" the nil-gap fix
+// (which made every run reachable, not just continuously-reported ones) now
+// surfaced alongside genuine sessions -- these aren't something a user would
+// recognize as "charging."
+const minChargingSessionDuration = 5 * time.Minute
+
 func detectChargingSessions(samples []ChargingSample) []detectedChargingSession {
 	var sessions []detectedChargingSession
 	var cur *detectedChargingSession
 	flush := func() {
-		if cur != nil && cur.numSamples >= 2 {
-			sessions = append(sessions, *cur)
+		if cur == nil || cur.numSamples < 2 {
+			cur = nil
+			return
 		}
+		energy := cur.addedEnergyKwh()
+		longEnough := cur.endedAt.Sub(cur.startedAt) >= minChargingSessionDuration
+		if (energy == nil || *energy <= 0) && !longEnough {
+			cur = nil
+			return
+		}
+		sessions = append(sessions, *cur)
 		cur = nil
 	}
 	for _, smp := range samples {

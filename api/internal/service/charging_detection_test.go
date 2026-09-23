@@ -99,10 +99,12 @@ func TestDetectChargingSessions_EnergyCounterResetYieldsNilEnergy(t *testing.T) 
 	// AddedEnergy counter resets mid-session (e.g. a new charge cycle
 	// re-zeroed it) — last-minus-first goes negative. Same guard as
 	// GeofenceDetectionService.engineRuntimeS: report nil, never a negative.
+	// Spans >=5 minutes so it isn't itself discarded by the noise filter
+	// (nil energy + under minChargingSessionDuration) this test isn't about.
 	samples := []ChargingSample{
 		chargingSample(0, bptr(true), f64ptr(18.0), nil, nil, nil, nil),
 		chargingSample(30, bptr(true), f64ptr(2.0), nil, nil, nil, nil),
-		chargingSample(60, bptr(true), f64ptr(4.0), nil, nil, nil, nil),
+		chargingSample(360, bptr(true), f64ptr(4.0), nil, nil, nil, nil),
 	}
 	sessions := detectChargingSessions(samples)
 	if len(sessions) != 1 {
@@ -152,5 +154,34 @@ func TestDetectChargingSessions_GapBetweenTrueSamplesDoesNotSplit(t *testing.T) 
 	}
 	if got := s.addedEnergyKwh(); got == nil || *got != 8.0 {
 		t.Fatalf("addedEnergyKwh = %v, want 8.0", got)
+	}
+}
+
+func TestDetectChargingSessions_ZeroEnergyShortRunDiscardedAsNoise(t *testing.T) {
+	// Two consecutive true samples (passes the numSamples>=2 rule), but zero
+	// energy transferred and under 5 minutes — a connector self-check or
+	// relay blip, not a real charging session. Observed on a real vehicle:
+	// dozens of exactly-60-second, zero-kWh, unchanged-SOC "sessions".
+	samples := []ChargingSample{
+		chargingSample(0, bptr(true), f64ptr(50.0), nil, f64ptr(73.0), nil, nil),
+		chargingSample(30, bptr(true), f64ptr(50.0), nil, f64ptr(73.0), nil, nil),
+	}
+	if got := detectChargingSessions(samples); len(got) != 0 {
+		t.Fatalf("got %d sessions, want 0 (zero-energy, sub-threshold-duration run is noise)", len(got))
+	}
+}
+
+func TestDetectChargingSessions_LongZeroEnergyRunKept(t *testing.T) {
+	// A run spanning >=5 minutes is kept even with an unmeasurable energy
+	// delta (e.g. a long, very low-power trickle the counter's resolution
+	// can't register) — duration alone is enough evidence this wasn't a
+	// momentary blip.
+	samples := []ChargingSample{
+		chargingSample(0, bptr(true), f64ptr(50.0), nil, nil, nil, nil),
+		chargingSample(30, bptr(true), f64ptr(50.0), nil, nil, nil, nil),
+		chargingSample(330, bptr(true), f64ptr(50.0), nil, nil, nil, nil),
+	}
+	if got := detectChargingSessions(samples); len(got) != 1 {
+		t.Fatalf("got %d sessions, want 1 (long enough to count despite zero measured energy)", len(got))
 	}
 }
