@@ -522,7 +522,6 @@
 'se81fdbeb35dd29dc': `Gas MPG equivalent`,
 'sc2e2d0ffd5c12bad': `Vehicle efficiency (kWh/mile)`,
 's90a6d0dbd7c45585': `Save settings`,
-'s61cc8982383f875c': `Show all vehicles`,
 's3fd6bd99e3f6a5be': `Started`,
 'sdb6622a51b2a94f5': `Energy`,
 's367d079d1aed1358': `Cost`,
