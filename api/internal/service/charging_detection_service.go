@@ -110,9 +110,13 @@ func (s *ChargingDetectionService) mergeCoverage(ctx context.Context, tenantID s
 // deleting the window first keeps exactly one copy and makes recompute
 // idempotent. Mirrors GeofenceDetectionService.persistPasses.
 func (s *ChargingDetectionService) persistSessions(ctx context.Context, tenantID string, tokenID int64, segments []Segment, from, to time.Time) error {
-	detected := make([]detectedChargingSession, len(segments))
-	for i, seg := range segments {
-		detected[i] = sessionFromSegment(seg)
+	var detected []detectedChargingSession
+	for _, seg := range segments {
+		d := sessionFromSegment(seg)
+		if d.isNoise() {
+			continue
+		}
+		detected = append(detected, d)
 	}
 
 	writer := s.pdb.DBS().Writer

@@ -87,7 +87,7 @@ export class ChargingView extends LitElement {
             .totals .stat { display: flex; flex-direction: column; }
             .totals .stat .value { font-size: 1.4rem; font-weight: 600; }
             .totals .stat .label { font-size: 0.8rem; color: var(--text-secondary); }
-            #charging-map { height: 360px; margin: 0 var(--gutter); border-radius: 8px; }
+            #charging-map { height: 360px; flex-shrink: 0; margin: 0 var(--gutter); border-radius: 8px; }
             table { width: 100%; border-collapse: collapse; margin-top: 16px; }
             th, td { text-align: left; padding: 8px 16px; border-bottom: 1px solid var(--border-color); }
 
