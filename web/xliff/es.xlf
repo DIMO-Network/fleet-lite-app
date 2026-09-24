@@ -1929,6 +1929,9 @@
 <trans-unit id="sd718caba2093c04e">
   <source>Gas price (per gallon)</source>
 </trans-unit>
+<trans-unit id="sf113fa256db9617b">
+  <source>Ended</source>
+</trans-unit>
 </body>
 </file>
 </xliff>
