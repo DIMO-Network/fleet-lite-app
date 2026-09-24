@@ -155,22 +155,17 @@ export class ChargingView extends LitElement {
             .settings-form .save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
             .settings-form .form-error { font: var(--type-body-sm); color: var(--error); }
 
-            .secondary-btn {
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                background: none;
+            .vehicle-select {
+                background: var(--surface-container);
                 border: 1px solid var(--outline-variant);
                 border-radius: var(--radius-md);
-                color: var(--on-surface-variant);
+                color: var(--on-surface);
                 font: var(--type-body-sm);
                 padding: 8px 12px;
                 margin: 0 var(--gutter) 16px;
+                outline: none;
                 cursor: pointer;
-                transition: background 0.15s, color 0.15s, border-color 0.15s;
-                white-space: nowrap;
             }
-            .secondary-btn:hover { background: var(--surface-container-high); color: var(--primary); }
 
             .error { color: var(--error, #d33); padding: 0 var(--gutter); }
         `,
@@ -226,6 +221,17 @@ export class ChargingView extends LitElement {
             this.renderMarkers();
             this.renderedSummary = this.summary;
         }
+    }
+
+    /** Distinct vehicles that reported a charging session, for the filter dropdown. */
+    private vehicleOptions(): { tokenId: number; label: string }[] {
+        const seen = new Map<number, string>();
+        for (const s of this.summary?.sessions ?? []) {
+            if (!seen.has(s.tokenId)) seen.set(s.tokenId, s.vehicleLabel);
+        }
+        return [...seen.entries()]
+            .map(([tokenId, label]) => ({ tokenId, label }))
+            .sort((a, b) => a.label.localeCompare(b.label));
     }
 
     private buildPopupContent(s: ChargingSessionView): HTMLElement {
@@ -289,11 +295,18 @@ export class ChargingView extends LitElement {
     }
 
     override render() {
-        const fleet = this.summary?.fleet;
         const sessions = (this.summary?.sessions ?? [])
             .filter((s) => this.selectedTokenId == null || s.tokenId === this.selectedTokenId)
             .filter((s) => s.addedEnergyKwh != null)
             .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+        const totals = this.selectedTokenId == null
+            ? this.summary?.fleet
+            : sessions.reduce((acc, s) => ({
+                addedEnergyKwh: acc.addedEnergyKwh + (s.addedEnergyKwh ?? 0),
+                cost: s.cost != null ? (acc.cost ?? 0) + s.cost : acc.cost,
+                savings: s.savings != null ? (acc.savings ?? 0) + s.savings : acc.savings,
+            }), { addedEnergyKwh: 0, cost: undefined as number | undefined, savings: undefined as number | undefined });
+        const vehicleOpts = this.vehicleOptions();
         return html`
             <header class="top-bar">
                 <h1>${msg('Charging')}</h1>
@@ -304,19 +317,31 @@ export class ChargingView extends LitElement {
             ${this.error ? html`<p class="error">${this.error}</p>` : nothing}
             <div class="totals">
                 <div class="stat">
-                    <span class="value">${formatKwh(fleet?.addedEnergyKwh)}</span>
+                    <span class="value">${formatKwh(totals?.addedEnergyKwh)}</span>
                     <span class="label">${msg('Energy added')}</span>
                 </div>
                 <div class="stat">
-                    <span class="value">${formatMoney(fleet?.cost, this.settings.currency)}</span>
+                    <span class="value">${formatMoney(totals?.cost, this.settings.currency)}</span>
                     <span class="label">${msg('Spent on electricity')}</span>
                 </div>
                 <div class="stat">
-                    <span class="value">${formatMoney(fleet?.savings, this.settings.currency)}</span>
+                    <span class="value">${formatMoney(totals?.savings, this.settings.currency)}</span>
                     <span class="label">${msg('Saved vs. gasoline')}</span>
                 </div>
             </div>
             <div id="charging-map"></div>
+            ${vehicleOpts.length > 1 ? html`
+                <select class="vehicle-select"
+                    @change=${(e: Event) => {
+                        const v = (e.target as HTMLSelectElement).value;
+                        this.selectedTokenId = v === '' ? null : Number(v);
+                    }}>
+                    <option value="" ?selected=${this.selectedTokenId == null}>${msg('All vehicles')}</option>
+                    ${vehicleOpts.map((v) => html`
+                        <option value=${v.tokenId} ?selected=${v.tokenId === this.selectedTokenId}>${v.label}</option>
+                    `)}
+                </select>
+            ` : nothing}
             <form class="settings-form" @submit=${(e: Event) => this.saveSettings(e)}>
                 <div class="field">
                     <label>${msg('Electricity rate (per kWh)')}</label>
@@ -341,9 +366,6 @@ export class ChargingView extends LitElement {
                 <button type="submit" class="save-btn" ?disabled=${this.savingSettings}>${msg('Save settings')}</button>
                 ${this.settingsError ? html`<span class="form-error">${this.settingsError}</span>` : nothing}
             </form>
-            ${this.selectedTokenId
-                ? html`<button class="secondary-btn" @click=${() => { this.selectedTokenId = null; }}>${msg('Show all vehicles')}</button>`
-                : nothing}
             ${this.loading
                 ? html`<p>${msg('Loading…')}</p>`
                 : html`
