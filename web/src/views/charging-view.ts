@@ -23,6 +23,17 @@ function formatKwh(n?: number): string {
     return `${n.toLocaleString(undefined, { maximumFractionDigits: 1 })} kWh`;
 }
 
+/** Energy cell fallback for connections that don't report added-energy/power
+ *  (some aftermarket devices only ever report state of charge) — shows the
+ *  SOC gained during the session instead of leaving the row blank. */
+function formatEnergyCell(s: ChargingSessionView): string {
+    if (s.addedEnergyKwh != null) return formatKwh(s.addedEnergyKwh);
+    if (s.socStartPct != null && s.socEndPct != null) {
+        return `${Math.round(s.socStartPct)}% → ${Math.round(s.socEndPct)}% SOC`;
+    }
+    return '—';
+}
+
 const WINDOW_DAYS = 30;
 
 @customElement('charging-view')
@@ -239,7 +250,7 @@ export class ChargingView extends LitElement {
         const label = document.createElement('div');
         label.textContent = s.vehicleLabel;
         const energy = document.createElement('div');
-        energy.textContent = formatKwh(s.addedEnergyKwh);
+        energy.textContent = formatEnergyCell(s);
         const costSaved = document.createElement('div');
         costSaved.textContent = msg(
             str`${formatMoney(s.cost, s.currency)} spent / ${formatMoney(s.savings, s.currency)} saved`,
@@ -297,7 +308,6 @@ export class ChargingView extends LitElement {
     override render() {
         const sessions = (this.summary?.sessions ?? [])
             .filter((s) => this.selectedTokenId == null || s.tokenId === this.selectedTokenId)
-            .filter((s) => s.addedEnergyKwh != null)
             .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
         const totals = this.selectedTokenId == null
             ? this.summary?.fleet
@@ -385,7 +395,7 @@ export class ChargingView extends LitElement {
                                     <tr>
                                         <td>${s.vehicleLabel}</td>
                                         <td>${new Date(s.startedAt).toLocaleString()}</td>
-                                        <td>${formatKwh(s.addedEnergyKwh)}</td>
+                                        <td>${formatEnergyCell(s)}</td>
                                         <td>${formatMoney(s.cost, s.currency)}</td>
                                         <td>${formatMoney(s.savings, s.currency)}</td>
                                     </tr>
