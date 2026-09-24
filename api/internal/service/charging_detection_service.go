@@ -41,6 +41,12 @@ func (s *ChargingDetectionService) Sessions(ctx context.Context, tenant models.T
 		if serr != nil {
 			return nil, fmt.Errorf("recharge segments: %w", serr)
 		}
+		// Logged even on the empty-result happy path — a vehicle that never
+		// charges (or whose connection doesn't report the recharge mechanism's
+		// signals) previously left zero trace anywhere in the logs, making it
+		// indistinguishable from "never queried at all" during investigation.
+		s.logger.Info().Int64("tokenID", tokenID).Str("from", rfc3339(gap.from)).Str("to", rfc3339(gap.to)).
+			Int("segments", len(segments)).Msg("recharge segments fetched")
 		if perr := s.persistSessions(ctx, tenant.ID, tokenID, segments, gap.from, gap.to); perr != nil {
 			return nil, perr
 		}
@@ -110,9 +116,13 @@ func (s *ChargingDetectionService) mergeCoverage(ctx context.Context, tenantID s
 // deleting the window first keeps exactly one copy and makes recompute
 // idempotent. Mirrors GeofenceDetectionService.persistPasses.
 func (s *ChargingDetectionService) persistSessions(ctx context.Context, tenantID string, tokenID int64, segments []Segment, from, to time.Time) error {
-	detected := make([]detectedChargingSession, len(segments))
-	for i, seg := range segments {
-		detected[i] = sessionFromSegment(seg)
+	var detected []detectedChargingSession
+	for _, seg := range segments {
+		d := sessionFromSegment(seg)
+		if d.isNoise() {
+			continue
+		}
+		detected = append(detected, d)
 	}
 
 	writer := s.pdb.DBS().Writer

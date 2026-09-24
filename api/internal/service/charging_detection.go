@@ -3,12 +3,21 @@ package service
 
 import "time"
 
+// minChargingSessionDuration mirrors the pre-native-segments noise filter:
+// telemetry-api's `recharge` segmentation reports gap-tolerant runs of
+// IsCharging=true, same as our old sweep did, but does NOT itself filter
+// connector self-check / relay-click blips — observed directly in
+// production (2026-09-24, vehicle 189017): dozens of exactly-60-second,
+// zero-kWh, unchanged-SOC "sessions" alongside genuine ones, once native
+// segments replaced the old sweep+filter. A session is kept only if it
+// either transferred measurable energy or lasted at least this long.
+const minChargingSessionDuration = 5 * time.Minute
+
 // detectedChargingSession is one charging session as reported by
 // telemetry-api's native `recharge` segmentation, mapped into the shape
 // ChargingDetectionService persists. telemetry-api owns run detection
-// (including tolerance for reporting gaps and filtering of connector
-// self-check / relay-click noise) — this package no longer re-derives it
-// from raw samples.
+// (gap tolerance for sparse reporting) but not noise filtering — see
+// minChargingSessionDuration and isNoise.
 type detectedChargingSession struct {
 	startedAt      time.Time
 	endedAt        time.Time
@@ -61,4 +70,18 @@ func sessionFromSegment(seg Segment) detectedChargingSession {
 		d.lat, d.lng = &lat, &lng
 	}
 	return d
+}
+
+// isNoise reports whether a detected session is a connector self-check,
+// relay click, or brief preconditioning blip rather than something a user
+// would recognize as charging: no measurable energy transferred and under
+// minChargingSessionDuration. A real (if brief) top-up still adds some
+// energy, so a zero-energy, sub-threshold run is noise; a long run is kept
+// even with an unmeasurable energy delta (e.g. a very low-power trickle the
+// counter's resolution can't register) since duration alone is evidence
+// enough it wasn't momentary.
+func (s detectedChargingSession) isNoise() bool {
+	energy := s.addedEnergyKwh()
+	longEnough := s.endedAt.Sub(s.startedAt) >= minChargingSessionDuration
+	return (energy == nil || *energy <= 0) && !longEnough
 }

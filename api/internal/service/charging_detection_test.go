@@ -79,3 +79,34 @@ func TestAddedEnergyKwh_NegativeDeltaYieldsNil(t *testing.T) {
 		t.Fatalf("addedEnergyKwh = %v, want nil", got)
 	}
 }
+
+func TestIsNoise_ZeroEnergyShortRunDiscarded(t *testing.T) {
+	// Observed directly in production: telemetry-api's native `recharge`
+	// segmentation reports exactly-60-second, zero-kWh runs (connector
+	// self-checks / relay clicks) as sessions in their own right — it does
+	// not filter these itself.
+	seg := segment("2026-09-01T08:00:00Z", "2026-09-01T08:01:00Z", 0, 0, f64ptr(50.0), f64ptr(50.0), nil, nil, nil)
+	if s := sessionFromSegment(seg); !s.isNoise() {
+		t.Fatalf("isNoise() = false, want true (zero-energy, sub-threshold-duration run)")
+	}
+}
+
+func TestIsNoise_LongZeroEnergyRunKept(t *testing.T) {
+	// A run spanning >=5 minutes is kept even with an unmeasurable energy
+	// delta (e.g. a long, very low-power trickle the counter's resolution
+	// can't register) — duration alone is enough evidence this wasn't a
+	// momentary blip.
+	seg := segment("2026-09-01T08:00:00Z", "2026-09-01T08:05:00Z", 0, 0, f64ptr(50.0), f64ptr(50.0), nil, nil, nil)
+	if s := sessionFromSegment(seg); s.isNoise() {
+		t.Fatalf("isNoise() = true, want false (long enough to count despite zero measured energy)")
+	}
+}
+
+func TestIsNoise_MeasurableEnergyKeptEvenIfShort(t *testing.T) {
+	// A real (if brief) top-up still adds some energy, so measurable energy
+	// alone is enough to keep a sub-threshold-duration run.
+	seg := segment("2026-09-01T08:00:00Z", "2026-09-01T08:00:30Z", 0, 0, f64ptr(50.0), f64ptr(50.06), nil, nil, nil)
+	if s := sessionFromSegment(seg); s.isNoise() {
+		t.Fatalf("isNoise() = true, want false (measurable energy transferred)")
+	}
+}
