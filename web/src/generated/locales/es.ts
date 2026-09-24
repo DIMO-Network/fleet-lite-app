@@ -523,6 +523,7 @@
 'sc2e2d0ffd5c12bad': `Vehicle efficiency (kWh/mile)`,
 's90a6d0dbd7c45585': `Save settings`,
 's3fd6bd99e3f6a5be': `Started`,
+'sf113fa256db9617b': `Ended`,
 'sdb6622a51b2a94f5': `Energy`,
 's367d079d1aed1358': `Cost`,
     };
