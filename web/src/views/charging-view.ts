@@ -384,6 +384,7 @@ export class ChargingView extends LitElement {
                             <tr>
                                 <th>${msg('Vehicle')}</th>
                                 <th>${msg('Started')}</th>
+                                <th>${msg('Ended')}</th>
                                 <th>${msg('Energy')}</th>
                                 <th>${msg('Cost')}</th>
                                 <th>${msg('Saved')}</th>
@@ -395,6 +396,7 @@ export class ChargingView extends LitElement {
                                     <tr>
                                         <td>${s.vehicleLabel}</td>
                                         <td>${new Date(s.startedAt).toLocaleString()}</td>
+                                        <td>${new Date(s.endedAt).toLocaleString()}</td>
                                         <td>${formatEnergyCell(s)}</td>
                                         <td>${formatMoney(s.cost, s.currency)}</td>
                                         <td>${formatMoney(s.savings, s.currency)}</td>
