@@ -128,6 +128,14 @@ export class ShareVehicleModal extends LitElement {
     @state() private confirmingUpgrade = '';
     /** The grantee whose upgrade is in flight, or empty. */
     @state() private upgrading = '';
+    /**
+     * Grantees upgraded while this modal is open (lowercased). identity-api
+     * indexes from chain and can lag the job's receipt by seconds, so the
+     * re-read right after an upgrade may still return the old mask; without
+     * this the row would still say "Limited" and offer a second, redundant
+     * upgrade. Scoped to this modal's lifetime — a later open re-reads chain.
+     */
+    @state() private upgraded = new Set<string>();
     /** Owner as identity-api reports it; empty until it answers, or if it fails. */
     @state() private chainOwner = '';
 
@@ -271,6 +279,7 @@ export class ShareVehicleModal extends LitElement {
             const jobId = await svc.share(this.tokenId, s.grantee, remainingShareDays(s.expiresAt));
             await svc.waitForShare(this.tokenId, jobId);
 
+            this.upgraded = new Set(this.upgraded).add(s.grantee.toLowerCase());
             this.successMessage = msg('Access upgraded.');
             this.dispatchEvent(new CustomEvent('shared', { bubbles: true, composed: true }));
             await this.loadFromChain();
@@ -617,7 +626,7 @@ export class ShareVehicleModal extends LitElement {
         const upBusy = this.upgrading === s.grantee;
         // null = the mask could not be read; offer nothing rather than guess.
         const missing = missingStandardPermissions(s.permissions);
-        const limited = !!missing && missing.length > 0;
+        const limited = !!missing && missing.length > 0 && !this.upgraded.has(s.grantee.toLowerCase());
         const missingList = limited ? missing.map((p) => this.permissionLabel(p)).join(', ') : '';
         // A share in flight, another row's job in flight, or a vehicle that
         // cannot be signed for at all: all make these controls a no-op, so

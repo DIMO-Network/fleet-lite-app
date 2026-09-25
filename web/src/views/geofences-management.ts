@@ -569,8 +569,10 @@ export class GeofencesManagementView extends LitElement {
             .draw-bar button { min-height: 36px; flex-shrink: 0; }
 
             .toast-error {
-                position: absolute; top: calc(var(--top-bar-height) + 16px); left: 50%; transform: translateX(-50%);
-                z-index: 35; max-width: 360px;
+                /* Between the zoom control (left) and the 340px list panel (right). */
+                position: absolute; top: calc(var(--top-bar-height) + 16px);
+                left: 88px; right: calc(24px + 340px + 16px);
+                z-index: 35; max-width: 360px; width: fit-content;
                 padding: 10px 14px;
                 background: var(--error-container); color: var(--error);
                 border-radius: var(--radius-md); box-shadow: var(--shadow-float);
