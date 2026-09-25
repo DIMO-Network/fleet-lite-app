@@ -21,6 +21,26 @@
  */
 export const DIMO_PERMISSIONS_ALL = '11111111';
 
+/**
+ * File access requested alongside the permission bits: SACD `cloudevent`
+ * agreements, which login.dimo.org signs into the grant's source document
+ * (dimo-login #299) and lists as "Files Requested".
+ *
+ * Permission bits don't cover documents for other DIMO apps: dimo-app-backend
+ * decides document access from these agreements (hasDocumentAgreement). This
+ * app's own glovebox reads through token-exchange with RAW_DATA and never
+ * needed them — requesting them makes the grant say what it gives.
+ *
+ * Vehicle documents and their original files, tagged `documents`, matching
+ * the agreements fleet-tenancy-api writes for its own shares. `source` is
+ * left out on purpose: login.dimo.org fills in the grantor (whose files are
+ * shared), which an app can't know before the owner signs in.
+ */
+export const DIMO_VEHICLE_FILE_AGREEMENTS = [
+    { eventType: 'dimo.document.vehicle.*', tags: ['documents'] },
+    { eventType: 'dimo.raw.vehicle.*', tags: ['documents'] },
+];
+
 /** Redirect URI to hand DIMO. Must exactly match one registered on the dev license. */
 export function dimoRedirectUri(): string {
     return location.origin + '/login.html';
@@ -105,6 +125,7 @@ export function buildShareVehiclesUrl(opts: ShareVehiclesUrlOptions): string {
         redirectUri: opts.redirectUri ?? dimoRedirectUri(),
         entryState: 'VEHICLE_MANAGER',
         permissions: opts.permissions ?? DIMO_PERMISSIONS_ALL,
+        cloudEvent: JSON.stringify(DIMO_VEHICLE_FILE_AGREEMENTS),
     });
     for (const v of opts.vehicles ?? []) {
         params.append('vehicles', String(v));
