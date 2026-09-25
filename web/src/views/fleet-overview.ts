@@ -675,10 +675,10 @@ export class FleetOverviewView extends LitElement {
             .map-controls button .material-symbols-outlined { font-size: 20px; }
             .map-controls button:hover { background: var(--surface-container-high); }
             .map-controls button.active {
-                background: var(--accent-soft-strong);
-                color: var(--accent-ink);
+                background: var(--selected-bg);
+                color: var(--selected-fg);
             }
-            .map-controls button.active:hover { background: var(--accent-soft-strong); }
+            .map-controls button.active:hover { background: var(--selected-bg); }
 
             .map-legend {
                 position: absolute;
@@ -854,7 +854,7 @@ export class FleetOverviewView extends LitElement {
                 transition: background 0.15s ease;
             }
             .panel-header button:hover { background: var(--surface-container-high); color: var(--on-surface); }
-            .panel-header button.search-active { color: var(--accent-ink); background: var(--accent-soft); }
+            .panel-header button.search-active { color: var(--selected-fg); background: var(--selected-bg); }
 
             .vehicle-card-dense {
                 display: flex;

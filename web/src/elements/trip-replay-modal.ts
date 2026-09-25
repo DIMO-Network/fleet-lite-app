@@ -294,11 +294,11 @@ export class TripReplayModal extends LitElement {
             .ctrl-btn.primary {
                 width: 40px;
                 height: 40px;
-                background: var(--brand-gradient);
-                color: var(--on-accent);
+                background: var(--btn-primary-bg);
+                color: var(--btn-primary-fg);
             }
             .ctrl-btn.primary .material-symbols-outlined { font-variation-settings: 'FILL' 1; }
-            .ctrl-btn.primary:hover { filter: brightness(1.06); box-shadow: var(--accent-glow); }
+            .ctrl-btn.primary:hover { background: var(--btn-primary-hover); }
             .speed-select {
                 height: 36px;
                 padding: 0 12px;

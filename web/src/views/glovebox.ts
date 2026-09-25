@@ -269,17 +269,17 @@ export class GloveboxView extends LitElement {
                 align-items: center;
             }
             .list-header h1 { font: var(--type-headline-md); letter-spacing: -0.01em; color: var(--primary); }
-            /* The page's primary action, as a round gradient button. */
+            /* The page's primary action, as a round ink button. */
             .list-header button {
                 width: 36px; height: 36px;
                 border-radius: var(--radius-full);
-                background: var(--brand-gradient);
-                color: var(--on-accent);
+                background: var(--btn-primary-bg);
+                color: var(--btn-primary-fg);
                 display: flex; align-items: center; justify-content: center;
-                transition: filter 0.15s ease, box-shadow 0.15s ease;
+                transition: background 0.15s ease;
             }
             .list-header button .material-symbols-outlined { font-size: 22px; }
-            .list-header button:hover { filter: brightness(1.06); box-shadow: var(--accent-glow); }
+            .list-header button:hover { background: var(--btn-primary-hover); }
             .list-header button:disabled { filter: grayscale(1) opacity(0.5); box-shadow: none; cursor: not-allowed; }
 
             .vehicle-list {
@@ -312,8 +312,8 @@ export class GloveboxView extends LitElement {
                 transition: background 0.15s ease;
             }
             .vehicle-icon .material-symbols-outlined { font-size: 22px; color: var(--on-surface-variant); }
-            .vehicle-card.active .vehicle-icon { background: var(--accent-soft); }
-            .vehicle-card.active .vehicle-icon .material-symbols-outlined { color: var(--accent-ink); }
+            .vehicle-card.active .vehicle-icon { background: var(--selected-bg); }
+            .vehicle-card.active .vehicle-icon .material-symbols-outlined { color: var(--selected-fg); }
 
             .vehicle-meta { flex: 1; min-width: 0; }
             .vehicle-meta h3 {
@@ -404,24 +404,24 @@ export class GloveboxView extends LitElement {
                 min-height: 36px;
                 padding: 0 14px 0 16px;
                 border-radius: var(--radius-full);
-                background: var(--brand-gradient);
-                color: var(--on-accent);
+                background: var(--btn-primary-bg);
+                color: var(--btn-primary-fg);
                 font: 600 13px/18px var(--font-body);
                 text-decoration: none;
                 display: inline-flex;
                 align-items: center;
                 gap: 6px;
-                transition: filter 0.15s ease, box-shadow 0.15s ease;
+                transition: background 0.15s ease;
             }
-            .perms-banner a.grant:hover { filter: brightness(1.06); box-shadow: var(--accent-glow); }
+            .perms-banner a.grant:hover { background: var(--btn-primary-hover); }
 
             .filter-row { margin-bottom: 28px; display: flex; gap: 8px; }
             /* The (only) filter is selected: toggled-control treatment. */
             .filter-pill {
                 min-height: 32px;
                 padding: 0 14px;
-                background: var(--accent-soft-strong);
-                color: var(--accent-ink);
+                background: var(--selected-bg);
+                color: var(--selected-fg);
                 border-radius: var(--radius-full);
                 font: 500 13px/18px var(--font-body);
                 display: inline-flex; align-items: center; gap: 6px;

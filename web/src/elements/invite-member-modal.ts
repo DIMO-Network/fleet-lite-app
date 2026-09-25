@@ -134,8 +134,8 @@ export class InviteMemberModal extends LitElement {
             }
             .radio-row label.option:hover { background: var(--surface-container-high); }
             .radio-row label.option:has(input:checked) {
-                background: var(--accent-soft);
-                box-shadow: inset 0 0 0 1px var(--accent-soft-strong);
+                background: var(--surface-container-high);
+                box-shadow: inset 0 0 0 1.5px var(--primary);
             }
             .radio-row label.option input { margin-top: 3px; flex: none; }
             .radio-row .option-text { display: flex; flex-direction: column; gap: 2px; }
@@ -185,8 +185,8 @@ export class InviteMemberModal extends LitElement {
                 font: 600 14px/20px var(--font-body);
                 transition: background 0.15s ease, border-color 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease;
             }
-            .actions .primary { background: var(--brand-gradient); color: var(--on-accent); }
-            .actions .primary:hover:not(:disabled) { filter: brightness(1.06); box-shadow: var(--accent-glow); }
+            .actions .primary { background: var(--btn-primary-bg); color: var(--btn-primary-fg); }
+            .actions .primary:hover:not(:disabled) { background: var(--btn-primary-hover); }
             .actions .primary:disabled { filter: grayscale(1); opacity: 0.5; cursor: not-allowed; }
             .actions .ghost {
                 padding: 0 16px; font-weight: 500;

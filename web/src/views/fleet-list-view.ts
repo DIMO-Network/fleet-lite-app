@@ -629,8 +629,8 @@ export class FleetListView extends LitElement {
             .show-hidden-btn:hover { background: var(--surface-container-highest); color: var(--on-surface); }
             .show-hidden-btn.active,
             .show-hidden-btn.active:hover {
-                background: var(--accent-soft-strong);
-                color: var(--accent-ink);
+                background: var(--selected-bg);
+                color: var(--selected-fg);
             }
             .show-hidden-btn .material-symbols-outlined { font-size: 18px; }
             .show-hidden-btn .hidden-count { font-weight: 600; }

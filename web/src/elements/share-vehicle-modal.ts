@@ -471,7 +471,7 @@ export class ShareVehicleModal extends LitElement {
                 background: var(--surface-container-highest); color: var(--on-surface);
             }
             .durations button.selected {
-                background: var(--accent-soft-strong); color: var(--accent-ink);
+                background: var(--selected-bg); color: var(--selected-fg);
             }
 
             .existing { margin-top: 28px; }
@@ -540,9 +540,9 @@ export class ShareVehicleModal extends LitElement {
                 background: color-mix(in srgb, var(--accent) 40%, transparent);
             }
             .existing li .act button.go {
-                background: var(--brand-gradient); color: var(--on-accent); font-weight: 600;
+                background: var(--btn-primary-bg); color: var(--btn-primary-fg); font-weight: 600;
             }
-            .existing li .act button.go:hover:not(:disabled) { filter: brightness(1.06); background: var(--brand-gradient); }
+            .existing li .act button.go:hover:not(:disabled) { background: var(--btn-primary-hover); }
             /* Disabled-and-greyed says "you can't", not "it's working". The
                pulse is what distinguishes a job in flight from a control that
                is merely off, and it stops for anyone who has asked motion to. */
@@ -583,8 +583,8 @@ export class ShareVehicleModal extends LitElement {
                 border: 1px solid var(--outline-variant);
             }
             .footer .cancel:hover:not(:disabled) { background: var(--surface-container-highest); border-color: var(--outline); }
-            .footer .confirm { background: var(--brand-gradient); color: var(--on-accent); }
-            .footer .confirm:hover:not(:disabled) { filter: brightness(1.06); box-shadow: var(--accent-glow); }
+            .footer .confirm { background: var(--btn-primary-bg); color: var(--btn-primary-fg); }
+            .footer .confirm:hover:not(:disabled) { background: var(--btn-primary-hover); }
             .footer button:disabled { opacity: 0.5; cursor: not-allowed; }
             .footer .confirm:disabled { filter: grayscale(1); }
         `,

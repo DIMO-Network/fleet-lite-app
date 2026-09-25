@@ -9,8 +9,11 @@ import { css } from 'lit';
  * Token roles:
  *  - `--primary` is the high-emphasis *ink* (headings, key values). It is not
  *    the action color.
- *  - `--accent` / `--brand-gradient` are the action + "live" color: primary
- *    buttons, active states, selected controls, online markers.
+ *  - `--accent` is the "live" color: selected controls, online markers.
+ *    `--brand-gradient` is kept for brand moments only (sign-in, onboarding,
+ *    progress fills) — it is too loud for everyday actions.
+ *  - `--btn-primary-*` is the primary action: solid ink, the inverse of the
+ *    surface, so it stands out without competing with data colors.
  *  - `--accent-ink` is the accent when it has to be read as text on a surface
  *    (mint on white fails contrast, so light mode deepens it).
  *  - `--focus-ring` is the keyboard-focus outline color; light mode uses a
@@ -157,12 +160,12 @@ export const sharedStyles = css`
         min-height: 40px;
         padding: 0 18px;
         border-radius: var(--radius-full);
-        background: var(--brand-gradient);
-        color: var(--on-accent);
+        background: var(--btn-primary-bg);
+        color: var(--btn-primary-fg);
         font: 600 14px/20px var(--font-body);
-        transition: filter 0.15s ease, box-shadow 0.15s ease;
+        transition: background 0.15s ease;
     }
-    .btn-primary:hover { filter: brightness(1.06); box-shadow: var(--accent-glow); }
+    .btn-primary:hover { background: var(--btn-primary-hover); }
     .btn-primary:disabled { filter: grayscale(1) opacity(0.5); box-shadow: none; cursor: not-allowed; }
 
     .btn-secondary {
@@ -258,6 +261,15 @@ const documentStyles = `
         --accent-glow: 0 0 0 1px rgba(70, 241, 228, 0.35), 0 6px 24px -6px rgba(70, 241, 228, 0.45);
         /* Keyboard focus outline (>=3:1 against every surface). */
         --focus-ring: #46F1E4;
+        /* Toggled/selected controls (filters, segmented options, map tools):
+           inverse ink, so selection never reads as a status color. Resolves
+           per theme through the inverse-* roles. */
+        --selected-bg: var(--inverse-surface);
+        --selected-fg: var(--inverse-on-surface);
+        /* Primary action: solid ink, inverse of the surface. */
+        --btn-primary-bg: #F6F7F7;
+        --btn-primary-fg: #111214;
+        --btn-primary-hover: #FFFFFF;
 
         /* ---------------- Status ---------------- */
         --positive: #36DF71;
@@ -366,6 +378,9 @@ const documentStyles = `
         --accent-glow: 0 0 0 1px rgba(34, 199, 186, 0.35), 0 6px 20px -8px rgba(34, 199, 186, 0.55);
         /* 5.2:1 on white, 4.3:1 on the canvas. */
         --focus-ring: #0B7A72;
+        --btn-primary-bg: #131417;
+        --btn-primary-fg: #FFFFFF;
+        --btn-primary-hover: #2E3236;
 
         --positive: #1B8842;
         --warning: #B75B0A;

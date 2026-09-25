@@ -441,8 +441,8 @@ export class VehicleTripsPanel extends LitElement {
                 flex-shrink: 0;
             }
             .trip-entry.selected {
-                background: var(--accent-soft);
-                box-shadow: inset 3px 0 0 var(--accent);
+                background: var(--surface-container-high);
+                box-shadow: inset 3px 0 0 var(--primary);
             }
             .trip-row-wrap {
                 display: flex;

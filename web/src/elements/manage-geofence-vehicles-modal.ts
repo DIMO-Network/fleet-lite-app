@@ -142,8 +142,8 @@ export class ManageGeofenceVehiclesModal extends LitElement {
                 transition: background 0.15s ease, color 0.15s ease;
             }
             .toggle .material-symbols-outlined { font-size: 20px; }
-            .toggle:hover { background: var(--accent-soft); color: var(--accent-ink); }
-            .toggle.member { background: var(--accent-soft-strong); color: var(--accent-ink); }
+            .toggle:hover { background: var(--surface-container-highest); color: var(--on-surface); }
+            .toggle.member { background: var(--selected-bg); color: var(--selected-fg); }
             .toggle:disabled { opacity: 0.5; cursor: progress; }
 
             .empty-state { color: var(--on-surface-variant); font: var(--type-body-sm); padding: 24px; text-align: center; }

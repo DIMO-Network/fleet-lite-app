@@ -163,11 +163,11 @@ export class CreateGeofenceModal extends LitElement {
                 transition: background 0.15s ease;
             }
             .group-row:hover { background: var(--surface-container-high); }
-            .group-row.selected { background: var(--accent-soft); }
+            .group-row.selected { background: var(--surface-container-high); box-shadow: inset 0 0 0 1.5px var(--primary); }
             .group-row .dot { width: 10px; height: 10px; border-radius: var(--radius-full); flex-shrink: 0; }
             .group-row .gname { flex: 1; font: var(--type-body-sm); color: var(--on-surface); }
             .group-row.selected .gname { color: var(--primary); font-weight: 500; }
-            .group-row .check { color: var(--accent-ink); font-size: 20px; }
+            .group-row .check { color: var(--primary); font-size: 20px; }
 
             .meta-line {
                 display: inline-flex; align-items: center; gap: 6px;

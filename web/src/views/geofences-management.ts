@@ -385,7 +385,7 @@ export class GeofencesManagementView extends LitElement {
                 transition: background 0.15s ease, color 0.15s ease;
             }
             .toggle-btn:hover:not(:disabled):not(.active) { background: var(--surface-container-high); }
-            .toggle-btn.active { background: var(--accent-soft-strong); color: var(--accent-ink); }
+            .toggle-btn.active { background: var(--selected-bg); color: var(--selected-fg); }
             .toggle-btn:disabled { opacity: 0.5; cursor: not-allowed; }
             .toggle-btn .material-symbols-outlined { font-size: 20px; }
 
@@ -469,7 +469,7 @@ export class GeofencesManagementView extends LitElement {
                 transition: background 0.15s ease;
             }
             .gf-card:hover { background: var(--surface-container-high); }
-            .gf-card.selected { background: var(--accent-soft); }
+            .gf-card.selected { background: var(--surface-container-high); box-shadow: inset 0 0 0 1.5px var(--primary); }
             .gf-head { display: flex; align-items: center; gap: 10px; }
             .gf-head .dot {
                 width: 10px; height: 10px; border-radius: var(--radius-full); flex-shrink: 0;

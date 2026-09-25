@@ -211,13 +211,13 @@ export class ChargingView extends LitElement {
                 min-height: 40px;
                 padding: 0 18px;
                 border-radius: var(--radius-full);
-                background: var(--brand-gradient);
-                color: var(--on-accent);
+                background: var(--btn-primary-bg);
+                color: var(--btn-primary-fg);
                 font: 600 14px/20px var(--font-body);
                 white-space: nowrap;
-                transition: filter 0.15s ease, box-shadow 0.15s ease;
+                transition: background 0.15s ease;
             }
-            .export-btn:hover { filter: brightness(1.06); box-shadow: var(--accent-glow); }
+            .export-btn:hover { background: var(--btn-primary-hover); }
             .export-btn:disabled { filter: grayscale(1) opacity(0.5); box-shadow: none; cursor: not-allowed; }
 
             .settings-form {
