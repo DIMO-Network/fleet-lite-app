@@ -269,6 +269,16 @@ export class UploadDocumentModal extends LitElement {
         const f = input.files?.[0];
         if (!f) return;
         this.file = f;
+        await this.runExtract(f);
+    }
+
+    /**
+     * Read the document and move to review. Clears any earlier result first:
+     * review renders "Reading document…" for as long as there is none, so a
+     * stale result would skip the wait and a missing one must mean "running".
+     */
+    private async runExtract(f: File) {
+        this.extractResult = null;
         this.step = 'review';
         this.errorMessage = '';
         try {
@@ -427,13 +437,32 @@ export class UploadDocumentModal extends LitElement {
         `;
     }
 
+    /**
+     * Try again from the error step. The step that failed decides what to
+     * retry: with no extract result, reading failed, so read again — returning
+     * to review alone would show "Reading document…" with nothing running,
+     * forever. With a result, the upload failed, so go back to review and let
+     * the member resubmit without re-reading.
+     */
+    private retry() {
+        if (!this.file) {
+            this.step = 'pick';
+            this.errorMessage = '';
+        } else if (!this.extractResult) {
+            void this.runExtract(this.file);
+        } else {
+            this.step = 'review';
+            this.errorMessage = '';
+        }
+    }
+
     private renderError() {
         return html`
             <h2>${msg('Something went wrong')}</h2>
             <div class="error-text">${this.errorMessage || msg('Unknown error')}</div>
             <div class="actions">
                 <button class="ghost" @click=${this.dispatchClose}>${msg('Close')}</button>
-                <button class="primary" @click=${() => { this.step = this.file ? 'review' : 'pick'; this.errorMessage = ''; }}>${msg('Try again')}</button>
+                <button class="primary" @click=${this.retry}>${msg('Try again')}</button>
             </div>
         `;
     }
