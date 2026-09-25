@@ -1,7 +1,10 @@
 // api/internal/service/charging_detection_test.go
 package service
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func segment(startTS, endTS string, lat, lng float64, energyFirst, energyLast, avgPower, socFirst, socLast *float64) Segment {
 	seg := Segment{
@@ -108,5 +111,33 @@ func TestIsNoise_MeasurableEnergyKeptEvenIfShort(t *testing.T) {
 	seg := segment("2026-09-01T08:00:00Z", "2026-09-01T08:00:30Z", 0, 0, f64ptr(50.0), f64ptr(50.06), nil, nil, nil)
 	if s := sessionFromSegment(seg); s.isNoise() {
 		t.Fatalf("isNoise() = true, want false (measurable energy transferred)")
+	}
+}
+
+func TestSettledUntil_NoOngoingCoversWholeWindow(t *testing.T) {
+	to := time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC)
+	segs := []Segment{segment("2026-09-25T08:00:00Z", "2026-09-25T09:00:00Z", 0, 0, nil, nil, nil, nil, nil)}
+	if got := settledUntil(segs, to); !got.Equal(to) {
+		t.Fatalf("settledUntil = %v, want %v", got, to)
+	}
+}
+
+func TestSettledUntil_StopsAtOngoingStart(t *testing.T) {
+	to := time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC)
+	done := segment("2026-09-25T08:00:00Z", "2026-09-25T09:00:00Z", 0, 0, nil, nil, nil, nil, nil)
+	live := segment("2026-09-25T11:00:00Z", "2026-09-25T11:55:00Z", 0, 0, nil, nil, nil, nil, nil)
+	live.IsOngoing = true
+	want := time.Date(2026, 9, 25, 11, 0, 0, 0, time.UTC)
+	if got := settledUntil([]Segment{done, live}, to); !got.Equal(want) {
+		t.Fatalf("settledUntil = %v, want %v", got, want)
+	}
+}
+
+func TestSettledUntil_UnparseableOngoingStartCoversNothing(t *testing.T) {
+	to := time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC)
+	live := segment("garbage", "", 0, 0, nil, nil, nil, nil, nil)
+	live.IsOngoing = true
+	if got := settledUntil([]Segment{live}, to); !got.IsZero() {
+		t.Fatalf("settledUntil = %v, want zero", got)
 	}
 }

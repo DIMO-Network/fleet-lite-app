@@ -14,6 +14,16 @@
       // logged-out visitor goes straight to login.html instead of letting
       // app-root mount, fire /vehicles, get rejected, and flash UI.
       (function () {
+        // A DIMO grant returns here with the *grantor's* token and email in the
+        // query. They are not ours — never store them; drop them from the
+        // address bar and history.
+        var q = new URLSearchParams(location.search);
+        if (q.has('token') || q.has('email')) {
+          q.delete('token');
+          q.delete('email');
+          var rest = q.toString();
+          history.replaceState(null, '', location.pathname + (rest ? '?' + rest : '') + location.hash);
+        }
         var t = localStorage.getItem('token');
         var expired = true;
         if (t) {

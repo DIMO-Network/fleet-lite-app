@@ -25,7 +25,7 @@ export class DocumentDetailModal extends LitElement {
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                background: color-mix(in srgb, var(--canvas) 70%, transparent);
+                background: var(--scrim);
                 backdrop-filter: blur(6px);
                 -webkit-backdrop-filter: blur(6px);
             }

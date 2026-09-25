@@ -85,3 +85,27 @@ func (s detectedChargingSession) isNoise() bool {
 	longEnough := s.endedAt.Sub(s.startedAt) >= minChargingSessionDuration
 	return (energy == nil || *energy <= 0) && !longEnough
 }
+
+// settledUntil returns how far a scan up to `to` can be recorded as covered.
+// A session still in progress (isOngoing) has no real end yet: persisting it
+// would freeze its latest reading as "ended", and marking its window scanned
+// would stop it from ever being re-read. Coverage therefore stops at the
+// earliest ongoing session's start, so the next request re-scans from there
+// and picks the session up once it has finished. An unparseable start gives
+// the zero time — the caller then records nothing, which only costs a rescan.
+func settledUntil(segments []Segment, to time.Time) time.Time {
+	settled := to
+	for _, seg := range segments {
+		if !seg.IsOngoing {
+			continue
+		}
+		start, err := time.Parse(time.RFC3339, seg.Start.Timestamp)
+		if err != nil {
+			return time.Time{}
+		}
+		if start.Before(settled) {
+			settled = start
+		}
+	}
+	return settled
+}

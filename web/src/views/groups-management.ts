@@ -120,7 +120,7 @@ export class GroupsManagementView extends LitElement {
                 background: var(--surface-container-high);
                 transition: box-shadow 0.15s ease;
             }
-            .search-wrap:focus-within { box-shadow: 0 0 0 2px var(--accent-soft-strong); }
+            .search-wrap:focus-within { box-shadow: 0 0 0 2px var(--focus-ring); }
             .search-wrap > .material-symbols-outlined { font-size: 18px; color: var(--on-surface-variant); }
             .search-wrap input {
                 background: none;
@@ -131,6 +131,8 @@ export class GroupsManagementView extends LitElement {
                 flex: 1;
                 min-width: 0;
             }
+            /* The pill draws the ring; drop the global input focus halo. */
+            .search-wrap input:focus-visible { box-shadow: none; }
             .search-wrap input::placeholder { color: var(--on-surface-variant); }
             .search-wrap input::-webkit-search-cancel-button { display: none; }
             .clear-btn {

@@ -5,7 +5,7 @@ import { sharedStyles } from '../global-styles.ts';
 import { ApiService } from '../services/api-service.ts';
 import { JobTimeoutError, SharingService } from '../services/sharing-service.ts';
 import { shortWallet } from '../utils/share-blocker.ts';
-import { missingStandardPermissions, remainingShareDays, SacdPermission } from '../utils/sacd-permissions.ts';
+import { extraPermissions, missingStandardPermissions, remainingShareDays, SacdPermission } from '../utils/sacd-permissions.ts';
 
 /** One existing on-chain grant, read back from identity-api. */
 interface ExistingShare {
@@ -286,6 +286,9 @@ export class ShareVehicleModal extends LitElement {
         } catch (err) {
             if (err instanceof JobTimeoutError) {
                 // Same reasoning as revoke: we stopped waiting, the job did not.
+                // Treat the grantee as upgraded so the row doesn't offer a
+                // second share job while the first is still running.
+                this.upgraded = new Set(this.upgraded).add(s.grantee.toLowerCase());
                 this.noticeMessage = err.message;
                 await this.loadFromChain();
             } else {
@@ -369,7 +372,7 @@ export class ShareVehicleModal extends LitElement {
             :host {
                 position: fixed; inset: 0; z-index: 100;
                 display: flex; align-items: center; justify-content: center;
-                background: color-mix(in srgb, var(--canvas) 70%, transparent);
+                background: var(--scrim);
                 backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
             }
             .card {
@@ -444,7 +447,7 @@ export class ShareVehicleModal extends LitElement {
             input[type='text']::placeholder { color: var(--on-surface-variant); }
             input[type='text']:hover:not(:disabled):not(:focus-visible) { border-color: var(--outline); }
             input[type='text']:focus-visible {
-                outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
+                outline: none; border-color: var(--focus-ring); box-shadow: 0 0 0 3px var(--accent-soft);
             }
             input[type='text'].invalid,
             input[type='text'].invalid:hover { border-color: var(--error); }
@@ -628,6 +631,9 @@ export class ShareVehicleModal extends LitElement {
         const missing = missingStandardPermissions(s.permissions);
         const limited = !!missing && missing.length > 0 && !this.upgraded.has(s.grantee.toLowerCase());
         const missingList = limited ? missing.map((p) => this.permissionLabel(p)).join(', ') : '';
+        // A re-share writes exactly the standard mask, so anything beyond it
+        // on this grant is lost. Say so before they confirm.
+        const lostList = limited ? extraPermissions(s.permissions).map((p) => this.permissionLabel(p)).join(', ') : '';
         // A share in flight, another row's job in flight, or a vehicle that
         // cannot be signed for at all: all make these controls a no-op, so
         // they are off rather than merely unhelpful.
@@ -696,7 +702,9 @@ export class ShareVehicleModal extends LitElement {
                 ${limited
                     ? html`<span class="missing ${upArmed ? 'confirm' : ''}">
                           ${upArmed
-                              ? msg('They will be able to see this vehicle’s data and send commands to it.')
+                              ? lostList
+                                  ? msg(str`Adds ${missingList}. Removes ${lostList}.`)
+                                  : msg(str`Adds ${missingList}.`)
                               : msg(str`Limited access: missing ${missingList}`)}
                       </span>`
                     : nothing}

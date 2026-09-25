@@ -17,7 +17,7 @@ import {
     createFleetMap, applyTileTheme, createVehicleClusterGroup,
     seedLocationsFromDb, fetchFleetLocations,
     VEHICLE_MARKER_STYLE, VEHICLE_MARKER_STYLE_HOVER, VEHICLE_MARKER_STYLE_SELECTED, VEHICLE_MARKER_STYLE_HIDDEN,
-    MAP_COLORS,
+    tripMapStyles,
 } from '../utils/fleet-map.ts';
 import { brandLogoUrl } from '../utils/brand-logo.ts';
 import { contrastingBadgeBackground } from '../utils/logo-color.ts';
@@ -79,6 +79,11 @@ export class FleetOverviewView extends LitElement {
         if (!this.leafletMap) return;
         const mapEl = this.renderRoot.querySelector<HTMLElement>('.map');
         this.tileLayer = applyTileTheme(this.leafletMap, this.tileLayer, mapEl, theme);
+        const trip = tripMapStyles(theme);
+        this.tripRouteLayer?.setStyle({ color: trip.route });
+        const [start, end] = this.tripEndpointLayers;
+        start?.setStyle(trip.start);
+        end?.setStyle(trip.end);
     }
 
     private centerMap() {
@@ -189,15 +194,16 @@ export class FleetOverviewView extends LitElement {
         this.clearTripRoute();
         const points = e.detail.points;
         if (!points || points.length === 0 || !this.leafletMap) return;
+        const trip = tripMapStyles(themeService.current);
         this.tripRouteLayer = L.polyline(points, {
-            color: MAP_COLORS.sky,
+            color: trip.route,
             weight: 4,
             opacity: 0.9,
         }).addTo(this.leafletMap);
         // Start/end dots so direction is readable at a glance.
         this.tripEndpointLayers = [
-            L.circleMarker(points[0], { radius: 5, fillColor: MAP_COLORS.mint, color: MAP_COLORS.ink, weight: 2, fillOpacity: 1 }).addTo(this.leafletMap),
-            L.circleMarker(points[points.length - 1], { radius: 5, fillColor: MAP_COLORS.sky, color: '#ffffff', weight: 2, fillOpacity: 1 }).addTo(this.leafletMap),
+            L.circleMarker(points[0], trip.start).addTo(this.leafletMap),
+            L.circleMarker(points[points.length - 1], trip.end).addTo(this.leafletMap),
         ];
         this.leafletMap.fitBounds(this.tripRouteLayer.getBounds(), { padding: [40, 40], maxZoom: 15 });
     }
@@ -916,7 +922,7 @@ export class FleetOverviewView extends LitElement {
                 border-radius: var(--radius-md);
                 background: var(--surface-container-high);
             }
-            .search-filter:focus-within { box-shadow: 0 0 0 2px var(--accent-soft-strong); }
+            .search-filter:focus-within { box-shadow: 0 0 0 2px var(--focus-ring); }
             .search-filter > .material-symbols-outlined {
                 font-size: 18px;
                 color: var(--on-surface-variant);
@@ -931,6 +937,8 @@ export class FleetOverviewView extends LitElement {
                 font: var(--type-body-sm);
             }
             .search-filter input:focus { outline: none; }
+            /* The pill draws the ring; drop the global input focus halo. */
+            .search-filter input:focus-visible { box-shadow: none; }
             .search-filter input::placeholder { color: var(--on-surface-variant); }
             /* Hide the native WebKit clear button — we render our own. */
             .search-filter input::-webkit-search-cancel-button { display: none; }

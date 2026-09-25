@@ -559,7 +559,7 @@ export class FleetListView extends LitElement {
                 max-width: 360px;
                 transition: box-shadow 0.15s ease;
             }
-            .search-wrap:focus-within { box-shadow: 0 0 0 2px var(--accent-soft-strong); }
+            .search-wrap:focus-within { box-shadow: 0 0 0 2px var(--focus-ring); }
             .search-wrap > .material-symbols-outlined { font-size: 18px; color: var(--on-surface-variant); flex-shrink: 0; }
             .search-wrap input {
                 background: none;

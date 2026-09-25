@@ -65,6 +65,19 @@ export function missingStandardPermissions(hex: string | null | undefined): Sacd
     return STANDARD_SHARE_PERMISSIONS.filter((p) => !hasPermission(mask, p));
 }
 
+/**
+ * Permissions this grant has that the standard set does not — what a re-share
+ * would take away, since it overwrites the whole mask. Today that can only be
+ * APPROXIMATE_LOCATION; anything newer than the enum knows is ignored rather
+ * than named wrongly.
+ */
+export function extraPermissions(hex: string | null | undefined): SacdPermission[] {
+    const mask = parsePermissionMask(hex);
+    return (Object.values(SacdPermission) as SacdPermission[]).filter(
+        (p) => !STANDARD_SHARE_PERMISSIONS.includes(p) && hasPermission(mask, p),
+    );
+}
+
 /** Expiries further out than this are SACD's "indefinite" (set forty years out). */
 const INDEFINITE_AFTER_YEARS = 10;
 

@@ -13,6 +13,8 @@ import { css } from 'lit';
  *    buttons, active states, selected controls, online markers.
  *  - `--accent-ink` is the accent when it has to be read as text on a surface
  *    (mint on white fails contrast, so light mode deepens it).
+ *  - `--focus-ring` is the keyboard-focus outline color; light mode uses a
+ *    deep teal so the ring stays >=3:1 on both white sheets and the canvas.
  *  - `--type-label-caps` is kept by name for compatibility, but it is now a
  *    sentence-case sans label, not uppercase mono.
  */
@@ -69,7 +71,7 @@ export const sharedStyles = css`
     }
 
     *:focus-visible {
-        outline: 2px solid var(--accent);
+        outline: 2px solid var(--focus-ring);
         outline-offset: 2px;
     }
 
@@ -131,7 +133,7 @@ export const sharedStyles = css`
     }
     :where(input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']), select, textarea):focus-visible {
         outline: none;
-        border-color: var(--accent);
+        border-color: var(--focus-ring);
         box-shadow: 0 0 0 3px var(--accent-soft);
     }
     :where(input[type='checkbox'], input[type='radio']) {
@@ -254,6 +256,8 @@ const documentStyles = `
         --accent-soft: rgba(70, 241, 228, 0.12);
         --accent-soft-strong: rgba(70, 241, 228, 0.28);
         --accent-glow: 0 0 0 1px rgba(70, 241, 228, 0.35), 0 6px 24px -6px rgba(70, 241, 228, 0.45);
+        /* Keyboard focus outline (>=3:1 against every surface). */
+        --focus-ring: #46F1E4;
 
         /* ---------------- Status ---------------- */
         --positive: #36DF71;
@@ -354,11 +358,14 @@ const documentStyles = `
         --brand-glow: radial-gradient(60% 50% at 35% 40%, rgba(140, 208, 255, 0.28), transparent 70%), radial-gradient(55% 50% at 65% 60%, rgba(70, 241, 228, 0.22), transparent 70%);
 
         --accent: #22C7BA;
-        --accent-ink: #0B7A72;
+        /* >=4.5:1 on white, surface-container-*, the canvas and accent-soft(-strong) over each. */
+        --accent-ink: #07635C;
         --on-accent: #06201E;
         --accent-soft: rgba(34, 199, 186, 0.14);
         --accent-soft-strong: rgba(34, 199, 186, 0.3);
         --accent-glow: 0 0 0 1px rgba(34, 199, 186, 0.35), 0 6px 20px -8px rgba(34, 199, 186, 0.55);
+        /* 5.2:1 on white, 4.3:1 on the canvas. */
+        --focus-ring: #0B7A72;
 
         --positive: #1B8842;
         --warning: #B75B0A;
@@ -404,6 +411,7 @@ const documentStyles = `
         --inverse-primary: #C4C7C7;
 
         --secondary: #B75B0A;
+        --on-secondary: #FFFFFF;
         --secondary-container: #FCDEC4;
         --on-secondary-container: #4A2000;
 

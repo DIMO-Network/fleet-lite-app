@@ -61,7 +61,7 @@ export class InviteMemberModal extends LitElement {
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                background: color-mix(in srgb, var(--canvas) 70%, transparent);
+                background: var(--scrim);
                 backdrop-filter: blur(6px);
                 -webkit-backdrop-filter: blur(6px);
             }
@@ -116,7 +116,7 @@ export class InviteMemberModal extends LitElement {
             .field select:hover:not(:focus-visible) { border-color: var(--outline); }
             .field input[type="email"]:focus-visible, .field select:focus-visible {
                 outline: none;
-                border-color: var(--accent);
+                border-color: var(--focus-ring);
                 box-shadow: 0 0 0 3px var(--accent-soft);
             }
 
@@ -159,7 +159,7 @@ export class InviteMemberModal extends LitElement {
             }
             .group-search input::placeholder { color: var(--on-surface-variant); }
             .group-search input:focus-visible { box-shadow: none; }
-            .group-search:focus-within { box-shadow: inset 0 -2px 0 var(--accent); }
+            .group-search:focus-within { box-shadow: inset 0 -2px 0 var(--focus-ring); }
             .group-list { max-height: 200px; overflow-y: auto; padding: 4px; }
             .group-row {
                 display: flex; align-items: center; gap: 10px;

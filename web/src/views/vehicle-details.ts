@@ -18,7 +18,7 @@ import {
 } from '../utils/units.ts';
 import { tripDurationMs } from '../utils/trips.ts';
 import { SettingsService } from '../services/settings-service.ts';
-import { buildShareVehiclesUrl, pickGrantRedirectUri } from '../utils/dimo-permissions.ts';
+import { buildShareVehiclesUrl, grantFallbackRedirectUri, pickGrantRedirectUri } from '../utils/dimo-permissions.ts';
 import { LicenseService } from '../services/license-service.ts';
 import '../elements/vehicle-trips-panel.ts';
 import '../elements/vehicle-behavior-panel.ts';
@@ -167,21 +167,23 @@ export class VehicleDetailsView extends LitElement {
      * still in flight or the API didn't name a license.
      */
     private grantUrl(): string {
-        if (this.grantRedirect === null) return '';
+        // Unknown (lookup pending) or unusable: no link, never a guessed redirect.
+        if (!this.grantRedirect) return '';
         if (!this.loginUrl || !this.telemetryDevLicense) return '';
         return buildShareVehiclesUrl({
             loginUrl: this.loginUrl,
             clientId: this.telemetryDevLicense,
-            redirectUri: this.grantRedirect ?? undefined,
+            redirectUri: this.grantRedirect,
             vehicles: [this.tokenId],
         });
     }
 
     /**
      * Look up where a grant to `license` may return (see pickGrantRedirectUri).
-     * undefined = unknown (lookup pending or failed): the link keeps the default
-     * redirect. null = the license has nothing on our origin, so a link would
-     * only reach DIMO's credentials error; the banner explains the fix instead.
+     * undefined = lookup pending: no link yet. A failed lookup falls back to
+     * the app root, never the login page. null = the license has no usable
+     * URI on our origin, so a link would only reach DIMO's credentials error;
+     * the banner explains the fix instead.
      */
     private resolveGrantRedirect(license: string) {
         this.grantRedirect = undefined;
@@ -191,7 +193,9 @@ export class VehicleDetailsView extends LitElement {
             .then((uris) => {
                 if (this.telemetryDevLicense === license) this.grantRedirect = pickGrantRedirectUri(uris, location.origin);
             })
-            .catch(() => { /* unknown: keep the default redirect */ });
+            .catch(() => {
+                if (this.telemetryDevLicense === license) this.grantRedirect = grantFallbackRedirectUri();
+            });
     }
 
     disconnectedCallback() {
@@ -375,8 +379,29 @@ export class VehicleDetailsView extends LitElement {
                 box-shadow: var(--shadow-sm);
             }
             header.top-bar .right { display: flex; align-items: center; gap: 16px; }
+            /* Phones: title + tenant switcher on the first row, the section
+               control full-width underneath (scrolls sideways if a locale's
+               labels run long). */
             @media (max-width: 768px) {
-                header.top-bar nav { display: none; }
+                header.top-bar {
+                    height: auto;
+                    min-height: var(--top-bar-height);
+                    flex-wrap: wrap;
+                    gap: 8px 12px;
+                    padding-top: 12px;
+                    padding-bottom: 12px;
+                }
+                header.top-bar .left { display: contents; }
+                header.top-bar h2 { flex: 1 1 0; min-width: 0; }
+                header.top-bar nav {
+                    order: 1;
+                    flex: 1 0 100%;
+                    min-width: 0;
+                    overflow-x: auto;
+                    scrollbar-width: none;
+                }
+                header.top-bar nav::-webkit-scrollbar { display: none; }
+                header.top-bar nav a { flex: 1 0 auto; text-align: center; white-space: nowrap; }
             }
 
             .canvas {
@@ -521,6 +546,10 @@ export class VehicleDetailsView extends LitElement {
 
             /* Tab jumps land below the sticky header, not under it. */
             #trips, #behavior, #status { scroll-margin-top: calc(var(--top-bar-height) + 8px); }
+            /* The phone header wraps to two rows (~96-104px). */
+            @media (max-width: 768px) {
+                #trips, #behavior, #status { scroll-margin-top: 112px; }
+            }
 
             .col-12 { grid-column: span 12; }
             .col-6  { grid-column: span 6; }
@@ -533,7 +562,9 @@ export class VehicleDetailsView extends LitElement {
             /* Section titles: sentence case headline, not tiny labels. */
             .section-label,
             .section-headline {
-                grid-column: span 12;
+                /* Full row in any column count: span 12 in the phones' 1fr grid
+                   adds 11 implicit tracks and scrolls the page sideways. */
+                grid-column: 1 / -1;
                 margin-top: 24px;
                 font: var(--type-headline-md);
                 letter-spacing: -0.01em;
@@ -697,8 +728,9 @@ export class VehicleDetailsView extends LitElement {
             .grant-setup { font: var(--type-body-sm); color: var(--on-surface-variant); max-width: 320px; }
             .grant-setup code { font: 500 12px/16px var(--font-body); color: var(--on-surface); }
             .perms-banner {
-                grid-column: span 12;
+                grid-column: 1 / -1;
                 display: flex;
+                flex-wrap: wrap;
                 align-items: center;
                 gap: 16px;
                 padding: 16px 20px;
@@ -1064,7 +1096,7 @@ export class VehicleDetailsView extends LitElement {
                                     ${msg('Grant permissions')}
                                     <span class="material-symbols-outlined" style="font-size:14px;">open_in_new</span>
                                 </a>
-                            ` : this.grantRedirect === null ? html`<p class="grant-setup">${msg(html`To grant from here, add <code>${location.origin}/login.html</code> to this license’s redirect URIs in the DIMO developer console.`)}</p>` : nothing}
+                            ` : this.grantRedirect === null ? html`<p class="grant-setup">${msg(html`To grant from here, add <code>${location.origin}/</code> to this license’s redirect URIs in the DIMO developer console.`)}</p>` : nothing}
                         </div>
                     ` : nothing}
 

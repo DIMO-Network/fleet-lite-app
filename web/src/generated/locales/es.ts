@@ -13,7 +13,6 @@
 'h3da2e750affa6331': html`VIN detectado <span class="vin">${0}</span>`,
 'h44c5e14d0e764356': html`<b>${0} ${1}</b> recorridos`,
 'h68eb2ca9278bb2bf': html`Suelte un archivo aquí, o <strong>haga clic para elegir</strong>`,
-'h722e55c40677671a': html`Para otorgar permisos desde aquí, agrega <code>${0}/login.html</code> a las URI de redirección de esta licencia en la consola de desarrolladores de DIMO.`,
 'h7d06fca4f9d88ac5': html`<p>Configure <code>DIMO_AUTH_CLIENT_ID</code> en el <code>settings.yaml</code> de la API y registre
                     <code>${0}/login.html</code> como URI de redirección en la
                     <a href="https://console.dimo.org">DIMO Developer Console</a>.</p>`,
@@ -22,6 +21,7 @@
                                         necesita permiso para compartir datos sobre este vehículo antes de que se pueda cargar su lista de documentos.
                                         Los documentos que suba aquí igual se guardan — simplemente aún no puede listarlos ni descargarlos.`,
 'hb34baa507d1a47d6': html`<b>${0}</b> viajes`,
+'hcd12aaf0719d60ee': html`Para otorgar permisos desde aquí, agrega <code>${0}/</code> a las URI de redirección de esta licencia en la consola de desarrolladores de DIMO.`,
 'hd8cd8096d46d8f48': html`
                                     La licencia de desarrollador de fleet-lite <code>${0}</code>
                                     necesita permisos SACD sobre este vehículo antes de poder leer señales de
@@ -255,6 +255,7 @@
 's96a2c98044e2cd3b': `Perfil de usuario`,
 's98743891246c44c9': `Cargando documentos…`,
 's98b3c841368a7b6f': `Otorgue permisos de DIMO para ver documentos de este vehículo.`,
+'s9a6eb470a2e340e7': str`Añade ${0}.`,
 's9a7e860521a14477': `Ingrese una dirección de wallet válida (0x…, 40 caracteres hexadecimales).`,
 's9b7382b7ca7fde6a': `Guardar acceso`,
 's9c82d2018344f8bc': `Sin integración DIMO — vincule un dispositivo para transmitir telemetría`,
@@ -297,6 +298,7 @@
 'sb0d17b84dc5cd2ad': `Combustible`,
 'sb38253b7012e60c5': `Quitar miembro`,
 'sb3be08d826f659c3': `Aún no hay grupos. Cree uno para organizar su flota.`,
+'sb3bf9f75f733f74a': str`Añade ${0}. Quita ${1}.`,
 'sb3cfb42e4f5396be': `La dirección puede ser incorrecta o inaccesible: corrígela e invita de nuevo.`,
 'sb52f6b2e5a4bc127': `Faltantes`,
 'sb64127e4e4f0b575': `Cerrar sesión`,
@@ -343,6 +345,7 @@
 'sd010e4d57061108f': `Correo entregado`,
 'sd01aa11617062a46': str`${0} de ${1} vehículos atravesaron · ${2} pasos`,
 'sd08a6db66b8b4603': `Entrada`,
+'sd0b06e7c54d772ab': `Podrán ver los datos de este vehículo y enviarle comandos.`,
 'sd12e9358e7e366cd': `Aún no hay integración con DIMO`,
 'sd1544db4dc3b46fc': str`Invitaciones anteriores (${0})`,
 'sd1e8f2f9e01188e8': `Acceso limitado a los siguientes grupos:`,
@@ -476,7 +479,6 @@
 's81454e9f6eaf08b6': `Revoking…`,
 'scb489a1a173ac3f0': `Yes`,
 's51621cc0113782ba': str`Revoke access for ${0}`,
-'sd0b06e7c54d772ab': `They will be able to see this vehicle’s data and send commands to it.`,
 's47e52a1832bbfd38': `Share vehicle`,
 's2e5f0579d98a7bbd': str`Give another wallet access to ${0}.`,
 's61aecbc69cddd9fd': `Give another wallet access to this vehicle.`,

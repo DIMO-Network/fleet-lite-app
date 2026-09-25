@@ -30,7 +30,7 @@ export class LoginElement extends LitElement {
             transition: filter 0.15s ease, box-shadow 0.15s ease;
         }
         #loginLink:hover { filter: brightness(1.06); box-shadow: var(--accent-glow); }
-        #loginLink:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+        #loginLink:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
         #loginLink svg {
             width: 18px;
             height: 18px;

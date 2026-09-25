@@ -47,7 +47,7 @@ export class UploadDocumentModal extends LitElement {
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                background: color-mix(in srgb, var(--canvas) 70%, transparent);
+                background: var(--scrim);
                 backdrop-filter: blur(6px);
                 -webkit-backdrop-filter: blur(6px);
             }
@@ -139,7 +139,7 @@ export class UploadDocumentModal extends LitElement {
             .field input[type="text"]:hover:not(:focus-visible) { border-color: var(--outline); }
             .field select:focus-visible, .field input[type="text"]:focus-visible {
                 outline: none;
-                border-color: var(--accent);
+                border-color: var(--focus-ring);
                 box-shadow: 0 0 0 3px var(--accent-soft);
             }
 

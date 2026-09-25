@@ -57,13 +57,11 @@ export class ManageGroupVehiclesModal extends LitElement {
         sharedStyles,
         css`
             :host {
-                /* Panel tone. --surface-overlay is a requested token (white in
-                   light mode); until it exists this falls back to the card tone. */
-                --modal-bg: var(--surface-overlay, var(--surface-container-low));
+                --modal-bg: var(--surface-overlay);
                 position: fixed; inset: 0; z-index: 100;
                 display: flex; align-items: center; justify-content: center;
                 padding: 16px;
-                background: color-mix(in srgb, var(--canvas) 72%, transparent);
+                background: var(--scrim);
                 backdrop-filter: blur(8px);
                 -webkit-backdrop-filter: blur(8px);
             }
@@ -105,7 +103,7 @@ export class ManageGroupVehiclesModal extends LitElement {
                 border: 1px solid var(--outline-variant);
                 transition: border-color 0.15s ease, box-shadow 0.15s ease;
             }
-            .search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+            .search:focus-within { border-color: var(--focus-ring); box-shadow: 0 0 0 3px var(--accent-soft); }
             .search > .material-symbols-outlined { font-size: 18px; color: var(--on-surface-variant); }
             .search input {
                 flex: 1; min-width: 0;
