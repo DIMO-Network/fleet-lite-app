@@ -13,6 +13,7 @@
 'h3da2e750affa6331': html`VIN detectado <span class="vin">${0}</span>`,
 'h44c5e14d0e764356': html`<b>${0} ${1}</b> recorridos`,
 'h68eb2ca9278bb2bf': html`Suelte un archivo aquí, o <strong>haga clic para elegir</strong>`,
+'h722e55c40677671a': html`Para otorgar permisos desde aquí, agrega <code>${0}/login.html</code> a las URI de redirección de esta licencia en la consola de desarrolladores de DIMO.`,
 'h7d06fca4f9d88ac5': html`<p>Configure <code>DIMO_AUTH_CLIENT_ID</code> en el <code>settings.yaml</code> de la API y registre
                     <code>${0}/login.html</code> como URI de redirección en la
                     <a href="https://console.dimo.org">DIMO Developer Console</a>.</p>`,

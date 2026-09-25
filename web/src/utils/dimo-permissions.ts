@@ -26,6 +26,42 @@ export function dimoRedirectUri(): string {
     return location.origin + '/login.html';
 }
 
+/**
+ * Choose which of a license's registered redirect URIs a grant should return
+ * to, or null when none of them is on this app's origin.
+ *
+ * A grant is made to the *fleet's* dev license, not to this app's login
+ * license, and each fleet registered its own redirect list. DIMO login requires
+ * an exact match and answers a mismatch with a generic "issue with the app's
+ * credentials" page — so assuming `/login.html` sends every fleet that
+ * registered only its root (license #472 did) to a dead end.
+ *
+ * Preference: our login page (the page built for DIMO's redirect), then the
+ * origin root, then any other path on our origin. Returned exactly as
+ * registered, trailing slash and all, because the comparison upstream is
+ * exact. Only the same scheme and host count: a lookalike host or plain http
+ * is not ours.
+ *
+ * Landing on a page other than /login.html is safe for a grant: the returned
+ * token is simply not read, and the member stays signed in with their own.
+ */
+export function pickGrantRedirectUri(registered: readonly string[], origin: string): string | null {
+    const ours = registered.filter((uri) => {
+        try {
+            return new URL(uri).origin === origin;
+        } catch {
+            return false;
+        }
+    });
+    const path = (uri: string) => new URL(uri).pathname;
+    return (
+        ours.find((uri) => path(uri) === '/login.html') ??
+        ours.find((uri) => path(uri) === '/') ??
+        ours[0] ??
+        null
+    );
+}
+
 export interface DimoGrantUrlOptions {
     /** Base login host, from GET /public/settings (`loginUrl`). */
     loginUrl: string;
@@ -38,6 +74,8 @@ export interface DimoGrantUrlOptions {
 export interface ShareVehiclesUrlOptions extends DimoGrantUrlOptions {
     /** Token ids to narrow the vehicle picker to. Omit to offer the whole garage. */
     vehicles?: Array<number | string>;
+    /** Where DIMO returns afterwards; must be registered on `clientId`. Defaults to dimoRedirectUri(). */
+    redirectUri?: string;
 }
 
 /**
@@ -64,7 +102,7 @@ export function buildLoginUrl(opts: DimoGrantUrlOptions): string {
 export function buildShareVehiclesUrl(opts: ShareVehiclesUrlOptions): string {
     const params = new URLSearchParams({
         clientId: opts.clientId,
-        redirectUri: dimoRedirectUri(),
+        redirectUri: opts.redirectUri ?? dimoRedirectUri(),
         entryState: 'VEHICLE_MANAGER',
         permissions: opts.permissions ?? DIMO_PERMISSIONS_ALL,
     });
