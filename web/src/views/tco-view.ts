@@ -14,6 +14,11 @@ function formatMoney(n: number): string {
     return n.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
 }
 
+/** Headline figures: whole dollars — cents are noise at display size. */
+function formatMoneyWhole(n: number): string {
+    return n.toLocaleString(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
 function vehicleTitle(v: Vehicle): string {
     const d = v.definition;
     const parts = [d.year ? String(d.year) : '', d.make, d.model].filter(Boolean);
@@ -67,7 +72,7 @@ export class TCOView extends LitElement {
                 background: var(--background);
             }
 
-            /* ── Top bar (matches fleet-list-view / groups-management) ─── */
+            /* ── Top bar (DESIGN.md page header) ─────────────────────── */
             header.top-bar {
                 position: sticky;
                 top: 0;
@@ -76,48 +81,45 @@ export class TCOView extends LitElement {
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
-                height: var(--top-bar-height, 80px);
+                height: var(--top-bar-height);
                 padding: 0 var(--gutter);
                 background: var(--background);
-                border-bottom: 1px solid var(--outline-variant);
             }
             header.top-bar .left { display: flex; align-items: center; gap: 16px; }
-            header.top-bar h2 { font: var(--type-headline-md); color: var(--primary); }
-            header.top-bar .right { display: flex; align-items: center; gap: 16px; }
+            header.top-bar h2 { font: var(--type-headline-md); letter-spacing: -0.01em; color: var(--primary); }
+            header.top-bar .right { display: flex; align-items: center; gap: 12px; }
 
             .back-link {
-                background: none;
-                border: none;
-                color: var(--on-surface-variant);
-                cursor: pointer;
-                font: var(--type-body-sm);
-                display: flex;
+                display: inline-flex;
                 align-items: center;
                 gap: 4px;
-                padding: 0;
-                transition: color 0.15s ease;
+                margin: 0 0 var(--stack-md) -8px;
+                padding: 6px 12px 6px 8px;
+                border-radius: var(--radius-full);
+                color: var(--on-surface-variant);
+                font: 500 13px/18px var(--font-body);
+                transition: background 0.15s ease, color 0.15s ease;
             }
-            .back-link:hover { color: var(--primary); }
+            .back-link:hover { background: var(--surface-container-high); color: var(--on-surface); }
             .back-link .material-symbols-outlined { font-size: 18px; }
 
+            /* Primary action: DIMO gradient pill. */
             .export-btn {
-                display: flex;
+                display: inline-flex;
                 align-items: center;
+                justify-content: center;
                 gap: 8px;
-                padding: 10px 16px;
-                border-radius: var(--radius-md);
-                background: var(--primary);
-                color: var(--on-primary);
-                border: none;
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                font-weight: 700;
-                cursor: pointer;
-                transition: opacity 0.15s ease;
+                min-height: 40px;
+                padding: 0 18px 0 14px;
+                border-radius: var(--radius-full);
+                background: var(--brand-gradient);
+                color: var(--on-accent);
+                font: 600 14px/20px var(--font-body);
+                white-space: nowrap;
+                transition: filter 0.15s ease, box-shadow 0.15s ease;
             }
-            .export-btn:hover { opacity: 0.9; }
-            .export-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+            .export-btn:hover { filter: brightness(1.06); box-shadow: var(--accent-glow); }
+            .export-btn:disabled { filter: grayscale(1) opacity(0.5); box-shadow: none; cursor: not-allowed; }
 
             /* ── Canvas ───────────────────────────────────────────────── */
             .canvas {
@@ -125,42 +127,66 @@ export class TCOView extends LitElement {
                 width: 100%;
                 max-width: var(--container-max-width);
                 margin: 0 auto;
-                padding: var(--stack-lg) var(--gutter);
+                padding: 8px var(--gutter) var(--stack-lg);
                 box-sizing: border-box;
             }
-            .canvas h1 { font: var(--type-headline-md); color: var(--primary); margin-bottom: var(--stack-md); }
+            .canvas h1 { font: var(--type-headline-md); letter-spacing: -0.01em; color: var(--primary); }
 
-            /* ── Table (matches fleet-list-view) ─────────────────────── */
-            .table-wrap {
-                border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-lg);
-                overflow: hidden;
+            /* ── Fleet summary strip: quiet big numbers, no cards ────── */
+            .summary {
+                display: grid;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: 24px;
+                padding: 8px 0 28px;
             }
+            .summary .metric { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+            .summary .metric + .metric { padding-left: 24px; border-left: 1px solid var(--outline-variant); }
+            .summary .label { font: var(--type-label); color: var(--on-surface-variant); }
+            .summary .value {
+                font: var(--type-data-display);
+                letter-spacing: -0.03em;
+                color: var(--primary);
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .summary .value .cell-loading { font-size: 28px; }
+            @media (max-width: 1100px) {
+                .summary .value { font-size: 32px; line-height: 38px; }
+            }
+            @media (max-width: 768px) {
+                .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+                .summary .metric:nth-child(3) { padding-left: 0; border-left: none; }
+            }
+
+            /* ── Table (DESIGN.md: unfilled header, hairline rows) ───── */
+            .table-wrap { overflow-x: auto; }
             table { width: 100%; border-collapse: collapse; font: var(--type-body-sm); color: var(--on-surface); }
-            thead { background: var(--surface-container-low); }
             th {
+                height: 40px;
+                padding: 0 12px;
                 text-align: left;
-                padding: 12px 16px;
-                font: var(--type-label-caps);
-                letter-spacing: 0.06em;
-                text-transform: uppercase;
+                font: var(--type-label);
                 color: var(--on-surface-variant);
                 border-bottom: 1px solid var(--outline-variant);
                 white-space: nowrap;
             }
             td {
-                padding: 14px 16px;
+                height: 52px;
+                padding: 8px 12px;
                 vertical-align: middle;
                 border-bottom: 1px solid var(--outline-variant);
             }
-            tbody tr { cursor: pointer; transition: background 0.1s ease; }
-            tbody tr:hover { background: var(--surface-container); }
-            tbody tr:last-child td { border-bottom: none; }
-            td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+            /* Only the fleet table's rows open something. */
+            table.fleet tbody td:first-child { color: var(--primary); font-weight: 500; }
+            table.fleet tbody tr { cursor: pointer; transition: background 0.12s ease; }
+            table.fleet tbody tr:hover { background: var(--surface-container-low); }
+            td.num, th.num { text-align: right; white-space: nowrap; }
+            /* Total row: same surface, emphasized by ink + weight. */
             tfoot td {
-                font-weight: 700;
-                background: var(--surface-container-low);
-                border-top: 1px solid var(--outline-variant);
+                height: 56px;
+                color: var(--primary);
+                font-weight: 600;
                 border-bottom: none;
             }
 
@@ -172,55 +198,54 @@ export class TCOView extends LitElement {
                 font: var(--type-body-md);
             }
             .error { color: var(--error); }
-            .cell-loading { color: var(--on-surface-variant); opacity: 0.5; letter-spacing: 1px; }
+            .cell-loading { color: var(--on-surface-variant); opacity: 0.5; letter-spacing: 1px; font-weight: 400; }
             .no-perm-badge {
                 display: inline-flex;
                 align-items: center;
-                gap: 3px;
-                font: var(--type-label-caps);
-                letter-spacing: 0.04em;
-                color: #ffb432;
-                font-size: 10px;
+                gap: 4px;
+                padding: 1px 8px;
+                border-radius: var(--radius-sm);
+                background: color-mix(in srgb, var(--warning) 14%, transparent);
+                color: var(--warning);
+                font: 500 11px/16px var(--font-body);
             }
             .no-perm-badge .material-symbols-outlined { font-size: 12px; }
             .perms-notice {
                 display: flex;
                 align-items: center;
-                gap: 8px;
+                gap: 10px;
                 padding: 12px 16px;
-                background: rgba(255, 180, 52, 0.08);
-                border: 1px solid rgba(255, 180, 52, 0.25);
+                background: color-mix(in srgb, var(--warning) 10%, transparent);
                 border-radius: var(--radius-md);
-                color: #ffb432;
+                color: var(--on-surface);
                 font: var(--type-body-sm);
                 margin-bottom: var(--stack-lg);
             }
-            .perms-notice .material-symbols-outlined { font-size: 18px; flex-shrink: 0; }
+            .perms-notice .material-symbols-outlined { font-size: 18px; flex-shrink: 0; color: var(--warning); }
 
             /* ── Hidden vehicles ──────────────────────────────────────── */
             .hidden-toggle-row { display: flex; justify-content: flex-end; margin-bottom: var(--stack-sm); }
             .show-hidden-btn {
-                display: flex;
+                display: inline-flex;
                 align-items: center;
                 gap: 6px;
-                background: none;
-                border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-md);
+                height: 36px;
+                padding: 0 14px;
+                border-radius: var(--radius-full);
+                background: var(--surface-container-high);
                 color: var(--on-surface-variant);
-                font: var(--type-body-sm);
-                padding: 8px 12px;
-                cursor: pointer;
-                transition: background 0.15s, color 0.15s, border-color 0.15s;
+                font: 500 13px/18px var(--font-body);
                 white-space: nowrap;
+                transition: background 0.15s ease, color 0.15s ease;
             }
-            .show-hidden-btn:hover { color: var(--primary); border-color: var(--primary); }
-            .show-hidden-btn.active {
-                background: var(--primary-container);
-                color: var(--on-primary-container);
-                border-color: var(--primary);
+            .show-hidden-btn:hover { background: var(--surface-container-highest); color: var(--on-surface); }
+            .show-hidden-btn.active,
+            .show-hidden-btn.active:hover {
+                background: var(--accent-soft-strong);
+                color: var(--accent-ink);
             }
             .show-hidden-btn .material-symbols-outlined { font-size: 18px; }
-            .show-hidden-btn .hidden-count { font-weight: 700; font-size: 12px; }
+            .show-hidden-btn .hidden-count { font-weight: 600; }
             tbody tr.hidden-row { opacity: 0.45; }
             tbody tr.hidden-row:hover { opacity: 0.7; }
 
@@ -229,24 +254,26 @@ export class TCOView extends LitElement {
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
+                gap: 16px;
                 margin-bottom: var(--stack-md);
             }
-            .breakdown { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: var(--stack-lg); }
+            .breakdown {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+                gap: 12px;
+                margin-bottom: var(--stack-lg);
+            }
             .stat {
                 background: var(--surface-container-low);
-                border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-md);
-                padding: 16px;
-                min-width: 160px;
+                border-radius: var(--radius-lg);
+                padding: 16px 18px;
             }
             .stat .label {
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
+                font: var(--type-label);
                 color: var(--on-surface-variant);
-                margin-bottom: 4px;
+                margin-bottom: 6px;
             }
-            .stat .value { font: var(--type-headline-md); color: var(--primary); }
+            .stat .value { font: var(--type-headline-md); letter-spacing: -0.01em; color: var(--primary); }
 
             .settings-form {
                 display: flex;
@@ -254,50 +281,41 @@ export class TCOView extends LitElement {
                 gap: 16px;
                 align-items: flex-end;
                 margin-bottom: var(--stack-lg);
-                padding: 16px;
+                padding: 20px;
                 background: var(--surface-container-low);
-                border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-md);
+                border-radius: var(--radius-lg);
             }
             .settings-form .field { display: flex; flex-direction: column; gap: 6px; }
             .settings-form label {
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
+                font: var(--type-label);
                 color: var(--on-surface-variant);
             }
             .settings-form input {
-                background: var(--surface-container);
+                height: 40px;
+                background: var(--surface-container-high);
                 color: var(--on-surface);
                 border: 1px solid var(--outline-variant);
                 border-radius: var(--radius-md);
-                padding: 10px 12px;
-                font-family: inherit;
-                font-size: 14px;
+                padding: 0 12px;
+                font: var(--type-body-sm);
             }
-            .settings-form input:focus { outline: 1px solid var(--primary); }
             .settings-form .save-btn {
-                padding: 10px 16px;
-                border-radius: var(--radius-md);
-                background: var(--primary);
-                color: var(--on-primary);
-                border: none;
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                font-weight: 700;
-                cursor: pointer;
-                transition: opacity 0.15s ease;
+                min-height: 40px;
+                padding: 0 18px;
+                border-radius: var(--radius-full);
+                background: var(--surface-container-high);
+                color: var(--on-surface);
+                border: 1px solid var(--outline-variant);
+                font: 500 14px/20px var(--font-body);
+                transition: background 0.15s ease, border-color 0.15s ease;
             }
-            .settings-form .save-btn:hover { opacity: 0.9; }
+            .settings-form .save-btn:hover { background: var(--surface-container-highest); border-color: var(--outline); }
             .settings-form .save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-            .settings-form .form-error { font: var(--type-body-sm); color: var(--error); }
+            .form-error { font: var(--type-body-sm); color: var(--error); }
 
             .section-label {
-                font: var(--type-label-caps);
-                letter-spacing: 0.06em;
-                text-transform: uppercase;
-                color: var(--on-surface-variant);
+                font: 600 15px/22px var(--font-headline);
+                color: var(--primary);
                 margin-bottom: var(--stack-sm);
             }
 
@@ -309,80 +327,76 @@ export class TCOView extends LitElement {
             }
             tr.missing-row td { vertical-align: top; }
             .backfill-input input {
-                width: 110px;
-                background: var(--surface-container);
+                width: 120px;
+                height: 32px;
+                background: var(--surface-container-high);
                 color: var(--on-surface);
                 border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-sm);
-                padding: 6px 8px;
-                font-family: inherit;
-                font-size: 13px;
+                border-radius: var(--radius-md);
+                padding: 0 10px;
+                font: var(--type-body-sm);
                 text-align: right;
             }
-            .backfill-input input:focus { outline: 1px solid var(--primary); }
             .backfill-save-btn {
-                padding: 6px 12px;
-                border-radius: var(--radius-sm);
-                background: var(--primary);
-                color: var(--on-primary);
-                border: none;
-                font: var(--type-label-caps);
-                letter-spacing: 0.04em;
-                text-transform: uppercase;
-                font-size: 10px;
-                cursor: pointer;
+                height: 32px;
+                padding: 0 14px;
+                border-radius: var(--radius-md);
+                background: var(--surface-container-high);
+                color: var(--on-surface);
+                border: 1px solid var(--outline-variant);
+                font: 500 13px/18px var(--font-body);
                 white-space: nowrap;
+                transition: background 0.15s ease;
             }
+            .backfill-save-btn:hover { background: var(--surface-container-highest); }
             .backfill-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-            .missing-row .form-error { margin-top: 4px; font-size: 11px; }
+            .missing-row .form-error { margin-top: 4px; font-size: 12px; }
 
             .refresh-btn {
-                background: none;
-                border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-md);
-                color: var(--on-surface-variant);
-                padding: 8px;
-                cursor: pointer;
-                display: flex;
+                width: 40px;
+                height: 40px;
+                display: inline-flex;
                 align-items: center;
-                transition: color 0.15s;
+                justify-content: center;
+                border-radius: var(--radius-full);
+                color: var(--on-surface-variant);
+                transition: background 0.15s ease, color 0.15s ease;
             }
-            .refresh-btn:hover { color: var(--primary); }
+            .refresh-btn .material-symbols-outlined { font-size: 20px; }
+            .refresh-btn:hover { background: var(--surface-container-high); color: var(--on-surface); }
             .refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
             .refresh-btn.spinning .material-symbols-outlined { animation: tco-spin 0.8s linear infinite; }
             @keyframes tco-spin { to { transform: rotate(360deg); } }
 
             /* ── Pagination ───────────────────────────────────────────── */
             .fleet-total-scope {
-                font: var(--type-label-caps);
-                letter-spacing: 0.03em;
+                font: var(--type-label);
                 color: var(--on-surface-variant);
-                font-weight: 400;
-                text-transform: none;
+                margin-left: 4px;
             }
             .pagination {
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
-                margin-top: var(--stack-sm);
+                margin-top: var(--stack-md);
             }
-            .pagination-info { font: var(--type-body-sm); color: var(--on-surface-variant); }
-            .pagination-controls { display: flex; align-items: center; gap: 8px; }
+            .pagination-info { font: var(--type-label); color: var(--on-surface-variant); }
+            .pagination-controls { display: flex; align-items: center; gap: 4px; }
             .page-btn {
-                background: none;
-                border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-md);
-                color: var(--on-surface-variant);
-                padding: 6px;
-                cursor: pointer;
-                display: flex;
+                width: 32px;
+                height: 32px;
+                display: inline-flex;
                 align-items: center;
-                transition: color 0.15s, border-color 0.15s;
+                justify-content: center;
+                border-radius: var(--radius-full);
+                background: var(--surface-container-high);
+                color: var(--on-surface);
+                transition: background 0.15s ease, opacity 0.15s ease;
             }
-            .page-btn:hover:not(:disabled) { color: var(--primary); border-color: var(--primary); }
-            .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+            .page-btn:hover:not(:disabled) { background: var(--surface-container-highest); }
+            .page-btn:disabled { opacity: 0.35; cursor: not-allowed; }
             .page-btn .material-symbols-outlined { font-size: 18px; }
-            .page-indicator { font: var(--type-body-sm); color: var(--on-surface-variant); min-width: 56px; text-align: center; }
+            .page-indicator { font: 500 13px/18px var(--font-body); color: var(--on-surface-variant); min-width: 56px; text-align: center; }
         `,
     ];
 
@@ -672,7 +686,26 @@ export class TCOView extends LitElement {
         const page = Math.min(this.page, totalPages - 1);
         const pageVehicles = visible.slice(page * TCOView.PAGE_SIZE, (page + 1) * TCOView.PAGE_SIZE);
 
+        const loadingDots = html`<span class="cell-loading">···</span>`;
         return html`
+            <div class="summary">
+                <div class="metric">
+                    <span class="label">${msg('Total TCO')}</span>
+                    <span class="value">${allLoaded ? formatMoneyWhole(fleetTotal) : loadingDots}</span>
+                </div>
+                <div class="metric">
+                    <span class="label">${msg('Operating cost')}</span>
+                    <span class="value">${allLoaded ? formatMoneyWhole(fleetOperating) : loadingDots}</span>
+                </div>
+                <div class="metric">
+                    <span class="label">${msg('Acquisition')}</span>
+                    <span class="value">${allLoaded ? formatMoneyWhole(fleetAcquisition) : loadingDots}</span>
+                </div>
+                <div class="metric">
+                    <span class="label">${msg('Depreciation to date')}</span>
+                    <span class="value">${allLoaded ? formatMoneyWhole(fleetDepreciation) : loadingDots}</span>
+                </div>
+            </div>
             ${this.hiddenVehicles.size > 0 ? html`
                 <div class="hidden-toggle-row">
                     <button class="show-hidden-btn ${this.showHidden ? 'active' : ''}" @click=${() => this.toggleShowHidden()}>
@@ -683,7 +716,7 @@ export class TCOView extends LitElement {
                 </div>
             ` : nothing}
             <div class="table-wrap">
-                <table>
+                <table class="fleet">
                     <thead>
                         <tr>
                             <th>${msg('Vehicle')}</th>

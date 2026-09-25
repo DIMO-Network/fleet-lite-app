@@ -22,9 +22,12 @@ import { polygonAreaM2, formatArea } from '../utils/geo.ts';
  *   - close: dismissed.
  *   - saved: { geofence } — created/updated; caller refetches.
  */
+// User-selectable data colors (stored on the geofence as a hex string), drawn
+// from the DIMO palette and ordered around the hue wheel. Saved geofences may
+// carry any hex — these are only the presets.
 const PRESET_COLORS = [
-    '#ea6b18', '#ffb691', '#f2c94c', '#27ae60',
-    '#2d9cdb', '#9b51e0', '#eb5757', '#8e9192',
+    '#2B82D5', '#8CD0FF', '#46F1E4', '#36DF71',
+    '#FFCD29', '#FFAC60', '#FF6060', '#957CDB',
 ];
 
 @customElement('create-geofence-modal')
@@ -65,83 +68,124 @@ export class CreateGeofenceModal extends LitElement {
         sharedStyles,
         css`
             :host {
+                /* Panel tone. --surface-overlay is a requested token (white in
+                   light mode); until it exists this falls back to the card tone. */
+                --modal-bg: var(--surface-overlay, var(--surface-container-low));
                 position: fixed; inset: 0; z-index: 100;
                 display: flex; align-items: center; justify-content: center;
-                background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px);
+                padding: 16px;
+                background: color-mix(in srgb, var(--canvas) 72%, transparent);
+                backdrop-filter: blur(8px);
+                -webkit-backdrop-filter: blur(8px);
             }
             .card {
-                width: 100%; max-width: 460px; max-height: 86vh; overflow-y: auto;
-                background: var(--surface-container); border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-lg); padding: 24px; color: var(--on-surface); position: relative;
+                width: 100%; max-width: 480px; max-height: calc(100vh - 32px); overflow-y: auto;
+                background: var(--modal-bg); border: none;
+                border-radius: var(--radius-xl); box-shadow: var(--shadow-float);
+                padding: 24px; color: var(--on-surface); position: relative;
             }
-            .card h2 { font: var(--type-headline-md); margin-bottom: 4px; }
-            .card .sub { font: var(--type-body-sm); color: var(--on-surface-variant); margin-bottom: 20px; }
+            .card h2 { font: var(--type-headline-md); letter-spacing: -0.01em; color: var(--primary); margin-bottom: 4px; padding-right: 40px; }
+            .card .sub { font: var(--type-body-sm); color: var(--on-surface-variant); margin-bottom: 16px; }
             .close {
                 position: absolute; top: 16px; right: 16px;
-                background: none; border: none; color: var(--on-surface-variant); padding: 4px; cursor: pointer;
+                width: 36px; height: 36px;
+                display: flex; align-items: center; justify-content: center;
+                border-radius: var(--radius-full);
+                color: var(--on-surface-variant);
+                transition: background 0.15s ease, color 0.15s ease;
             }
-            .close:hover { color: var(--primary); }
+            .close:hover { background: var(--surface-container-high); color: var(--on-surface); }
+            .close .material-symbols-outlined { font-size: 20px; }
 
-            .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
-            .field label {
-                font: var(--type-label-caps); letter-spacing: 0.05em; text-transform: uppercase; color: var(--on-surface-variant);
-            }
+            .field { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+            .field > label { font: var(--type-label); color: var(--on-surface-variant); }
             .field input[type="text"], .field input[type="number"] {
-                background: var(--surface-container-low); color: var(--on-surface);
-                border: 1px solid var(--outline-variant); border-radius: var(--radius-md);
-                padding: 10px 12px; font-family: inherit; font-size: 14px;
+                height: 40px;
+                padding: 0 12px;
+                background: var(--surface-container-high);
+                color: var(--on-surface);
+                border: 1px solid var(--outline-variant);
+                border-radius: var(--radius-md);
+                font: var(--type-body-sm);
+                transition: border-color 0.15s ease, box-shadow 0.15s ease;
             }
-            .field input:focus { outline: 1px solid var(--primary); }
-            .field .hint { font: var(--type-body-sm); color: var(--on-surface-variant); }
-            .suffix-row { display: flex; align-items: center; gap: 8px; }
-            .suffix-row input { flex: 1; }
+            .field input::placeholder { color: var(--on-surface-variant); }
+            .field input:focus-visible {
+                outline: none;
+                border-color: var(--accent);
+                box-shadow: 0 0 0 3px var(--accent-soft);
+            }
+            .field .hint { font: var(--type-label); color: var(--on-surface-variant); }
+            .suffix-row { display: flex; align-items: center; gap: 10px; }
+            .suffix-row input { flex: 1; min-width: 0; }
             .suffix-row .unit { font: var(--type-body-sm); color: var(--on-surface-variant); }
 
             .swatches { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-            .swatch { width: 28px; height: 28px; border-radius: var(--radius-full); border: 2px solid transparent; cursor: pointer; padding: 0; }
-            .swatch.selected { border-color: var(--primary); }
-            .swatch.custom {
-                display: flex; align-items: center; justify-content: center; position: relative;
-                background: var(--surface-container-low); border: 1px solid var(--outline-variant); color: var(--on-surface-variant);
+            .swatch {
+                position: relative;
+                width: 28px; height: 28px; border-radius: var(--radius-full);
+                border: none; cursor: pointer; padding: 0;
+                transition: transform 0.12s ease, box-shadow 0.12s ease;
             }
+            .swatch:hover { transform: scale(1.08); }
+            /* Ink ring with a gap: legible on every swatch hue, incl. mint. */
+            .swatch.selected { box-shadow: 0 0 0 2px var(--modal-bg), 0 0 0 4px var(--primary); }
+            .swatch.custom {
+                display: flex; align-items: center; justify-content: center;
+                background: var(--surface-container-high); color: var(--on-surface-variant);
+            }
+            .swatch.custom:hover { color: var(--on-surface); background: var(--surface-container-highest); }
+            .swatch.custom .material-symbols-outlined { font-size: 16px; }
             .swatch.custom input { position: absolute; width: 0; height: 0; opacity: 0; }
 
-            .segmented { display: flex; gap: 0; border: 1px solid var(--outline-variant); border-radius: var(--radius-md); overflow: hidden; }
+            /* Segmented pill, same as the view switch in the page header. */
+            .segmented {
+                display: flex; gap: 2px; padding: 3px;
+                border-radius: var(--radius-full);
+                background: var(--surface-container-high);
+            }
             .segmented button {
-                flex: 1; padding: 10px 8px; background: var(--surface-container-low); color: var(--on-surface-variant);
-                border: none; border-right: 1px solid var(--outline-variant); cursor: pointer;
-                font: var(--type-label-caps); letter-spacing: 0.04em; text-transform: uppercase;
+                flex: 1; padding: 7px 10px;
+                border-radius: var(--radius-full);
+                color: var(--on-surface-variant);
+                font: 500 13px/18px var(--font-body);
+                transition: background 0.15s ease, color 0.15s ease;
             }
-            .segmented button:last-child { border-right: none; }
-            .segmented button.active { background: var(--primary); color: var(--on-primary); font-weight: 700; }
+            .segmented button:hover { color: var(--on-surface); }
+            .segmented button.active {
+                color: var(--primary);
+                background: var(--surface-bright);
+                box-shadow: var(--shadow-sm);
+            }
 
-            .group-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; max-height: 180px; overflow-y: auto; }
+            .group-list { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; max-height: 188px; overflow-y: auto; }
             .group-row {
-                display: flex; align-items: center; gap: 10px; padding: 8px 10px; cursor: pointer;
-                border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-low);
+                display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px; cursor: pointer;
+                border-radius: var(--radius-md); background: var(--surface-container);
+                transition: background 0.15s ease;
             }
-            .group-row.selected { border-color: var(--primary); }
-            .group-row .dot { width: 12px; height: 12px; border-radius: var(--radius-full); flex-shrink: 0; }
-            .group-row .gname { flex: 1; font: var(--type-body-md); color: var(--on-surface); }
-            .group-row .check { color: var(--primary); }
+            .group-row:hover { background: var(--surface-container-high); }
+            .group-row.selected { background: var(--accent-soft); }
+            .group-row .dot { width: 10px; height: 10px; border-radius: var(--radius-full); flex-shrink: 0; }
+            .group-row .gname { flex: 1; font: var(--type-body-sm); color: var(--on-surface); }
+            .group-row.selected .gname { color: var(--primary); font-weight: 500; }
+            .group-row .check { color: var(--accent-ink); font-size: 20px; }
 
-            .meta-line { display: flex; align-items: center; gap: 8px; font: var(--type-body-sm); color: var(--on-surface-variant); margin-bottom: 16px; }
+            .meta-line {
+                display: inline-flex; align-items: center; gap: 6px;
+                padding: 4px 10px 4px 8px; margin-bottom: 20px;
+                border-radius: var(--radius-sm);
+                background: var(--surface-container-high);
+                font: var(--type-label); color: var(--on-surface-variant);
+            }
             .meta-line .material-symbols-outlined { font-size: 16px; }
 
-            .actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px; }
-            .actions button {
-                padding: 10px 18px; border-radius: var(--radius-md);
-                font: var(--type-label-caps); letter-spacing: 0.05em; text-transform: uppercase; font-weight: 700;
-                border: 1px solid transparent; cursor: pointer;
-            }
-            .actions .primary { background: var(--primary); color: var(--on-primary); }
-            .actions .primary:disabled { opacity: 0.5; cursor: not-allowed; }
-            .actions .ghost { background: transparent; color: var(--on-surface-variant); border-color: var(--outline-variant); }
+            .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 24px; }
 
             .error-text {
-                padding: 12px; background: rgba(255, 180, 171, 0.04);
-                border: 1px solid rgba(255, 180, 171, 0.2); color: var(--error);
-                border-radius: var(--radius-md); font: var(--type-body-sm); margin-bottom: 16px;
+                padding: 10px 12px; margin-top: 16px;
+                background: var(--error-container); color: var(--error);
+                border-radius: var(--radius-md); font: var(--type-body-sm);
             }
         `,
     ];
@@ -198,6 +242,7 @@ export class CreateGeofenceModal extends LitElement {
     private renderScopeButton(scope: GeofenceScope, label: string) {
         return html`<button
             class=${this.scope === scope ? 'active' : ''}
+            aria-pressed=${this.scope === scope}
             @click=${() => { this.scope = scope; }}
         >${label}</button>`;
     }
@@ -206,7 +251,7 @@ export class CreateGeofenceModal extends LitElement {
         const canSave = !!this.name.trim() && (this.isEdit || !!this.pendingGeometry);
         return html`
             <div class="card" @click=${(e: Event) => e.stopPropagation()}>
-                <button class="close" @click=${this.dispatchClose}>
+                <button class="close" aria-label=${msg('Close')} @click=${this.dispatchClose}>
                     <span class="material-symbols-outlined">close</span>
                 </button>
                 <h2>${this.isEdit ? msg('Edit geofence') : msg('New geofence')}</h2>
@@ -231,7 +276,7 @@ export class CreateGeofenceModal extends LitElement {
                     <div class="swatches">
                         ${PRESET_COLORS.map((c) => this.renderSwatch(c))}
                         <label class="swatch custom" title="${msg('Custom color')}">
-                            <span class="material-symbols-outlined" style="font-size:18px;">palette</span>
+                            <span class="material-symbols-outlined">palette</span>
                             <input type="color" .value=${this.color}
                                 @input=${(e: Event) => { this.color = (e.target as HTMLInputElement).value; }} />
                         </label>
@@ -278,8 +323,8 @@ export class CreateGeofenceModal extends LitElement {
                 ${this.errorMessage ? html`<div class="error-text">${this.errorMessage}</div>` : nothing}
 
                 <div class="actions">
-                    <button class="ghost" @click=${this.dispatchClose}>${msg('Cancel')}</button>
-                    <button class="primary" ?disabled=${!canSave || this.saving} @click=${this.onSave}>
+                    <button class="btn-secondary" @click=${this.dispatchClose}>${msg('Cancel')}</button>
+                    <button class="btn-primary" ?disabled=${!canSave || this.saving} @click=${this.onSave}>
                         ${this.saving ? msg('Saving…') : this.isEdit ? msg('Save') : msg('Create geofence')}
                     </button>
                 </div>

@@ -5,6 +5,7 @@ import { sharedStyles } from '../global-styles.ts';
 import { TenantService } from '../services/tenant-service.ts';
 import { PrefsService } from '../services/prefs-service.ts';
 import { setLocale } from '../localization.ts';
+import { themeService } from '../services/theme-service.ts';
 import './side-nav.ts';
 import './tenant-switcher.ts';
 import '../views/fleet-overview.ts';
@@ -49,15 +50,33 @@ export class AppRoot extends LitElement {
                 width: 100vw;
                 height: 100vh;
                 overflow: hidden;
-                background: var(--background);
+                background: var(--canvas);
             }
+            side-nav { padding: 20px 12px 16px; }
+            side-nav[collapsed] { padding: 20px 8px 16px; }
+            /* The workspace is a rounded sheet inset from the canvas, so the
+               sidebar reads as frame and the content as the thing you work on. */
             main {
                 flex: 1;
+                min-width: 0;
                 position: relative;
                 display: flex;
                 flex-direction: column;
-                height: 100vh;
+                height: calc(100vh - 16px);
+                margin: 8px 8px 8px 0;
+                border-radius: var(--radius-xl);
+                border: 1px solid var(--sheet-border);
+                background: var(--background);
                 overflow: hidden;
+            }
+            main.bare {
+                height: 100vh;
+                margin: 0;
+                border: none;
+                border-radius: 0;
+            }
+            @media (max-width: 768px) {
+                main { height: 100vh; margin: 0; border: none; border-radius: 0; }
             }
         `,
     ];
@@ -82,6 +101,9 @@ export class AppRoot extends LitElement {
 
     async connectedCallback() {
         super.connectedCallback();
+        // Apply the saved theme here, not only in side-nav: full-bleed routes
+        // (onboarding) render without the sidebar.
+        themeService.init();
         // Activate the saved/browser locale before the first route renders so the
         // initial paint is already localized (lit-localize runtime mode).
         const locale = PrefsService.getInstance().getLocale();
@@ -178,7 +200,7 @@ export class AppRoot extends LitElement {
         // Onboarding (and the brief resolving state) render full-bleed, no nav.
         const chrome = this.tenantId !== '';
         if (!chrome) {
-            return html`<main>${this.router.outlet()}</main>`;
+            return html`<main class="bare">${this.router.outlet()}</main>`;
         }
         return html`
             <side-nav .active=${this.activeNav} .tenantId=${this.tenantId}></side-nav>

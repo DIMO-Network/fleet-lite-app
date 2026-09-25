@@ -10,7 +10,7 @@ import { TelemetryService } from '../services/telemetry-service.ts';
 import { Trip, TripWaypoint } from '../types/telemetry.ts';
 import { tripDistanceKm, tripDurationMs, tripSignal } from '../utils/trips.ts';
 import { formatDistance, formatSpeed } from '../utils/units.ts';
-import { buildTileLayer } from '../utils/fleet-map.ts';
+import { buildTileLayer, MAP_COLORS } from '../utils/fleet-map.ts';
 import { behaviorColor, isBehaviorEvent } from '../utils/behavior-events.ts';
 
 interface EventFlag {
@@ -19,6 +19,11 @@ interface EventFlag {
 }
 
 const MAX_WAYPOINTS = 500;
+
+// Map markers can't read CSS variables: mint = start / the vehicle, sky = route / end.
+const START_STYLE: L.CircleMarkerOptions = { radius: 6, fillColor: MAP_COLORS.mint, color: MAP_COLORS.ink, weight: 2, fillOpacity: 1 };
+const END_STYLE: L.CircleMarkerOptions = { radius: 6, fillColor: MAP_COLORS.sky, color: MAP_COLORS.ink, weight: 2, fillOpacity: 1 };
+const POSITION_STYLE: L.CircleMarkerOptions = { radius: 8, fillColor: MAP_COLORS.mint, color: MAP_COLORS.ink, weight: 2.5, fillOpacity: 1 };
 
 function downsample(pts: TripWaypoint[]): TripWaypoint[] {
     if (pts.length <= MAX_WAYPOINTS) return pts;
@@ -55,172 +60,235 @@ export class TripReplayModal extends LitElement {
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                background: rgba(0, 0, 0, 0.6);
-                backdrop-filter: blur(4px);
+                padding: 16px;
+                /* TODO(token): swap for a shared --scrim once global-styles has one. */
+                background: var(--scrim, color-mix(in srgb, var(--canvas) 72%, transparent));
+                backdrop-filter: blur(6px);
+                -webkit-backdrop-filter: blur(6px);
             }
             .card {
-                width: min(90vw, 820px);
+                width: min(100%, 820px);
                 max-height: 90vh;
                 display: flex;
                 flex-direction: column;
                 overflow: hidden;
-                background: var(--surface-container);
-                border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-lg);
+                background: var(--surface);
+                border-radius: var(--radius-xl);
+                box-shadow: var(--shadow-float);
                 color: var(--on-surface);
                 position: relative;
             }
             .replay-header {
                 display: flex;
-                align-items: center;
+                align-items: flex-start;
                 justify-content: space-between;
-                padding: 16px 24px;
-                border-bottom: 1px solid var(--outline-variant);
+                gap: 12px;
+                padding: 20px 16px 16px 24px;
                 flex-shrink: 0;
             }
-            .replay-title { font: var(--type-headline-md); }
+            .replay-title {
+                font: var(--type-headline-md);
+                letter-spacing: -0.01em;
+                color: var(--primary);
+            }
             .replay-subtitle {
                 display: block;
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
+                font: var(--type-body-sm);
                 color: var(--on-surface-variant);
-                margin-top: 4px;
+                margin-top: 2px;
             }
             .close {
-                background: none;
-                border: none;
+                display: inline-flex;
                 color: var(--on-surface-variant);
-                padding: 4px;
-                cursor: pointer;
+                padding: 6px;
+                border-radius: var(--radius-full);
+                transition: background 0.15s ease, color 0.15s ease;
             }
-            .close:hover { color: var(--primary); }
-            .map-wrapper { position: relative; flex-shrink: 0; }
-            #map { width: 100%; height: 340px; background: var(--surface-container-lowest); }
+            .close:hover { background: var(--surface-container-high); color: var(--primary); }
+            .map-wrapper {
+                position: relative;
+                flex-shrink: 0;
+                margin: 0 16px;
+                border-radius: var(--radius-lg);
+                overflow: hidden;
+                isolation: isolate;
+                background: var(--surface-container-lowest);
+            }
+            #map { width: 100%; height: 360px; background: var(--surface-container-lowest); }
+            #map .leaflet-bar {
+                border: none;
+                border-radius: var(--radius-md);
+                box-shadow: var(--shadow-float);
+                overflow: hidden;
+            }
+            #map .leaflet-bar a {
+                width: 32px;
+                height: 32px;
+                background: var(--glass-bg);
+                backdrop-filter: blur(16px);
+                -webkit-backdrop-filter: blur(16px);
+                color: var(--on-surface);
+                border-bottom: 1px solid var(--outline-variant);
+                font: 500 18px/32px var(--font-body);
+            }
+            #map .leaflet-bar a:last-child { border-bottom: none; }
+            #map .leaflet-bar a:hover { background: var(--surface-container-high); color: var(--primary); }
+            #map .leaflet-control-attribution {
+                background: var(--glass-bg);
+                color: var(--on-surface-variant);
+                font-size: 9px;
+                opacity: 0.7;
+            }
+            #map .leaflet-control-attribution a { color: var(--on-surface-variant); }
             .sparse-msg {
                 position: absolute;
-                bottom: 10px;
+                bottom: 12px;
                 left: 50%;
                 transform: translateX(-50%);
-                background: rgba(0, 0, 0, 0.8);
-                border: 1px solid var(--secondary);
-                border-radius: var(--radius-sm);
-                padding: 6px 12px;
-                font: var(--type-label-caps);
-                color: var(--secondary);
+                z-index: 500;
+                background: var(--glass-bg);
+                backdrop-filter: blur(16px);
+                -webkit-backdrop-filter: blur(16px);
+                box-shadow: var(--shadow-float);
+                border-radius: var(--radius-full);
+                padding: 6px 14px;
+                font: var(--type-label);
+                color: var(--warning);
                 pointer-events: none;
                 white-space: nowrap;
             }
             .map-state {
-                height: 340px;
+                height: 360px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
+                padding: 24px;
+                text-align: center;
                 font: var(--type-body-md);
                 color: var(--on-surface-variant);
             }
             .map-state.error { color: var(--error); }
+
+            /* Trip stats as tonal tiles rather than a ruled strip. */
             .stats-bar {
-                display: flex;
-                border-top: 1px solid var(--outline-variant);
-                border-bottom: 1px solid var(--outline-variant);
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 8px;
+                padding: 12px 16px 0;
                 flex-shrink: 0;
             }
+            @media (max-width: 600px) {
+                .stats-bar { grid-template-columns: repeat(2, 1fr); }
+            }
             .stat {
-                flex: 1;
-                padding: 12px 20px;
-                border-right: 1px solid var(--outline-variant);
+                padding: 12px 14px;
+                border-radius: var(--radius-md);
+                background: var(--surface-container-low);
+                min-width: 0;
             }
-            .stat:last-child { border-right: none; }
             .stat-label {
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
+                font: var(--type-label);
                 color: var(--on-surface-variant);
-                margin-bottom: 4px;
+                margin-bottom: 2px;
             }
-            .stat-value { font: var(--type-headline-md); font-size: 18px; }
-            .stat-value .unit { font-size: 12px; font-weight: 400; color: var(--on-surface-variant); margin-left: 2px; }
+            .stat-value {
+                font: 600 22px/28px var(--font-headline);
+                letter-spacing: -0.02em;
+                color: var(--primary);
+            }
+            .stat-value .unit {
+                font: var(--type-label);
+                letter-spacing: 0;
+                color: var(--on-surface-variant);
+                margin-left: 3px;
+            }
             .controls {
                 display: flex;
                 align-items: center;
-                gap: 12px;
-                padding: 12px 20px;
+                gap: 10px;
+                padding: 16px 16px 20px 20px;
                 flex-shrink: 0;
             }
             .progress-bar {
                 flex: 1;
                 position: relative;
                 height: 4px;
+                margin-right: 6px;
                 overflow: visible;
             }
             .progress-track {
                 height: 100%;
-                background: var(--outline-variant);
+                background: var(--surface-container-highest);
                 border-radius: var(--radius-full);
                 overflow: hidden;
             }
             .progress-fill {
                 height: 100%;
-                background: var(--primary);
+                background: var(--brand-gradient);
                 border-radius: var(--radius-full);
             }
             .event-tick {
                 position: absolute;
                 top: -4px;
-                width: 2px;
+                width: 3px;
                 height: 12px;
                 background: var(--tick-color);
-                border-radius: 1px;
+                border-radius: var(--radius-full);
                 transform: translateX(-50%);
                 cursor: default;
             }
             .event-tick-tooltip {
                 display: none;
                 position: absolute;
-                bottom: 16px;
+                bottom: 18px;
                 left: 50%;
                 transform: translateX(-50%);
-                background: var(--surface-container-lowest);
-                border: 1px solid var(--tick-color);
+                background: var(--surface-bright);
+                box-shadow: var(--shadow-float);
                 border-radius: var(--radius-sm);
-                padding: 3px 7px;
-                font: var(--type-label-caps);
-                font-size: 9px;
-                color: var(--tick-color);
+                padding: 4px 8px;
+                font: var(--type-label);
+                color: var(--on-surface);
                 white-space: nowrap;
                 pointer-events: none;
+                /* The event name arrives upper-cased; render it sentence case. */
+                text-transform: lowercase;
             }
+            .event-tick-tooltip::first-letter { text-transform: uppercase; }
             .event-tick:hover .event-tick-tooltip { display: block; }
             .time-display {
-                font: var(--type-label-caps);
+                font: 500 13px/18px var(--font-body);
                 color: var(--on-surface-variant);
                 white-space: nowrap;
             }
             .ctrl-btn {
+                width: 36px;
+                height: 36px;
+                border-radius: var(--radius-full);
                 background: var(--surface-container-high);
-                border: none;
-                border-radius: var(--radius-sm);
-                width: 32px;
-                height: 32px;
-                cursor: pointer;
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 color: var(--on-surface);
-                font-size: 14px;
                 flex-shrink: 0;
+                transition: background 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease;
             }
-            .ctrl-btn.primary { background: var(--primary); color: var(--on-primary); }
-            .ctrl-btn:hover { opacity: 0.8; }
+            .ctrl-btn .material-symbols-outlined { font-size: 20px; }
+            .ctrl-btn:hover { background: var(--surface-container-highest); }
+            .ctrl-btn.primary {
+                width: 40px;
+                height: 40px;
+                background: var(--brand-gradient);
+                color: var(--on-accent);
+            }
+            .ctrl-btn.primary .material-symbols-outlined { font-variation-settings: 'FILL' 1; }
+            .ctrl-btn.primary:hover { filter: brightness(1.06); box-shadow: var(--accent-glow); }
             .speed-select {
-                background: var(--surface-container-high);
-                border: none;
-                color: var(--on-surface-variant);
-                font: var(--type-label-caps);
-                padding: 4px 8px;
-                border-radius: var(--radius-sm);
-                cursor: pointer;
+                height: 36px;
+                padding: 0 12px;
+                border-radius: var(--radius-full);
+                font: 500 13px/18px var(--font-body);
+                color: var(--on-surface);
             }
         `,
     ];
@@ -344,11 +412,11 @@ export class TripReplayModal extends LitElement {
         this.tileLayer = buildTileLayer(themeService.current);
         this.tileLayer.addTo(this.map);
 
-        L.circleMarker([sLat, sLng], { color: '#39FF14', fillColor: '#39FF14', fillOpacity: 0.9, radius: 8 })
+        L.circleMarker([sLat, sLng], START_STYLE)
             .bindPopup(msg('Start')).addTo(this.map);
-        L.circleMarker([eLat, eLng], { color: '#FF0055', fillColor: '#FF0055', fillOpacity: 0.9, radius: 8 })
+        L.circleMarker([eLat, eLng], END_STYLE)
             .bindPopup(msg('End')).addTo(this.map);
-        L.polyline([[sLat, sLng], [eLat, eLng]], { color: '#3388ff', dashArray: '6,6', opacity: 0.5, weight: 2 }).addTo(this.map);
+        L.polyline([[sLat, sLng], [eLat, eLng]], { color: MAP_COLORS.sky, dashArray: '6,6', opacity: 0.6, weight: 2 }).addTo(this.map);
 
         try { this.map.fitBounds([[sLat, sLng], [eLat, eLng]], { padding: [40, 40] }); } catch { /* ignore */ }
         this.mapInitTimer = window.setTimeout(() => {
@@ -367,15 +435,15 @@ export class TripReplayModal extends LitElement {
         this.tileLayer = buildTileLayer(themeService.current);
         this.tileLayer.addTo(this.map);
 
-        L.polyline(bounds, { color: '#3388ff', opacity: 0.2, weight: 2, dashArray: '4,3' }).addTo(this.map);
+        L.polyline(bounds, { color: MAP_COLORS.sky, opacity: 0.35, weight: 2, dashArray: '4,3' }).addTo(this.map);
 
-        L.circleMarker(bounds[0], { color: '#39FF14', fillColor: '#39FF14', fillOpacity: 0.9, radius: 8 })
+        L.circleMarker(bounds[0], START_STYLE)
             .bindPopup(msg('Start')).addTo(this.map);
-        L.circleMarker(bounds[bounds.length - 1], { color: '#FF0055', fillColor: '#FF0055', fillOpacity: 0.9, radius: 8 })
+        L.circleMarker(bounds[bounds.length - 1], END_STYLE)
             .bindPopup(msg('End')).addTo(this.map);
 
-        this.drawnPolyline = L.polyline([], { color: '#3388ff', weight: 2.5, opacity: 0.9 }).addTo(this.map);
-        this.positionMarker = L.circleMarker(bounds[0], { color: '#3388ff', fillColor: '#3388ff', fillOpacity: 1, radius: 7 }).addTo(this.map);
+        this.drawnPolyline = L.polyline([], { color: MAP_COLORS.sky, weight: 4, opacity: 0.95 }).addTo(this.map);
+        this.positionMarker = L.circleMarker(bounds[0], POSITION_STYLE).addTo(this.map);
 
         try { this.map.fitBounds(bounds as L.LatLngBoundsLiteral, { padding: [40, 40] }); } catch { /* ignore */ }
         this.mapInitTimer = window.setTimeout(() => {

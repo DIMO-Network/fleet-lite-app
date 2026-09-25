@@ -61,89 +61,142 @@ export class InviteMemberModal extends LitElement {
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                background: rgba(0, 0, 0, 0.6);
-                backdrop-filter: blur(4px);
+                background: color-mix(in srgb, var(--canvas) 70%, transparent);
+                backdrop-filter: blur(6px);
+                -webkit-backdrop-filter: blur(6px);
             }
             .card {
-                width: 100%;
+                width: calc(100% - 32px);
                 max-width: 480px;
                 max-height: 90vh;
                 overflow-y: auto;
-                background: var(--surface-container);
-                border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-lg);
+                background: var(--surface-overlay);
+                border-radius: var(--radius-xl);
+                box-shadow: var(--shadow-float);
                 padding: 24px;
                 color: var(--on-surface);
                 position: relative;
+                animation: modal-in 0.18s ease-out;
             }
-            .card h2 { font: var(--type-headline-md); margin-bottom: 4px; }
-            .card .sub { font: var(--type-body-sm); color: var(--on-surface-variant); margin-bottom: 20px; }
+            @keyframes modal-in {
+                from { opacity: 0; transform: translateY(8px) scale(0.98); }
+            }
+            .card h2 {
+                font: var(--type-headline-md);
+                letter-spacing: -0.01em;
+                color: var(--primary);
+                padding-right: 40px;
+                margin-bottom: 4px;
+            }
+            .card .sub { font: var(--type-body-sm); color: var(--on-surface-variant); margin-bottom: 24px; }
             .close {
                 position: absolute; top: 16px; right: 16px;
-                background: none; border: none; color: var(--on-surface-variant); padding: 4px; cursor: pointer;
+                width: 32px; height: 32px; padding: 0;
+                display: inline-flex; align-items: center; justify-content: center;
+                border-radius: var(--radius-full); color: var(--on-surface-variant);
+                transition: background 0.15s ease, color 0.15s ease;
             }
-            .close:hover { color: var(--primary); }
+            .close .material-symbols-outlined { font-size: 20px; }
+            .close:hover { background: var(--surface-container-high); color: var(--on-surface); }
 
-            .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
-            .field label {
-                font: var(--type-label-caps); letter-spacing: 0.05em; text-transform: uppercase; color: var(--on-surface-variant);
-            }
+            .field { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+            .field > label { font: var(--type-label); color: var(--on-surface-variant); }
             .field input[type="email"], .field select {
-                background: var(--surface-container-low); color: var(--on-surface);
-                border: 1px solid var(--outline-variant); border-radius: var(--radius-md);
-                padding: 10px 12px; font-family: inherit; font-size: 14px;
+                height: 40px;
+                padding: 0 12px;
+                background-color: var(--surface-container-high);
+                color: var(--on-surface);
+                border: 1px solid var(--outline-variant);
+                border-radius: var(--radius-md);
+                font: var(--type-body-sm);
+                transition: border-color 0.15s ease, box-shadow 0.15s ease;
             }
-            .field input:focus, .field select:focus { outline: 1px solid var(--primary); }
+            .field input[type="email"]::placeholder { color: var(--on-surface-variant); }
+            .field input[type="email"]:hover:not(:focus-visible),
+            .field select:hover:not(:focus-visible) { border-color: var(--outline); }
+            .field input[type="email"]:focus-visible, .field select:focus-visible {
+                outline: none;
+                border-color: var(--accent);
+                box-shadow: 0 0 0 3px var(--accent-soft);
+            }
 
-            .radio-row { display: flex; flex-direction: column; gap: 8px; }
+            /* Access scope reads as two option cards; the chosen one takes the
+               accent tint so the choice is visible without finding the dot. */
+            .radio-row { display: flex; flex-direction: column; gap: 6px; }
             .radio-row label.option {
-                display: flex; align-items: flex-start; gap: 10px;
-                font: var(--type-body-md); color: var(--on-surface);
-                text-transform: none; letter-spacing: normal; cursor: pointer;
+                display: flex; align-items: flex-start; gap: 12px;
+                padding: 12px 14px;
+                border-radius: var(--radius-md);
+                background: var(--surface-container);
+                font: 500 14px/20px var(--font-body); color: var(--on-surface);
+                cursor: pointer;
+                transition: background 0.15s ease, box-shadow 0.15s ease;
             }
+            .radio-row label.option:hover { background: var(--surface-container-high); }
+            .radio-row label.option:has(input:checked) {
+                background: var(--accent-soft);
+                box-shadow: inset 0 0 0 1px var(--accent-soft-strong);
+            }
+            .radio-row label.option input { margin-top: 3px; flex: none; }
             .radio-row .option-text { display: flex; flex-direction: column; gap: 2px; }
             .radio-row .option-hint { font: var(--type-body-sm); color: var(--on-surface-variant); }
 
             .group-picker {
-                border: 1px solid var(--outline-variant);
                 border-radius: var(--radius-md);
-                background: var(--surface-container-low);
-                margin-top: 8px;
+                background: var(--surface-container);
+                margin-top: 6px;
+                overflow: hidden;
             }
             .group-search {
                 display: flex; align-items: center; gap: 8px;
-                padding: 8px 12px; border-bottom: 1px solid var(--outline-variant);
+                height: 40px; padding: 0 12px;
+                border-bottom: 1px solid var(--outline-variant);
             }
-            .group-search .material-symbols-outlined { font-size: 16px; color: var(--on-surface-variant); }
+            .group-search .material-symbols-outlined { font-size: 18px; color: var(--on-surface-variant); }
             .group-search input {
                 background: none; border: none; outline: none; flex: 1; min-width: 0;
                 color: var(--on-surface); font: var(--type-body-sm);
             }
-            .group-list { max-height: 200px; overflow-y: auto; padding: 6px 0; }
+            .group-search input::placeholder { color: var(--on-surface-variant); }
+            .group-search input:focus-visible { box-shadow: none; }
+            .group-search:focus-within { box-shadow: inset 0 -2px 0 var(--accent); }
+            .group-list { max-height: 200px; overflow-y: auto; padding: 4px; }
             .group-row {
                 display: flex; align-items: center; gap: 10px;
-                padding: 7px 12px; cursor: pointer;
-                font: var(--type-body-md); color: var(--on-surface);
+                min-height: 36px; padding: 0 10px; cursor: pointer;
+                border-radius: var(--radius-sm);
+                font: var(--type-body-sm); color: var(--on-surface);
+                transition: background 0.15s ease;
             }
             .group-row:hover { background: var(--surface-container-high); }
-            .group-row .dot { width: 12px; height: 12px; border-radius: var(--radius-full); flex-shrink: 0; }
+            .group-row .dot { width: 8px; height: 8px; border-radius: var(--radius-full); flex-shrink: 0; }
             .group-row .gname { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             .group-empty { padding: 14px 12px; font: var(--type-body-sm); color: var(--on-surface-variant); text-align: center; }
-            .selection-count { padding: 8px 12px; font: var(--type-body-sm); color: var(--on-surface-variant); border-top: 1px solid var(--outline-variant); }
-
-            .actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px; }
-            .actions button {
-                padding: 10px 18px; border-radius: var(--radius-md);
-                font: var(--type-label-caps); letter-spacing: 0.05em; text-transform: uppercase; font-weight: 700;
-                border: 1px solid transparent; cursor: pointer;
+            .selection-count {
+                padding: 8px 12px; font: var(--type-label); color: var(--on-surface-variant);
+                border-top: 1px solid var(--outline-variant);
             }
-            .actions .primary { background: var(--primary); color: var(--on-primary); }
-            .actions .primary:disabled { opacity: 0.5; cursor: not-allowed; }
-            .actions .ghost { background: transparent; color: var(--on-surface-variant); border-color: var(--outline-variant); }
+
+            .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 24px; }
+            .actions button {
+                display: inline-flex; align-items: center; justify-content: center;
+                min-height: 40px; padding: 0 18px;
+                border-radius: var(--radius-full);
+                font: 600 14px/20px var(--font-body);
+                transition: background 0.15s ease, border-color 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease;
+            }
+            .actions .primary { background: var(--brand-gradient); color: var(--on-accent); }
+            .actions .primary:hover:not(:disabled) { filter: brightness(1.06); box-shadow: var(--accent-glow); }
+            .actions .primary:disabled { filter: grayscale(1); opacity: 0.5; cursor: not-allowed; }
+            .actions .ghost {
+                padding: 0 16px; font-weight: 500;
+                background: var(--surface-container-high); color: var(--on-surface);
+                border: 1px solid var(--outline-variant);
+            }
+            .actions .ghost:hover { background: var(--surface-container-highest); border-color: var(--outline); }
 
             .error-text {
-                padding: 12px; background: rgba(255, 180, 171, 0.04);
-                border: 1px solid rgba(255, 180, 171, 0.2); color: var(--error);
+                padding: 12px 14px; background: var(--error-container); color: var(--error);
                 border-radius: var(--radius-md); font: var(--type-body-sm); margin-bottom: 16px;
             }
         `,
@@ -267,8 +320,8 @@ export class InviteMemberModal extends LitElement {
                             .value=${this.inviteRole}
                             @change=${(e: Event) => { this.inviteRole = (e.target as HTMLSelectElement).value; }}
                         >
-                            <option value=${ROLE_MEMBER}>${msg('Member')}</option>
-                            <option value=${ROLE_OWNER}>${msg('Owner')}</option>
+                            <option value=${ROLE_MEMBER} ?selected=${this.inviteRole === ROLE_MEMBER}>${msg('Member')}</option>
+                            <option value=${ROLE_OWNER} ?selected=${this.inviteRole === ROLE_OWNER}>${msg('Owner')}</option>
                         </select>
                     </div>
                 `}

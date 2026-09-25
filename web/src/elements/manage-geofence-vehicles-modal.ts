@@ -52,66 +52,109 @@ export class ManageGeofenceVehiclesModal extends LitElement {
         sharedStyles,
         css`
             :host {
+                /* Panel tone. --surface-overlay is a requested token (white in
+                   light mode); until it exists this falls back to the card tone. */
+                --modal-bg: var(--surface-overlay, var(--surface-container-low));
                 position: fixed; inset: 0; z-index: 100;
                 display: flex; align-items: center; justify-content: center;
-                background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px);
+                padding: 16px;
+                background: color-mix(in srgb, var(--canvas) 72%, transparent);
+                backdrop-filter: blur(8px);
+                -webkit-backdrop-filter: blur(8px);
             }
             .card {
-                width: 100%; max-width: 520px; max-height: 80vh;
-                background: var(--surface-container); border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-lg); padding: 24px; color: var(--on-surface);
+                width: 100%; max-width: 520px; max-height: min(80vh, 720px);
+                background: var(--modal-bg); border: none;
+                border-radius: var(--radius-xl); box-shadow: var(--shadow-float);
+                padding: 24px; color: var(--on-surface);
                 position: relative; display: flex; flex-direction: column;
             }
-            .card h2 { font: var(--type-headline-md); margin-bottom: 4px; display: flex; align-items: center; gap: 10px; }
-            .card h2 .dot { width: 14px; height: 14px; border-radius: var(--radius-full); }
+            .card h2 {
+                font: var(--type-headline-md); letter-spacing: -0.01em; color: var(--primary);
+                margin-bottom: 4px; padding-right: 40px;
+                display: flex; align-items: center; gap: 10px;
+            }
+            .card h2 .dot {
+                width: 12px; height: 12px; border-radius: var(--radius-full); flex-shrink: 0;
+                background: var(--c);
+                box-shadow: 0 0 8px color-mix(in srgb, var(--c) 55%, transparent);
+            }
             .card .sub { font: var(--type-body-sm); color: var(--on-surface-variant); margin-bottom: 16px; }
             .close {
                 position: absolute; top: 16px; right: 16px;
-                background: none; border: none; color: var(--on-surface-variant); padding: 4px; cursor: pointer;
+                width: 36px; height: 36px;
+                display: flex; align-items: center; justify-content: center;
+                border-radius: var(--radius-full);
+                color: var(--on-surface-variant);
+                transition: background 0.15s ease, color 0.15s ease;
             }
-            .close:hover { color: var(--primary); }
+            .close:hover { background: var(--surface-container-high); color: var(--on-surface); }
+            .close .material-symbols-outlined { font-size: 20px; }
 
+            /* Same search field as the vehicles panel on the map. */
+            .search {
+                display: flex; align-items: center; gap: 8px;
+                flex-shrink: 0; height: 40px; padding: 0 12px; margin-bottom: 12px;
+                border-radius: var(--radius-md);
+                background: var(--surface-container-high);
+                border: 1px solid var(--outline-variant);
+                transition: border-color 0.15s ease, box-shadow 0.15s ease;
+            }
+            .search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+            .search > .material-symbols-outlined { font-size: 18px; color: var(--on-surface-variant); }
             .search input {
-                width: 100%; box-sizing: border-box;
-                background: var(--surface-container-low); color: var(--on-surface);
-                border: 1px solid var(--outline-variant); border-radius: var(--radius-md);
-                padding: 10px 12px; font-family: inherit; font-size: 14px; margin-bottom: 12px;
+                flex: 1; min-width: 0;
+                background: none; border: none;
+                color: var(--on-surface); font: var(--type-body-sm);
             }
-            .search input:focus { outline: 1px solid var(--primary); }
+            .search input:focus-visible { outline: none; box-shadow: none; }
+            .search input::placeholder { color: var(--on-surface-variant); }
 
-            .list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+            .list {
+                flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;
+                margin: 0 -8px; padding: 0 8px;
+            }
             .list::-webkit-scrollbar { width: 6px; }
             .list::-webkit-scrollbar-thumb { background-color: var(--outline-variant); border-radius: 10px; }
 
             .row {
                 display: flex; align-items: center; gap: 12px;
-                padding: 12px; border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-md); background: var(--surface-container-low);
+                min-height: 56px; padding: 8px 8px 8px 12px;
+                border-radius: var(--radius-md);
+                transition: background 0.15s ease;
             }
+            .row:hover { background: var(--surface-container); }
             .row .meta { flex: 1; min-width: 0; }
-            .row .meta .title { font: var(--type-body-md); color: var(--primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-            .row .meta .sub2 { font: var(--type-label-caps); letter-spacing: 0.05em; text-transform: uppercase; color: var(--on-surface-variant); margin-top: 2px; }
+            .row .meta .title {
+                font: 500 15px/22px var(--font-body); color: var(--primary);
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            }
+            /* Identifiers can outrun the row, so they clip rather than wrap
+               the card wider — the search box is how you find a specific one. */
+            .row .meta .sub2 {
+                font: var(--type-label); color: var(--on-surface-variant); margin-top: 2px;
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            }
 
             .toggle {
-                width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
-                border-radius: var(--radius-full); border: 1px solid var(--outline-variant);
-                background: transparent; color: var(--on-surface-variant); cursor: pointer; flex-shrink: 0;
+                width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+                border-radius: var(--radius-full);
+                background: var(--surface-container-high); color: var(--on-surface-variant);
+                flex-shrink: 0;
+                transition: background 0.15s ease, color 0.15s ease;
             }
-            .toggle.member { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+            .toggle .material-symbols-outlined { font-size: 20px; }
+            .toggle:hover { background: var(--accent-soft); color: var(--accent-ink); }
+            .toggle.member { background: var(--accent-soft-strong); color: var(--accent-ink); }
             .toggle:disabled { opacity: 0.5; cursor: progress; }
 
             .empty-state { color: var(--on-surface-variant); font: var(--type-body-sm); padding: 24px; text-align: center; }
             .error-text {
-                padding: 12px; background: rgba(255, 180, 171, 0.04);
-                border: 1px solid rgba(255, 180, 171, 0.2); color: var(--error);
-                border-radius: var(--radius-md); font: var(--type-body-sm); margin: 12px 0 0;
+                padding: 10px 12px; margin-top: 12px;
+                background: var(--error-container); color: var(--error);
+                border-radius: var(--radius-md); font: var(--type-body-sm);
             }
-            .footer { display: flex; justify-content: flex-end; margin-top: 16px; }
-            .footer button {
-                padding: 10px 18px; border-radius: var(--radius-md);
-                font: var(--type-label-caps); letter-spacing: 0.05em; text-transform: uppercase; font-weight: 700;
-                border: 1px solid transparent; background: var(--primary); color: var(--on-primary); cursor: pointer;
-            }
+            .footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
         `,
     ];
 
@@ -164,15 +207,16 @@ export class ManageGeofenceVehiclesModal extends LitElement {
 
         return html`
             <div class="card" @click=${(e: Event) => e.stopPropagation()}>
-                <button class="close" @click=${this.dispatchClose}>
+                <button class="close" aria-label=${msg('Close')} @click=${this.dispatchClose}>
                     <span class="material-symbols-outlined">close</span>
                 </button>
-                <h2><span class="dot" style="background:${this.geofence.color}"></span>${this.geofence.name}</h2>
+                <h2 style="--c:${this.geofence.color}"><span class="dot"></span>${this.geofence.name}</h2>
                 <p class="sub">${this.loading
                     ? msg('Loading assigned vehicles…')
                     : msg(str`${this.memberIds.size} of ${this.vehicles.length} vehicles assigned.`)}</p>
 
                 <div class="search">
+                    <span class="material-symbols-outlined">search</span>
                     <input type="text" placeholder="${msg('Search vehicles…')}"
                         .value=${this.query}
                         @input=${(e: Event) => { this.query = (e.target as HTMLInputElement).value; }} />
@@ -207,7 +251,7 @@ export class ManageGeofenceVehiclesModal extends LitElement {
                 ${this.errorMessage ? html`<div class="error-text">${this.errorMessage}</div>` : nothing}
 
                 <div class="footer">
-                    <button @click=${this.dispatchClose}>${msg('Done')}</button>
+                    <button class="btn-primary" @click=${this.dispatchClose}>${msg('Done')}</button>
                 </div>
             </div>
         `;

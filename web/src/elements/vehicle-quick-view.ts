@@ -242,27 +242,29 @@ export class VehicleQuickView extends LitElement {
     static styles = [
         sharedStyles,
         css`
+            /* Floats next to the overview's map-control column (24px + 40px + 16px). */
             :host {
                 position: absolute;
-                top: 96px;
-                left: 24px;
+                top: calc(var(--top-bar-height) + 16px);
+                left: 80px;
                 z-index: 600; /* above leaflet panes (max ~400) and map controls */
                 display: block;
                 pointer-events: none; /* panel re-enables; host box shouldn't eat map clicks */
             }
             .panel {
                 pointer-events: auto;
-                width: 340px;
-                max-height: calc(100vh - 200px);
+                width: 348px;
+                max-height: calc(100vh - var(--top-bar-height) - 64px);
                 overflow-y: auto;
-                background: var(--surface-container-low);
-                border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-lg);
-                box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
-                backdrop-filter: blur(12px);
-                -webkit-backdrop-filter: blur(12px);
+                background: var(--glass-bg);
+                backdrop-filter: blur(24px) saturate(1.4);
+                -webkit-backdrop-filter: blur(24px) saturate(1.4);
+                border-radius: var(--radius-xl);
+                box-shadow: var(--shadow-float);
                 display: flex;
                 flex-direction: column;
+                scrollbar-width: thin;
+                scrollbar-color: var(--outline-variant) transparent;
             }
             @media (max-width: 768px) {
                 :host {
@@ -274,8 +276,7 @@ export class VehicleQuickView extends LitElement {
                 .panel {
                     width: 100%;
                     max-height: 60vh;
-                    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-                    border-bottom: none;
+                    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
                 }
             }
 
@@ -284,15 +285,15 @@ export class VehicleQuickView extends LitElement {
                 align-items: flex-start;
                 justify-content: space-between;
                 gap: 12px;
-                padding: 16px 16px 12px;
+                padding: 18px 12px 10px 20px;
             }
             header .identity { min-width: 0; flex: 1; }
             header h3 {
                 display: flex;
                 align-items: center;
                 gap: 8px;
-                font: var(--type-headline-sm, var(--type-body-lg));
-                font-weight: 600;
+                font: 600 17px/24px var(--font-headline);
+                letter-spacing: -0.01em;
                 color: var(--primary);
                 overflow: hidden;
                 text-overflow: ellipsis;
@@ -306,34 +307,42 @@ export class VehicleQuickView extends LitElement {
                 text-overflow: ellipsis;
                 white-space: nowrap;
             }
-            header h3 .favorite-star { color: #f5c84b; font-size: 18px; flex-shrink: 0; }
+            header h3 .favorite-star {
+                color: var(--favorite);
+                font-size: 17px;
+                font-variation-settings: 'FILL' 1;
+                flex-shrink: 0;
+                margin-left: -2px;
+            }
             header h3 .status-dot {
-                width: 10px;
-                height: 10px;
+                width: 9px;
+                height: 9px;
                 border-radius: var(--radius-full);
                 flex-shrink: 0;
             }
-            .status-green { background: #69dbad; }
-            .status-amber { background: #f5c84b; }
-            .status-red   { background: var(--error, #e57373); }
+            .status-green { background: var(--accent); box-shadow: 0 0 8px var(--accent-soft-strong); }
+            .status-amber { background: var(--warning); }
+            .status-red   { background: var(--error); }
             header .sub {
                 font: var(--type-body-sm);
                 color: var(--on-surface-variant);
             }
-            /* Token # on the left, the real-time toggle on the right — its own
+            /* Last seen on the left, the real-time toggle on the right — its own
                row so the pill can never sit on top of the title. */
             header .sub-row {
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
                 gap: 8px;
-                margin-top: 4px;
+                margin-top: 6px;
             }
             header .vin-row {
                 display: flex;
                 align-items: center;
                 gap: 4px;
                 margin-top: 2px;
+                font: 400 12px/16px var(--font-body);
+                letter-spacing: 0.02em;
             }
             header .vin-row .vin-text {
                 overflow: hidden;
@@ -341,189 +350,188 @@ export class VehicleQuickView extends LitElement {
                 white-space: nowrap;
             }
             .copy-btn {
-                background: none;
-                border: none;
                 color: var(--on-surface-variant);
                 padding: 2px;
                 border-radius: var(--radius-sm);
-                cursor: pointer;
                 display: inline-flex;
                 flex-shrink: 0;
                 transition: color 0.15s ease;
             }
             .copy-btn:hover { color: var(--primary); }
-            .copy-btn .material-symbols-outlined { font-size: 14px; }
+            .copy-btn .material-symbols-outlined { font-size: 13px; }
             .identifiers {
                 display: flex;
                 flex-wrap: wrap;
                 align-items: center;
                 gap: 6px;
-                padding: 8px 16px 0;
+                padding: 0 20px 10px;
             }
             .plate-pill {
                 display: inline-flex;
                 align-items: center;
                 gap: 4px;
-                background: var(--surface-container-high);
-                border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-sm);
-                padding: 3px 8px;
-                font: var(--type-label-caps);
-                letter-spacing: 0.04em;
-                color: var(--on-surface-variant);
+                padding: 1px 6px;
+                border-radius: 5px;
+                background: var(--surface-container-highest);
+                font: 600 11px/16px var(--font-body);
+                letter-spacing: 0.06em;
+                color: var(--on-surface);
                 white-space: nowrap;
             }
-            .plate-pill .material-symbols-outlined { font-size: 14px; }
+            .plate-pill .material-symbols-outlined { font-size: 13px; color: var(--on-surface-variant); }
             .close-btn {
-                margin-top: -2px;
-                background: none;
-                border: none;
                 color: var(--on-surface-variant);
                 padding: 6px;
                 border-radius: var(--radius-full);
-                cursor: pointer;
                 display: inline-flex;
                 flex-shrink: 0;
                 transition: background 0.15s ease, color 0.15s ease;
             }
+            .close-btn .material-symbols-outlined { font-size: 20px; }
             .close-btn:hover { background: var(--surface-container-high); color: var(--primary); }
 
+            /* Real-time toggle: neutral pill; on = accent tint (it's live). */
             .rt-btn {
                 display: inline-flex;
                 align-items: center;
                 gap: 6px;
-                padding: 5px 10px;
-                border: 1px solid var(--outline-variant);
+                padding: 4px 10px;
                 border-radius: var(--radius-full);
-                background: none;
+                background: var(--surface-container-high);
                 color: var(--on-surface-variant);
-                font-size: 12px;
-                font-weight: 500;
-                cursor: pointer;
+                font: 500 12px/16px var(--font-body);
                 white-space: nowrap;
-                transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+                transition: background 0.15s ease, color 0.15s ease;
             }
-            .rt-btn:hover { background: var(--surface-container-high); color: var(--primary); }
-            .rt-btn .material-symbols-outlined { font-size: 16px; }
-            .rt-btn.active {
-                color: var(--primary);
-                border-color: var(--primary);
-                background: color-mix(in srgb, var(--primary) 10%, transparent);
+            .rt-btn:hover { background: var(--surface-container-highest); color: var(--on-surface); }
+            .rt-btn .material-symbols-outlined { font-size: 14px; }
+            .rt-btn.active,
+            .rt-btn.active:hover {
+                background: var(--accent-soft-strong);
+                color: var(--accent-ink);
             }
             .rt-dot {
-                width: 8px;
-                height: 8px;
+                width: 7px;
+                height: 7px;
                 border-radius: 50%;
-                background: var(--primary);
-                box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 60%, transparent);
+                background: var(--accent);
                 animation: rt-pulse 1.6s ease-out infinite;
             }
             @keyframes rt-pulse {
-                0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 50%, transparent); }
-                100% { box-shadow: 0 0 0 7px transparent; }
+                0% { box-shadow: 0 0 0 0 var(--accent-soft-strong); }
+                100% { box-shadow: 0 0 0 6px transparent; }
             }
 
             .groups {
                 display: flex;
                 flex-wrap: wrap;
                 gap: 6px;
-                padding: 0 16px 12px;
+                padding: 0 20px 14px;
             }
+            /* Group chip: 12px/500 on a 14% tint of the group color, 6px dot. */
             .group-chip {
                 display: inline-flex;
                 align-items: center;
                 gap: 6px;
-                padding: 3px 10px;
+                padding: 3px 10px 3px 8px;
                 border-radius: var(--radius-full);
-                border: 1px solid var(--outline-variant);
-                background: var(--surface-container-high);
-                font: var(--type-body-sm);
+                background: color-mix(in srgb, var(--gc, var(--outline)) 14%, transparent);
+                font: var(--type-label);
                 color: var(--on-surface);
             }
             .group-chip .swatch {
-                width: 8px;
-                height: 8px;
+                width: 6px;
+                height: 6px;
                 border-radius: var(--radius-full);
             }
 
+            /* Live signals: tonal tiles instead of a ruled grid. */
             .signals {
                 display: grid;
                 grid-template-columns: 1fr 1fr;
-                gap: 1px;
-                background: var(--outline-variant);
-                border-top: 1px solid var(--outline-variant);
+                gap: 6px;
+                padding: 0 12px 4px;
             }
             .signal {
-                background: var(--surface-container-low);
-                padding: 12px 16px;
+                background: color-mix(in srgb, var(--surface-container-high) 70%, transparent);
+                border-radius: var(--radius-md);
+                padding: 10px 12px;
             }
             .signal .label {
                 display: flex;
                 align-items: center;
-                gap: 6px;
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
+                gap: 5px;
+                font: var(--type-label);
                 color: var(--on-surface-variant);
-                margin-bottom: 4px;
+                margin-bottom: 2px;
             }
             .signal .label .material-symbols-outlined { font-size: 14px; }
-            .signal .value { font: var(--type-body-lg); font-weight: 600; color: var(--primary); }
+            .signal .value {
+                font: 600 17px/24px var(--font-headline);
+                letter-spacing: -0.01em;
+                color: var(--primary);
+            }
             .signal .value .unit {
-                font: var(--type-body-sm);
-                font-weight: 400;
+                font: var(--type-label);
                 color: var(--on-surface-variant);
-                margin-left: 4px;
+                margin-left: 3px;
+                letter-spacing: 0;
             }
 
             .state-row {
-                padding: 16px;
-                border-top: 1px solid var(--outline-variant);
+                padding: 8px 20px 12px;
                 font: var(--type-body-sm);
                 color: var(--on-surface-variant);
             }
-            .state-row.perms { color: #f5c84b; display: flex; gap: 8px; align-items: flex-start; }
-            .state-row.perms .material-symbols-outlined { font-size: 16px; margin-top: 1px; }
+            .state-row.perms {
+                margin: 0 12px 4px;
+                padding: 10px 12px;
+                border-radius: var(--radius-md);
+                background: color-mix(in srgb, var(--warning) 12%, transparent);
+                color: var(--warning);
+                display: flex;
+                gap: 8px;
+                align-items: flex-start;
+            }
+            .state-row.perms .material-symbols-outlined { font-size: 16px; margin-top: 2px; }
 
             .trips-head {
                 display: flex;
-                align-items: center;
+                align-items: baseline;
                 justify-content: space-between;
-                padding: 12px 16px 8px;
-                border-top: 1px solid var(--outline-variant);
+                padding: 16px 20px 6px;
             }
             .trips-head .title {
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                color: var(--on-surface-variant);
+                font: 600 15px/22px var(--font-headline);
+                color: var(--primary);
             }
-            .trips-head .title .material-symbols-outlined { font-size: 15px; }
-            .trips-head .window { font: var(--type-body-sm); color: var(--on-surface-variant); opacity: 0.7; }
-            .trips-list { max-height: 220px; overflow-y: auto; }
+            .trips-head .window { font: var(--type-label); color: var(--on-surface-variant); }
+            .trips-list {
+                max-height: 232px;
+                overflow-y: auto;
+                padding: 0 8px;
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+            }
             .trip-row {
                 width: 100%;
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
                 gap: 10px;
-                padding: 10px 16px;
-                background: none;
-                border: none;
-                border-top: 1px solid var(--outline-variant);
-                cursor: pointer;
+                padding: 8px 12px;
+                border-radius: var(--radius-md);
                 text-align: left;
                 transition: background 0.15s ease;
             }
             .trip-row:hover { background: var(--surface-container-high); }
-            .trip-row.selected {
-                background: var(--surface-container-high);
-                box-shadow: inset 3px 0 0 #f5c84b;
+            .trip-row.selected,
+            .trip-row.selected:hover {
+                background: var(--accent-soft);
+                box-shadow: inset 3px 0 0 var(--accent);
             }
-            .trip-row .when { min-width: 0; }
+            .trip-row .when { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
             .trip-row .when .times {
                 display: flex;
                 align-items: center;
@@ -534,27 +542,28 @@ export class VehicleQuickView extends LitElement {
             }
             .trip-row .when .times .material-symbols-outlined { font-size: 13px; color: var(--on-surface-variant); }
             .trip-row .when .ongoing {
-                font: var(--type-label-caps);
-                font-size: 9px;
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                color: #69dbad;
+                font: var(--type-label);
+                color: var(--accent-ink);
             }
             .trip-row .stats {
                 flex-shrink: 0;
                 text-align: right;
-                font: var(--type-body-sm);
+                font: var(--type-label);
                 color: var(--on-surface-variant);
                 white-space: nowrap;
             }
-            .trip-row .stats .dist { color: var(--primary); font-weight: 600; }
-            .trip-row .route-spin { font-size: 14px; color: var(--on-surface-variant); }
+            .trip-row .stats .dist { font: 600 14px/20px var(--font-body); color: var(--primary); }
+            .trip-row .route-spin {
+                font-size: 16px;
+                color: var(--accent-ink);
+                animation: spin 0.8s linear infinite;
+            }
+            @keyframes spin { to { transform: rotate(360deg); } }
 
             footer {
                 display: flex;
                 gap: 10px;
                 padding: 12px 16px 16px;
-                border-top: 1px solid var(--outline-variant);
             }
             footer .btn {
                 flex: 1;
@@ -562,41 +571,37 @@ export class VehicleQuickView extends LitElement {
                 align-items: center;
                 justify-content: center;
                 gap: 6px;
-                padding: 10px 0;
+                min-height: 40px;
+                padding: 0 18px;
                 border-radius: var(--radius-full);
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
+                font: 500 14px/20px var(--font-body);
                 text-decoration: none;
                 cursor: pointer;
-                border: 1px solid var(--outline-variant);
                 background: var(--surface-container-high);
-                color: var(--on-surface-variant);
+                color: var(--on-surface);
+                transition: filter 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
             }
             footer .btn.primary {
-                background: var(--primary);
-                border-color: var(--primary);
-                color: var(--on-primary);
+                background: var(--brand-gradient);
+                color: var(--on-accent);
+                font-weight: 600;
             }
+            footer .btn.primary:hover { filter: brightness(1.06); box-shadow: var(--accent-glow); }
             footer .btn[disabled] { opacity: 0.55; cursor: default; }
-            footer .btn .soon {
-                font-size: 9px;
-                letter-spacing: 0.04em;
-                opacity: 0.8;
-            }
+            footer .btn .soon { font-size: 11px; opacity: 0.8; }
         `,
     ];
 
     private renderTrips() {
         return html`
             <div class="trips-head">
-                <span class="title"><span class="material-symbols-outlined">route</span>${msg('Trips')}</span>
+                <span class="title">${msg('Trips')}</span>
                 <span class="window">${msg('Last 2 weeks')}</span>
             </div>
             ${this.tripsLoading
-                ? html`<div class="state-row" style="border-top:none;">${msg('Loading trips…')}</div>`
+                ? html`<div class="state-row">${msg('Loading trips…')}</div>`
                 : this.trips.length === 0
-                    ? html`<div class="state-row" style="border-top:none;">${msg('No trips in the last 2 weeks.')}</div>`
+                    ? html`<div class="state-row">${msg('No trips in the last 2 weeks.')}</div>`
                     : html`
                         <div class="trips-list custom-scrollbar">
                             ${this.trips.map((trip) => this.renderTripRow(trip))}
@@ -687,7 +692,7 @@ export class VehicleQuickView extends LitElement {
                 ${(v.groups?.length ?? 0) > 0 ? html`
                     <div class="groups">
                         ${v.groups!.map((g) => html`
-                            <span class="group-chip">
+                            <span class="group-chip" style="--gc:${g.color}">
                                 <span class="swatch" style="background:${g.color}"></span>${g.name}
                             </span>
                         `)}

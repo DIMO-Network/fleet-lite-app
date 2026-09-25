@@ -291,17 +291,23 @@ export class ShareVehicleModal extends LitElement {
             :host {
                 position: fixed; inset: 0; z-index: 100;
                 display: flex; align-items: center; justify-content: center;
-                background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px);
+                background: color-mix(in srgb, var(--canvas) 70%, transparent);
+                backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
             }
             .card {
-                width: 100%; max-width: 480px; max-height: 80vh;
-                background: var(--surface-container); border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-lg); padding: 24px; color: var(--on-surface);
+                width: calc(100% - 32px); max-width: 480px; max-height: 80vh;
+                background: var(--surface-overlay);
+                border-radius: var(--radius-xl); box-shadow: var(--shadow-float);
+                padding: 24px; color: var(--on-surface);
                 position: relative; display: flex; flex-direction: column;
                 /* The height cap is only half a constraint without this: anything
                    the body cannot fit has to be clipped to the rounded box, not
                    painted over the page behind it. */
                 overflow: hidden;
+                animation: modal-in 0.18s ease-out;
+            }
+            @keyframes modal-in {
+                from { opacity: 0; transform: translateY(8px) scale(0.98); }
             }
             /* Fixed furniture. The close button and Close/Share are the ways out
                of this modal, so they are never somewhere you have to scroll to
@@ -317,86 +323,98 @@ export class ShareVehicleModal extends LitElement {
                 flex: 1 1 auto; min-height: 0; overflow-y: auto;
                 margin: 0 -24px; padding: 0 24px;
             }
-            .card h2 { font: var(--type-headline-md); margin-bottom: 4px; }
-            /* The treatment every other secondary identifier in the app already
-               gets: --type-label-caps is the mono face, so this matches the
-               owner row's label here and the token line under a vehicle row
-               elsewhere without inventing a style for it. */
+            .card h2 {
+                font: var(--type-headline-md); letter-spacing: -0.01em;
+                color: var(--primary); padding-right: 40px; margin-bottom: 2px;
+            }
+            /* The same secondary-identifier treatment the token line under a
+               vehicle row gets elsewhere, so it reads as meta, not as a title. */
             .card .token-id {
-                font: var(--type-label-caps); letter-spacing: 0.05em;
-                text-transform: uppercase; color: var(--on-surface-variant);
-                margin-bottom: 4px;
+                font: var(--type-label); color: var(--on-surface-variant);
+                margin-bottom: 8px;
             }
             .card .sub { font: var(--type-body-sm); color: var(--on-surface-variant); margin-bottom: 20px; }
             .close {
                 position: absolute; top: 16px; right: 16px;
-                background: none; border: none; color: var(--on-surface-variant); padding: 4px; cursor: pointer;
+                width: 32px; height: 32px; padding: 0;
+                display: inline-flex; align-items: center; justify-content: center;
+                border-radius: var(--radius-full); color: var(--on-surface-variant);
+                transition: background 0.15s ease, color 0.15s ease;
             }
-            .close:hover { color: var(--primary); }
+            .close .material-symbols-outlined { font-size: 20px; }
+            .close:hover { background: var(--surface-container-high); color: var(--on-surface); }
 
             .owner-row {
                 display: flex; align-items: center; justify-content: space-between; gap: 12px;
-                padding: 8px 10px; margin-bottom: 20px;
-                background: var(--surface-container-low); border-radius: var(--radius-md);
+                min-height: 44px; padding: 0 14px; margin-bottom: 20px;
+                background: var(--surface-container); border-radius: var(--radius-md);
                 font: var(--type-body-sm);
             }
-            .owner-row .lbl {
-                font: var(--type-label-caps); letter-spacing: 0.05em;
-                text-transform: uppercase; color: var(--on-surface-variant);
-            }
-            .owner-row .who { font-family: monospace; }
+            .owner-row .lbl { font: var(--type-label); color: var(--on-surface-variant); }
+            .owner-row .who { color: var(--on-surface); font-weight: 500; }
 
             label {
-                display: block; font: var(--type-label-caps); letter-spacing: 0.05em;
-                text-transform: uppercase; color: var(--on-surface-variant); margin-bottom: 8px;
+                display: block; font: var(--type-label); color: var(--on-surface-variant); margin-bottom: 8px;
             }
             input[type='text'] {
-                width: 100%; box-sizing: border-box;
-                background: var(--surface-container-low); color: var(--on-surface);
+                width: 100%; height: 40px; padding: 0 12px;
+                background-color: var(--surface-container-high); color: var(--on-surface);
                 border: 1px solid var(--outline-variant); border-radius: var(--radius-md);
-                padding: 10px 12px; font-family: monospace; font-size: 13px;
+                font: var(--type-body-sm);
+                transition: border-color 0.15s ease, box-shadow 0.15s ease;
             }
-            input[type='text']:focus { outline: 1px solid var(--primary); }
-            input[type='text'].invalid { border-color: var(--error); }
+            input[type='text']::placeholder { color: var(--on-surface-variant); }
+            input[type='text']:hover:not(:disabled):not(:focus-visible) { border-color: var(--outline); }
+            input[type='text']:focus-visible {
+                outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
+            }
+            input[type='text'].invalid,
+            input[type='text'].invalid:hover { border-color: var(--error); }
             /* Same treatment the confirm button already had, so a blocked modal
                reads as one form that is uniformly off rather than a mix of live
                and dead controls. */
             input[type='text']:disabled,
             .durations button:disabled { opacity: 0.5; cursor: not-allowed; }
-            .hint { font: var(--type-body-sm); color: var(--on-surface-variant); margin-top: 6px; }
+            .hint { font: var(--type-body-sm); color: var(--on-surface-variant); margin-top: 8px; }
             .hint.bad { color: var(--error); }
 
-            .durations { display: flex; gap: 8px; margin: 20px 0 4px; }
+            .durations { display: flex; gap: 8px; margin: 0 0 4px; }
             .durations button {
-                flex: 1; padding: 10px; cursor: pointer;
-                background: var(--surface-container-low); color: var(--on-surface-variant);
-                border: 1px solid var(--outline-variant); border-radius: var(--radius-md);
-                font: var(--type-body-sm);
+                flex: 1; min-height: 40px; padding: 0 12px;
+                background: var(--surface-container-high); color: var(--on-surface-variant);
+                border-radius: var(--radius-md);
+                font: 500 14px/20px var(--font-body);
+                transition: background 0.15s ease, color 0.15s ease;
+            }
+            .durations button:hover:not(:disabled):not(.selected) {
+                background: var(--surface-container-highest); color: var(--on-surface);
             }
             .durations button.selected {
-                background: var(--primary); color: var(--on-primary); border-color: var(--primary);
+                background: var(--accent-soft-strong); color: var(--accent-ink);
             }
 
-            .existing { margin-top: 20px; border-top: 1px solid var(--outline-variant); padding-top: 16px; }
+            .existing { margin-top: 28px; }
             .existing h3 {
-                font: var(--type-label-caps); letter-spacing: 0.05em; text-transform: uppercase;
-                color: var(--on-surface-variant); margin-bottom: 10px;
+                font: var(--type-label); color: var(--on-surface-variant); margin-bottom: 8px;
             }
             /* No height cap of its own. The card body scrolls now, and a second
                scroller nested in the first only fights it for the wheel and
                hides grants behind a scrollbar nobody goes looking for. */
-            .existing ul { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+            .existing ul { list-style: none; display: flex; flex-direction: column; gap: 4px; }
             .existing li {
                 display: flex; align-items: center; justify-content: space-between;
-                gap: 12px; padding: 8px 10px;
-                background: var(--surface-container-low); border-radius: var(--radius-md);
+                gap: 12px; min-height: 48px; padding: 0 8px 0 14px;
+                background: var(--surface-container); border-radius: var(--radius-md);
                 font: var(--type-body-sm);
             }
             /* The address is the row's identity, so it is the part that gives
                when the row is tight — the expiry and the control keep their
                size and the wallet ellipsises. It is already abbreviated and
                carries the full value in its title. */
-            .existing li .who { font-family: monospace; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+            .existing li .who {
+                font-weight: 500; color: var(--on-surface);
+                flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            }
             .existing li .when { color: var(--on-surface-variant); flex: none; }
             .existing .empty { color: var(--on-surface-variant); font: var(--type-body-sm); }
 
@@ -406,18 +424,21 @@ export class ShareVehicleModal extends LitElement {
                and never a question about which grant is being withdrawn. */
             .existing li .act { flex: none; display: flex; align-items: center; gap: 6px; }
             .existing li .act button {
-                padding: 3px 8px; cursor: pointer; font: var(--type-body-sm);
-                background: transparent; color: var(--on-surface-variant);
-                border: 1px solid var(--outline-variant); border-radius: var(--radius-sm);
+                min-height: 32px; padding: 0 12px; font: 500 13px/18px var(--font-body);
+                background: var(--surface-container-high); color: var(--on-surface);
+                border-radius: var(--radius-full);
+                transition: background 0.15s ease, color 0.15s ease;
             }
-            .existing li .act button:hover:not(:disabled) { color: var(--on-surface); border-color: var(--on-surface-variant); }
+            .existing li .act button:hover:not(:disabled) { background: var(--surface-container-highest); }
             .existing li .act button:disabled { opacity: 0.5; cursor: not-allowed; }
             /* The destructive half of the confirm is the only thing here that
                wears the error colour — the arming click is not destructive and
                must not read as though it were. */
-            .existing li .act button.danger { color: var(--error); border-color: rgba(255, 180, 171, 0.4); }
-            .existing li .act button.danger:hover:not(:disabled) { border-color: var(--error); }
-            .existing li .ask { color: var(--error); flex: none; }
+            .existing li .act button.danger { background: var(--error-container); color: var(--error); }
+            .existing li .act button.danger:hover:not(:disabled) {
+                background: color-mix(in srgb, var(--error) 18%, var(--error-container));
+            }
+            .existing li .ask { color: var(--error); font-weight: 500; flex: none; }
             /* Disabled-and-greyed says "you can't", not "it's working". The
                pulse is what distinguishes a job in flight from a control that
                is merely off, and it stops for anyone who has asked motion to. */
@@ -431,40 +452,37 @@ export class ShareVehicleModal extends LitElement {
             }
 
             .banner {
-                padding: 12px; border-radius: var(--radius-md);
+                padding: 12px 14px; border-radius: var(--radius-md);
                 font: var(--type-body-sm); margin-top: 16px;
             }
-            .banner.error {
-                background: rgba(255, 180, 171, 0.04);
-                border: 1px solid rgba(255, 180, 171, 0.2); color: var(--error);
-            }
+            .banner.error { background: var(--error-container); color: var(--error); }
             /* A blocked reason is a precondition, not the outcome of pressing
                anything, so it is read before the form instead of in the
                submit-error slot down by the footer. */
             .banner.lead { margin-top: 0; margin-bottom: 20px; }
-            .banner.success {
-                background: rgba(140, 255, 180, 0.04);
-                border: 1px solid rgba(140, 255, 180, 0.2); color: var(--on-surface);
-            }
+            .banner.success { background: var(--accent-soft); color: var(--on-surface); }
             /* "We stopped waiting" is not an outcome. It is deliberately neither
                red nor green — either colour would answer a question that is
                still open. */
-            .banner.notice {
-                background: var(--surface-container-low);
-                border: 1px solid var(--outline-variant); color: var(--on-surface-variant);
-            }
+            .banner.notice { background: var(--surface-container-high); color: var(--on-surface-variant); }
 
-            .footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+            .footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
             .footer button {
-                padding: 10px 18px; border-radius: var(--radius-md); cursor: pointer;
-                font: var(--type-label-caps); letter-spacing: 0.05em; text-transform: uppercase; font-weight: 700;
-                border: 1px solid transparent;
+                display: inline-flex; align-items: center; justify-content: center;
+                min-height: 40px; padding: 0 18px; border-radius: var(--radius-full);
+                font: 600 14px/20px var(--font-body);
+                transition: background 0.15s ease, border-color 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease;
             }
             .footer .cancel {
-                background: transparent; color: var(--on-surface-variant); border-color: var(--outline-variant);
+                padding: 0 16px; font-weight: 500;
+                background: var(--surface-container-high); color: var(--on-surface);
+                border: 1px solid var(--outline-variant);
             }
-            .footer .confirm { background: var(--primary); color: var(--on-primary); }
-            .footer .confirm:disabled { opacity: 0.5; cursor: not-allowed; }
+            .footer .cancel:hover:not(:disabled) { background: var(--surface-container-highest); border-color: var(--outline); }
+            .footer .confirm { background: var(--brand-gradient); color: var(--on-accent); }
+            .footer .confirm:hover:not(:disabled) { filter: brightness(1.06); box-shadow: var(--accent-glow); }
+            .footer button:disabled { opacity: 0.5; cursor: not-allowed; }
+            .footer .confirm:disabled { filter: grayscale(1); }
         `,
     ];
 

@@ -97,9 +97,9 @@ export class VehicleBehaviorPanel extends LitElement {
             :host { display: block; }
             .card {
                 background: var(--surface-container-low);
-                border: 1px solid var(--outline-variant);
+                border: none;
                 border-radius: var(--radius-lg);
-                padding: var(--gutter);
+                padding: 16px 20px 20px;
                 display: flex;
                 flex-direction: column;
                 gap: 20px;
@@ -111,24 +111,16 @@ export class VehicleBehaviorPanel extends LitElement {
                 gap: 12px;
             }
             .head h4 {
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                color: var(--on-surface-variant);
-                display: flex;
-                align-items: center;
-                gap: 8px;
+                font: 600 17px/24px var(--font-headline);
+                letter-spacing: -0.01em;
+                color: var(--primary);
             }
-            .head h4 .material-symbols-outlined { font-size: 16px; }
             .range {
-                font: var(--type-label-caps);
-                font-size: 10px;
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
+                font: var(--type-label);
                 color: var(--on-surface-variant);
-                padding: 4px 8px;
-                border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-sm);
+                padding: 4px 10px;
+                border-radius: var(--radius-full);
+                background: var(--surface-container-high);
             }
 
             .body {
@@ -150,7 +142,7 @@ export class VehicleBehaviorPanel extends LitElement {
             .tile {
                 position: relative;
                 flex: 1;
-                padding: 10px 16px 10px 18px;
+                padding: 12px 16px 12px 18px;
                 border-radius: var(--radius-md);
                 background: var(--surface-container);
                 display: flex;
@@ -168,21 +160,15 @@ export class VehicleBehaviorPanel extends LitElement {
                 background: var(--c);
             }
             .tile .label {
-                font: var(--type-label-caps);
-                font-size: 10px;
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
+                font: var(--type-label);
                 color: var(--on-surface-variant);
                 white-space: nowrap;
                 margin-bottom: 2px;
             }
             .tile .num {
-                font: var(--type-headline-lg);
-                font-size: 28px;
-                letter-spacing: -0.01em;
+                font: 600 30px/34px var(--font-headline);
+                letter-spacing: -0.03em;
                 color: var(--primary);
-                line-height: 1.1;
-                font-variant-numeric: tabular-nums;
             }
             .tile .rate {
                 font: var(--type-body-sm);
@@ -193,7 +179,7 @@ export class VehicleBehaviorPanel extends LitElement {
                 gap: 2px;
                 white-space: nowrap;
             }
-            .tile .rate b { color: var(--on-surface); font-weight: 600; font-size: 14px; font-variant-numeric: tabular-nums; }
+            .tile .rate b { color: var(--on-surface); font-weight: 600; font-size: 14px; }
 
             /* ---- chart ---- */
             .chart-wrap { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
@@ -201,10 +187,7 @@ export class VehicleBehaviorPanel extends LitElement {
                 display: flex;
                 justify-content: space-between;
                 align-items: baseline;
-                font: var(--type-label-caps);
-                font-size: 10px;
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
+                font: var(--type-label);
                 color: var(--on-surface-variant);
             }
             .chart {
@@ -248,7 +231,7 @@ export class VehicleBehaviorPanel extends LitElement {
                 margin-top: 2px;   /* the surface gap between stacked fills */
                 transition: height 0.45s cubic-bezier(0.16, 1, 0.3, 1);
             }
-            .seg.top { border-radius: 3px 3px 0 0; }
+            .seg.top { border-radius: 4px 4px 0 0; }
             .seg.first { margin-top: 0; }
             .idle {
                 height: 2px;
@@ -260,12 +243,8 @@ export class VehicleBehaviorPanel extends LitElement {
             .labels span {
                 flex: 1;
                 min-width: 0;
-                font-family: var(--font-mono);
-                font-size: 9px;
-                letter-spacing: 0.06em;
-                text-transform: uppercase;
+                font: 500 10px/14px var(--font-body);
                 color: var(--on-surface-variant);
-                opacity: 0.7;
                 white-space: nowrap;
                 text-align: center;
                 overflow: visible;
@@ -286,7 +265,7 @@ export class VehicleBehaviorPanel extends LitElement {
             }
             .swatch {
                 width: 10px; height: 10px;
-                border-radius: 2px;
+                border-radius: 3px;
                 background: var(--c);
                 flex-shrink: 0;
             }
@@ -299,9 +278,8 @@ export class VehicleBehaviorPanel extends LitElement {
                 min-width: 210px;
                 padding: 10px 12px;
                 border-radius: var(--radius-md);
-                background: var(--surface-container-highest);
-                border: 1px solid var(--outline-variant);
-                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+                background: var(--surface-bright);
+                box-shadow: var(--shadow-float);
                 pointer-events: none;
                 font: var(--type-body-sm);
                 font-size: 12px;
@@ -316,7 +294,7 @@ export class VehicleBehaviorPanel extends LitElement {
                 line-height: 18px;
             }
             .tip .t-row .n { display: inline-flex; align-items: center; gap: 6px; color: var(--on-surface-variant); white-space: nowrap; }
-            .tip .t-row b { font-weight: 600; font-variant-numeric: tabular-nums; }
+            .tip .t-row b { font-weight: 600; }
             .tip .t-foot {
                 margin-top: 6px;
                 padding-top: 6px;
@@ -367,7 +345,7 @@ export class VehicleBehaviorPanel extends LitElement {
         return html`
             <div class="card">
                 <div class="head">
-                    <h4><span class="material-symbols-outlined">speed</span>${msg('Driving behaviour')}</h4>
+                    <h4>${msg('Driving behaviour')}</h4>
                     <span class="range">${msg(str`Last ${DAYS} days`)}</span>
                 </div>
                 ${this.renderBody()}

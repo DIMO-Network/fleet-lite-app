@@ -83,97 +83,141 @@ export class GroupsManagementView extends LitElement {
                 position: sticky; top: 0; z-index: 40; flex-shrink: 0;
                 display: flex; align-items: center; justify-content: space-between;
                 height: var(--top-bar-height); padding: 0 var(--gutter);
-                background: var(--background); border-bottom: 1px solid var(--outline-variant);
+                /* Same tone as the sheet, so it reads as transparent while still
+                   covering cards that scroll under it. */
+                background: var(--background);
             }
-            header.top-bar h2 { font: var(--type-headline-md); color: var(--primary); }
+            header.top-bar h2 { font: var(--type-headline-md); letter-spacing: -0.01em; color: var(--primary); }
             .header-actions { display: flex; align-items: center; gap: 20px; }
             .group-total { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; }
-            .group-total .num { font: var(--type-body-lg); font-weight: 700; color: var(--primary); }
-            .group-total .lbl {
-                font: var(--type-label-caps); letter-spacing: 0.05em; text-transform: uppercase;
-                color: var(--on-surface-variant);
-            }
-            .new-btn {
-                display: flex; align-items: center; gap: 8px;
-                background: var(--primary); color: var(--on-primary);
-                border: none; padding: 10px 16px; border-radius: var(--radius-md);
-                font: var(--type-label-caps); letter-spacing: 0.05em; text-transform: uppercase; font-weight: 700; cursor: pointer;
-            }
-            .canvas { flex: 1; width: 100%; max-width: 880px; margin: 0 auto; padding: var(--stack-lg) var(--gutter); box-sizing: border-box; }
+            .group-total .num { font: 600 15px/22px var(--font-headline); color: var(--primary); }
+            .group-total .lbl { font: var(--type-label); color: var(--on-surface-variant); }
+            .new-btn { padding-left: 14px; }
+            .new-btn .material-symbols-outlined { font-size: 20px; }
 
-            /* Search lives on its own row above the grid. */
+            .canvas {
+                flex: 1; width: 100%; max-width: 1200px;
+                padding: 4px var(--gutter) var(--stack-lg);
+            }
+
             .toolbar {
                 display: flex;
                 align-items: center;
                 gap: 12px;
                 flex-wrap: wrap;
-                margin-bottom: var(--stack-md);
+                margin-bottom: 20px;
             }
-            /* Same search treatment as the fleet list view. */
+            /* Same search treatment as the vehicles panel on the map. */
             .search-wrap {
                 display: flex;
                 align-items: center;
                 gap: 8px;
-                background: var(--surface-container);
-                border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-md);
-                padding: 8px 12px;
+                height: 40px;
+                padding: 0 12px;
                 flex: 1;
                 max-width: 360px;
+                border-radius: var(--radius-md);
+                background: var(--surface-container-high);
+                transition: box-shadow 0.15s ease;
             }
-            .search-wrap .material-symbols-outlined { font-size: 18px; color: var(--on-surface-variant); }
+            .search-wrap:focus-within { box-shadow: 0 0 0 2px var(--accent-soft-strong); }
+            .search-wrap > .material-symbols-outlined { font-size: 18px; color: var(--on-surface-variant); }
             .search-wrap input {
                 background: none;
                 border: none;
                 outline: none;
                 color: var(--on-surface);
-                font: var(--type-body-md);
+                font: var(--type-body-sm);
                 flex: 1;
+                min-width: 0;
             }
+            .search-wrap input::placeholder { color: var(--on-surface-variant); }
+            .search-wrap input::-webkit-search-cancel-button { display: none; }
             .clear-btn {
-                background: none;
-                border: none;
-                padding: 0;
+                padding: 2px;
                 color: var(--on-surface-variant);
-                cursor: pointer;
-                display: flex;
+                border-radius: var(--radius-full);
+                display: inline-flex;
             }
+            .clear-btn:hover { color: var(--primary); background: var(--surface-container-highest); }
             .clear-btn .material-symbols-outlined { font-size: 16px; }
 
-            .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+            .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(272px, 1fr)); gap: 16px; }
 
+            /* Tonal card; the group color lives in the tile, not the chrome.
+               --c is set per card from the group's (arbitrary) hex color. */
             .group-card {
-                background: var(--surface-container-low); border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-lg); padding: 16px; display: flex; flex-direction: column; gap: 12px;
+                background: var(--surface-container-low);
+                border-radius: var(--radius-lg);
+                padding: 20px;
+                display: flex; flex-direction: column; gap: 20px;
+                min-height: 148px;
+                transition: background 0.15s ease;
             }
-            .group-head { display: flex; align-items: center; gap: 12px; }
-            .group-head .dot { width: 18px; height: 18px; border-radius: var(--radius-full); flex-shrink: 0; }
-            .group-head .name { font: var(--type-body-lg); font-weight: 600; color: var(--primary); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-            .count { font: var(--type-body-sm); color: var(--on-surface-variant); }
+            .group-card:hover { background: var(--surface-container); }
+            .group-head { display: flex; align-items: center; gap: 12px; min-height: 36px; }
+            .group-head .tile {
+                width: 36px; height: 36px; flex-shrink: 0;
+                border-radius: var(--radius-md);
+                background: color-mix(in srgb, var(--c) 16%, transparent);
+                display: flex; align-items: center; justify-content: center;
+            }
+            .group-head .dot {
+                width: 12px; height: 12px; border-radius: var(--radius-full);
+                background: var(--c);
+                box-shadow: 0 0 10px color-mix(in srgb, var(--c) 55%, transparent);
+            }
+            .group-head .name {
+                font: 600 17px/24px var(--font-headline); letter-spacing: -0.01em; color: var(--primary);
+                flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            }
 
-            .card-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+            .foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; margin-top: auto; }
+            .count { display: flex; align-items: baseline; gap: 8px; }
+            .count .n { font: 600 32px/36px var(--font-headline); letter-spacing: -0.03em; color: var(--primary); }
+            .count .unit { font: var(--type-body-sm); color: var(--on-surface-variant); }
+
+            /* Quiet icon actions: names live in aria-label + tooltip. */
+            .card-actions { display: flex; align-items: center; gap: 2px; margin: 0 -6px -4px 0; }
             .card-actions button {
-                display: flex; align-items: center; gap: 6px;
-                background: transparent; color: var(--on-surface-variant);
-                border: 1px solid var(--outline-variant); border-radius: var(--radius-md);
-                padding: 8px 10px; font: var(--type-label-caps); letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer;
-                transition: color 0.15s ease, border-color 0.15s ease;
+                width: 34px; height: 34px;
+                display: inline-flex; align-items: center; justify-content: center;
+                border-radius: var(--radius-full);
+                color: var(--on-surface-variant);
+                transition: background 0.15s ease, color 0.15s ease;
             }
-            .card-actions button:hover { color: var(--primary); border-color: var(--primary); }
-            .card-actions button.danger:hover { color: var(--error); border-color: var(--error); }
-            .card-actions .material-symbols-outlined { font-size: 16px; }
+            .card-actions button:hover,
+            .card-actions button:focus-visible { background: var(--surface-container-high); color: var(--on-surface); }
+            .card-actions button.danger:hover,
+            .card-actions button.danger:focus-visible { background: var(--error-container); color: var(--error); }
+            .card-actions .material-symbols-outlined { font-size: 20px; }
 
-            .confirm { display: flex; align-items: center; gap: 8px; font: var(--type-body-sm); color: var(--error); }
+            .confirm {
+                display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+                margin-top: auto;
+                font: var(--type-body-sm); color: var(--on-surface);
+            }
+            .confirm span { flex: 1 1 100%; }
             .confirm button {
-                border: none; border-radius: var(--radius-sm); padding: 6px 10px;
-                font: var(--type-label-caps); letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer;
+                min-height: 32px; padding: 0 14px;
+                border-radius: var(--radius-full);
+                font: 500 13px/18px var(--font-body);
+                transition: filter 0.15s ease, background 0.15s ease;
             }
-            .confirm .yes { background: var(--error); color: var(--on-primary); }
+            .confirm .yes { background: var(--error-container); color: var(--error); font-weight: 600; }
+            .confirm .yes:hover { filter: brightness(1.15); }
             .confirm .no { background: var(--surface-container-high); color: var(--on-surface); }
+            .confirm .no:hover { background: var(--surface-container-highest); }
 
-            .empty-state { color: var(--on-surface-variant); font: var(--type-body-md); padding: 48px 24px; text-align: center; }
+            .empty-state { color: var(--on-surface-variant); font: var(--type-body-md); padding: 64px 24px; text-align: center; }
             .empty-state.error { color: var(--error); }
-            .empty-state .material-symbols-outlined { font-size: 40px; display: block; margin-bottom: 12px; opacity: 0.6; }
+            .empty-state .material-symbols-outlined {
+                font-size: 28px; display: flex; align-items: center; justify-content: center;
+                width: 56px; height: 56px; margin: 0 auto 16px;
+                border-radius: var(--radius-full);
+                background: var(--surface-container-high);
+                color: var(--on-surface-variant);
+            }
         `,
     ];
 
@@ -185,32 +229,38 @@ export class GroupsManagementView extends LitElement {
 
     private renderCard(g: FleetGroup) {
         const confirming = this.confirmingDeleteId === g.id;
+        const count = g.vehicleCount ?? 0;
         return html`
-            <div class="group-card">
+            <div class="group-card" style="--c:${g.color}">
                 <div class="group-head">
-                    <span class="dot" style="background:${g.color}"></span>
-                    <span class="name">${g.name}</span>
+                    <span class="tile"><span class="dot"></span></span>
+                    <span class="name" title=${g.name}>${g.name}</span>
                 </div>
-                <span class="count">${g.vehicleCount ?? 0} ${(g.vehicleCount ?? 0) === 1 ? msg('vehicle') : msg('vehicles')}</span>
-                ${this.readOnly
-                    ? nothing
-                    : confirming
-                        ? html`<div class="confirm">
-                            <span>${msg(str`Delete “${g.name}”?`)}</span>
-                            <button class="yes" @click=${() => this.onDelete(g)}>${msg('Delete')}</button>
-                            <button class="no" @click=${() => { this.confirmingDeleteId = null; }}>${msg('Cancel')}</button>
-                        </div>`
-                        : html`<div class="card-actions">
-                            <button @click=${() => { this.managing = g; }}>
-                                <span class="material-symbols-outlined">directions_car</span> ${msg('Vehicles')}
-                            </button>
-                            <button @click=${() => { this.editing = g; }}>
-                                <span class="material-symbols-outlined">palette</span> ${msg('Color')}
-                            </button>
-                            <button class="danger" @click=${() => { this.confirmingDeleteId = g.id; }}>
-                                <span class="material-symbols-outlined">delete</span> ${msg('Delete')}
-                            </button>
-                        </div>`}
+                ${confirming && !this.readOnly
+                    ? html`<div class="confirm">
+                        <span>${msg(str`Delete “${g.name}”?`)}</span>
+                        <button class="yes" @click=${() => this.onDelete(g)}>${msg('Delete')}</button>
+                        <button class="no" @click=${() => { this.confirmingDeleteId = null; }}>${msg('Cancel')}</button>
+                    </div>`
+                    : html`<div class="foot">
+                        <div class="count">
+                            <span class="n">${count}</span>
+                            <span class="unit">${count === 1 ? msg('vehicle') : msg('vehicles')}</span>
+                        </div>
+                        ${this.readOnly
+                            ? nothing
+                            : html`<div class="card-actions">
+                                <button aria-label=${msg('Vehicles')} title=${msg('Vehicles')} @click=${() => { this.managing = g; }}>
+                                    <span class="material-symbols-outlined">directions_car</span>
+                                </button>
+                                <button aria-label=${msg('Color')} title=${msg('Color')} @click=${() => { this.editing = g; }}>
+                                    <span class="material-symbols-outlined">palette</span>
+                                </button>
+                                <button class="danger" aria-label=${msg('Delete')} title=${msg('Delete')} @click=${() => { this.confirmingDeleteId = g.id; }}>
+                                    <span class="material-symbols-outlined">delete</span>
+                                </button>
+                            </div>`}
+                    </div>`}
             </div>
         `;
     }
@@ -227,7 +277,7 @@ export class GroupsManagementView extends LitElement {
                             <span class="lbl">${this.groups.length === 1 ? msg('group total') : msg('groups total')}</span>
                         </span>`}
                     ${!this.readOnly
-                        ? html`<button class="new-btn" @click=${() => { this.creating = true; }}>
+                        ? html`<button class="btn-primary new-btn" @click=${() => { this.creating = true; }}>
                             <span class="material-symbols-outlined">add</span> ${msg('New group')}
                         </button>`
                         : nothing}

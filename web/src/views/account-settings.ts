@@ -91,40 +91,41 @@ export class AccountSettingsView extends LitElement {
                 overflow-y: auto;
                 background: var(--background);
             }
+            :host > * { flex-shrink: 0; }
 
             header.top-bar {
                 position: sticky;
                 top: 0;
                 z-index: 40;
-                height: var(--top-bar-height, 80px);
-                flex-shrink: 0;
+                height: var(--top-bar-height);
                 background: var(--background);
-                border-bottom: 1px solid var(--outline-variant);
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
-                padding: 0 var(--margin-desktop);
+                padding: 0 var(--gutter);
             }
             @media (max-width: 768px) {
                 header.top-bar { display: none; }
             }
-            header.top-bar h2 { font: var(--type-headline-md); color: var(--primary); }
-            header.top-bar .right { display: flex; align-items: center; gap: 16px; }
+            header.top-bar h2 { font: var(--type-headline-md); letter-spacing: -0.01em; color: var(--primary); }
+            header.top-bar .right { display: flex; align-items: center; gap: 12px; }
             .icon-btn {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 40px;
+                height: 40px;
                 color: var(--on-surface-variant);
-                background: none;
-                border: none;
-                padding: 8px;
                 border-radius: var(--radius-full);
-                transition: background 0.15s ease;
+                transition: background 0.15s ease, color 0.15s ease;
             }
-            .icon-btn:hover { background: var(--surface-container-high); color: var(--primary); }
+            .icon-btn .material-symbols-outlined { font-size: 22px; }
+            .icon-btn:hover { background: var(--surface-container-high); color: var(--on-surface); }
             .avatar {
                 width: 32px;
                 height: 32px;
                 border-radius: var(--radius-full);
                 background: var(--surface-container-high);
-                border: 1px solid var(--outline-variant);
                 overflow: hidden;
             }
             .avatar img { width: 100%; height: 100%; object-fit: cover; }
@@ -134,7 +135,7 @@ export class AccountSettingsView extends LitElement {
                 width: 100%;
                 max-width: 800px;
                 margin: 0 auto;
-                padding: var(--stack-lg) var(--gutter);
+                padding: var(--stack-md) var(--gutter) 48px;
             }
             @media (max-width: 768px) {
                 .canvas { padding: var(--stack-lg) var(--margin-mobile); }
@@ -142,72 +143,79 @@ export class AccountSettingsView extends LitElement {
 
             .profile-block {
                 margin-bottom: var(--stack-lg);
-                padding: 24px;
+                padding: 20px 24px;
                 background: var(--surface-container-low);
-                border: 1px solid var(--outline-variant);
                 border-radius: var(--radius-lg);
             }
             .profile-block .wallet {
                 display: flex;
                 align-items: center;
-                gap: 8px;
+                gap: 6px;
                 color: var(--primary);
-                margin-bottom: 4px;
-                font: var(--type-body-lg);
+                font: 600 17px/24px var(--font-headline);
+                letter-spacing: 0.01em;
             }
             .profile-block .wallet button {
-                background: none;
-                border: none;
+                display: inline-flex;
+                padding: 6px;
+                border-radius: var(--radius-full);
                 color: var(--on-surface-variant);
-                padding: 4px;
-                cursor: pointer;
+                transition: background 0.15s ease, color 0.15s ease;
             }
-            .profile-block .wallet button:hover { color: var(--primary); }
-            .profile-block .email { font: var(--type-body-md); color: var(--on-surface-variant); }
+            .profile-block .wallet button:hover { background: var(--surface-container-high); color: var(--on-surface); }
+            .profile-block .email { font: var(--type-body-sm); color: var(--on-surface-variant); margin-top: 2px; }
             .profile-block .empty { font: var(--type-body-sm); color: var(--on-surface-variant); }
 
             .section { margin-bottom: 32px; }
             .section-title {
-                font: var(--type-body-md);
-                font-weight: 500;
-                color: var(--on-surface-variant);
-                margin-bottom: 16px;
-                padding: 0 8px;
+                font: 600 15px/22px var(--font-headline);
+                color: var(--primary);
+                margin-bottom: 12px;
+                padding: 0 4px;
             }
 
             .row-group {
                 background: var(--surface-container-low);
-                border: 1px solid var(--outline-variant);
                 border-radius: var(--radius-lg);
                 overflow: hidden;
             }
             .row {
+                position: relative;
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
-                padding: 16px;
+                min-height: 56px;
+                padding: 0 12px 0 16px;
                 cursor: pointer;
-                border-bottom: 1px solid var(--outline-variant);
                 color: inherit;
                 text-decoration: none;
                 transition: background 0.15s ease;
             }
-            .row:last-child { border-bottom: none; }
-            .row:hover { background: var(--surface-container-high); }
+            /* Inset divider, starting under the label (not the icon). */
+            .row + .row::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 54px;
+                right: 0;
+                height: 1px;
+                background: var(--outline-variant);
+            }
+            .row:hover { background: var(--surface-container); }
             .row .left-group { display: flex; align-items: center; gap: 16px; }
-            .row .right-group { display: flex; align-items: center; gap: 12px; }
+            .row .right-group { display: flex; align-items: center; gap: 8px; }
             .row .trailing {
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
+                font: var(--type-body-sm);
                 color: var(--on-surface-variant);
             }
             .row .label {
-                font: var(--type-body-lg);
-                color: var(--primary);
+                font: 500 15px/22px var(--font-body);
+                color: var(--on-surface);
             }
+            .row .material-symbols-outlined { font-size: 22px; }
             .row .material-symbols-outlined.muted { color: var(--on-surface-variant); }
-            .row:hover .left-group > .material-symbols-outlined { color: var(--primary); }
+            .row .right-group > .material-symbols-outlined { font-size: 20px; opacity: 0.7; }
+            .row:hover .left-group > .material-symbols-outlined { color: var(--on-surface); }
         `,
     ];
 

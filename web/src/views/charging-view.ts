@@ -11,7 +11,7 @@ import { themeService } from '../services/theme-service.ts';
 import { ChargingCache } from '../services/charging-cache.ts';
 import { ChargingService } from '../services/charging-service.ts';
 import { ChargingFleetSummary, ChargingSettings, ChargingSessionView } from '../types/charging.ts';
-import { createFleetMap, applyTileTheme } from '../utils/fleet-map.ts';
+import { createFleetMap, applyTileTheme, createVehicleClusterGroup, MAP_COLORS } from '../utils/fleet-map.ts';
 
 function formatMoney(n?: number, currency = 'USD'): string {
     if (n == null) return '—';
@@ -77,49 +77,140 @@ export class ChargingView extends LitElement {
                 height: 100%;
                 overflow-y: auto;
                 background: var(--background);
+                padding-bottom: var(--stack-lg);
             }
+            /* The host scrolls; its sections must not shrink to fit it. */
+            :host > * { flex-shrink: 0; }
             header.top-bar {
                 position: sticky;
                 top: 0;
                 z-index: 40;
+                flex-shrink: 0;
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
-                height: var(--top-bar-height, 80px);
+                gap: 12px;
+                height: var(--top-bar-height);
                 padding: 0 var(--gutter);
                 background: var(--background);
-                border-bottom: 1px solid var(--border-color);
             }
+            header.top-bar h1 { font: var(--type-headline-md); letter-spacing: -0.01em; color: var(--primary); }
+
+            /* Big numbers, label above (column-reverse keeps the markup order). */
             .totals {
                 display: flex;
+                flex-wrap: wrap;
                 gap: 24px;
-                padding: 16px var(--gutter);
+                padding: 8px var(--gutter) 24px;
             }
-            .totals .stat { display: flex; flex-direction: column; }
-            .totals .stat .value { font-size: 1.4rem; font-weight: 600; }
-            .totals .stat .label { font-size: 0.8rem; color: var(--text-secondary); }
-            #charging-map { height: 360px; flex-shrink: 0; margin: 0 var(--gutter); border-radius: 8px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-            th, td { text-align: left; padding: 8px 16px; border-bottom: 1px solid var(--border-color); }
-
-            .export-btn {
+            .totals .stat {
                 display: flex;
-                align-items: center;
-                gap: 8px;
-                padding: 10px 16px;
-                border-radius: var(--radius-md);
-                background: var(--primary);
-                color: var(--on-primary);
-                border: none;
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                font-weight: 700;
-                cursor: pointer;
-                transition: opacity 0.15s ease;
+                flex-direction: column-reverse;
+                justify-content: flex-end;
+                gap: 6px;
+                min-width: 180px;
             }
-            .export-btn:hover { opacity: 0.9; }
-            .export-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+            .totals .stat + .stat { padding-left: 24px; border-left: 1px solid var(--outline-variant); }
+            .totals .stat .value {
+                font: var(--type-data-display);
+                letter-spacing: -0.03em;
+                color: var(--primary);
+                white-space: nowrap;
+            }
+            .totals .stat .label { font: var(--type-label); color: var(--on-surface-variant); }
+
+            #charging-map {
+                height: 360px;
+                flex-shrink: 0;
+                margin: 0 var(--gutter);
+                border-radius: var(--radius-lg);
+                overflow: hidden;
+                background: var(--surface-container-low);
+                isolation: isolate;
+            }
+            #charging-map.dark-tiles .leaflet-tile { filter: brightness(1.8); }
+            #charging-map .leaflet-control-attribution { font-size: 9px; opacity: 0.5; }
+            /* Leaflet's white zoom buttons → floating glass pills. */
+            #charging-map .leaflet-bar {
+                border: none;
+                border-radius: var(--radius-full);
+                overflow: hidden;
+                box-shadow: var(--shadow-float);
+                background: var(--glass-bg);
+                backdrop-filter: blur(16px);
+                -webkit-backdrop-filter: blur(16px);
+            }
+            #charging-map .leaflet-bar a {
+                width: 36px;
+                height: 36px;
+                line-height: 36px;
+                background: transparent;
+                color: var(--on-surface);
+                border-bottom: 1px solid var(--outline-variant);
+                font: 400 18px/36px var(--font-body);
+                transition: background 0.15s ease;
+            }
+            #charging-map .leaflet-bar a:last-child { border-bottom: none; }
+            #charging-map .leaflet-bar a:hover { background: var(--surface-container-high); }
+            #charging-map .leaflet-bar a.leaflet-disabled { color: var(--on-surface-variant); opacity: 0.5; }
+            #charging-map .leaflet-popup-content-wrapper,
+            #charging-map .leaflet-popup-tip {
+                background: var(--surface-container-high);
+                color: var(--on-surface);
+                box-shadow: var(--shadow-float);
+            }
+            #charging-map .leaflet-popup-content-wrapper { border-radius: var(--radius-md); }
+            #charging-map .leaflet-popup-content { font: var(--type-body-sm); margin: 12px 14px; }
+            #charging-map .leaflet-popup-content > div > div:first-child { font-weight: 600; color: var(--primary); }
+            #charging-map a.leaflet-popup-close-button { color: var(--on-surface-variant); }
+
+            /* ── Sessions table (DESIGN.md) ─────────────────────────── */
+            table {
+                width: calc(100% - 2 * var(--gutter));
+                margin: 16px var(--gutter) 0;
+                border-collapse: collapse;
+                font: var(--type-body-sm);
+                color: var(--on-surface);
+            }
+            th {
+                height: 40px;
+                padding: 0 12px;
+                text-align: left;
+                font: var(--type-label);
+                color: var(--on-surface-variant);
+                border-bottom: 1px solid var(--outline-variant);
+                white-space: nowrap;
+            }
+            td {
+                height: 52px;
+                padding: 8px 12px;
+                border-bottom: 1px solid var(--outline-variant);
+                vertical-align: middle;
+            }
+            tbody tr { transition: background 0.12s ease; }
+            tbody tr:hover { background: var(--surface-container-low); }
+            tbody tr:last-child td { border-bottom: none; }
+            tbody td:first-child { color: var(--primary); font-weight: 500; }
+            td:nth-child(2), td:nth-child(3) { color: var(--on-surface-variant); white-space: nowrap; }
+            th.num, td.num { text-align: right; white-space: nowrap; }
+
+            /* Primary action: DIMO gradient pill. */
+            .export-btn {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+                min-height: 40px;
+                padding: 0 18px;
+                border-radius: var(--radius-full);
+                background: var(--brand-gradient);
+                color: var(--on-accent);
+                font: 600 14px/20px var(--font-body);
+                white-space: nowrap;
+                transition: filter 0.15s ease, box-shadow 0.15s ease;
+            }
+            .export-btn:hover { filter: brightness(1.06); box-shadow: var(--accent-glow); }
+            .export-btn:disabled { filter: grayscale(1) opacity(0.5); box-shadow: none; cursor: not-allowed; }
 
             .settings-form {
                 display: flex;
@@ -127,58 +218,56 @@ export class ChargingView extends LitElement {
                 gap: 16px;
                 align-items: flex-end;
                 margin: 16px var(--gutter);
-                padding: 16px;
+                padding: 20px;
                 background: var(--surface-container-low);
-                border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-md);
+                border-radius: var(--radius-lg);
             }
-            .settings-form .field { display: flex; flex-direction: column; gap: 6px; }
+            .settings-form .field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 160px; }
             .settings-form label {
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
+                font: var(--type-label);
                 color: var(--on-surface-variant);
             }
             .settings-form input {
-                background: var(--surface-container);
+                height: 40px;
+                background: var(--surface-container-high);
                 color: var(--on-surface);
                 border: 1px solid var(--outline-variant);
                 border-radius: var(--radius-md);
-                padding: 10px 12px;
-                font-family: inherit;
-                font-size: 14px;
+                padding: 0 12px;
+                font: var(--type-body-sm);
             }
-            .settings-form input:focus { outline: 1px solid var(--primary); }
             .settings-form .save-btn {
-                padding: 10px 16px;
-                border-radius: var(--radius-md);
-                background: var(--primary);
-                color: var(--on-primary);
-                border: none;
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                font-weight: 700;
-                cursor: pointer;
-                transition: opacity 0.15s ease;
+                min-height: 40px;
+                padding: 0 18px;
+                border-radius: var(--radius-full);
+                background: var(--surface-container-high);
+                color: var(--on-surface);
+                border: 1px solid var(--outline-variant);
+                font: 500 14px/20px var(--font-body);
+                white-space: nowrap;
+                transition: background 0.15s ease, border-color 0.15s ease;
             }
-            .settings-form .save-btn:hover { opacity: 0.9; }
+            .settings-form .save-btn:hover { background: var(--surface-container-highest); border-color: var(--outline); }
             .settings-form .save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-            .settings-form .form-error { font: var(--type-body-sm); color: var(--error); }
+            .settings-form .form-error { font: var(--type-body-sm); color: var(--error); flex-basis: 100%; }
 
             .vehicle-select {
-                background: var(--surface-container);
-                border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-md);
+                align-self: flex-start;
+                height: 40px;
+                min-width: 220px;
+                margin: 16px var(--gutter) 0;
+                padding: 0 12px;
+                font: 500 13px/18px var(--font-body);
                 color: var(--on-surface);
-                font: var(--type-body-sm);
-                padding: 8px 12px;
-                margin: 0 var(--gutter) 16px;
-                outline: none;
-                cursor: pointer;
             }
 
-            .error { color: var(--error, #d33); padding: 0 var(--gutter); }
+            :host > p:not(.error) {
+                padding: 48px var(--gutter);
+                text-align: center;
+                color: var(--on-surface-variant);
+                font: var(--type-body-md);
+            }
+            .error { color: var(--error); font: var(--type-body-sm); padding: 0 var(--gutter) 8px; }
         `,
     ];
 
@@ -225,7 +314,7 @@ export class ChargingView extends LitElement {
         if (el && !this.leafletMap) {
             this.leafletMap = createFleetMap(el, { zoomControl: true });
             this.tileLayer = applyTileTheme(this.leafletMap, null, el, themeService.current);
-            this.markers = L.markerClusterGroup();
+            this.markers = createVehicleClusterGroup();
             this.leafletMap.addLayer(this.markers);
         }
         if (this.summary !== this.renderedSummary) {
@@ -265,7 +354,7 @@ export class ChargingView extends LitElement {
         for (const s of this.summary?.sessions ?? []) {
             if (s.lat == null || s.lng == null) continue;
             const marker = L.circleMarker([s.lat, s.lng], {
-                radius: 6, fillColor: '#69dbad', color: '#fff', weight: 1.5, fillOpacity: 0.85,
+                radius: 6, fillColor: MAP_COLORS.mint, color: MAP_COLORS.ink, weight: 2, fillOpacity: 1,
             });
             marker.bindPopup(this.buildPopupContent(s));
             marker.on('click', () => { this.selectedTokenId = s.tokenId; });
@@ -385,9 +474,9 @@ export class ChargingView extends LitElement {
                                 <th>${msg('Vehicle')}</th>
                                 <th>${msg('Started')}</th>
                                 <th>${msg('Ended')}</th>
-                                <th>${msg('Energy')}</th>
-                                <th>${msg('Cost')}</th>
-                                <th>${msg('Saved')}</th>
+                                <th class="num">${msg('Energy')}</th>
+                                <th class="num">${msg('Cost')}</th>
+                                <th class="num">${msg('Saved')}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -397,9 +486,9 @@ export class ChargingView extends LitElement {
                                         <td>${s.vehicleLabel}</td>
                                         <td>${new Date(s.startedAt).toLocaleString()}</td>
                                         <td>${new Date(s.endedAt).toLocaleString()}</td>
-                                        <td>${formatEnergyCell(s)}</td>
-                                        <td>${formatMoney(s.cost, s.currency)}</td>
-                                        <td>${formatMoney(s.savings, s.currency)}</td>
+                                        <td class="num">${formatEnergyCell(s)}</td>
+                                        <td class="num">${formatMoney(s.cost, s.currency)}</td>
+                                        <td class="num">${formatMoney(s.savings, s.currency)}</td>
                                     </tr>
                                 `,
                             )}

@@ -60,9 +60,9 @@ export class SideNav extends LitElement {
                 flex-direction: column;
                 width: var(--sidebar-width);
                 height: 100vh;
-                padding: var(--stack-md);
-                background: var(--surface-container-low);
-                border-right: 1px solid var(--outline-variant);
+                /* padding is set by app-root: its shared reset (* { padding: 0 })
+                   matches this host from the outer scope and would beat :host. */
+                background: var(--canvas);
                 flex-shrink: 0;
                 z-index: 50;
                 position: relative;
@@ -70,8 +70,7 @@ export class SideNav extends LitElement {
                 transition: width 0.2s ease, padding 0.2s ease;
             }
             :host([collapsed]) {
-                width: 56px;
-                padding: var(--stack-md) 0;
+                width: 64px;
             }
             @media (max-width: 768px) {
                 :host { display: none; }
@@ -79,27 +78,29 @@ export class SideNav extends LitElement {
 
             .collapse-toggle {
                 position: absolute;
-                right: -12px;
-                top: 50%;
-                transform: translateY(-50%);
-                width: 24px;
-                height: 48px;
+                right: -14px;
+                top: 26px;
+                width: 28px;
+                height: 28px;
                 background: var(--surface-container-high);
                 border: 1px solid var(--outline-variant);
-                border-left: none;
-                border-radius: 0 var(--radius-md) var(--radius-md) 0;
+                border-radius: var(--radius-full);
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 cursor: pointer;
                 z-index: 51;
                 color: var(--on-surface-variant);
-                transition: background 0.15s ease, color 0.15s ease;
+                opacity: 0;
+                transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
                 padding: 0;
             }
+            :host(:hover) .collapse-toggle,
+            .collapse-toggle:focus-visible,
+            :host([collapsed]) .collapse-toggle { opacity: 1; }
             .collapse-toggle:hover {
                 background: var(--surface-container-highest);
-                color: var(--primary);
+                color: var(--on-surface);
             }
             .collapse-toggle .material-symbols-outlined {
                 font-size: 18px;
@@ -108,104 +109,110 @@ export class SideNav extends LitElement {
             .brand {
                 display: flex;
                 align-items: center;
-                gap: 12px;
-                padding: var(--stack-md) 8px;
-                margin-bottom: 32px;
+                gap: 10px;
+                height: 32px;
+                padding: 0 10px;
+                margin-bottom: 28px;
+                text-decoration: none;
+            }
+            .brand .wordmark {
+                height: 18px;
+                width: auto;
+                display: block;
+            }
+            /* The gradient wordmark is drawn for dark backgrounds; on the light
+               canvas render it as solid ink. */
+            .brand .wordmark.on-light { filter: brightness(0) opacity(0.88); }
+            .brand .product {
+                font: 500 18px/1 var(--font-headline);
+                color: var(--on-surface);
+                letter-spacing: -0.01em;
+                padding-left: 10px;
+                border-left: 1px solid var(--outline-variant);
+            }
+            .brand .mark {
+                display: none;
+                width: 32px;
+                height: 32px;
+                border-radius: var(--radius-full);
             }
             :host([collapsed]) .brand {
                 justify-content: center;
-                padding: var(--stack-md) 0;
-                gap: 0;
+                padding: 0;
             }
-            :host([collapsed]) .brand h1,
-            :host([collapsed]) .brand p {
+            :host([collapsed]) .brand .wordmark,
+            :host([collapsed]) .brand .product {
                 display: none;
             }
-            .brand img {
-                width: 40px;
-                height: 40px;
-                border-radius: var(--radius-full);
-                background: var(--surface-container-high);
-                border: 1px solid var(--outline-variant);
-                object-fit: cover;
-            }
-            .brand h1 {
-                font: var(--type-headline-md);
-                color: var(--primary);
-                letter-spacing: -0.02em;
-            }
-            .brand p {
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                color: var(--on-surface-variant);
-            }
+            :host([collapsed]) .brand .mark { display: block; }
 
-            nav.items { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+            nav.items { flex: 1; display: flex; flex-direction: column; gap: 2px; }
 
             a.nav-item {
+                position: relative;
                 display: flex;
                 align-items: center;
                 gap: 12px;
-                padding: 12px 16px;
+                height: 40px;
+                padding: 0 12px;
                 border-radius: var(--radius-md);
                 color: var(--on-surface-variant);
                 text-decoration: none;
                 transition: background 0.15s ease, color 0.15s ease;
             }
+            a.nav-item .material-symbols-outlined { font-size: 22px; }
             a.nav-item:hover {
-                background: var(--surface-container-high);
-                color: var(--primary);
+                background: var(--nav-hover);
+                color: var(--on-surface);
             }
             a.nav-item.active {
-                background: var(--surface-container-highest);
+                background: var(--nav-active);
                 color: var(--primary);
+                box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
             }
             a.nav-item.active .material-symbols-outlined {
-                font-variation-settings: 'FILL' 1;
+                font-variation-settings: 'FILL' 1, 'wght' 400;
+                color: var(--accent-ink);
             }
             :host([collapsed]) a.nav-item {
                 justify-content: center;
-                padding: 12px 0;
+                padding: 0;
                 gap: 0;
             }
             :host([collapsed]) a.nav-item span.label {
                 display: none;
             }
             a.nav-item span.label {
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
+                font: 500 14px/20px var(--font-body);
             }
 
             .footer {
                 margin-top: auto;
-                padding-top: 16px;
-                border-top: 1px solid var(--outline-variant);
+                padding-top: 12px;
                 display: flex;
                 flex-direction: column;
-                gap: 8px;
+                gap: 2px;
             }
             button.theme-toggle {
                 width: 100%;
                 display: flex;
                 align-items: center;
                 gap: 12px;
-                padding: 12px 16px;
+                height: 40px;
+                padding: 0 12px;
                 border-radius: var(--radius-md);
                 color: var(--on-surface-variant);
                 transition: background 0.15s ease, color 0.15s ease;
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
+                font: 500 14px/20px var(--font-body);
             }
+            button.theme-toggle .material-symbols-outlined { font-size: 22px; }
             button.theme-toggle:hover {
-                background: var(--surface-container-high);
-                color: var(--primary);
+                background: var(--nav-hover);
+                color: var(--on-surface);
             }
             :host([collapsed]) button.theme-toggle {
                 justify-content: center;
-                padding: 12px 0;
+                padding: 0;
                 gap: 0;
             }
             :host([collapsed]) button.theme-toggle span.label {
@@ -233,13 +240,12 @@ export class SideNav extends LitElement {
                     ${this.collapsed ? 'chevron_right' : 'chevron_left'}
                 </span>
             </button>
-            <div class="brand">
-                <img src="/assets/logo.png" alt="${msg('DIMO')}" />
-                <div>
-                    <h1>${msg('DIMO Dashboard')}</h1>
-                    <p>${msg('Precision Telemetry')}</p>
-                </div>
-            </div>
+            <!-- Product name is a brand, so it is not localized. -->
+            <a class="brand" href="#/${this.tenantId}/" aria-label="DIMO Fleet">
+                <img class="wordmark ${this.theme === 'light' ? 'on-light' : ''}" src="/assets/dimo-wordmark.png" alt="" />
+                <span class="product">Fleet</span>
+                <img class="mark" src="/assets/dimo-mark.png" alt="" />
+            </a>
             <nav class="items">
                 ${ITEMS.map(i => this.item(i.key, i.icon, i.label(), i.suffix))}
             </nav>
@@ -253,7 +259,7 @@ export class SideNav extends LitElement {
                         ${this.theme === 'dark' ? 'light_mode' : 'dark_mode'}
                     </span>
                     <span class="label">
-                        ${this.theme === 'dark' ? msg('Light Mode') : msg('Dark Mode')}
+                        ${this.theme === 'dark' ? msg('Light mode') : msg('Dark mode')}
                     </span>
                 </button>
                 <a class="nav-item" href="#/${this.tenantId}/settings"
@@ -262,10 +268,10 @@ export class SideNav extends LitElement {
                     <span class="label">${msg('Support')}</span>
                 </a>
                 <a class="nav-item" href="#"
-                   title=${this.collapsed ? msg('Sign Out') : ''}
+                   title=${this.collapsed ? msg('Sign out') : ''}
                    @click=${(e: Event) => { e.preventDefault(); logout(); }}>
                     <span class="material-symbols-outlined">logout</span>
-                    <span class="label">${msg('Sign Out')}</span>
+                    <span class="label">${msg('Sign out')}</span>
                 </a>
             </div>
         `;

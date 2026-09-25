@@ -1,23 +1,41 @@
 import { css } from 'lit';
 
+/*
+ * DIMO Fleet design tokens.
+ *
+ * The visual language follows the DIMO Driver mobile app: Euclid Circular A,
+ * cool blue-black surfaces, the sky→mint DIMO gradient, and generous radii.
+ *
+ * Token roles:
+ *  - `--primary` is the high-emphasis *ink* (headings, key values). It is not
+ *    the action color.
+ *  - `--accent` / `--brand-gradient` are the action + "live" color: primary
+ *    buttons, active states, selected controls, online markers.
+ *  - `--accent-ink` is the accent when it has to be read as text on a surface
+ *    (mint on white fails contrast, so light mode deepens it).
+ *  - `--type-label-caps` is kept by name for compatibility, but it is now a
+ *    sentence-case sans label, not uppercase mono.
+ */
 export const sharedStyles = css`
     :host {
         /* ---------------- Typography ---------------- */
-        --font-headline: 'Inter', sans-serif;
-        --font-body: 'Inter', sans-serif;
-        --font-mono: 'JetBrains Mono', monospace;
+        --font-headline: 'Euclid Circular A', system-ui, -apple-system, 'Segoe UI', sans-serif;
+        --font-body: 'Euclid Circular A', system-ui, -apple-system, 'Segoe UI', sans-serif;
+        /* Identifiers (VIN, token, plate) use the brand face with tabular figures. */
+        --font-mono: var(--font-body);
 
-        --type-headline-xl: 700 40px/48px var(--font-headline);
-        --type-headline-lg: 600 32px/40px var(--font-headline);
-        --type-headline-md: 600 24px/32px var(--font-headline);
-        --type-body-lg: 400 18px/28px var(--font-body);
-        --type-body-md: 400 16px/24px var(--font-body);
+        --type-headline-xl: 600 32px/40px var(--font-headline);
+        --type-headline-lg: 600 26px/32px var(--font-headline);
+        --type-headline-md: 600 20px/28px var(--font-headline);
+        --type-body-lg: 400 17px/26px var(--font-body);
+        --type-body-md: 400 15px/22px var(--font-body);
         --type-body-sm: 400 14px/20px var(--font-body);
-        --type-label-caps: 600 12px/16px var(--font-mono);
-        --type-data-display: 500 48px/56px var(--font-headline);
+        --type-label: 500 12px/16px var(--font-body);
+        --type-label-caps: var(--type-label);
+        --type-data-display: 600 40px/44px var(--font-headline);
 
         /* ---------------- Spacing ---------------- */
-        --sidebar-width: 280px;
+        --sidebar-width: 244px;
         --container-max-width: 1440px;
         --gutter: 24px;
         --margin-desktop: 40px;
@@ -26,16 +44,20 @@ export const sharedStyles = css`
         --stack-md: 16px;
         --stack-lg: 32px;
 
-        /* ---------------- Radii ---------------- */
-        --radius-sm: 0.25rem;
-        --radius-md: 0.5rem;
-        --radius-lg: 0.75rem;
-        --radius-xl: 1rem;
-        --radius-2xl: 1.5rem;
+        /* ---------------- Radii ----------------
+         * Hierarchy, not one radius everywhere: chips/inputs < cards < sheets. */
+        --radius-sm: 6px;
+        --radius-md: 10px;
+        --radius-lg: 16px;
+        --radius-xl: 20px;
+        --radius-2xl: 28px;
         --radius-full: 9999px;
 
         color: var(--on-surface);
         font: var(--type-body-md);
+        font-feature-settings: 'tnum' 1;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
     }
 
     *,
@@ -47,8 +69,13 @@ export const sharedStyles = css`
     }
 
     *:focus-visible {
-        outline: 1px solid var(--primary);
+        outline: 2px solid var(--accent);
         outline-offset: 2px;
+    }
+
+    ::selection {
+        background: var(--accent-soft-strong);
+        color: var(--on-surface);
     }
 
     /* Material Symbols must be redeclared inside each Shadow DOM */
@@ -64,6 +91,7 @@ export const sharedStyles = css`
         white-space: nowrap;
         word-wrap: normal;
         direction: ltr;
+        font-variation-settings: 'wght' 350;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
         text-rendering: optimizeLegibility;
@@ -71,18 +99,44 @@ export const sharedStyles = css`
     }
 
     .material-symbols-outlined.filled {
-        font-variation-settings: 'FILL' 1;
+        font-variation-settings: 'FILL' 1, 'wght' 400;
     }
 
     /* ---------------- Type utility classes ---------------- */
     .t-headline-xl { font: var(--type-headline-xl); letter-spacing: -0.02em; }
-    .t-headline-lg { font: var(--type-headline-lg); letter-spacing: -0.01em; }
-    .t-headline-md { font: var(--type-headline-md); }
+    .t-headline-lg { font: var(--type-headline-lg); letter-spacing: -0.015em; }
+    .t-headline-md { font: var(--type-headline-md); letter-spacing: -0.01em; }
     .t-body-lg     { font: var(--type-body-lg); }
     .t-body-md     { font: var(--type-body-md); }
     .t-body-sm     { font: var(--type-body-sm); }
-    .t-label-caps  { font: var(--type-label-caps); letter-spacing: 0.05em; text-transform: uppercase; }
+    .t-label-caps  { font: var(--type-label); color: var(--on-surface-variant); }
     .t-data        { font: var(--type-data-display); letter-spacing: -0.03em; }
+
+    /* ---------------- Form controls (baseline; components may override) ---------------- */
+    :where(input, select, textarea) {
+        font: var(--type-body-sm);
+        color: var(--on-surface);
+    }
+    :where(select) {
+        appearance: none;
+        -webkit-appearance: none;
+        background-color: var(--surface-container-high);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a8d8d' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 12px center;
+        padding-right: 34px !important;
+        border: 1px solid var(--outline-variant);
+        border-radius: var(--radius-md);
+        cursor: pointer;
+    }
+    :where(input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']), select, textarea):focus-visible {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+    :where(input[type='checkbox'], input[type='radio']) {
+        accent-color: var(--accent);
+    }
 
     /* ---------------- Buttons ---------------- */
     button {
@@ -94,35 +148,44 @@ export const sharedStyles = css`
     }
 
     .btn-primary {
-        background: var(--primary);
-        color: var(--on-primary);
-        padding: 12px 16px;
-        border-radius: var(--radius-md);
-        font: var(--type-label-caps);
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
-        transition: opacity 0.15s ease;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 40px;
+        padding: 0 18px;
+        border-radius: var(--radius-full);
+        background: var(--brand-gradient);
+        color: var(--on-accent);
+        font: 600 14px/20px var(--font-body);
+        transition: filter 0.15s ease, box-shadow 0.15s ease;
     }
-    .btn-primary:hover { opacity: 0.9; }
+    .btn-primary:hover { filter: brightness(1.06); box-shadow: var(--accent-glow); }
+    .btn-primary:disabled { filter: grayscale(1) opacity(0.5); box-shadow: none; cursor: not-allowed; }
 
     .btn-secondary {
-        background: transparent;
-        color: var(--primary);
-        border: 1px solid var(--primary);
-        padding: 12px 16px;
-        border-radius: var(--radius-md);
-        font: var(--type-label-caps);
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 40px;
+        padding: 0 16px;
+        border-radius: var(--radius-full);
+        background: var(--surface-container-high);
+        color: var(--on-surface);
+        border: 1px solid var(--outline-variant);
+        font: 500 14px/20px var(--font-body);
+        transition: background 0.15s ease, border-color 0.15s ease;
     }
+    .btn-secondary:hover { background: var(--surface-container-highest); border-color: var(--outline); }
 
     .btn-ghost {
         color: var(--on-surface-variant);
         padding: 8px;
         border-radius: var(--radius-full);
-        transition: background 0.15s ease;
+        transition: background 0.15s ease, color 0.15s ease;
     }
-    .btn-ghost:hover { background: var(--surface-container-high); color: var(--primary); }
+    .btn-ghost:hover { background: var(--surface-container-high); color: var(--on-surface); }
 
     /* ---------------- Card ---------------- */
     .card {
@@ -135,88 +198,140 @@ export const sharedStyles = css`
     /* ---------------- Glass panel (used by the map overlay list) ---------------- */
     .glass-panel {
         background: var(--glass-bg);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
+        backdrop-filter: blur(20px) saturate(1.4);
+        -webkit-backdrop-filter: blur(20px) saturate(1.4);
     }
 
     /* ---------------- Scrollbar ---------------- */
+    .custom-scrollbar { scrollbar-width: thin; scrollbar-color: var(--outline-variant) transparent; }
     .custom-scrollbar::-webkit-scrollbar { width: 6px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
     .custom-scrollbar::-webkit-scrollbar-thumb {
         background-color: var(--outline-variant);
         border-radius: 10px;
     }
+
+    @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+            transition-duration: 0.01ms !important;
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+        }
+    }
 `;
 
 /**
  * Global document-level styles. Imported for side-effect from src/index.ts;
  * these apply to anything in light DOM (e.g. <body>, the <app-root> host).
+ * @font-face lives here: faces declared on the document are usable from every
+ * shadow root.
  */
 const documentStyles = `
+    @font-face { font-family: 'Euclid Circular A'; font-weight: 400; font-style: normal; font-display: swap; src: url('/assets/fonts/EuclidCircularA-Regular.woff2') format('woff2'); }
+    @font-face { font-family: 'Euclid Circular A'; font-weight: 500; font-style: normal; font-display: swap; src: url('/assets/fonts/EuclidCircularA-Medium.woff2') format('woff2'); }
+    @font-face { font-family: 'Euclid Circular A'; font-weight: 600; font-style: normal; font-display: swap; src: url('/assets/fonts/EuclidCircularA-Semibold.woff2') format('woff2'); }
+    @font-face { font-family: 'Euclid Circular A'; font-weight: 700; font-style: normal; font-display: swap; src: url('/assets/fonts/EuclidCircularA-Bold.woff2') format('woff2'); }
+
     :root {
-        --top-bar-height: 80px;
+        --top-bar-height: 72px;
+        color-scheme: dark;
+
+        /* ---------------- DIMO brand (from the Driver app palette) ---------------- */
+        --dimo-sky: #8CD0FF;
+        --dimo-mint: #46F1E4;
+        --brand-gradient: linear-gradient(105deg, #8CD0FF 0%, #46F1E4 100%);
+        /* Soft ambient glow for full-bleed brand moments (sign-in, onboarding). */
+        --brand-glow: radial-gradient(60% 50% at 35% 40%, rgba(140, 208, 255, 0.12), transparent 70%), radial-gradient(55% 50% at 65% 60%, rgba(70, 241, 228, 0.10), transparent 70%);
+        /* Single-series chart fill. */
+        --data-1: #8CD0FF;
+        /* Modal backdrop. */
+        --scrim: rgba(8, 9, 10, 0.62);
+
+        /* ---------------- Accent (actions, active, live) ---------------- */
+        --accent: #46F1E4;
+        --accent-ink: #46F1E4;
+        --on-accent: #06201E;
+        --accent-soft: rgba(70, 241, 228, 0.12);
+        --accent-soft-strong: rgba(70, 241, 228, 0.28);
+        --accent-glow: 0 0 0 1px rgba(70, 241, 228, 0.35), 0 6px 24px -6px rgba(70, 241, 228, 0.45);
+
+        /* ---------------- Status ---------------- */
+        --positive: #36DF71;
+        --warning: #FFAC60;
+        --negative: #FF6060;
+        --favorite: #FFCD29;
+
+        /* ---------------- App frame ---------------- */
+        --canvas: #0E0F11;
+        --nav-hover: #16181B;
+        --nav-active: #24272B;
+        --sheet-border: rgba(255, 255, 255, 0.06);
+        --shadow-float: 0 16px 48px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.06);
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+        /* Modals, menus and other panels that float above the page. */
+        --surface-overlay: #1C1F22;
 
         /* ---------------- Surface / Material 3 roles ---------------- */
-        --surface: #131313;
-        --surface-dim: #131313;
-        --surface-bright: #393939;
-        --surface-container-lowest: #0e0e0e;
-        --surface-container-low: #1c1b1b;
-        --surface-container: #201f1f;
-        --surface-container-high: #2a2a2a;
-        --surface-container-highest: #353534;
-        --surface-variant: #353534;
-        --surface-tint: #c6c6c7;
-        --background: #131313;
-        --on-background: #e5e2e1;
-        --on-surface: #e5e2e1;
-        --on-surface-variant: #c4c7c8;
-        --inverse-surface: #e5e2e1;
-        --inverse-on-surface: #313030;
+        --surface: #16181B;
+        --surface-dim: #111214;
+        --surface-bright: #3A3E42;
+        --surface-container-lowest: #0E0F11;
+        --surface-container-low: #1C1F22;
+        --surface-container: #212428;
+        --surface-container-high: #272A2E;
+        --surface-container-highest: #303438;
+        --surface-variant: #272A2E;
+        --surface-tint: #A0A3A2;
+        --background: #16181B;
+        --on-background: #EDEEEE;
+        --on-surface: #EDEEEE;
+        --on-surface-variant: #A0A3A2;
+        --inverse-surface: #EDEEEE;
+        --inverse-on-surface: #16181B;
 
         /* ---------------- Outlines ---------------- */
-        --outline: #8e9192;
-        --outline-variant: #444748;
+        --outline: #5C6063;
+        --outline-variant: #2A2E32;
 
-        /* ---------------- Primary (mono white) ---------------- */
-        --primary: #ffffff;
-        --on-primary: #2f3131;
-        --primary-container: #e2e2e2;
-        --on-primary-container: #636565;
-        --inverse-primary: #5d5f5f;
-        --primary-fixed: #e2e2e2;
-        --primary-fixed-dim: #c6c6c7;
-        --on-primary-fixed: #1a1c1c;
-        --on-primary-fixed-variant: #454747;
+        /* ---------------- Primary = high-emphasis ink ---------------- */
+        --primary: #F6F7F7;
+        --on-primary: #111214;
+        --primary-container: #E6E8E8;
+        --on-primary-container: #3A3E42;
+        --inverse-primary: #3A3E42;
+        --primary-fixed: #E6E8E8;
+        --primary-fixed-dim: #C4C7C7;
+        --on-primary-fixed: #111214;
+        --on-primary-fixed-variant: #3A3E42;
 
-        /* ---------------- Secondary (kinetic orange) ---------------- */
-        --secondary: #ffb691;
-        --on-secondary: #552000;
-        --secondary-container: #ea6b18;
-        --on-secondary-container: #4a1b00;
-        --secondary-fixed: #ffdbcb;
-        --secondary-fixed-dim: #ffb691;
+        /* ---------------- Secondary (warm highlight / warnings) ---------------- */
+        --secondary: #FFAC60;
+        --on-secondary: #4A2000;
+        --secondary-container: #E8730C;
+        --on-secondary-container: #2A1200;
+        --secondary-fixed: #FCDEC4;
+        --secondary-fixed-dim: #FFAC60;
         --on-secondary-fixed: #341100;
         --on-secondary-fixed-variant: #793100;
 
-        /* ---------------- Tertiary (status green) ---------------- */
-        --tertiary: #ffffff;
-        --on-tertiary: #003827;
-        --tertiary-container: #86f8c8;
-        --on-tertiary-container: #007352;
-        --tertiary-fixed: #86f8c8;
-        --tertiary-fixed-dim: #69dbad;
-        --on-tertiary-fixed: #002115;
-        --on-tertiary-fixed-variant: #005139;
+        /* ---------------- Tertiary (online / healthy = DIMO mint) ---------------- */
+        --tertiary: #F6F7F7;
+        --on-tertiary: #06201E;
+        --tertiary-container: #46F1E4;
+        --on-tertiary-container: #0E4B45;
+        --tertiary-fixed: #8CFFF5;
+        --tertiary-fixed-dim: #46F1E4;
+        --on-tertiary-fixed: #06201E;
+        --on-tertiary-fixed-variant: #17645D;
 
         /* ---------------- Error ---------------- */
-        --error: #ffb4ab;
-        --on-error: #690005;
-        --error-container: #93000a;
-        --on-error-container: #ffdad6;
+        --error: #FF6060;
+        --on-error: #330000;
+        --error-container: #402321;
+        --on-error-container: #FFCCCC;
 
         /* ---------------- Glass ---------------- */
-        --glass-bg: rgba(28, 27, 27, 0.85);
+        --glass-bg: rgba(22, 24, 27, 0.78);
 
         /* ---------------- Driver-behaviour series (dark steps, validated) ---------------- */
         --bhv-braking: #e66767;
@@ -225,50 +340,89 @@ const documentStyles = `
     }
 
     :root[data-theme="light"] {
+        color-scheme: light;
+
         /* ---------------- Driver-behaviour series (light steps, validated) ---------------- */
         --bhv-braking: #e34948;
         --bhv-cornering: #4a3aa7;
         --bhv-acceleration: #1baf7a;
 
+        --data-1: #2B82D5;
+        --scrim: rgba(19, 20, 23, 0.32);
+        --brand-glow: radial-gradient(60% 50% at 35% 40%, rgba(140, 208, 255, 0.28), transparent 70%), radial-gradient(55% 50% at 65% 60%, rgba(70, 241, 228, 0.22), transparent 70%);
+
+        --accent: #22C7BA;
+        --accent-ink: #0B7A72;
+        --on-accent: #06201E;
+        --accent-soft: rgba(34, 199, 186, 0.14);
+        --accent-soft-strong: rgba(34, 199, 186, 0.3);
+        --accent-glow: 0 0 0 1px rgba(34, 199, 186, 0.35), 0 6px 20px -8px rgba(34, 199, 186, 0.55);
+
+        --positive: #1B8842;
+        --warning: #B75B0A;
+        --negative: #C70000;
+        --favorite: #C99A00;
+
+        --canvas: #E7E9E9;
+        --nav-hover: rgba(255, 255, 255, 0.55);
+        --nav-active: #FFFFFF;
+        --sheet-border: rgba(19, 20, 23, 0.06);
+        --shadow-float: 0 16px 40px -14px rgba(19, 20, 23, 0.22), 0 0 0 1px rgba(19, 20, 23, 0.06);
+        --shadow-sm: 0 1px 2px rgba(19, 20, 23, 0.12);
+        --surface-overlay: #FFFFFF;
+
         /* ---------------- Surface / Material 3 roles ---------------- */
-        --surface: #f8f8f8;
-        --surface-dim: #efefef;
-        --surface-bright: #ffffff;
-        --surface-container-lowest: #ffffff;
-        --surface-container-low: #f2f2f2;
-        --surface-container: #ebebeb;
-        --surface-container-high: #e2e2e2;
-        --surface-container-highest: #d9d9d9;
-        --surface-variant: #e0e0e0;
-        --surface-tint: #5d5f5f;
-        --background: #f8f8f8;
-        --on-background: #1a1a1a;
-        --on-surface: #1a1a1a;
-        --on-surface-variant: #444748;
-        --inverse-surface: #2f3131;
-        --inverse-on-surface: #f0f0f0;
+        --surface: #FFFFFF;
+        --surface-dim: #F1F2F2;
+        --surface-bright: #FFFFFF;
+        --surface-container-lowest: #FFFFFF;
+        --surface-container-low: #F6F7F7;
+        --surface-container: #F0F1F1;
+        --surface-container-high: #E9EBEB;
+        --surface-container-highest: #DFE2E2;
+        --surface-variant: #E9EBEB;
+        --surface-tint: #5E6163;
+        --background: #FFFFFF;
+        --on-background: #131417;
+        --on-surface: #131417;
+        --on-surface-variant: #5E6163;
+        --inverse-surface: #16181B;
+        --inverse-on-surface: #EDEEEE;
 
         /* ---------------- Outlines ---------------- */
-        --outline: #6e7172;
-        --outline-variant: #c4c7c8;
+        --outline: #A0A3A2;
+        --outline-variant: #E1E4E4;
 
-        /* ---------------- Primary (mono black in light) ---------------- */
-        --primary: #1a1a1a;
-        --on-primary: #ffffff;
-        --primary-container: #2f3131;
-        --on-primary-container: #e0e0e0;
-        --inverse-primary: #c6c6c7;
+        /* ---------------- Primary = high-emphasis ink ---------------- */
+        --primary: #131417;
+        --on-primary: #FFFFFF;
+        --primary-container: #232729;
+        --on-primary-container: #E6E8E8;
+        --inverse-primary: #C4C7C7;
+
+        --secondary: #B75B0A;
+        --secondary-container: #FCDEC4;
+        --on-secondary-container: #4A2000;
+
+        --tertiary-container: #22C7BA;
+        --tertiary-fixed-dim: #1EA398;
+
+        --error: #C70000;
+        --on-error: #FFFFFF;
+        --error-container: #FFF0F0;
+        --on-error-container: #7A0000;
 
         /* ---------------- Glass ---------------- */
-        --glass-bg: rgba(248, 248, 248, 0.85);
+        --glass-bg: rgba(255, 255, 255, 0.82);
     }
 
     html, body {
         margin: 0;
-        background: var(--surface);
+        background: var(--canvas);
         color: var(--on-surface);
-        font-family: 'Inter', sans-serif;
+        font-family: 'Euclid Circular A', system-ui, -apple-system, 'Segoe UI', sans-serif;
         height: 100%;
+        -webkit-font-smoothing: antialiased;
     }
     body { overflow: hidden; }
 `;

@@ -11,7 +11,7 @@ import { formatDistance, formatSpeed } from '../utils/units.ts';
 import { tripSignal, tripDistanceKm, tripTimeShort, formatDwell } from '../utils/trips.ts';
 import { Trip } from '../types/telemetry.ts';
 import { BEHAVIOR_SERIES, behaviorTotal, seriesCount } from '../utils/behavior-events.ts';
-import { buildTileLayer } from '../utils/fleet-map.ts';
+import { buildTileLayer, MAP_COLORS } from '../utils/fleet-map.ts';
 import { GeofenceCrossing } from '../types/geofence.ts';
 import './trip-replay-modal.ts';
 
@@ -67,7 +67,7 @@ export class VehicleTripsPanel extends LitElement {
     // Guards stale async results after period/vehicle switches.
     private loadGeneration = 0;
 
-    private static readonly LIVE_STYLE: L.CircleMarkerOptions = { radius: 8, fillColor: '#69dbad', color: '#ffffff', weight: 2, opacity: 0.9, fillOpacity: 0.85 };
+    private static readonly LIVE_STYLE: L.CircleMarkerOptions = { radius: 8, fillColor: MAP_COLORS.mint, color: MAP_COLORS.ink, weight: 2.5, opacity: 1, fillOpacity: 1 };
 
     private boundOnThemeChange = (e: Event) => {
         const { theme } = (e as CustomEvent<{ theme: 'dark' | 'light' }>).detail;
@@ -263,7 +263,7 @@ export class VehicleTripsPanel extends LitElement {
             }
             for (const p of g.passes) {
                 const m = L.circleMarker([p.entryLat, p.entryLng], {
-                    radius: 6, fillColor: g.color, color: '#ffffff', weight: 2, fillOpacity: 0.95,
+                    radius: 6, fillColor: g.color, color: MAP_COLORS.ink, weight: 2, fillOpacity: 0.95,
                 }).addTo(this.map);
                 this.geofenceMarkers.push(m);
             }
@@ -287,10 +287,10 @@ export class VehicleTripsPanel extends LitElement {
     private drawRoute(points: Array<[number, number]>) {
         if (!this.map) return;
         this.removeRouteLayers();
-        this.routeLayer = L.polyline(points, { color: '#f5c84b', weight: 4, opacity: 0.85 }).addTo(this.map);
+        this.routeLayer = L.polyline(points, { color: MAP_COLORS.sky, weight: 4, opacity: 0.9 }).addTo(this.map);
         this.endpointLayers = [
-            L.circleMarker(points[0], { radius: 5, fillColor: '#69dbad', color: '#ffffff', weight: 2, fillOpacity: 1 }).addTo(this.map),
-            L.circleMarker(points[points.length - 1], { radius: 5, fillColor: '#f5c84b', color: '#ffffff', weight: 2, fillOpacity: 1 }).addTo(this.map),
+            L.circleMarker(points[0], { radius: 5, fillColor: MAP_COLORS.mint, color: MAP_COLORS.ink, weight: 2, fillOpacity: 1 }).addTo(this.map),
+            L.circleMarker(points[points.length - 1], { radius: 5, fillColor: MAP_COLORS.sky, color: MAP_COLORS.ink, weight: 2, fillOpacity: 1 }).addTo(this.map),
         ];
         this.map.fitBounds(this.routeLayer.getBounds(), { padding: [30, 30], maxZoom: 15 });
     }
@@ -325,95 +325,131 @@ export class VehicleTripsPanel extends LitElement {
             :host { display: block; }
             .card {
                 background: var(--surface-container-low);
-                border: 1px solid var(--outline-variant);
+                border: none;
                 border-radius: var(--radius-lg);
+                padding: 0;
                 overflow: hidden;
             }
             .head {
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
-                gap: 12px;
-                padding: 14px 16px;
-                border-bottom: 1px solid var(--outline-variant);
+                gap: 10px;
+                padding: 14px 16px 14px 20px;
                 flex-wrap: wrap;
             }
             .head .title {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                color: var(--on-surface-variant);
+                font: 600 17px/24px var(--font-headline);
+                letter-spacing: -0.01em;
+                color: var(--primary);
             }
-            .head .title .material-symbols-outlined { font-size: 16px; }
             .head .count {
-                font: var(--type-body-sm);
-                padding: 2px 10px;
+                font: var(--type-label);
+                padding: 2px 8px;
                 border-radius: var(--radius-full);
                 background: var(--surface-container-high);
-                border: 1px solid var(--outline-variant);
-                color: var(--on-surface);
+                color: var(--on-surface-variant);
             }
-            .head .controls { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+            .head .controls { display: flex; align-items: center; gap: 8px; margin-left: auto; }
             .head select {
-                background: var(--surface-container-high);
-                border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-md);
+                height: 36px;
+                padding: 0 12px;
+                font: 500 13px/18px var(--font-body);
                 color: var(--on-surface);
-                font: var(--type-body-sm);
-                padding: 6px 10px;
             }
-            .head select:focus { outline: 1px solid var(--primary); }
+            /* "Back to live": returning to the live position is the actionable state. */
             .back-live {
                 display: inline-flex;
                 align-items: center;
                 gap: 6px;
-                background: none;
-                border: 1px solid #f5c84b;
+                height: 36px;
+                padding: 0 14px 0 10px;
                 border-radius: var(--radius-full);
-                color: #f5c84b;
-                font: var(--type-label-caps);
-                font-size: 10px;
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                padding: 5px 12px;
-                cursor: pointer;
+                background: var(--accent-soft);
+                color: var(--accent-ink);
+                font: 500 13px/18px var(--font-body);
+                transition: background 0.15s ease;
             }
-            .back-live .material-symbols-outlined { font-size: 14px; }
-            .back-live:hover { background: rgba(245, 200, 75, 0.12); }
+            .back-live .material-symbols-outlined { font-size: 16px; }
+            .back-live:hover { background: var(--accent-soft-strong); }
 
-            .body { display: grid; grid-template-columns: 1fr 360px; min-height: 380px; }
+            .body {
+                display: grid;
+                grid-template-columns: 1fr 380px;
+                gap: 12px;
+                padding: 0 12px 12px;
+                min-height: 400px;
+            }
             @media (max-width: 900px) {
                 .body { grid-template-columns: 1fr; }
                 .map { height: 280px; }
             }
-            .map { min-height: 280px; background: #0d0f12; isolation: isolate; }
-            .list {
-                border-left: 1px solid var(--outline-variant);
-                overflow-y: auto;
-                max-height: 380px;
+            .map {
+                min-height: 280px;
+                border-radius: var(--radius-md);
+                overflow: hidden;
+                background: var(--surface-container-lowest);
+                isolation: isolate;
             }
-            @media (max-width: 900px) {
-                .list { border-left: none; border-top: 1px solid var(--outline-variant); }
+            .list {
+                overflow-y: auto;
+                max-height: 400px;
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
             }
 
-            .trip-entry { border-bottom: 1px solid var(--outline-variant); }
+            /* Leaflet chrome, restyled to the floating-control idiom. */
+            .map .leaflet-bar {
+                border: none;
+                border-radius: var(--radius-md);
+                box-shadow: var(--shadow-float);
+                overflow: hidden;
+            }
+            .map .leaflet-bar a {
+                width: 32px;
+                height: 32px;
+                line-height: 32px;
+                background: var(--glass-bg);
+                backdrop-filter: blur(16px);
+                -webkit-backdrop-filter: blur(16px);
+                color: var(--on-surface);
+                border-bottom: 1px solid var(--outline-variant);
+                font: 500 18px/32px var(--font-body);
+            }
+            .map .leaflet-bar a:last-child { border-bottom: none; }
+            .map .leaflet-bar a:hover { background: var(--surface-container-high); color: var(--primary); }
+            .map .leaflet-control-attribution {
+                background: var(--glass-bg);
+                color: var(--on-surface-variant);
+                font-size: 9px;
+                opacity: 0.7;
+                border-top-left-radius: var(--radius-sm);
+            }
+            .map .leaflet-control-attribution a { color: var(--on-surface-variant); }
+
+            /* Trip rows: rounded list items; selected = accent tint + inset bar. */
+            .trip-entry {
+                border-radius: var(--radius-md);
+                overflow: hidden;
+                flex-shrink: 0;
+            }
             .trip-entry.selected {
-                background: var(--surface-container-high);
-                box-shadow: inset 3px 0 0 #f5c84b;
+                background: var(--accent-soft);
+                box-shadow: inset 3px 0 0 var(--accent);
             }
             .trip-row-wrap {
                 display: flex;
-                align-items: stretch;
+                align-items: center;
+                border-radius: var(--radius-md);
                 transition: background 0.15s ease;
             }
             .trip-entry:not(.selected) .trip-row-wrap:hover { background: var(--surface-container-high); }
 
             .gf-detail {
-                padding: 10px 16px 14px;
-                border-top: 1px dashed var(--outline-variant);
+                margin: 0 12px;
+                padding: 10px 0 12px;
+                border-top: 1px solid var(--outline-variant);
                 display: flex;
                 flex-direction: column;
                 gap: 10px;
@@ -429,10 +465,7 @@ export class VehicleTripsPanel extends LitElement {
                 display: flex;
                 align-items: center;
                 gap: 6px;
-                font: var(--type-label-caps);
-                font-size: 10px;
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
+                font: var(--type-label);
                 color: var(--on-surface-variant);
             }
             .gf-head .material-symbols-outlined { font-size: 14px; }
@@ -444,20 +477,17 @@ export class VehicleTripsPanel extends LitElement {
                 font: var(--type-body-sm);
                 font-weight: 600;
                 color: var(--on-surface);
-                background: none;
-                border: none;
                 padding: 0;
-                cursor: pointer;
                 text-align: left;
             }
-            .gf-name:hover { color: var(--primary); }
-            .gf-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+            .gf-name:hover { color: var(--accent-ink); }
+            .gf-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
             .gf-pass {
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
                 gap: 10px;
-                padding-left: 17px;
+                padding-left: 15px;
                 font: var(--type-body-sm);
                 color: var(--on-surface-variant);
             }
@@ -479,24 +509,22 @@ export class VehicleTripsPanel extends LitElement {
                 align-items: center;
                 justify-content: space-between;
                 gap: 10px;
-                padding: 12px 16px;
-                background: none;
-                border: none;
-                cursor: pointer;
+                padding: 10px 8px 10px 14px;
                 text-align: left;
             }
             .replay-btn {
                 flex-shrink: 0;
-                display: flex;
+                display: inline-flex;
                 align-items: center;
-                padding: 0 14px;
-                background: none;
-                border: none;
-                border-left: 1px solid var(--outline-variant);
+                justify-content: center;
+                width: 32px;
+                height: 32px;
+                margin-right: 8px;
+                border-radius: var(--radius-full);
                 color: var(--on-surface-variant);
-                cursor: pointer;
+                transition: background 0.15s ease, color 0.15s ease;
             }
-            .replay-btn:hover { color: #f5c84b; }
+            .replay-btn:hover { background: var(--accent-soft); color: var(--accent-ink); }
             .replay-btn .material-symbols-outlined { font-size: 18px; }
             .trip-row .when .times {
                 display: flex;
@@ -508,40 +536,34 @@ export class VehicleTripsPanel extends LitElement {
             }
             .trip-row .when .times .material-symbols-outlined { font-size: 13px; color: var(--on-surface-variant); }
             .trip-row .when .ongoing {
-                font: var(--type-label-caps);
-                font-size: 9px;
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                color: #69dbad;
+                font: var(--type-label);
+                color: var(--accent-ink);
             }
             .trip-row .stats {
                 flex-shrink: 0;
                 text-align: right;
-                font: var(--type-body-sm);
+                font: var(--type-label);
                 color: var(--on-surface-variant);
                 white-space: nowrap;
             }
-            .trip-row .stats .dist { color: var(--primary); font-weight: 600; }
-            .trip-row .when { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+            .trip-row .stats .dist { font: 600 14px/20px var(--font-body); color: var(--primary); }
+            .trip-row .when { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
             .bhv { display: flex; flex-wrap: wrap; gap: 4px; }
             .bhv .pill {
                 display: inline-flex;
                 align-items: center;
                 gap: 4px;
-                padding: 1px 6px 1px 5px;
+                padding: 0 6px 0 5px;
                 border-radius: var(--radius-full);
                 background: color-mix(in srgb, var(--c) 14%, transparent);
-                font-family: var(--font-mono);
-                font-size: 10px;
-                font-weight: 600;
-                letter-spacing: 0.02em;
+                font: 600 11px/16px var(--font-body);
                 color: var(--on-surface);
-                font-variant-numeric: tabular-nums;
             }
             .bhv .pill i { width: 6px; height: 6px; border-radius: 50%; background: var(--c); }
             .bhv-detail {
-                padding: 10px 16px 12px;
-                border-top: 1px dashed var(--outline-variant);
+                margin: 0 12px;
+                padding: 10px 0 12px;
+                border-top: 1px solid var(--outline-variant);
                 display: flex;
                 flex-direction: column;
                 gap: 8px;
@@ -559,8 +581,8 @@ export class VehicleTripsPanel extends LitElement {
                 color: var(--on-surface-variant);
             }
             .bhv-item .n { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
-            .bhv-item .n i { width: 10px; height: 10px; border-radius: 2px; background: var(--c); flex-shrink: 0; }
-            .bhv-item b { color: var(--on-surface); font-weight: 600; font-variant-numeric: tabular-nums; }
+            .bhv-item .n i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); flex-shrink: 0; }
+            .bhv-item b { color: var(--on-surface); font-weight: 600; }
             .bhv-item.zero { opacity: 0.45; }
 
             .state-row {
@@ -568,8 +590,16 @@ export class VehicleTripsPanel extends LitElement {
                 font: var(--type-body-sm);
                 color: var(--on-surface-variant);
             }
-            .state-row.perms { color: #f5c84b; display: flex; gap: 8px; align-items: flex-start; }
-            .state-row.perms .material-symbols-outlined { font-size: 16px; margin-top: 1px; }
+            .state-row.perms {
+                padding: 12px 14px;
+                border-radius: var(--radius-md);
+                background: color-mix(in srgb, var(--warning) 12%, transparent);
+                color: var(--warning);
+                display: flex;
+                gap: 8px;
+                align-items: flex-start;
+            }
+            .state-row.perms .material-symbols-outlined { font-size: 16px; margin-top: 2px; }
         `,
     ];
 
@@ -711,7 +741,7 @@ export class VehicleTripsPanel extends LitElement {
         return html`
             <div class="card">
                 <div class="head">
-                    <span class="title"><span class="material-symbols-outlined">route</span>${msg('Trips')}</span>
+                    <span class="title">${msg('Trips')}</span>
                     ${!this.tripsLoading && this.trips.length > 0
                         ? html`<span class="count">${this.trips.length}</span>` : nothing}
                     <div class="controls">

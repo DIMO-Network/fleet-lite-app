@@ -9,43 +9,61 @@ export class LoginElement extends LitElement {
     @state() private loginUrl = '';
     @state() private noClient = false;
 
+    // Tokens (--brand-gradient, --on-accent, …) come from :root: global-styles.ts
+    // in the app, and the mirrored :root block in login.html / accept-invite.html.
     static styles = css`
         :host { display: block; }
-        a {
-            display: inline-flex;
+        *, *::before, *::after { box-sizing: border-box; }
+        #loginLink {
+            display: flex;
             align-items: center;
             justify-content: center;
+            gap: 10px;
             width: 100%;
-            padding: 14px 24px;
-            background: #ffffff;
-            color: #2f3131;
-            border-radius: 8px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 12px;
-            font-weight: 600;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
+            min-height: 48px;
+            padding: 0 24px;
+            background: var(--brand-gradient);
+            color: var(--on-accent);
+            border-radius: var(--radius-full, 9999px);
+            font: 600 15px/20px var(--font-body, inherit);
             text-decoration: none;
-            transition: opacity 0.2s;
+            transition: filter 0.15s ease, box-shadow 0.15s ease;
         }
-        a:hover { opacity: 0.85; }
+        #loginLink:hover { filter: brightness(1.06); box-shadow: var(--accent-glow); }
+        #loginLink:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+        #loginLink svg {
+            width: 18px;
+            height: 18px;
+            transition: transform 0.15s ease;
+        }
+        #loginLink:hover svg { transform: translateX(2px); }
+        @media (prefers-reduced-motion: reduce) {
+            #loginLink, #loginLink svg { transition: none; }
+        }
         .no-client {
             text-align: center;
-            color: #c4c7c8;
-            font-size: 14px;
-            line-height: 1.6;
+            color: var(--on-surface-variant);
+            font: 400 14px/20px var(--font-body, inherit);
+            padding: 16px;
+            border-radius: var(--radius-md, 10px);
+            background: var(--surface-container-low);
         }
-        .no-client h3 { color: #ffffff; font-size: 16px; margin-bottom: 8px; }
+        .no-client h3 {
+            color: var(--primary);
+            font: 600 15px/22px var(--font-body, inherit);
+            margin: 0 0 6px;
+        }
+        .no-client p { margin: 0; }
+        .no-client code {
+            font: 500 13px/18px var(--font-body, inherit);
+            color: var(--on-surface);
+        }
         .no-client a {
-            display: inline;
-            width: auto;
-            padding: 0;
-            background: none;
-            color: #ffb691;
-            font-size: 14px;
-            text-transform: none;
-            letter-spacing: normal;
+            color: var(--accent-ink);
+            text-decoration: none;
+            font-weight: 500;
         }
+        .no-client a:hover { text-decoration: underline; }
     `;
 
     async connectedCallback() {
@@ -77,6 +95,10 @@ export class LoginElement extends LitElement {
                 </div>
             `;
         }
-        return html`<a id="loginLink" href=${this.loginUrl}>${msg('Sign in with DIMO')}</a>`;
+        return html`<a id="loginLink" href=${this.loginUrl}>
+            ${msg('Sign in with DIMO')}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+                stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+        </a>`;
     }
 }

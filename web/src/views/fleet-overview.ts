@@ -17,6 +17,7 @@ import {
     createFleetMap, applyTileTheme, createVehicleClusterGroup,
     seedLocationsFromDb, fetchFleetLocations,
     VEHICLE_MARKER_STYLE, VEHICLE_MARKER_STYLE_HOVER, VEHICLE_MARKER_STYLE_SELECTED, VEHICLE_MARKER_STYLE_HIDDEN,
+    MAP_COLORS,
 } from '../utils/fleet-map.ts';
 import { brandLogoUrl } from '../utils/brand-logo.ts';
 import { contrastingBadgeBackground } from '../utils/logo-color.ts';
@@ -189,14 +190,14 @@ export class FleetOverviewView extends LitElement {
         const points = e.detail.points;
         if (!points || points.length === 0 || !this.leafletMap) return;
         this.tripRouteLayer = L.polyline(points, {
-            color: '#f5c84b',
+            color: MAP_COLORS.sky,
             weight: 4,
-            opacity: 0.85,
+            opacity: 0.9,
         }).addTo(this.leafletMap);
         // Start/end dots so direction is readable at a glance.
         this.tripEndpointLayers = [
-            L.circleMarker(points[0], { radius: 5, fillColor: '#69dbad', color: '#ffffff', weight: 2, fillOpacity: 1 }).addTo(this.leafletMap),
-            L.circleMarker(points[points.length - 1], { radius: 5, fillColor: '#f5c84b', color: '#ffffff', weight: 2, fillOpacity: 1 }).addTo(this.leafletMap),
+            L.circleMarker(points[0], { radius: 5, fillColor: MAP_COLORS.mint, color: MAP_COLORS.ink, weight: 2, fillOpacity: 1 }).addTo(this.leafletMap),
+            L.circleMarker(points[points.length - 1], { radius: 5, fillColor: MAP_COLORS.sky, color: '#ffffff', weight: 2, fillOpacity: 1 }).addTo(this.leafletMap),
         ];
         this.leafletMap.fitBounds(this.tripRouteLayer.getBounds(), { padding: [40, 40], maxZoom: 15 });
     }
@@ -586,27 +587,38 @@ export class FleetOverviewView extends LitElement {
                 align-items: center;
                 justify-content: space-between;
                 padding: 0 var(--gutter);
-                border-bottom: 1px solid var(--outline-variant);
                 z-index: 40;
-                background: var(--glass-bg);
-                backdrop-filter: blur(12px);
-                -webkit-backdrop-filter: blur(12px);
+                /* Fades into the map instead of slicing it with a bar. */
+                background: linear-gradient(to bottom, var(--background) 0%, color-mix(in srgb, var(--background) 72%, transparent) 55%, transparent 100%);
+                pointer-events: none;
             }
+            header.top-bar > * { pointer-events: auto; }
             @media (max-width: 768px) {
                 header.top-bar { display: none; }
             }
-            header.top-bar .left { display: flex; align-items: center; gap: 32px; }
-            header.top-bar h2 { font: var(--type-headline-md); color: var(--primary); }
-            header.top-bar nav { display: flex; gap: 24px; }
+            header.top-bar .left { display: flex; align-items: center; gap: 20px; }
+            header.top-bar h2 { font: var(--type-headline-md); letter-spacing: -0.01em; color: var(--primary); }
+            /* Segmented control: the view switch is one choice, not two links. */
+            header.top-bar nav {
+                display: flex;
+                gap: 2px;
+                padding: 3px;
+                border-radius: var(--radius-full);
+                background: var(--surface-container-high);
+            }
             header.top-bar nav a {
                 text-decoration: none;
-                font: var(--type-body-md);
+                font: 500 13px/18px var(--font-body);
                 color: var(--on-surface-variant);
-                padding-bottom: 4px;
+                padding: 6px 14px;
+                border-radius: var(--radius-full);
+                transition: background 0.15s ease, color 0.15s ease;
             }
+            header.top-bar nav a:hover { color: var(--on-surface); }
             header.top-bar nav a.active {
                 color: var(--primary);
-                border-bottom: 2px solid var(--primary);
+                background: var(--surface-bright);
+                box-shadow: var(--shadow-sm);
             }
             header.top-bar .right { display: flex; align-items: center; gap: 16px; }
             header.top-bar .icon-btn {
@@ -641,39 +653,45 @@ export class FleetOverviewView extends LitElement {
                 z-index: 10;
             }
             .map-controls button {
-                width: 48px;
-                height: 48px;
-                background: var(--surface-container-low);
-                border: 1px solid var(--outline-variant);
+                width: 40px;
+                height: 40px;
+                background: var(--glass-bg);
+                backdrop-filter: blur(16px);
+                -webkit-backdrop-filter: blur(16px);
                 border-radius: var(--radius-full);
+                box-shadow: var(--shadow-float);
                 color: var(--on-surface);
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                transition: background 0.15s ease;
+                transition: background 0.15s ease, color 0.15s ease;
             }
+            .map-controls button .material-symbols-outlined { font-size: 20px; }
             .map-controls button:hover { background: var(--surface-container-high); }
             .map-controls button.active {
-                background: var(--primary-container);
-                color: var(--on-primary-container);
-                border-color: var(--primary);
+                background: var(--accent-soft-strong);
+                color: var(--accent-ink);
             }
-            .map-controls button.active:hover { background: var(--primary-container); }
+            .map-controls button.active:hover { background: var(--accent-soft-strong); }
 
             .map-legend {
                 position: absolute;
-                bottom: 40px;
+                bottom: 24px;
                 left: 24px;
                 display: flex;
                 flex-direction: row;
-                gap: 8px;
+                gap: 2px;
+                padding: 4px;
+                border-radius: var(--radius-full);
+                background: var(--glass-bg);
+                backdrop-filter: blur(16px);
+                -webkit-backdrop-filter: blur(16px);
+                box-shadow: var(--shadow-float);
                 z-index: 10;
             }
             .map-legend button {
-                width: 48px;
-                height: 48px;
-                background: var(--surface-container-low);
-                border: 1px solid var(--outline-variant);
+                width: 36px;
+                height: 36px;
                 border-radius: var(--radius-full);
                 color: var(--on-surface);
                 display: flex;
@@ -681,6 +699,7 @@ export class FleetOverviewView extends LitElement {
                 justify-content: center;
                 transition: background 0.15s ease;
             }
+            .map-legend button .material-symbols-outlined { font-size: 20px; }
             .map-legend button:hover { background: var(--surface-container-high); }
             .map-legend button:disabled { cursor: default; opacity: 0.6; }
             .map-legend .spinning .material-symbols-outlined {
@@ -698,14 +717,13 @@ export class FleetOverviewView extends LitElement {
                 right: 0;
                 z-index: 20;
                 background: var(--glass-bg);
-                backdrop-filter: blur(12px);
-                -webkit-backdrop-filter: blur(12px);
-                border: 1px solid var(--outline-variant);
-                border-radius: 24px 24px 0 0;
+                backdrop-filter: blur(24px) saturate(1.4);
+                -webkit-backdrop-filter: blur(24px) saturate(1.4);
+                border-radius: var(--radius-xl) var(--radius-xl) 0 0;
                 display: flex;
                 flex-direction: column;
                 overflow: hidden;
-                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+                box-shadow: var(--shadow-float);
                 transition: transform 0.3s ease, width 0.3s ease;
             }
             .vehicles-panel.collapsed {
@@ -717,8 +735,8 @@ export class FleetOverviewView extends LitElement {
                     bottom: 24px;
                     right: 24px;
                     left: auto;
-                    width: 384px;
-                    border-radius: 24px;
+                    width: 372px;
+                    border-radius: var(--radius-xl);
                 }
                 .vehicles-panel.narrow { width: 96px; }
                 .vehicles-panel.narrow .panel-header { display: none; }
@@ -730,11 +748,11 @@ export class FleetOverviewView extends LitElement {
                 display: none;
                 position: absolute;
                 top: 120px;
-                right: calc(24px + 384px - 12px);
+                right: calc(24px + 372px - 12px);
                 width: 24px;
                 height: 24px;
-                background: var(--surface-container-low);
-                border: 1px solid var(--outline-variant);
+                background: var(--surface-container-high);
+                box-shadow: var(--shadow-float);
                 border-radius: var(--radius-full);
                 color: var(--on-surface-variant);
                 align-items: center;
@@ -766,7 +784,6 @@ export class FleetOverviewView extends LitElement {
             .compact-token-id {
                 font: var(--type-label-caps);
                 font-size: 11px;
-                letter-spacing: 0.04em;
                 color: var(--on-surface-variant);
                 text-align: center;
                 line-height: 1.2;
@@ -812,39 +829,35 @@ export class FleetOverviewView extends LitElement {
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
-                padding: 16px 24px;
-                border-bottom: 1px solid var(--outline-variant);
+                padding: 16px 12px 8px 20px;
             }
-            .panel-header h3 { font: var(--type-headline-md); color: var(--primary); }
-            .panel-header-actions { display: flex; align-items: center; gap: 4px; }
+            .panel-header h3 { font: 600 17px/24px var(--font-headline); letter-spacing: -0.01em; color: var(--primary); }
+            .panel-header-actions { display: flex; align-items: center; gap: 2px; }
+            .panel-header button .material-symbols-outlined { font-size: 20px; }
             .panel-header button {
-                color: var(--primary);
+                color: var(--on-surface-variant);
                 background: none;
                 border: none;
                 padding: 8px;
                 border-radius: var(--radius-full);
                 transition: background 0.15s ease;
             }
-            .panel-header button:hover { background: var(--surface-container-high); }
-            .panel-header button.search-active { color: var(--secondary); }
+            .panel-header button:hover { background: var(--surface-container-high); color: var(--on-surface); }
+            .panel-header button.search-active { color: var(--accent-ink); background: var(--accent-soft); }
 
             .vehicle-card-dense {
                 display: flex;
                 align-items: center;
                 gap: 10px;
-                padding: 8px 12px;
+                padding: 8px 10px;
                 border-radius: var(--radius-md);
-                border: 1px solid var(--outline-variant);
-                background: var(--surface-container-low);
                 text-decoration: none;
                 color: inherit;
                 position: relative;
                 cursor: pointer;
-                transition: border-color 0.15s ease;
+                transition: background 0.15s ease;
             }
-            .vehicle-card-dense:hover { border-color: rgba(255, 255, 255, 0.5); }
-            .vehicle-card-dense.offline { border-color: rgba(255, 180, 171, 0.2); }
-            .vehicle-card-dense.offline:hover { border-color: rgba(255, 180, 171, 0.5); }
+            .vehicle-card-dense:hover { background: var(--surface-container-high); }
             .vehicle-card-dense .zoom-btn {
                 position: relative;
                 top: auto; right: auto;
@@ -859,11 +872,9 @@ export class FleetOverviewView extends LitElement {
                 align-items: center;
                 gap: 5px;
                 flex-shrink: 0;
-                font-family: var(--font-mono);
-                font-size: 11px;
+                font: 500 11px/14px var(--font-body);
                 color: var(--on-surface-variant);
                 background: var(--surface-container-high);
-                border: 1px solid var(--outline-variant);
                 border-radius: var(--radius-sm);
                 padding: 3px 7px;
             }
@@ -894,9 +905,13 @@ export class FleetOverviewView extends LitElement {
                 display: flex;
                 align-items: center;
                 gap: 8px;
-                padding: 12px 24px;
-                border-bottom: 1px solid var(--outline-variant);
+                margin: 4px 16px 8px;
+                padding: 0 12px;
+                height: 40px;
+                border-radius: var(--radius-md);
+                background: var(--surface-container-high);
             }
+            .search-filter:focus-within { box-shadow: 0 0 0 2px var(--accent-soft-strong); }
             .search-filter > .material-symbols-outlined {
                 font-size: 18px;
                 color: var(--on-surface-variant);
@@ -930,8 +945,7 @@ export class FleetOverviewView extends LitElement {
                 display: flex;
                 align-items: center;
                 gap: 8px;
-                padding: 12px 24px;
-                border-bottom: 1px solid var(--outline-variant);
+                padding: 4px 16px 8px 20px;
             }
             .group-filter .swatch {
                 width: 12px;
@@ -942,23 +956,21 @@ export class FleetOverviewView extends LitElement {
             }
             .group-filter select {
                 flex: 1;
-                background: var(--surface-container-low);
+                height: 36px;
                 color: var(--on-surface);
-                border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-md);
-                padding: 8px 10px;
-                font-family: inherit;
-                font-size: 13px;
+                padding: 0 12px;
+                font: 500 13px/18px var(--font-body);
             }
-            .group-filter select:focus { outline: 1px solid var(--primary); }
 
             .vehicle-list {
                 flex: 1;
                 overflow-y: auto;
-                padding: 16px;
+                padding: 4px 8px 12px;
                 display: flex;
                 flex-direction: column;
-                gap: 16px;
+                gap: 2px;
+                border-top: 1px solid var(--outline-variant);
+                padding-top: 8px;
             }
             .empty-state {
                 color: var(--on-surface-variant);
@@ -975,12 +987,12 @@ export class FleetOverviewView extends LitElement {
             }
 
             .vehicle-card {
-                background: var(--surface-container-low);
-                border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-lg);
-                padding: 16px;
+                background: transparent;
+                border-radius: 14px;
+                padding: 12px;
                 cursor: pointer;
-                transition: border-color 0.15s ease;
+                transition: background 0.15s ease;
+                flex-shrink: 0;
                 text-decoration: none;
                 color: inherit;
                 display: block;
@@ -991,10 +1003,9 @@ export class FleetOverviewView extends LitElement {
                 position: absolute;
                 top: 12px;
                 right: 12px;
-                width: 32px;
-                height: 32px;
-                background: var(--surface-container-high);
-                border: 1px solid var(--outline-variant);
+                width: 30px;
+                height: 30px;
+                background: transparent;
                 border-radius: var(--radius-full);
                 color: var(--on-surface-variant);
                 display: flex;
@@ -1004,16 +1015,13 @@ export class FleetOverviewView extends LitElement {
                 z-index: 1;
             }
             .zoom-btn:hover {
-                background: var(--primary);
-                color: var(--on-primary);
-                border-color: var(--primary);
+                background: var(--accent-soft);
+                color: var(--accent-ink);
             }
             .zoom-btn .material-symbols-outlined { font-size: 16px; }
-            .vehicle-card:hover { border-color: rgba(255, 255, 255, 0.5); }
-            .vehicle-card.offline { border-color: rgba(255, 180, 171, 0.2); }
-            .vehicle-card.offline:hover { border-color: rgba(255, 180, 171, 0.5); }
+            .vehicle-card:hover { background: var(--surface-container-high); }
             .vehicle-card.hidden-card { opacity: 0.5; }
-            .vehicle-card.hidden-card:hover { opacity: 0.75; border-color: var(--outline-variant); }
+            .vehicle-card.hidden-card:hover { opacity: 0.75; }
             .vehicle-card-dense.hidden-card { opacity: 0.5; }
             .vehicle-card-dense.hidden-card:hover { opacity: 0.75; }
 
@@ -1021,10 +1029,9 @@ export class FleetOverviewView extends LitElement {
                 position: absolute;
                 top: 12px;
                 right: 52px;
-                width: 32px;
-                height: 32px;
-                background: var(--surface-container-high);
-                border: 1px solid var(--outline-variant);
+                width: 30px;
+                height: 30px;
+                background: var(--surface-container-highest);
                 border-radius: var(--radius-full);
                 color: var(--on-surface-variant);
                 display: flex;
@@ -1035,17 +1042,16 @@ export class FleetOverviewView extends LitElement {
                 z-index: 1;
             }
             .vehicle-card:hover .hide-btn { opacity: 1; }
-            .hide-btn:hover { background: var(--error); color: #fff; border-color: var(--error); }
+            .hide-btn:hover { background: var(--error-container); color: var(--error); }
             .hide-btn .material-symbols-outlined { font-size: 16px; }
 
             .unhide-btn {
                 position: absolute;
                 top: 12px;
                 right: 12px;
-                width: 32px;
-                height: 32px;
-                background: var(--surface-container-high);
-                border: 1px solid var(--outline-variant);
+                width: 30px;
+                height: 30px;
+                background: var(--surface-container-highest);
                 border-radius: var(--radius-full);
                 color: var(--primary);
                 display: flex;
@@ -1054,7 +1060,7 @@ export class FleetOverviewView extends LitElement {
                 transition: background 0.15s, color 0.15s;
                 z-index: 1;
             }
-            .unhide-btn:hover { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+            .unhide-btn:hover { background: var(--accent-soft); color: var(--accent-ink); }
             .unhide-btn .material-symbols-outlined { font-size: 16px; }
 
             .dense-hide-btn {
@@ -1087,27 +1093,26 @@ export class FleetOverviewView extends LitElement {
                 width: 12px;
                 height: 12px;
                 border-radius: var(--radius-full);
-                border: 2px solid var(--surface-container-low);
+                border: 2px solid var(--surface);
             }
-            .status-dot.status-green { background: #69dbad; }
+            .status-dot.status-green { background: var(--accent); box-shadow: 0 0 8px var(--accent-soft-strong); }
             .status-dot.status-red { background: var(--error); }
-            .status-dot.status-amber { background: #ffb432; }
+            .status-dot.status-amber { background: var(--warning); }
 
-            .vehicle-row { display: flex; align-items: flex-start; gap: 16px; }
+            .vehicle-row { display: flex; align-items: flex-start; gap: 14px; }
             .vehicle-icon {
                 position: relative;
-                width: 64px;
-                height: 64px;
+                width: 48px;
+                height: 48px;
                 border-radius: var(--radius-full);
                 background: var(--surface-container-highest);
-                border: 1px solid var(--outline-variant);
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 flex-shrink: 0;
             }
             .vehicle-icon .status-dot { bottom: -2px; right: -2px; }
-            .vehicle-icon .material-symbols-outlined { color: var(--primary); font-size: 32px; }
+            .vehicle-icon .material-symbols-outlined { color: var(--primary); font-size: 24px; }
             .vehicle-icon .brand-logo {
                 width: 100%;
                 height: 100%;
@@ -1120,8 +1125,8 @@ export class FleetOverviewView extends LitElement {
 
             .vehicle-meta { flex: 1; min-width: 0; }
             .vehicle-meta h4 {
-                font: var(--type-body-lg);
-                font-weight: 600;
+                font: 600 15px/22px var(--font-headline);
+                padding-right: 32px;
                 color: var(--primary);
                 white-space: nowrap;
                 overflow: hidden;
@@ -1132,7 +1137,8 @@ export class FleetOverviewView extends LitElement {
             }
             .favorite-star {
                 font-size: 16px;
-                color: #ffb432;
+                color: var(--favorite);
+                font-variation-settings: 'FILL' 1;
                 flex-shrink: 0;
             }
             .favorite-star-compact {
@@ -1140,7 +1146,8 @@ export class FleetOverviewView extends LitElement {
                 top: 4px;
                 right: 4px;
                 font-size: 12px;
-                color: #ffb432;
+                color: var(--favorite);
+                font-variation-settings: 'FILL' 1;
             }
             .vehicle-meta .location {
                 font: var(--type-body-sm);
@@ -1156,37 +1163,34 @@ export class FleetOverviewView extends LitElement {
                 display: inline-flex;
                 align-items: center;
                 gap: 4px;
-                margin-top: 6px;
-                padding: 2px 8px;
-                border-radius: var(--radius-full);
-                background: var(--surface-container-low);
-                border: 1px solid var(--outline-variant);
-                font-family: var(--font-mono);
-                font-size: 12px;
-                line-height: 16px;
+                margin-top: 4px;
+                padding: 1px 6px;
+                border-radius: 5px;
+                background: var(--surface-container-highest);
+                font: 600 11px/16px var(--font-body);
                 letter-spacing: 0.06em;
-                color: var(--primary);
+                color: var(--on-surface);
                 cursor: default;
             }
-            .vehicle-meta .plate-pill .material-symbols-outlined { font-size: 14px; }
+            .vehicle-meta .plate-pill .material-symbols-outlined { font-size: 13px; color: var(--on-surface-variant); }
             /* VIN line: caps label + monospace value with a copy affordance,
                sitting under the title like the plate pill. */
             .vehicle-meta .vin-line {
                 display: flex;
                 align-items: center;
                 gap: 6px;
-                margin-top: 6px;
-                font: var(--type-body-sm);
+                margin-top: 4px;
+                font: 400 12px/16px var(--font-body);
                 color: var(--on-surface-variant);
             }
             .vehicle-meta .vin-line .vin-label {
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                opacity: 0.75;
+                font: 500 11px/16px var(--font-body);
+                opacity: 0.7;
             }
             .vehicle-meta .vin-line .vin-value {
-                font-family: var(--font-mono);
-                color: var(--primary);
+                font: 400 12px/16px var(--font-body);
+                letter-spacing: 0.02em;
+                color: var(--on-surface-variant);
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: nowrap;
@@ -1204,13 +1208,13 @@ export class FleetOverviewView extends LitElement {
                 cursor: pointer;
             }
             .vehicle-meta .copy-btn:hover { color: var(--primary); }
-            .vehicle-meta .copy-btn .material-symbols-outlined { font-size: 14px; }
+            .vehicle-meta .copy-btn { opacity: 0; transition: opacity 0.15s ease; }
+            .vehicle-card:hover .copy-btn, .vehicle-meta .copy-btn:focus-visible { opacity: 1; }
+            .vehicle-meta .copy-btn .material-symbols-outlined { font-size: 13px; }
             .vehicle-meta .seen {
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
+                font: 400 12px/16px var(--font-body);
                 color: var(--on-surface-variant);
-                margin-top: 8px;
+                margin-top: 6px;
             }
             .vehicle-meta .row-flex {
                 display: flex;
@@ -1224,7 +1228,6 @@ export class FleetOverviewView extends LitElement {
                 padding: 2px 8px;
                 border-radius: var(--radius-sm);
                 font: var(--type-label-caps);
-                letter-spacing: 0.05em;
             }
             .vehicle-meta .error-msg {
                 margin-top: 4px;
@@ -1240,13 +1243,11 @@ export class FleetOverviewView extends LitElement {
                 display: inline-flex;
                 align-items: center;
                 gap: 4px;
-                background: rgba(255, 180, 50, 0.12);
-                border: 1px solid rgba(255, 180, 50, 0.35);
-                color: #ffb432;
+                background: color-mix(in srgb, var(--warning) 14%, transparent);
+                color: var(--warning);
                 border-radius: var(--radius-sm);
                 padding: 2px 8px;
                 font: var(--type-label-caps);
-                letter-spacing: 0.04em;
             }
             .no-permissions-badge .material-symbols-outlined { font-size: 14px; }
         `,

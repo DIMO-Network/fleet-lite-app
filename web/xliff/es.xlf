@@ -154,25 +154,9 @@
   <source>Settings</source>
   <target>Configuración</target>
 </trans-unit>
-<trans-unit id="sdeddc072bb580102">
-  <source>DIMO</source>
-  <target>DIMO</target>
-</trans-unit>
-<trans-unit id="saa9caac4d34e88f6">
-  <source>DIMO Dashboard</source>
-  <target>Fleets DIMO</target>
-</trans-unit>
-<trans-unit id="sf2aae326542d86d0">
-  <source>Precision Telemetry</source>
-  <target>Telemetría de Precisión</target>
-</trans-unit>
 <trans-unit id="s3736464cf8d6fa08">
   <source>Support</source>
   <target>Soporte</target>
-</trans-unit>
-<trans-unit id="s8fa032cdafb3c9b0">
-  <source>Sign Out</source>
-  <target>Cerrar sesión</target>
 </trans-unit>
 <trans-unit id="sae0d84bbaa95a2e0">
   <source>Could not load members.</source>
@@ -1076,14 +1060,6 @@
   <source>Switch to dark mode</source>
         <target>Cambiar a modo oscuro</target>
 </trans-unit>
-<trans-unit id="sa09ceb160ce673ca">
-  <source>Light Mode</source>
-        <target>Modo Claro</target>
-</trans-unit>
-<trans-unit id="s2d604c0203cd8238">
-  <source>Dark Mode</source>
-        <target>Modo Oscuro</target>
-</trans-unit>
 <trans-unit id="sc876b69c2e31e0a2">
   <source>Unhide vehicle</source>
         <target>Mostrar vehículo</target>
@@ -1931,6 +1907,18 @@
 </trans-unit>
 <trans-unit id="sf113fa256db9617b">
   <source>Ended</source>
+</trans-unit>
+<trans-unit id="s760fea0a0b77b2ea">
+  <source>Light mode</source>
+  <target>Modo claro</target>
+</trans-unit>
+<trans-unit id="s57ed4d0e053c4318">
+  <source>Dark mode</source>
+  <target>Modo oscuro</target>
+</trans-unit>
+<trans-unit id="s7cfe12cd14df9950">
+  <source>Sign out</source>
+  <target>Cerrar sesión</target>
 </trans-unit>
 </body>
 </file>

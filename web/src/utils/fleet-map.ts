@@ -110,10 +110,19 @@ export function applyTileTheme(
 // Small dots by default — fleets can run to thousands of vehicles, so the map
 // stays readable at density. Hover grows the dot for an easier click target;
 // selection grows it further and recolors.
-export const VEHICLE_MARKER_STYLE: L.CircleMarkerOptions = { radius: 4, fillColor: '#69dbad', color: '#ffffff', weight: 1.5, opacity: 0.9, fillOpacity: 0.85 };
-export const VEHICLE_MARKER_STYLE_HOVER: L.CircleMarkerOptions = { radius: 8, fillColor: '#69dbad', color: '#ffffff', weight: 2, opacity: 1, fillOpacity: 0.95 };
-export const VEHICLE_MARKER_STYLE_SELECTED: L.CircleMarkerOptions = { radius: 9, fillColor: '#f5c84b', color: '#ffffff', weight: 2.5, opacity: 1, fillOpacity: 0.95 };
-export const VEHICLE_MARKER_STYLE_HIDDEN: L.CircleMarkerOptions = { radius: 4, fillColor: '#808080', color: '#ffffff', weight: 1, opacity: 0.35, fillOpacity: 0.35 };
+// Leaflet paints markers on canvas/SVG, so these can't read CSS custom
+// properties. They mirror the DIMO brand tokens in global-styles.ts.
+export const MAP_COLORS = {
+    mint: '#46F1E4',
+    sky: '#8CD0FF',
+    ink: '#0E0F11',
+    muted: '#808080',
+} as const;
+
+export const VEHICLE_MARKER_STYLE: L.CircleMarkerOptions = { radius: 5, fillColor: MAP_COLORS.mint, color: MAP_COLORS.ink, weight: 2, opacity: 0.9, fillOpacity: 1 };
+export const VEHICLE_MARKER_STYLE_HOVER: L.CircleMarkerOptions = { radius: 8, fillColor: MAP_COLORS.mint, color: MAP_COLORS.ink, weight: 2.5, opacity: 1, fillOpacity: 1 };
+export const VEHICLE_MARKER_STYLE_SELECTED: L.CircleMarkerOptions = { radius: 9, fillColor: MAP_COLORS.sky, color: '#ffffff', weight: 3, opacity: 1, fillOpacity: 1 };
+export const VEHICLE_MARKER_STYLE_HIDDEN: L.CircleMarkerOptions = { radius: 4, fillColor: MAP_COLORS.muted, color: MAP_COLORS.ink, weight: 1, opacity: 0.35, fillOpacity: 0.35 };
 
 /** A green GPS dot with a hover tooltip, matching the vehicle map's style. */
 export function createVehicleMarker(
@@ -127,10 +136,11 @@ export function createVehicleMarker(
 }
 
 function clusterIcon(count: number): L.DivIcon {
-    const size = count < 10 ? 32 : count < 50 ? 40 : 48;
-    const total = size + 12;
+    const size = count < 10 ? 30 : count < 50 ? 38 : 46;
+    const total = size + 16;
+    // DIMO gradient disc with a soft mint halo: clusters read as "live fleet".
     return L.divIcon({
-        html: `<div style="width:${size}px;height:${size}px;background:#69dbad;border:2px solid #1a2332;border-radius:50%;box-shadow:0 0 0 6px rgba(105,219,173,0.25);display:flex;align-items:center;justify-content:center;font-size:${size < 40 ? 11 : 13}px;font-weight:600;color:#1a2332;">${count}</div>`,
+        html: `<div style="width:${size}px;height:${size}px;margin:8px;background:linear-gradient(135deg,${MAP_COLORS.sky},${MAP_COLORS.mint});border:2px solid ${MAP_COLORS.ink};border-radius:50%;box-shadow:0 0 0 6px rgba(70,241,228,0.18),0 0 24px 4px rgba(70,241,228,0.25);display:flex;align-items:center;justify-content:center;font-family:'Euclid Circular A',system-ui,sans-serif;font-size:${size < 38 ? 12 : 14}px;font-weight:600;color:#06201E;font-feature-settings:'tnum' 1;">${count}</div>`,
         className: '',
         iconSize: [total, total],
         iconAnchor: [total / 2, total / 2],

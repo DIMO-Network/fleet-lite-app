@@ -47,138 +47,201 @@ export class UploadDocumentModal extends LitElement {
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                background: rgba(0, 0, 0, 0.6);
-                backdrop-filter: blur(4px);
+                background: color-mix(in srgb, var(--canvas) 70%, transparent);
+                backdrop-filter: blur(6px);
+                -webkit-backdrop-filter: blur(6px);
             }
             .card {
-                width: 100%;
+                width: calc(100% - 32px);
                 max-width: 520px;
                 max-height: 90vh;
                 overflow-y: auto;
-                background: var(--surface-container);
-                border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-lg);
+                background: var(--surface-overlay);
+                border-radius: var(--radius-xl);
+                box-shadow: var(--shadow-float);
                 padding: 24px;
                 color: var(--on-surface);
                 position: relative;
+                animation: modal-in 0.18s ease-out;
             }
-            .card h2 { font: var(--type-headline-md); margin-bottom: 4px; }
+            @keyframes modal-in {
+                from { opacity: 0; transform: translateY(8px) scale(0.98); }
+            }
+            .card h2 {
+                font: var(--type-headline-md);
+                letter-spacing: -0.01em;
+                color: var(--primary);
+                padding-right: 40px;
+                margin-bottom: 4px;
+            }
             .card .sub { font: var(--type-body-sm); color: var(--on-surface-variant); margin-bottom: 24px; }
 
             .close {
-                position: absolute;
-                top: 16px;
-                right: 16px;
-                background: none;
-                border: none;
-                color: var(--on-surface-variant);
-                padding: 4px;
-                cursor: pointer;
+                position: absolute; top: 16px; right: 16px;
+                width: 32px; height: 32px; padding: 0;
+                display: inline-flex; align-items: center; justify-content: center;
+                border-radius: var(--radius-full); color: var(--on-surface-variant);
+                transition: background 0.15s ease, color 0.15s ease;
             }
-            .close:hover { color: var(--primary); }
+            .close .material-symbols-outlined { font-size: 20px; }
+            .close:hover { background: var(--surface-container-high); color: var(--on-surface); }
 
             .drop {
-                display: block;
-                border: 1px dashed var(--outline-variant);
-                border-radius: var(--radius-md);
-                padding: 32px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 4px;
+                border: 1.5px dashed var(--outline);
+                border-radius: var(--radius-lg);
+                padding: 32px 24px;
                 text-align: center;
-                color: var(--on-surface-variant);
+                font: var(--type-body-sm);
+                color: var(--on-surface);
                 cursor: pointer;
                 transition: border-color 0.15s ease, background 0.15s ease;
             }
-            .drop:hover, .drop.over {
-                border-color: var(--secondary);
-                background: rgba(255, 182, 145, 0.04);
+            .drop:hover, .drop.over, .drop:focus-within {
+                border-color: var(--accent);
+                background: var(--accent-soft);
             }
             .drop input { display: none; }
-            .drop .icon { font-size: 32px; color: var(--secondary); margin-bottom: 8px; }
-            .drop .hint { font: var(--type-label-caps); letter-spacing: 0.05em; text-transform: uppercase; margin-top: 8px; }
-
-            .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
-            .field label {
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                color: var(--on-surface-variant);
+            .drop .icon {
+                width: 48px;
+                height: 48px;
+                margin-bottom: 12px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: var(--radius-full);
+                background: var(--accent-soft);
+                color: var(--accent-ink);
+                transition: background 0.15s ease;
             }
+            .drop:hover .icon, .drop.over .icon { background: var(--accent-soft-strong); }
+            .drop .icon .material-symbols-outlined { font-size: 24px; }
+            .drop strong { font-weight: 500; color: var(--accent-ink); }
+            .drop .hint { font: var(--type-label); color: var(--on-surface-variant); margin-top: 4px; }
+
+            .field { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+            .field label { font: var(--type-label); color: var(--on-surface-variant); }
             .field select, .field input[type="text"] {
-                background: var(--surface-container-low);
+                height: 40px;
+                padding: 0 12px;
+                background-color: var(--surface-container-high);
                 color: var(--on-surface);
                 border: 1px solid var(--outline-variant);
                 border-radius: var(--radius-md);
-                padding: 10px 12px;
-                font-family: inherit;
-                font-size: 14px;
+                font: var(--type-body-sm);
+                transition: border-color 0.15s ease, box-shadow 0.15s ease;
             }
-            .field select:focus, .field input:focus { outline: 1px solid var(--primary); }
+            .field input[type="text"]::placeholder { color: var(--on-surface-variant); }
+            .field select:hover:not(:focus-visible),
+            .field input[type="text"]:hover:not(:focus-visible) { border-color: var(--outline); }
+            .field select:focus-visible, .field input[type="text"]:focus-visible {
+                outline: none;
+                border-color: var(--accent);
+                box-shadow: 0 0 0 3px var(--accent-soft);
+            }
 
             .vin-row {
                 display: flex;
                 align-items: center;
-                gap: 8px;
-                padding: 8px 12px;
+                gap: 10px;
+                min-height: 44px;
+                padding: 10px 14px;
                 border-radius: var(--radius-md);
-                background: var(--surface-container-low);
-                border: 1px solid var(--outline-variant);
+                background: var(--accent-soft);
                 font: var(--type-body-sm);
                 color: var(--on-surface-variant);
-                margin-bottom: 16px;
+                margin-bottom: 20px;
             }
-            .vin-row .vin { font-family: var(--font-mono); color: var(--primary); }
-            .vin-row.no-vin { background: rgba(255, 180, 171, 0.04); border-color: rgba(255, 180, 171, 0.2); color: var(--error); }
+            .vin-row > .material-symbols-outlined { font-size: 18px; color: var(--accent-ink); }
+            .vin-row .vin { font-weight: 500; color: var(--primary); letter-spacing: 0.02em; }
+            .vin-row.no-vin {
+                background: color-mix(in srgb, var(--warning) 12%, transparent);
+                color: var(--on-surface);
+            }
+            .vin-row.no-vin > .material-symbols-outlined { color: var(--warning); }
 
-            .actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px; }
+            .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 24px; }
             .actions button {
-                padding: 10px 18px;
-                border-radius: var(--radius-md);
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                font-weight: 700;
-                border: 1px solid transparent;
-                cursor: pointer;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 40px;
+                padding: 0 18px;
+                border-radius: var(--radius-full);
+                font: 600 14px/20px var(--font-body);
+                transition: background 0.15s ease, border-color 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease;
             }
             .actions .primary {
-                background: var(--primary);
-                color: var(--on-primary);
+                background: var(--brand-gradient);
+                color: var(--on-accent);
             }
-            .actions .primary:disabled { opacity: 0.5; cursor: not-allowed; }
+            .actions .primary:hover:not(:disabled) { filter: brightness(1.06); box-shadow: var(--accent-glow); }
+            .actions .primary:disabled { filter: grayscale(1); opacity: 0.5; cursor: not-allowed; }
             .actions .ghost {
-                background: transparent;
-                color: var(--on-surface-variant);
-                border-color: var(--outline-variant);
+                padding: 0 16px;
+                font-weight: 500;
+                background: var(--surface-container-high);
+                color: var(--on-surface);
+                border: 1px solid var(--outline-variant);
             }
+            .actions .ghost:hover { background: var(--surface-container-highest); border-color: var(--outline); }
 
             .picked-file {
                 display: flex;
                 align-items: center;
                 gap: 12px;
-                padding: 12px;
-                background: var(--surface-container-low);
-                border: 1px solid var(--outline-variant);
+                padding: 12px 14px;
+                background: var(--surface-container);
                 border-radius: var(--radius-md);
-                margin-bottom: 16px;
+                margin-bottom: 8px;
             }
-            .picked-file .name { flex: 1; font: var(--type-body-md); color: var(--primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-            .picked-file .meta { font: var(--type-label-caps); color: var(--on-surface-variant); letter-spacing: 0.05em; }
+            .picked-file .file-icon {
+                width: 36px;
+                height: 36px;
+                flex: none;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: var(--radius-md);
+                background: var(--surface-container-high);
+                color: var(--on-surface-variant);
+            }
+            .picked-file .file-icon .material-symbols-outlined { font-size: 20px; }
+            .picked-file .name { flex: 1; min-width: 0; font: 500 14px/20px var(--font-body); color: var(--primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            .picked-file .meta { font: var(--type-label); color: var(--on-surface-variant); flex: none; }
 
             .status {
                 text-align: center;
-                padding: 32px 0;
+                padding: 40px 0 32px;
+                font: var(--type-body-sm);
                 color: var(--on-surface-variant);
             }
-            .status .big { font: var(--type-headline-md); color: var(--primary); margin-bottom: 8px; }
+            .status::before {
+                content: '';
+                display: block;
+                width: 28px;
+                height: 28px;
+                margin: 0 auto 16px;
+                border-radius: var(--radius-full);
+                border: 2.5px solid var(--accent-soft-strong);
+                border-top-color: var(--accent);
+                animation: upload-spin 0.8s linear infinite;
+            }
+            @keyframes upload-spin { to { transform: rotate(360deg); } }
+            .status .big { font: 600 17px/24px var(--font-headline); color: var(--primary); margin-bottom: 4px; }
 
             .error-text {
-                padding: 12px;
-                background: rgba(255, 180, 171, 0.04);
-                border: 1px solid rgba(255, 180, 171, 0.2);
+                padding: 12px 14px;
+                background: var(--error-container);
                 color: var(--error);
                 border-radius: var(--radius-md);
                 font: var(--type-body-sm);
                 margin-bottom: 16px;
             }
+            .card h2 + .error-text { margin-top: 16px; }
         `,
     ];
 
@@ -293,7 +356,7 @@ export class UploadDocumentModal extends LitElement {
 
             ${this.file ? html`
                 <div class="picked-file">
-                    <span class="material-symbols-outlined" style="color: var(--secondary);">description</span>
+                    <span class="file-icon"><span class="material-symbols-outlined">description</span></span>
                     <span class="name">${this.file.name}</span>
                     <span class="meta">${(this.file.size / 1024).toFixed(0)} KB</span>
                 </div>
@@ -301,11 +364,11 @@ export class UploadDocumentModal extends LitElement {
 
             ${vin
                 ? html`<div class="vin-row">
-                    <span class="material-symbols-outlined" style="font-size:16px;">qr_code</span>
+                    <span class="material-symbols-outlined">qr_code</span>
                     <span>${msg(html`Detected VIN <span class="vin">${vin}</span>`)}</span>
                 </div>`
                 : html`<div class="vin-row no-vin">
-                    <span class="material-symbols-outlined" style="font-size:16px;">info</span>
+                    <span class="material-symbols-outlined">info</span>
                     <span>${msg('No VIN detected — pick the vehicle manually.')}</span>
                 </div>`
             }
