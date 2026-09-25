@@ -410,10 +410,12 @@ export class VehicleQuickView extends LitElement {
             }
             .rt-btn:hover { background: var(--surface-container-highest); color: var(--on-surface); }
             .rt-btn .material-symbols-outlined { font-size: 14px; }
+            /* Live mode: the pulsing dot carries the accent; the pill stays
+               neutral so it doesn't read as a tinted status badge. */
             .rt-btn.active,
             .rt-btn.active:hover {
-                background: var(--accent-soft-strong);
-                color: var(--accent-ink);
+                background: var(--surface-container-highest);
+                color: var(--primary);
             }
             .rt-dot {
                 width: 7px;
@@ -587,11 +589,11 @@ export class VehicleQuickView extends LitElement {
                 transition: filter 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
             }
             footer .btn.primary {
-                background: var(--brand-gradient);
-                color: var(--on-accent);
+                background: var(--btn-primary-bg);
+                color: var(--btn-primary-fg);
                 font-weight: 600;
             }
-            footer .btn.primary:hover { filter: brightness(1.06); box-shadow: var(--accent-glow); }
+            footer .btn.primary:hover { background: var(--btn-primary-hover); }
             footer .btn[disabled] { opacity: 0.55; cursor: default; }
             footer .btn .soon { font-size: 11px; opacity: 0.8; }
         `,

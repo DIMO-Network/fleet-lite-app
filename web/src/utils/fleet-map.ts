@@ -121,7 +121,8 @@ export const MAP_COLORS = {
 
 export const VEHICLE_MARKER_STYLE: L.CircleMarkerOptions = { radius: 5, fillColor: MAP_COLORS.mint, color: MAP_COLORS.ink, weight: 2, opacity: 0.9, fillOpacity: 1 };
 export const VEHICLE_MARKER_STYLE_HOVER: L.CircleMarkerOptions = { radius: 8, fillColor: MAP_COLORS.mint, color: MAP_COLORS.ink, weight: 2.5, opacity: 1, fillOpacity: 1 };
-export const VEHICLE_MARKER_STYLE_SELECTED: L.CircleMarkerOptions = { radius: 9, fillColor: MAP_COLORS.sky, color: '#ffffff', weight: 3, opacity: 1, fillOpacity: 1 };
+// Ink ring like the unselected dots: a white ring vanishes on the light tiles.
+export const VEHICLE_MARKER_STYLE_SELECTED: L.CircleMarkerOptions = { radius: 9, fillColor: MAP_COLORS.sky, color: MAP_COLORS.ink, weight: 3, opacity: 1, fillOpacity: 1 };
 export const VEHICLE_MARKER_STYLE_HIDDEN: L.CircleMarkerOptions = { radius: 4, fillColor: MAP_COLORS.muted, color: MAP_COLORS.ink, weight: 1, opacity: 0.35, fillOpacity: 0.35 };
 
 /** A green GPS dot with a hover tooltip, matching the vehicle map's style. */
@@ -157,6 +158,28 @@ export function createVehicleClusterGroup(): L.MarkerClusterGroup {
         maxClusterRadius: 60,
         animate: true,
     });
+}
+
+// ---- Trip routes ---------------------------------------------------------
+
+export interface TripMapStyles {
+    route: string;
+    start: L.CircleMarkerOptions;
+    end: L.CircleMarkerOptions;
+}
+
+/** Route + endpoint styling for a drawn trip. The route keeps the brand sky on
+ *  dark tiles but deepens to a blue that holds >=3:1 on CARTO's light tiles
+ *  (land and water; sky is ~1.6:1 there). Start and end differ in shape as
+ *  well as hue so they read without color: start is a solid green dot, end a
+ *  red ring around a white core. */
+export function tripMapStyles(theme: 'dark' | 'light'): TripMapStyles {
+    const light = theme === 'light';
+    return {
+        route: light ? '#2272C4' : MAP_COLORS.sky,
+        start: { radius: 6, fillColor: light ? '#1B8842' : '#36DF71', color: MAP_COLORS.ink, weight: 2, opacity: 1, fillOpacity: 1 },
+        end: { radius: 6, fillColor: '#FFFFFF', color: light ? '#C70000' : '#FF6060', weight: 4, opacity: 1, fillOpacity: 1 },
+    };
 }
 
 // ---- Location loading ----------------------------------------------------

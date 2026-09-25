@@ -559,7 +559,7 @@ export class FleetListView extends LitElement {
                 max-width: 360px;
                 transition: box-shadow 0.15s ease;
             }
-            .search-wrap:focus-within { box-shadow: 0 0 0 2px var(--accent-soft-strong); }
+            .search-wrap:focus-within { box-shadow: 0 0 0 2px var(--focus-ring); }
             .search-wrap > .material-symbols-outlined { font-size: 18px; color: var(--on-surface-variant); flex-shrink: 0; }
             .search-wrap input {
                 background: none;
@@ -629,8 +629,8 @@ export class FleetListView extends LitElement {
             .show-hidden-btn:hover { background: var(--surface-container-highest); color: var(--on-surface); }
             .show-hidden-btn.active,
             .show-hidden-btn.active:hover {
-                background: var(--accent-soft-strong);
-                color: var(--accent-ink);
+                background: var(--selected-bg);
+                color: var(--selected-fg);
             }
             .show-hidden-btn .material-symbols-outlined { font-size: 18px; }
             .show-hidden-btn .hidden-count { font-weight: 600; }

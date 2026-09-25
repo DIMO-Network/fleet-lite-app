@@ -52,13 +52,11 @@ export class ManageGeofenceVehiclesModal extends LitElement {
         sharedStyles,
         css`
             :host {
-                /* Panel tone. --surface-overlay is a requested token (white in
-                   light mode); until it exists this falls back to the card tone. */
-                --modal-bg: var(--surface-overlay, var(--surface-container-low));
+                --modal-bg: var(--surface-overlay);
                 position: fixed; inset: 0; z-index: 100;
                 display: flex; align-items: center; justify-content: center;
                 padding: 16px;
-                background: color-mix(in srgb, var(--canvas) 72%, transparent);
+                background: var(--scrim);
                 backdrop-filter: blur(8px);
                 -webkit-backdrop-filter: blur(8px);
             }
@@ -100,7 +98,7 @@ export class ManageGeofenceVehiclesModal extends LitElement {
                 border: 1px solid var(--outline-variant);
                 transition: border-color 0.15s ease, box-shadow 0.15s ease;
             }
-            .search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+            .search:focus-within { border-color: var(--focus-ring); box-shadow: 0 0 0 3px var(--accent-soft); }
             .search > .material-symbols-outlined { font-size: 18px; color: var(--on-surface-variant); }
             .search input {
                 flex: 1; min-width: 0;
@@ -144,8 +142,8 @@ export class ManageGeofenceVehiclesModal extends LitElement {
                 transition: background 0.15s ease, color 0.15s ease;
             }
             .toggle .material-symbols-outlined { font-size: 20px; }
-            .toggle:hover { background: var(--accent-soft); color: var(--accent-ink); }
-            .toggle.member { background: var(--accent-soft-strong); color: var(--accent-ink); }
+            .toggle:hover { background: var(--surface-container-highest); color: var(--on-surface); }
+            .toggle.member { background: var(--selected-bg); color: var(--selected-fg); }
             .toggle:disabled { opacity: 0.5; cursor: progress; }
 
             .empty-state { color: var(--on-surface-variant); font: var(--type-body-sm); padding: 24px; text-align: center; }

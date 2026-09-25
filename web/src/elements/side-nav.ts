@@ -173,9 +173,11 @@ export class SideNav extends LitElement {
                 color: var(--primary);
                 box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
             }
+            /* Selection reads from the raised pill and the filled glyph; the
+               icon stays ink so the nav doesn't carry a second accent color. */
             a.nav-item.active .material-symbols-outlined {
                 font-variation-settings: 'FILL' 1, 'wght' 400;
-                color: var(--accent-ink);
+                color: var(--primary);
             }
             :host([collapsed]) a.nav-item {
                 justify-content: center;

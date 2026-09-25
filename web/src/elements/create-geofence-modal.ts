@@ -68,13 +68,11 @@ export class CreateGeofenceModal extends LitElement {
         sharedStyles,
         css`
             :host {
-                /* Panel tone. --surface-overlay is a requested token (white in
-                   light mode); until it exists this falls back to the card tone. */
-                --modal-bg: var(--surface-overlay, var(--surface-container-low));
+                --modal-bg: var(--surface-overlay);
                 position: fixed; inset: 0; z-index: 100;
                 display: flex; align-items: center; justify-content: center;
                 padding: 16px;
-                background: color-mix(in srgb, var(--canvas) 72%, transparent);
+                background: var(--scrim);
                 backdrop-filter: blur(8px);
                 -webkit-backdrop-filter: blur(8px);
             }
@@ -112,7 +110,7 @@ export class CreateGeofenceModal extends LitElement {
             .field input::placeholder { color: var(--on-surface-variant); }
             .field input:focus-visible {
                 outline: none;
-                border-color: var(--accent);
+                border-color: var(--focus-ring);
                 box-shadow: 0 0 0 3px var(--accent-soft);
             }
             .field .hint { font: var(--type-label); color: var(--on-surface-variant); }
@@ -165,11 +163,11 @@ export class CreateGeofenceModal extends LitElement {
                 transition: background 0.15s ease;
             }
             .group-row:hover { background: var(--surface-container-high); }
-            .group-row.selected { background: var(--accent-soft); }
+            .group-row.selected { background: var(--surface-container-high); box-shadow: inset 0 0 0 1.5px var(--primary); }
             .group-row .dot { width: 10px; height: 10px; border-radius: var(--radius-full); flex-shrink: 0; }
             .group-row .gname { flex: 1; font: var(--type-body-sm); color: var(--on-surface); }
             .group-row.selected .gname { color: var(--primary); font-weight: 500; }
-            .group-row .check { color: var(--accent-ink); font-size: 20px; }
+            .group-row .check { color: var(--primary); font-size: 20px; }
 
             .meta-line {
                 display: inline-flex; align-items: center; gap: 6px;

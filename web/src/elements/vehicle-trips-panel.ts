@@ -11,7 +11,7 @@ import { formatDistance, formatSpeed } from '../utils/units.ts';
 import { tripSignal, tripDistanceKm, tripTimeShort, formatDwell } from '../utils/trips.ts';
 import { Trip } from '../types/telemetry.ts';
 import { BEHAVIOR_SERIES, behaviorTotal, seriesCount } from '../utils/behavior-events.ts';
-import { buildTileLayer, MAP_COLORS } from '../utils/fleet-map.ts';
+import { buildTileLayer, MAP_COLORS, tripMapStyles } from '../utils/fleet-map.ts';
 import { GeofenceCrossing } from '../types/geofence.ts';
 import './trip-replay-modal.ts';
 
@@ -75,6 +75,11 @@ export class VehicleTripsPanel extends LitElement {
         this.tileLayer?.remove();
         this.tileLayer = buildTileLayer(theme);
         this.tileLayer.addTo(this.map);
+        const trip = tripMapStyles(theme);
+        this.routeLayer?.setStyle({ color: trip.route });
+        const [start, end] = this.endpointLayers;
+        start?.setStyle(trip.start);
+        end?.setStyle(trip.end);
     };
 
     connectedCallback() {
@@ -287,10 +292,11 @@ export class VehicleTripsPanel extends LitElement {
     private drawRoute(points: Array<[number, number]>) {
         if (!this.map) return;
         this.removeRouteLayers();
-        this.routeLayer = L.polyline(points, { color: MAP_COLORS.sky, weight: 4, opacity: 0.9 }).addTo(this.map);
+        const trip = tripMapStyles(themeService.current);
+        this.routeLayer = L.polyline(points, { color: trip.route, weight: 4, opacity: 0.9 }).addTo(this.map);
         this.endpointLayers = [
-            L.circleMarker(points[0], { radius: 5, fillColor: MAP_COLORS.mint, color: MAP_COLORS.ink, weight: 2, fillOpacity: 1 }).addTo(this.map),
-            L.circleMarker(points[points.length - 1], { radius: 5, fillColor: MAP_COLORS.sky, color: MAP_COLORS.ink, weight: 2, fillOpacity: 1 }).addTo(this.map),
+            L.circleMarker(points[0], trip.start).addTo(this.map),
+            L.circleMarker(points[points.length - 1], trip.end).addTo(this.map),
         ];
         this.map.fitBounds(this.routeLayer.getBounds(), { padding: [30, 30], maxZoom: 15 });
     }
@@ -435,8 +441,8 @@ export class VehicleTripsPanel extends LitElement {
                 flex-shrink: 0;
             }
             .trip-entry.selected {
-                background: var(--accent-soft);
-                box-shadow: inset 3px 0 0 var(--accent);
+                background: var(--surface-container-high);
+                box-shadow: inset 3px 0 0 var(--primary);
             }
             .trip-row-wrap {
                 display: flex;

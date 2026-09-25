@@ -188,12 +188,12 @@ export class TenantMembers extends LitElement {
                 min-height: 40px;
                 padding: 0 18px 0 14px;
                 border-radius: var(--radius-full);
-                background: var(--brand-gradient);
-                color: var(--on-accent);
+                background: var(--btn-primary-bg);
+                color: var(--btn-primary-fg);
                 font: 600 14px/20px var(--font-body);
-                transition: filter 0.15s ease, box-shadow 0.15s ease;
+                transition: background 0.15s ease;
             }
-            .invite-btn:hover { filter: brightness(1.06); box-shadow: var(--accent-glow); }
+            .invite-btn:hover { background: var(--btn-primary-hover); }
             .invite-btn .material-symbols-outlined { font-size: 18px; }
 
             /* Email-delivery badge on a pending invite. Tone maps to the

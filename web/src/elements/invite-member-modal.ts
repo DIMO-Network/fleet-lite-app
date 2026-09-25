@@ -61,7 +61,7 @@ export class InviteMemberModal extends LitElement {
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                background: color-mix(in srgb, var(--canvas) 70%, transparent);
+                background: var(--scrim);
                 backdrop-filter: blur(6px);
                 -webkit-backdrop-filter: blur(6px);
             }
@@ -116,7 +116,7 @@ export class InviteMemberModal extends LitElement {
             .field select:hover:not(:focus-visible) { border-color: var(--outline); }
             .field input[type="email"]:focus-visible, .field select:focus-visible {
                 outline: none;
-                border-color: var(--accent);
+                border-color: var(--focus-ring);
                 box-shadow: 0 0 0 3px var(--accent-soft);
             }
 
@@ -134,8 +134,8 @@ export class InviteMemberModal extends LitElement {
             }
             .radio-row label.option:hover { background: var(--surface-container-high); }
             .radio-row label.option:has(input:checked) {
-                background: var(--accent-soft);
-                box-shadow: inset 0 0 0 1px var(--accent-soft-strong);
+                background: var(--surface-container-high);
+                box-shadow: inset 0 0 0 1.5px var(--primary);
             }
             .radio-row label.option input { margin-top: 3px; flex: none; }
             .radio-row .option-text { display: flex; flex-direction: column; gap: 2px; }
@@ -159,7 +159,7 @@ export class InviteMemberModal extends LitElement {
             }
             .group-search input::placeholder { color: var(--on-surface-variant); }
             .group-search input:focus-visible { box-shadow: none; }
-            .group-search:focus-within { box-shadow: inset 0 -2px 0 var(--accent); }
+            .group-search:focus-within { box-shadow: inset 0 -2px 0 var(--focus-ring); }
             .group-list { max-height: 200px; overflow-y: auto; padding: 4px; }
             .group-row {
                 display: flex; align-items: center; gap: 10px;
@@ -185,8 +185,8 @@ export class InviteMemberModal extends LitElement {
                 font: 600 14px/20px var(--font-body);
                 transition: background 0.15s ease, border-color 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease;
             }
-            .actions .primary { background: var(--brand-gradient); color: var(--on-accent); }
-            .actions .primary:hover:not(:disabled) { filter: brightness(1.06); box-shadow: var(--accent-glow); }
+            .actions .primary { background: var(--btn-primary-bg); color: var(--btn-primary-fg); }
+            .actions .primary:hover:not(:disabled) { background: var(--btn-primary-hover); }
             .actions .primary:disabled { filter: grayscale(1); opacity: 0.5; cursor: not-allowed; }
             .actions .ghost {
                 padding: 0 16px; font-weight: 500;

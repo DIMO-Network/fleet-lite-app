@@ -165,9 +165,17 @@ export class ChargingView extends LitElement {
             #charging-map a.leaflet-popup-close-button { color: var(--on-surface-variant); }
 
             /* ── Sessions table (DESIGN.md) ─────────────────────────── */
-            table {
-                width: calc(100% - 2 * var(--gutter));
+            /* The nowrap date/number cells scroll inside the wrapper on
+               phones instead of pushing the whole view sideways. flex-shrink:0
+               because :host is a fixed-height flex column and an overflow box
+               would otherwise shrink into its own vertical scroller. */
+            .table-wrap {
+                flex-shrink: 0;
+                overflow-x: auto;
                 margin: 16px var(--gutter) 0;
+            }
+            table {
+                width: 100%;
                 border-collapse: collapse;
                 font: var(--type-body-sm);
                 color: var(--on-surface);
@@ -203,13 +211,13 @@ export class ChargingView extends LitElement {
                 min-height: 40px;
                 padding: 0 18px;
                 border-radius: var(--radius-full);
-                background: var(--brand-gradient);
-                color: var(--on-accent);
+                background: var(--btn-primary-bg);
+                color: var(--btn-primary-fg);
                 font: 600 14px/20px var(--font-body);
                 white-space: nowrap;
-                transition: filter 0.15s ease, box-shadow 0.15s ease;
+                transition: background 0.15s ease;
             }
-            .export-btn:hover { filter: brightness(1.06); box-shadow: var(--accent-glow); }
+            .export-btn:hover { background: var(--btn-primary-hover); }
             .export-btn:disabled { filter: grayscale(1) opacity(0.5); box-shadow: none; cursor: not-allowed; }
 
             .settings-form {
@@ -468,32 +476,34 @@ export class ChargingView extends LitElement {
             ${this.loading
                 ? html`<p>${msg('Loading…')}</p>`
                 : html`
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>${msg('Vehicle')}</th>
-                                <th>${msg('Started')}</th>
-                                <th>${msg('Ended')}</th>
-                                <th class="num">${msg('Energy')}</th>
-                                <th class="num">${msg('Cost')}</th>
-                                <th class="num">${msg('Saved')}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${sessions.map(
-                                (s: ChargingSessionView) => html`
-                                    <tr>
-                                        <td>${s.vehicleLabel}</td>
-                                        <td>${new Date(s.startedAt).toLocaleString()}</td>
-                                        <td>${new Date(s.endedAt).toLocaleString()}</td>
-                                        <td class="num">${formatEnergyCell(s)}</td>
-                                        <td class="num">${formatMoney(s.cost, s.currency)}</td>
-                                        <td class="num">${formatMoney(s.savings, s.currency)}</td>
-                                    </tr>
-                                `,
-                            )}
-                        </tbody>
-                    </table>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>${msg('Vehicle')}</th>
+                                    <th>${msg('Started')}</th>
+                                    <th>${msg('Ended')}</th>
+                                    <th class="num">${msg('Energy')}</th>
+                                    <th class="num">${msg('Cost')}</th>
+                                    <th class="num">${msg('Saved')}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${sessions.map(
+                                    (s: ChargingSessionView) => html`
+                                        <tr>
+                                            <td>${s.vehicleLabel}</td>
+                                            <td>${new Date(s.startedAt).toLocaleString()}</td>
+                                            <td>${new Date(s.endedAt).toLocaleString()}</td>
+                                            <td class="num">${formatEnergyCell(s)}</td>
+                                            <td class="num">${formatMoney(s.cost, s.currency)}</td>
+                                            <td class="num">${formatMoney(s.savings, s.currency)}</td>
+                                        </tr>
+                                    `,
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 `}
         `;
     }

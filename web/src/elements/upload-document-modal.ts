@@ -47,7 +47,7 @@ export class UploadDocumentModal extends LitElement {
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                background: color-mix(in srgb, var(--canvas) 70%, transparent);
+                background: var(--scrim);
                 backdrop-filter: blur(6px);
                 -webkit-backdrop-filter: blur(6px);
             }
@@ -139,7 +139,7 @@ export class UploadDocumentModal extends LitElement {
             .field input[type="text"]:hover:not(:focus-visible) { border-color: var(--outline); }
             .field select:focus-visible, .field input[type="text"]:focus-visible {
                 outline: none;
-                border-color: var(--accent);
+                border-color: var(--focus-ring);
                 box-shadow: 0 0 0 3px var(--accent-soft);
             }
 
@@ -175,10 +175,10 @@ export class UploadDocumentModal extends LitElement {
                 transition: background 0.15s ease, border-color 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease;
             }
             .actions .primary {
-                background: var(--brand-gradient);
-                color: var(--on-accent);
+                background: var(--btn-primary-bg);
+                color: var(--btn-primary-fg);
             }
-            .actions .primary:hover:not(:disabled) { filter: brightness(1.06); box-shadow: var(--accent-glow); }
+            .actions .primary:hover:not(:disabled) { background: var(--btn-primary-hover); }
             .actions .primary:disabled { filter: grayscale(1); opacity: 0.5; cursor: not-allowed; }
             .actions .ghost {
                 padding: 0 16px;

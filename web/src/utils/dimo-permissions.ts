@@ -56,12 +56,14 @@ export function dimoRedirectUri(): string {
  * credentials" page — so assuming `/login.html` sends every fleet that
  * registered only its root (license #472 did) to a dead end.
  *
- * Preference: the origin root, then any other path on our origin, and our
- * login page only as a last resort. A grant returns with the *grantor's*
- * token for the fleet's license, and login.html stores any `token` it is
- * handed as this app's session — so returning there signs the member's
- * browser in as whoever granted. Any other page ignores the token and the
- * member stays signed in as themselves.
+ * Only the app root (`/` or `/index.html`) qualifies. A grant returns with
+ * the *grantor's* token for the fleet's license, and login.html stores any
+ * `token` it is handed as this app's session — returning there signs the
+ * member's browser in as whoever granted. accept-invite.html likewise keeps
+ * its `token` as the pending invite. The root ignores the token (index.html
+ * strips it from the URL) and the member stays signed in as themselves. A
+ * license with nothing but those pages gets null, so the caller shows the
+ * setup hint instead of a link.
  *
  * Returned exactly as registered, trailing slash and all, because the
  * comparison upstream is exact. Only the same scheme and host count: a
@@ -78,10 +80,18 @@ export function pickGrantRedirectUri(registered: readonly string[], origin: stri
     const path = (uri: string) => new URL(uri).pathname;
     return (
         ours.find((uri) => path(uri) === '/') ??
-        ours.find((uri) => path(uri) !== '/login.html') ??
-        ours[0] ??
+        ours.find((uri) => path(uri) === '/index.html') ??
         null
     );
+}
+
+/**
+ * Where a grant returns when the license's redirect list couldn't be read.
+ * The root is the only safe guess (see pickGrantRedirectUri); if it isn't
+ * registered DIMO shows its credentials error, which beats a session swap.
+ */
+export function grantFallbackRedirectUri(): string {
+    return location.origin + '/';
 }
 
 export interface DimoGrantUrlOptions {
@@ -96,8 +106,11 @@ export interface DimoGrantUrlOptions {
 export interface ShareVehiclesUrlOptions extends DimoGrantUrlOptions {
     /** Token ids to narrow the vehicle picker to. Omit to offer the whole garage. */
     vehicles?: Array<number | string>;
-    /** Where DIMO returns afterwards; must be registered on `clientId`. Defaults to dimoRedirectUri(). */
-    redirectUri?: string;
+    /**
+     * Where DIMO returns afterwards; must be registered on `clientId`. Never
+     * the login page — see pickGrantRedirectUri.
+     */
+    redirectUri: string;
 }
 
 /**
@@ -124,7 +137,7 @@ export function buildLoginUrl(opts: DimoGrantUrlOptions): string {
 export function buildShareVehiclesUrl(opts: ShareVehiclesUrlOptions): string {
     const params = new URLSearchParams({
         clientId: opts.clientId,
-        redirectUri: opts.redirectUri ?? dimoRedirectUri(),
+        redirectUri: opts.redirectUri,
         entryState: 'VEHICLE_MANAGER',
         permissions: opts.permissions ?? DIMO_PERMISSIONS_ALL,
         cloudEvent: JSON.stringify(DIMO_VEHICLE_FILE_AGREEMENTS),

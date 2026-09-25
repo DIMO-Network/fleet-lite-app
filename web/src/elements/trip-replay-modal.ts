@@ -10,7 +10,7 @@ import { TelemetryService } from '../services/telemetry-service.ts';
 import { Trip, TripWaypoint } from '../types/telemetry.ts';
 import { tripDistanceKm, tripDurationMs, tripSignal } from '../utils/trips.ts';
 import { formatDistance, formatSpeed } from '../utils/units.ts';
-import { buildTileLayer, MAP_COLORS } from '../utils/fleet-map.ts';
+import { buildTileLayer, MAP_COLORS, tripMapStyles } from '../utils/fleet-map.ts';
 import { behaviorColor, isBehaviorEvent } from '../utils/behavior-events.ts';
 
 interface EventFlag {
@@ -20,9 +20,8 @@ interface EventFlag {
 
 const MAX_WAYPOINTS = 500;
 
-// Map markers can't read CSS variables: mint = start / the vehicle, sky = route / end.
-const START_STYLE: L.CircleMarkerOptions = { radius: 6, fillColor: MAP_COLORS.mint, color: MAP_COLORS.ink, weight: 2, fillOpacity: 1 };
-const END_STYLE: L.CircleMarkerOptions = { radius: 6, fillColor: MAP_COLORS.sky, color: MAP_COLORS.ink, weight: 2, fillOpacity: 1 };
+// Map markers can't read CSS variables. The vehicle is the brand mint; route
+// and endpoints come from tripMapStyles() so they track the tile theme.
 const POSITION_STYLE: L.CircleMarkerOptions = { radius: 8, fillColor: MAP_COLORS.mint, color: MAP_COLORS.ink, weight: 2.5, fillOpacity: 1 };
 
 function downsample(pts: TripWaypoint[]): TripWaypoint[] {
@@ -61,17 +60,23 @@ export class TripReplayModal extends LitElement {
                 align-items: center;
                 justify-content: center;
                 padding: 16px;
-                /* TODO(token): swap for a shared --scrim once global-styles has one. */
-                background: var(--scrim, color-mix(in srgb, var(--canvas) 72%, transparent));
+                background: var(--scrim);
                 backdrop-filter: blur(6px);
                 -webkit-backdrop-filter: blur(6px);
             }
             .card {
                 width: min(100%, 820px);
-                max-height: 90vh;
+                max-height: calc(100vh - 32px);
+                max-height: calc(100dvh - 32px);
                 display: flex;
                 flex-direction: column;
-                overflow: hidden;
+                /* The map shrinks first; scrolling is only a last resort on
+                   viewports too short for even the minimum map. */
+                overflow-x: hidden;
+                overflow-y: auto;
+                /* Sections pad themselves; cancel the shared .card padding + border. */
+                padding: 0;
+                border: none;
                 background: var(--surface);
                 border-radius: var(--radius-xl);
                 box-shadow: var(--shadow-float);
@@ -105,16 +110,21 @@ export class TripReplayModal extends LitElement {
                 transition: background 0.15s ease, color 0.15s ease;
             }
             .close:hover { background: var(--surface-container-high); color: var(--primary); }
+            /* Up to 360px tall, giving way (down to 200px) so the stats and
+               playback controls always fit on short laptop and phone screens. */
             .map-wrapper {
                 position: relative;
-                flex-shrink: 0;
+                flex: 0 1 360px;
+                min-height: 200px;
+                display: flex;
+                flex-direction: column;
                 margin: 0 16px;
                 border-radius: var(--radius-lg);
                 overflow: hidden;
                 isolation: isolate;
                 background: var(--surface-container-lowest);
             }
-            #map { width: 100%; height: 360px; background: var(--surface-container-lowest); }
+            #map { flex: 1 1 auto; width: 100%; min-height: 0; background: var(--surface-container-lowest); }
             #map .leaflet-bar {
                 border: none;
                 border-radius: var(--radius-md);
@@ -158,7 +168,7 @@ export class TripReplayModal extends LitElement {
                 white-space: nowrap;
             }
             .map-state {
-                height: 360px;
+                flex: 1 1 auto;
                 display: flex;
                 align-items: center;
                 justify-content: center;
@@ -215,6 +225,12 @@ export class TripReplayModal extends LitElement {
                 height: 4px;
                 margin-right: 6px;
                 overflow: visible;
+            }
+            /* Phones: the progress bar takes its own row above the buttons. */
+            @media (max-width: 480px) {
+                .controls { flex-wrap: wrap; row-gap: 14px; padding: 16px 16px 16px; }
+                .progress-bar { flex: 1 0 100%; margin: 6px 0 0; }
+                .time-display { margin-right: auto; }
             }
             .progress-track {
                 height: 100%;
@@ -278,11 +294,11 @@ export class TripReplayModal extends LitElement {
             .ctrl-btn.primary {
                 width: 40px;
                 height: 40px;
-                background: var(--brand-gradient);
-                color: var(--on-accent);
+                background: var(--btn-primary-bg);
+                color: var(--btn-primary-fg);
             }
             .ctrl-btn.primary .material-symbols-outlined { font-variation-settings: 'FILL' 1; }
-            .ctrl-btn.primary:hover { filter: brightness(1.06); box-shadow: var(--accent-glow); }
+            .ctrl-btn.primary:hover { background: var(--btn-primary-hover); }
             .speed-select {
                 height: 36px;
                 padding: 0 12px;
@@ -314,10 +330,20 @@ export class TripReplayModal extends LitElement {
         this.tileLayer?.remove();
         this.tileLayer = buildTileLayer(theme);
         this.tileLayer.addTo(this.map);
+        const trip = tripMapStyles(theme);
+        this.routeLines.forEach((l) => l.setStyle({ color: trip.route }));
+        this.startMarker?.setStyle(trip.start);
+        this.endMarker?.setStyle(trip.end);
     };
 
     private positionMarker?: L.CircleMarker;
     private drawnPolyline?: L.Polyline;
+    // Route lines + endpoints, restyled when the theme flips.
+    private routeLines: L.Polyline[] = [];
+    private startMarker?: L.CircleMarker;
+    private endMarker?: L.CircleMarker;
+    // The map's height flexes with the viewport; keep Leaflet's size in sync.
+    private resizeObserver?: ResizeObserver;
     private animationInterval?: number;
     private mapInitTimer?: number;
     private connected = false;
@@ -347,6 +373,8 @@ export class TripReplayModal extends LitElement {
         window.removeEventListener('theme-change', this.boundOnThemeChange);
         if (this.mapInitTimer !== undefined) { clearTimeout(this.mapInitTimer); this.mapInitTimer = undefined; }
         this.stopAnim();
+        this.resizeObserver?.disconnect();
+        this.resizeObserver = undefined;
         this.map?.remove();
         this.map = undefined;
     }
@@ -411,12 +439,16 @@ export class TripReplayModal extends LitElement {
         this.map = L.map(el as HTMLElement);
         this.tileLayer = buildTileLayer(themeService.current);
         this.tileLayer.addTo(this.map);
+        this.observeMapSize(el as HTMLElement);
+        const trip = tripMapStyles(themeService.current);
 
-        L.circleMarker([sLat, sLng], START_STYLE)
+        this.routeLines = [
+            L.polyline([[sLat, sLng], [eLat, eLng]], { color: trip.route, dashArray: '6,6', opacity: 0.6, weight: 2 }).addTo(this.map),
+        ];
+        this.startMarker = L.circleMarker([sLat, sLng], trip.start)
             .bindPopup(msg('Start')).addTo(this.map);
-        L.circleMarker([eLat, eLng], END_STYLE)
+        this.endMarker = L.circleMarker([eLat, eLng], trip.end)
             .bindPopup(msg('End')).addTo(this.map);
-        L.polyline([[sLat, sLng], [eLat, eLng]], { color: MAP_COLORS.sky, dashArray: '6,6', opacity: 0.6, weight: 2 }).addTo(this.map);
 
         try { this.map.fitBounds([[sLat, sLng], [eLat, eLng]], { padding: [40, 40] }); } catch { /* ignore */ }
         this.mapInitTimer = window.setTimeout(() => {
@@ -434,15 +466,20 @@ export class TripReplayModal extends LitElement {
         this.map = L.map(el as HTMLElement);
         this.tileLayer = buildTileLayer(themeService.current);
         this.tileLayer.addTo(this.map);
+        this.observeMapSize(el as HTMLElement);
+        const trip = tripMapStyles(themeService.current);
 
-        L.polyline(bounds, { color: MAP_COLORS.sky, opacity: 0.35, weight: 2, dashArray: '4,3' }).addTo(this.map);
+        this.drawnPolyline = L.polyline([], { color: trip.route, weight: 4, opacity: 0.95 });
+        this.routeLines = [
+            L.polyline(bounds, { color: trip.route, opacity: 0.35, weight: 2, dashArray: '4,3' }).addTo(this.map),
+            this.drawnPolyline.addTo(this.map),
+        ];
 
-        L.circleMarker(bounds[0], START_STYLE)
+        this.startMarker = L.circleMarker(bounds[0], trip.start)
             .bindPopup(msg('Start')).addTo(this.map);
-        L.circleMarker(bounds[bounds.length - 1], END_STYLE)
+        this.endMarker = L.circleMarker(bounds[bounds.length - 1], trip.end)
             .bindPopup(msg('End')).addTo(this.map);
 
-        this.drawnPolyline = L.polyline([], { color: MAP_COLORS.sky, weight: 4, opacity: 0.95 }).addTo(this.map);
         this.positionMarker = L.circleMarker(bounds[0], POSITION_STYLE).addTo(this.map);
 
         try { this.map.fitBounds(bounds as L.LatLngBoundsLiteral, { padding: [40, 40] }); } catch { /* ignore */ }
@@ -451,6 +488,12 @@ export class TripReplayModal extends LitElement {
             this.map?.invalidateSize();
             this.startAnim();
         }, 150);
+    }
+
+    private observeMapSize(el: HTMLElement) {
+        this.resizeObserver?.disconnect();
+        this.resizeObserver = new ResizeObserver(() => this.map?.invalidateSize());
+        this.resizeObserver.observe(el);
     }
 
     private startAnim() {

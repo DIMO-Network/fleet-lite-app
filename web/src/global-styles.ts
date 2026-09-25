@@ -9,10 +9,15 @@ import { css } from 'lit';
  * Token roles:
  *  - `--primary` is the high-emphasis *ink* (headings, key values). It is not
  *    the action color.
- *  - `--accent` / `--brand-gradient` are the action + "live" color: primary
- *    buttons, active states, selected controls, online markers.
+ *  - `--accent` is the "live" color: selected controls, online markers.
+ *    `--brand-gradient` is kept for brand moments only (sign-in, onboarding,
+ *    progress fills) — it is too loud for everyday actions.
+ *  - `--btn-primary-*` is the primary action: solid ink, the inverse of the
+ *    surface, so it stands out without competing with data colors.
  *  - `--accent-ink` is the accent when it has to be read as text on a surface
  *    (mint on white fails contrast, so light mode deepens it).
+ *  - `--focus-ring` is the keyboard-focus outline color; light mode uses a
+ *    deep teal so the ring stays >=3:1 on both white sheets and the canvas.
  *  - `--type-label-caps` is kept by name for compatibility, but it is now a
  *    sentence-case sans label, not uppercase mono.
  */
@@ -69,7 +74,7 @@ export const sharedStyles = css`
     }
 
     *:focus-visible {
-        outline: 2px solid var(--accent);
+        outline: 2px solid var(--focus-ring);
         outline-offset: 2px;
     }
 
@@ -131,7 +136,7 @@ export const sharedStyles = css`
     }
     :where(input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']), select, textarea):focus-visible {
         outline: none;
-        border-color: var(--accent);
+        border-color: var(--focus-ring);
         box-shadow: 0 0 0 3px var(--accent-soft);
     }
     :where(input[type='checkbox'], input[type='radio']) {
@@ -155,12 +160,12 @@ export const sharedStyles = css`
         min-height: 40px;
         padding: 0 18px;
         border-radius: var(--radius-full);
-        background: var(--brand-gradient);
-        color: var(--on-accent);
+        background: var(--btn-primary-bg);
+        color: var(--btn-primary-fg);
         font: 600 14px/20px var(--font-body);
-        transition: filter 0.15s ease, box-shadow 0.15s ease;
+        transition: background 0.15s ease;
     }
-    .btn-primary:hover { filter: brightness(1.06); box-shadow: var(--accent-glow); }
+    .btn-primary:hover { background: var(--btn-primary-hover); }
     .btn-primary:disabled { filter: grayscale(1) opacity(0.5); box-shadow: none; cursor: not-allowed; }
 
     .btn-secondary {
@@ -254,6 +259,17 @@ const documentStyles = `
         --accent-soft: rgba(70, 241, 228, 0.12);
         --accent-soft-strong: rgba(70, 241, 228, 0.28);
         --accent-glow: 0 0 0 1px rgba(70, 241, 228, 0.35), 0 6px 24px -6px rgba(70, 241, 228, 0.45);
+        /* Keyboard focus outline (>=3:1 against every surface). */
+        --focus-ring: #46F1E4;
+        /* Toggled/selected controls (filters, segmented options, map tools):
+           inverse ink, so selection never reads as a status color. Resolves
+           per theme through the inverse-* roles. */
+        --selected-bg: var(--inverse-surface);
+        --selected-fg: var(--inverse-on-surface);
+        /* Primary action: solid ink, inverse of the surface. */
+        --btn-primary-bg: #F6F7F7;
+        --btn-primary-fg: #111214;
+        --btn-primary-hover: #FFFFFF;
 
         /* ---------------- Status ---------------- */
         --positive: #36DF71;
@@ -354,11 +370,17 @@ const documentStyles = `
         --brand-glow: radial-gradient(60% 50% at 35% 40%, rgba(140, 208, 255, 0.28), transparent 70%), radial-gradient(55% 50% at 65% 60%, rgba(70, 241, 228, 0.22), transparent 70%);
 
         --accent: #22C7BA;
-        --accent-ink: #0B7A72;
+        /* >=4.5:1 on white, surface-container-*, the canvas and accent-soft(-strong) over each. */
+        --accent-ink: #07635C;
         --on-accent: #06201E;
         --accent-soft: rgba(34, 199, 186, 0.14);
         --accent-soft-strong: rgba(34, 199, 186, 0.3);
         --accent-glow: 0 0 0 1px rgba(34, 199, 186, 0.35), 0 6px 20px -8px rgba(34, 199, 186, 0.55);
+        /* 5.2:1 on white, 4.3:1 on the canvas. */
+        --focus-ring: #0B7A72;
+        --btn-primary-bg: #131417;
+        --btn-primary-fg: #FFFFFF;
+        --btn-primary-hover: #2E3236;
 
         --positive: #1B8842;
         --warning: #B75B0A;
@@ -404,6 +426,7 @@ const documentStyles = `
         --inverse-primary: #C4C7C7;
 
         --secondary: #B75B0A;
+        --on-secondary: #FFFFFF;
         --secondary-container: #FCDEC4;
         --on-secondary-container: #4A2000;
 

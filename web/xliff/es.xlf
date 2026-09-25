@@ -1703,6 +1703,7 @@
 </trans-unit>
 <trans-unit id="sd0b06e7c54d772ab">
   <source>They will be able to see this vehicle’s data and send commands to it.</source>
+  <target>Podrán ver los datos de este vehículo y enviarle comandos.</target>
 </trans-unit>
 <trans-unit id="sbcdda1147516d9d7">
   <source>Access expires</source>
@@ -1980,9 +1981,17 @@
   <source>Limited access: missing <x id="0" equiv-text="${missingList}"/></source>
   <target>Acceso limitado: sin <x id="0" equiv-text="${missingList}"/></target>
 </trans-unit>
-<trans-unit id="h722e55c40677671a">
-  <source>To grant from here, add <x id="0" equiv-text="&lt;code&gt;${location.origin}"/>/login.html<x id="1" equiv-text="&lt;/code&gt;"/> to this license’s redirect URIs in the DIMO developer console.</source>
-  <target>Para otorgar permisos desde aquí, agrega <x id="0" equiv-text="&lt;code&gt;${location.origin}"/>/login.html<x id="1" equiv-text="&lt;/code&gt;"/> a las URI de redirección de esta licencia en la consola de desarrolladores de DIMO.</target>
+<trans-unit id="sb3bf9f75f733f74a">
+  <source>Adds <x id="0" equiv-text="${missingList}"/>. Removes <x id="1" equiv-text="${lostList}"/>.</source>
+  <target>Añade <x id="0" equiv-text="${missingList}"/>. Quita <x id="1" equiv-text="${lostList}"/>.</target>
+</trans-unit>
+<trans-unit id="s9a6eb470a2e340e7">
+  <source>Adds <x id="0" equiv-text="${missingList}"/>.</source>
+  <target>Añade <x id="0" equiv-text="${missingList}"/>.</target>
+</trans-unit>
+<trans-unit id="hcd12aaf0719d60ee">
+  <source>To grant from here, add <x id="0" equiv-text="&lt;code&gt;${location.origin}"/>/<x id="1" equiv-text="&lt;/code&gt;"/> to this license’s redirect URIs in the DIMO developer console.</source>
+  <target>Para otorgar permisos desde aquí, agrega <x id="0" equiv-text="&lt;code&gt;${location.origin}"/>/<x id="1" equiv-text="&lt;/code&gt;"/> a las URI de redirección de esta licencia en la consola de desarrolladores de DIMO.</target>
 </trans-unit>
 </body>
 </file>

@@ -36,6 +36,8 @@ func (s *ChargingDetectionService) Sessions(ctx context.Context, tenant models.T
 	if err != nil {
 		return nil, err
 	}
+	// Coverage ends where the first still-running session begins; see settledUntil.
+	coveredTo := to
 	for _, gap := range gaps {
 		segments, serr := s.telemetry.RechargeSegments(tenant, uint64(tokenID), rfc3339(gap.from), rfc3339(gap.to))
 		if serr != nil {
@@ -50,9 +52,12 @@ func (s *ChargingDetectionService) Sessions(ctx context.Context, tenant models.T
 		if perr := s.persistSessions(ctx, tenant.ID, tokenID, segments, gap.from, gap.to); perr != nil {
 			return nil, perr
 		}
+		if settled := settledUntil(segments, gap.to); settled.Before(coveredTo) {
+			coveredTo = settled
+		}
 	}
-	if len(gaps) > 0 {
-		if cerr := s.mergeCoverage(ctx, tenant.ID, tokenID, from, to); cerr != nil {
+	if len(gaps) > 0 && coveredTo.After(from) {
+		if cerr := s.mergeCoverage(ctx, tenant.ID, tokenID, from, coveredTo); cerr != nil {
 			return nil, cerr
 		}
 	}
@@ -118,6 +123,11 @@ func (s *ChargingDetectionService) mergeCoverage(ctx context.Context, tenantID s
 func (s *ChargingDetectionService) persistSessions(ctx context.Context, tenantID string, tokenID int64, segments []Segment, from, to time.Time) error {
 	var detected []detectedChargingSession
 	for _, seg := range segments {
+		// Still charging: no real end yet. Left out until it finishes — the
+		// coverage stops short of it, so a later request picks it up.
+		if seg.IsOngoing {
+			continue
+		}
 		d := sessionFromSegment(seg)
 		if d.isNoise() {
 			continue
