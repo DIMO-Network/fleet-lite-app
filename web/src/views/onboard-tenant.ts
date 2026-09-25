@@ -156,7 +156,7 @@ export class OnboardTenantView extends LitElement {
                 color: var(--on-surface);
                 letter-spacing: -0.01em;
                 padding-left: 10px;
-                border-left: 1px solid var(--outline-variant);
+                border-left: 1px solid var(--canvas-divider);
             }
             .logout-btn {
                 display: inline-flex;
@@ -169,7 +169,7 @@ export class OnboardTenantView extends LitElement {
                 font: 500 14px/20px var(--font-body);
                 transition: background 0.15s ease, color 0.15s ease;
             }
-            .logout-btn:hover { background: var(--surface-container-high); color: var(--on-surface); }
+            .logout-btn:hover { background: var(--nav-hover); color: var(--on-surface); }
             .logout-btn .material-symbols-outlined { font-size: 18px; }
 
             .center {
