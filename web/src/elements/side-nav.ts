@@ -82,8 +82,11 @@ export class SideNav extends LitElement {
                 top: 26px;
                 width: 28px;
                 height: 28px;
-                background: var(--surface-container-high);
-                border: 1px solid var(--outline-variant);
+                /* Straddles the canvas and the sheet, so it floats rather than
+                   using a surface fill that matches the light canvas. */
+                background: var(--surface-overlay);
+                border: 1px solid var(--canvas-divider);
+                box-shadow: var(--shadow-sm);
                 border-radius: var(--radius-full);
                 display: flex;
                 align-items: center;
@@ -128,7 +131,7 @@ export class SideNav extends LitElement {
                 color: var(--on-surface);
                 letter-spacing: -0.01em;
                 padding-left: 10px;
-                border-left: 1px solid var(--outline-variant);
+                border-left: 1px solid var(--canvas-divider);
             }
             .brand .mark {
                 display: none;

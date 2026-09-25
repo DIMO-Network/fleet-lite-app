@@ -263,9 +263,11 @@ const documentStyles = `
 
         /* ---------------- App frame ---------------- */
         --canvas: #0E0F11;
-        --nav-hover: #16181B;
+        --nav-hover: #1C1F22;
         --nav-active: #24272B;
         --sheet-border: rgba(255, 255, 255, 0.06);
+        /* Hairlines drawn directly on the canvas (sidebar, onboarding). */
+        --canvas-divider: #45494E;
         --shadow-float: 0 16px 48px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.06);
         --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
         /* Modals, menus and other panels that float above the page. */
@@ -291,7 +293,7 @@ const documentStyles = `
 
         /* ---------------- Outlines ---------------- */
         --outline: #5C6063;
-        --outline-variant: #2A2E32;
+        --outline-variant: #373B40;
 
         /* ---------------- Primary = high-emphasis ink ---------------- */
         --primary: #F6F7F7;
@@ -367,6 +369,7 @@ const documentStyles = `
         --nav-hover: rgba(255, 255, 255, 0.55);
         --nav-active: #FFFFFF;
         --sheet-border: rgba(19, 20, 23, 0.06);
+        --canvas-divider: #A0A3A2;
         --shadow-float: 0 16px 40px -14px rgba(19, 20, 23, 0.22), 0 0 0 1px rgba(19, 20, 23, 0.06);
         --shadow-sm: 0 1px 2px rgba(19, 20, 23, 0.12);
         --surface-overlay: #FFFFFF;
@@ -391,7 +394,7 @@ const documentStyles = `
 
         /* ---------------- Outlines ---------------- */
         --outline: #A0A3A2;
-        --outline-variant: #E1E4E4;
+        --outline-variant: #D2D6D7;
 
         /* ---------------- Primary = high-emphasis ink ---------------- */
         --primary: #131417;
