@@ -1920,6 +1920,66 @@
   <source>Sign out</source>
   <target>Cerrar sesión</target>
 </trans-unit>
+<trans-unit id="s4c86bb16d5c102e9">
+  <source>Access upgraded.</source>
+  <target>Acceso ampliado.</target>
+</trans-unit>
+<trans-unit id="se1538d7693580b4e">
+  <source>The upgrade could not be completed.</source>
+  <target>No se pudo ampliar el acceso.</target>
+</trans-unit>
+<trans-unit id="sdfe7319567f5587d">
+  <source>vehicle data</source>
+  <target>datos del vehículo</target>
+</trans-unit>
+<trans-unit id="sde78ca980afb3f6f">
+  <source>remote commands</source>
+  <target>comandos remotos</target>
+</trans-unit>
+<trans-unit id="s29834ff452894ee5">
+  <source>current location</source>
+  <target>ubicación actual</target>
+</trans-unit>
+<trans-unit id="sb8289caa6dfbf312">
+  <source>location history</source>
+  <target>historial de ubicaciones</target>
+</trans-unit>
+<trans-unit id="se3b05ce357dec789">
+  <source>vehicle credentials</source>
+  <target>credenciales del vehículo</target>
+</trans-unit>
+<trans-unit id="s5a5c01d6e13a50ba">
+  <source>live streams</source>
+  <target>transmisiones en vivo</target>
+</trans-unit>
+<trans-unit id="s06865fc7cde61d6b">
+  <source>raw data</source>
+  <target>datos sin procesar</target>
+</trans-unit>
+<trans-unit id="s13dcb663447b5414">
+  <source>approximate location</source>
+  <target>ubicación aproximada</target>
+</trans-unit>
+<trans-unit id="sa8efeb5bdd86f0f8">
+  <source>Upgrade?</source>
+  <target>¿Ampliar?</target>
+</trans-unit>
+<trans-unit id="s93dd00cf7592b4b2">
+  <source>Upgrading…</source>
+  <target>Ampliando…</target>
+</trans-unit>
+<trans-unit id="s4ca8c12882216ed6">
+  <source>Upgrade access for <x id="0" equiv-text="${shortWallet(s.grantee)}"/></source>
+  <target>Ampliar el acceso de <x id="0" equiv-text="${shortWallet(s.grantee)}"/></target>
+</trans-unit>
+<trans-unit id="sfb720fc010661f17">
+  <source>Upgrade</source>
+  <target>Ampliar</target>
+</trans-unit>
+<trans-unit id="sdb5882872af5ea1b">
+  <source>Limited access: missing <x id="0" equiv-text="${missingList}"/></source>
+  <target>Acceso limitado: sin <x id="0" equiv-text="${missingList}"/></target>
+</trans-unit>
 </body>
 </file>
 </xliff>
