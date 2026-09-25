@@ -10,7 +10,8 @@ import { categoryLabel, EXPECTED_CE_TYPES } from '../utils/document-categories.t
 import { documentSummary } from '../utils/document-summary.ts';
 import { FleetCache } from '../services/fleet-cache.ts';
 import { SettingsService } from '../services/settings-service.ts';
-import { buildShareVehiclesUrl } from '../utils/dimo-permissions.ts';
+import { buildShareVehiclesUrl, pickGrantRedirectUri } from '../utils/dimo-permissions.ts';
+import { LicenseService } from '../services/license-service.ts';
 import { TCOCache } from '../services/tco-cache.ts';
 import '../elements/upload-document-modal.ts';
 import '../elements/document-detail-modal.ts';
@@ -53,6 +54,8 @@ export class GloveboxView extends LitElement {
     @state() private docCounts = new Map<number, number>();
     @state() private permissionsRequired = false;
     @state() private devLicense = '';
+    /** Registered redirect for grants to the license; see resolveGrantRedirect. */
+    @state() private grantRedirect: string | null | undefined = undefined;
     // Login host for the grant link in the permissions banner. Empty until
     // /public/settings resolves; the banner falls back to plain text.
     @state() private loginUrl = '';
@@ -127,6 +130,7 @@ export class GloveboxView extends LitElement {
             this.documents = res.documents || [];
             this.permissionsRequired = !!res.permissionsRequired;
             this.devLicense = res.devLicense || '';
+            this.resolveGrantRedirect(this.devLicense);
             this.docCounts = new Map(this.docCounts).set(tokenId, this.documents.length);
         } catch (e) {
             console.error('Failed to load documents', e);
@@ -142,12 +146,31 @@ export class GloveboxView extends LitElement {
      * /public/settings is still in flight or the API didn't name a license.
      */
     private grantUrl(): string {
+        if (this.grantRedirect === null) return '';
         if (!this.loginUrl || !this.devLicense || !this.selected) return '';
         return buildShareVehiclesUrl({
             loginUrl: this.loginUrl,
             clientId: this.devLicense,
+            redirectUri: this.grantRedirect ?? undefined,
             vehicles: [this.selected.tokenId],
         });
+    }
+
+    /**
+     * Look up where a grant to `license` may return (see pickGrantRedirectUri).
+     * undefined = unknown (lookup pending or failed): the link keeps the default
+     * redirect. null = the license has nothing on our origin, so a link would
+     * only reach DIMO's credentials error; the banner explains the fix instead.
+     */
+    private resolveGrantRedirect(license: string) {
+        this.grantRedirect = undefined;
+        if (!license) return;
+        LicenseService.getInstance()
+            .redirectUris(license)
+            .then((uris) => {
+                if (this.devLicense === license) this.grantRedirect = pickGrantRedirectUri(uris, location.origin);
+            })
+            .catch(() => { /* unknown: keep the default redirect */ });
     }
 
     private async selectVehicle(v: Vehicle) {
@@ -347,6 +370,8 @@ export class GloveboxView extends LitElement {
                 flex-direction: column;
             }
 
+            .grant-setup { font: var(--type-body-sm); color: var(--on-surface-variant); max-width: 320px; }
+            .grant-setup code { font: 500 12px/16px var(--font-body); color: var(--on-surface); }
             .perms-banner {
                 display: flex;
                 align-items: center;
@@ -604,7 +629,7 @@ export class GloveboxView extends LitElement {
                                         ${msg('Grant permissions')}
                                         <span class="material-symbols-outlined" style="font-size:16px;">open_in_new</span>
                                     </a>
-                                ` : nothing}
+                                ` : this.grantRedirect === null ? html`<p class="grant-setup">${msg(html`To grant from here, add <code>${location.origin}/login.html</code> to this license’s redirect URIs in the DIMO developer console.`)}</p>` : nothing}
                             </div>
                         ` : nothing}
                         <div class="filter-row">
