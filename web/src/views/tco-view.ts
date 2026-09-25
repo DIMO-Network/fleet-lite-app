@@ -139,7 +139,7 @@ export class TCOView extends LitElement {
                 gap: 24px;
                 padding: 8px 0 28px;
             }
-            .summary .metric { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+            .summary .metric { display: flex; flex-direction: column; gap: 6px; min-width: 0; container-type: inline-size; }
             .summary .metric + .metric { padding-left: 24px; border-left: 1px solid var(--outline-variant); }
             .summary .label { font: var(--type-label); color: var(--on-surface-variant); }
             .summary .value {
@@ -151,9 +151,9 @@ export class TCOView extends LitElement {
                 text-overflow: ellipsis;
             }
             .summary .value .cell-loading { font-size: 28px; }
-            @media (max-width: 1100px) {
-                .summary .value { font-size: 32px; line-height: 38px; }
-            }
+            /* Scale to the column rather than truncate: an ellipsis on a total
+               ("$1,234,5…") shows the wrong magnitude. 18cqi fits 11 characters. */
+            .summary .value { font-size: min(40px, 18cqi); line-height: 1.1; }
             @media (max-width: 768px) {
                 .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
                 .summary .metric:nth-child(3) { padding-left: 0; border-left: none; }

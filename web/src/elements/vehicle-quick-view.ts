@@ -242,10 +242,14 @@ export class VehicleQuickView extends LitElement {
     static styles = [
         sharedStyles,
         css`
-            /* Floats next to the overview's map-control column (24px + 40px + 16px). */
+            /* Floats next to the overview's map-control column (24px + 40px + 16px),
+               and stops above its zoom/refresh pill (24px + 44px + 16px). The
+               bounds are the overview's, not the viewport's: the page sits in an
+               inset sheet, so 100vh overshoots and the panel used to cover the pill. */
             :host {
                 position: absolute;
                 top: calc(var(--top-bar-height) + 16px);
+                bottom: 84px;
                 left: 80px;
                 z-index: 600; /* above leaflet panes (max ~400) and map controls */
                 display: block;
@@ -254,7 +258,7 @@ export class VehicleQuickView extends LitElement {
             .panel {
                 pointer-events: auto;
                 width: 348px;
-                max-height: calc(100vh - var(--top-bar-height) - 64px);
+                max-height: 100%;
                 overflow-y: auto;
                 background: var(--glass-bg);
                 backdrop-filter: blur(24px) saturate(1.4);
@@ -270,6 +274,7 @@ export class VehicleQuickView extends LitElement {
                 :host {
                     top: auto;
                     left: 0;
+                    height: auto;
                     right: 0;
                     bottom: 0;
                 }

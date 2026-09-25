@@ -700,6 +700,11 @@ export class FleetOverviewView extends LitElement {
                 transition: background 0.15s ease;
             }
             .map-legend button .material-symbols-outlined { font-size: 20px; }
+            /* Phones: the collapsed vehicles sheet keeps a 56px strip along the
+               bottom above the map, so the pill sits above it, not under it. */
+            @media (max-width: 767px) {
+                .map-legend { bottom: calc(56px + 12px); }
+            }
             .map-legend button:hover { background: var(--surface-container-high); }
             .map-legend button:disabled { cursor: default; opacity: 0.6; }
             .map-legend .spinning .material-symbols-outlined {
@@ -1208,8 +1213,11 @@ export class FleetOverviewView extends LitElement {
                 cursor: pointer;
             }
             .vehicle-meta .copy-btn:hover { color: var(--primary); }
-            .vehicle-meta .copy-btn { opacity: 0; transition: opacity 0.15s ease; }
-            .vehicle-card:hover .copy-btn, .vehicle-meta .copy-btn:focus-visible { opacity: 1; }
+            /* Reveal-on-hover only where hovering exists; on touch they stay visible. */
+            @media (hover: hover) {
+                .vehicle-meta .copy-btn { opacity: 0; transition: opacity 0.15s ease; }
+                .vehicle-card:hover .copy-btn, .vehicle-meta .copy-btn:focus-visible { opacity: 1; }
+            }
             .vehicle-meta .copy-btn .material-symbols-outlined { font-size: 13px; }
             .vehicle-meta .seen {
                 font: 400 12px/16px var(--font-body);

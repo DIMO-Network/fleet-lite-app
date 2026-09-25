@@ -123,7 +123,7 @@ export class TenantSwitcher extends LitElement {
 
     render() {
         return html`
-            <button class="trigger" aria-haspopup="menu" aria-expanded=${this.open ? 'true' : 'false'} @click=${(e: Event) => { e.stopPropagation(); this.open = !this.open; }}>
+            <button class="trigger" aria-expanded=${this.open ? 'true' : 'false'} @click=${(e: Event) => { e.stopPropagation(); this.open = !this.open; }}>
                 <span class="material-symbols-outlined glyph">garage</span>
                 <span class="name">${this.currentName()}</span>
                 <span class="material-symbols-outlined chev">${this.open ? 'expand_less' : 'expand_more'}</span>

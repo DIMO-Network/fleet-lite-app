@@ -56,14 +56,16 @@ export function dimoRedirectUri(): string {
  * credentials" page — so assuming `/login.html` sends every fleet that
  * registered only its root (license #472 did) to a dead end.
  *
- * Preference: our login page (the page built for DIMO's redirect), then the
- * origin root, then any other path on our origin. Returned exactly as
- * registered, trailing slash and all, because the comparison upstream is
- * exact. Only the same scheme and host count: a lookalike host or plain http
- * is not ours.
+ * Preference: the origin root, then any other path on our origin, and our
+ * login page only as a last resort. A grant returns with the *grantor's*
+ * token for the fleet's license, and login.html stores any `token` it is
+ * handed as this app's session — so returning there signs the member's
+ * browser in as whoever granted. Any other page ignores the token and the
+ * member stays signed in as themselves.
  *
- * Landing on a page other than /login.html is safe for a grant: the returned
- * token is simply not read, and the member stays signed in with their own.
+ * Returned exactly as registered, trailing slash and all, because the
+ * comparison upstream is exact. Only the same scheme and host count: a
+ * lookalike host or plain http is not ours.
  */
 export function pickGrantRedirectUri(registered: readonly string[], origin: string): string | null {
     const ours = registered.filter((uri) => {
@@ -75,8 +77,8 @@ export function pickGrantRedirectUri(registered: readonly string[], origin: stri
     });
     const path = (uri: string) => new URL(uri).pathname;
     return (
-        ours.find((uri) => path(uri) === '/login.html') ??
         ours.find((uri) => path(uri) === '/') ??
+        ours.find((uri) => path(uri) !== '/login.html') ??
         ours[0] ??
         null
     );
