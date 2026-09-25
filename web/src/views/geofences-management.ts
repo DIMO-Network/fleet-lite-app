@@ -17,7 +17,7 @@ import { formatArea } from '../utils/geo.ts';
 import {
     createFleetMap, applyTileTheme, createVehicleClusterGroup, createVehicleMarker,
     seedLocationsFromDb, fetchFleetLocations, LatLon,
-    VEHICLE_MARKER_STYLE, VEHICLE_MARKER_STYLE_HOVER,
+    VEHICLE_MARKER_STYLE, VEHICLE_MARKER_STYLE_HOVER, MAP_COLORS,
 } from '../utils/fleet-map.ts';
 import '../elements/create-geofence-modal.ts';
 import '../elements/manage-geofence-vehicles-modal.ts';
@@ -264,7 +264,7 @@ export class GeofencesManagementView extends LitElement {
 
         if (this.drawPoints.length >= 2) {
             this.drawLine = L.polyline([...this.drawPoints, this.drawPoints[0]], {
-                color: '#86f8c8', weight: 2, dashArray: '6 6',
+                color: MAP_COLORS.mint, weight: 2, dashArray: '6 6',
             }).addTo(this.leafletMap);
         } else {
             this.drawLine = null;
@@ -275,9 +275,11 @@ export class GeofencesManagementView extends LitElement {
             const first = i === 0;
             const m = L.circleMarker(pt, {
                 radius: first ? 7 : 5,
-                color: '#ffffff',
+                color: MAP_COLORS.ink,
                 weight: 2,
-                fillColor: first ? '#86f8c8' : '#69dbad',
+                // The first vertex is the "finish" target, so it carries the
+                // actionable mint; the rest are sky.
+                fillColor: first ? MAP_COLORS.mint : MAP_COLORS.sky,
                 fillOpacity: 1,
             });
             if (first && this.drawPoints.length >= 3) {
@@ -352,96 +354,186 @@ export class GeofencesManagementView extends LitElement {
         unsafeCSS(leafletCss),
         unsafeCSS(markerClusterCss),
         css`
-            :host { display: flex; flex-direction: column; width: 100%; height: 100%; background: var(--background); }
+            :host {
+                display: flex; flex-direction: column; position: relative;
+                width: 100%; height: 100%; overflow: hidden; background: var(--background);
+            }
+            /* Same header as the map view: floats over the map and fades into it. */
             header.top-bar {
-                position: relative; z-index: 40; flex-shrink: 0;
+                position: absolute; top: 0; left: 0; right: 0; z-index: 40;
                 display: flex; align-items: center; justify-content: space-between;
                 height: var(--top-bar-height); padding: 0 var(--gutter);
-                background: var(--background); border-bottom: 1px solid var(--outline-variant);
+                background: linear-gradient(to bottom, var(--background) 0%, color-mix(in srgb, var(--background) 72%, transparent) 55%, transparent 100%);
+                pointer-events: none;
             }
-            header.top-bar h2 { font: var(--type-headline-md); color: var(--primary); }
-            .new-btn {
-                display: flex; align-items: center; gap: 8px;
-                background: var(--primary); color: var(--on-primary);
-                border: none; padding: 10px 16px; border-radius: var(--radius-md);
-                font: var(--type-label-caps); letter-spacing: 0.05em; text-transform: uppercase; font-weight: 700; cursor: pointer;
-            }
-            .new-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+            header.top-bar > * { pointer-events: auto; }
+            header.top-bar h2 { font: var(--type-headline-md); letter-spacing: -0.01em; color: var(--primary); }
             .top-actions { display: flex; align-items: center; gap: 10px; }
+            .new-btn { padding-left: 14px; }
+            .new-btn .material-symbols-outlined { font-size: 20px; }
+            /* Toggle as a glass pill (matches the map controls). */
             .toggle-btn {
-                display: flex; align-items: center; gap: 8px;
-                background: transparent; color: var(--on-surface-variant);
-                border: 1px solid var(--outline-variant); padding: 10px 16px; border-radius: var(--radius-md);
-                font: var(--type-label-caps); letter-spacing: 0.05em; text-transform: uppercase; font-weight: 700; cursor: pointer;
+                display: inline-flex; align-items: center; gap: 8px;
+                min-height: 40px; padding: 0 16px 0 12px;
+                border-radius: var(--radius-full);
+                background: var(--glass-bg);
+                backdrop-filter: blur(16px);
+                -webkit-backdrop-filter: blur(16px);
+                box-shadow: var(--shadow-float);
+                color: var(--on-surface);
+                font: 500 14px/20px var(--font-body);
+                transition: background 0.15s ease, color 0.15s ease;
             }
-            .toggle-btn:hover:not(:disabled):not(.active) { color: var(--primary); border-color: var(--primary); }
-            .toggle-btn.active { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+            .toggle-btn:hover:not(:disabled):not(.active) { background: var(--surface-container-high); }
+            .toggle-btn.active { background: var(--accent-soft-strong); color: var(--accent-ink); }
             .toggle-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-            .toggle-btn .material-symbols-outlined { font-size: 18px; }
+            .toggle-btn .material-symbols-outlined { font-size: 20px; }
 
             .body { position: relative; flex: 1; min-height: 0; }
             .map { position: absolute; inset: 0; z-index: 0; }
             .map.dark-tiles .leaflet-tile { filter: brightness(1.8); }
             .map.drawing { cursor: crosshair; }
             .map.drawing .leaflet-grab, .map.drawing .leaflet-interactive { cursor: crosshair; }
-            .gf-tooltip { background: var(--surface-container-high); color: var(--on-surface); border: none; font: var(--type-label-caps); letter-spacing: 0.04em; text-transform: uppercase; }
+            .map .leaflet-control-attribution { font-size: 9px; opacity: 0.5; }
 
+            /* Leaflet zoom control restyled as a floating glass pill. */
+            .map .leaflet-top.leaflet-left { top: calc(var(--top-bar-height) + 16px); }
+            .map .leaflet-top .leaflet-control { margin: 0 0 0 24px; }
+            .map .leaflet-control-zoom.leaflet-bar {
+                display: flex; flex-direction: column; gap: 2px;
+                border: none;
+                border-radius: var(--radius-full);
+                background: var(--glass-bg);
+                backdrop-filter: blur(16px);
+                -webkit-backdrop-filter: blur(16px);
+                box-shadow: var(--shadow-float);
+                padding: 4px;
+            }
+            .map .leaflet-control-zoom.leaflet-bar a {
+                width: 36px; height: 36px;
+                display: flex; align-items: center; justify-content: center;
+                border: none; border-radius: var(--radius-full);
+                background: transparent; color: var(--on-surface);
+                transition: background 0.15s ease;
+            }
+            /* Swap Leaflet's text glyphs for the icon font the other map controls use. */
+            .map .leaflet-control-zoom.leaflet-bar a span { display: none; }
+            .map .leaflet-control-zoom.leaflet-bar a::before {
+                font-family: 'Material Symbols Outlined';
+                font-size: 20px; line-height: 1;
+                font-variation-settings: 'wght' 350;
+                font-feature-settings: 'liga';
+                -webkit-font-smoothing: antialiased;
+            }
+            .map .leaflet-control-zoom-in::before { content: 'add'; }
+            .map .leaflet-control-zoom-out::before { content: 'remove'; }
+            .map .leaflet-control-zoom.leaflet-bar a:hover { background: var(--surface-container-high); }
+            .map .leaflet-control-zoom.leaflet-bar a.leaflet-disabled { color: var(--outline); background: transparent; }
+
+            .map .leaflet-tooltip {
+                background: var(--surface-container-high); color: var(--on-surface);
+                border: none; border-radius: var(--radius-sm);
+                box-shadow: var(--shadow-float);
+                font: var(--type-label); padding: 4px 8px;
+            }
+            .map .leaflet-tooltip-top::before { border-top-color: var(--surface-container-high); }
+            .map .leaflet-tooltip-bottom::before { border-bottom-color: var(--surface-container-high); }
+            .map .leaflet-tooltip.gf-tooltip { font: 600 12px/16px var(--font-body); color: var(--primary); }
+
+            /* Floating glass panel over the map, same as the vehicles panel. */
             .panel {
-                position: absolute; top: 16px; right: 16px; z-index: 30;
-                width: 320px; max-width: calc(100% - 32px); max-height: calc(100% - 32px);
+                position: absolute; top: calc(var(--top-bar-height) + 16px); right: 24px; z-index: 30;
+                width: 340px; max-width: calc(100% - 48px); max-height: calc(100% - var(--top-bar-height) - 40px);
                 display: flex; flex-direction: column;
-                background: color-mix(in srgb, var(--surface-container-low) 92%, transparent);
-                backdrop-filter: blur(8px);
-                border: 1px solid var(--outline-variant); border-radius: var(--radius-lg);
+                background: var(--glass-bg);
+                backdrop-filter: blur(24px) saturate(1.4);
+                -webkit-backdrop-filter: blur(24px) saturate(1.4);
+                border-radius: var(--radius-xl);
+                box-shadow: var(--shadow-float);
                 overflow: hidden;
             }
-            .panel-head { padding: 14px 16px; border-bottom: 1px solid var(--outline-variant); font: var(--type-label-caps); letter-spacing: 0.05em; text-transform: uppercase; color: var(--on-surface-variant); }
-            .panel-list { overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+            .panel-head {
+                padding: 16px 20px 10px;
+                font: 600 17px/24px var(--font-headline); letter-spacing: -0.01em; color: var(--primary);
+            }
+            .panel-head .n { font: 500 15px/24px var(--font-body); color: var(--on-surface-variant); margin-left: 2px; }
+            .panel-list {
+                overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 2px;
+                border-top: 1px solid var(--outline-variant);
+            }
             .panel-list::-webkit-scrollbar { width: 6px; }
             .panel-list::-webkit-scrollbar-thumb { background-color: var(--outline-variant); border-radius: 10px; }
 
             .gf-card {
-                background: var(--surface-container); border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-md); padding: 12px; display: flex; flex-direction: column; gap: 8px; cursor: pointer;
+                border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 8px; cursor: pointer;
+                transition: background 0.15s ease;
             }
-            .gf-card.selected { border-color: var(--primary); }
+            .gf-card:hover { background: var(--surface-container-high); }
+            .gf-card.selected { background: var(--accent-soft); }
             .gf-head { display: flex; align-items: center; gap: 10px; }
-            .gf-head .dot { width: 14px; height: 14px; border-radius: var(--radius-full); flex-shrink: 0; }
-            .gf-head .name { font: var(--type-body-md); font-weight: 600; color: var(--primary); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-            .gf-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; font: var(--type-body-sm); color: var(--on-surface-variant); }
+            .gf-head .dot {
+                width: 10px; height: 10px; border-radius: var(--radius-full); flex-shrink: 0;
+                background: var(--c);
+                box-shadow: 0 0 8px color-mix(in srgb, var(--c) 55%, transparent);
+            }
+            .gf-head .name {
+                font: 600 15px/22px var(--font-headline); color: var(--primary);
+                flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            }
+            .gf-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; padding-left: 20px; font: 400 13px/18px var(--font-body); color: var(--on-surface-variant); }
             .gf-meta .chip { display: inline-flex; align-items: center; gap: 4px; }
             .gf-meta .material-symbols-outlined { font-size: 14px; }
 
-            .card-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+            /* Quiet actions: "Activity" reads as text; the rest are icons named
+               by aria-label + tooltip. */
+            .card-actions { display: flex; align-items: center; gap: 2px; padding-left: 12px; margin-right: -4px; }
             .card-actions button {
-                display: flex; align-items: center; gap: 4px;
-                background: transparent; color: var(--on-surface-variant);
-                border: 1px solid var(--outline-variant); border-radius: var(--radius-sm);
-                padding: 6px 8px; font: var(--type-label-caps); letter-spacing: 0.03em; text-transform: uppercase; cursor: pointer;
+                display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+                height: 32px; min-width: 32px; padding: 0 8px;
+                border-radius: var(--radius-full);
+                color: var(--on-surface-variant);
+                font: 500 13px/18px var(--font-body);
+                transition: background 0.15s ease, color 0.15s ease;
             }
-            .card-actions button:hover { color: var(--primary); border-color: var(--primary); }
-            .card-actions button.danger:hover { color: var(--error); border-color: var(--error); }
-            .card-actions .material-symbols-outlined { font-size: 14px; }
+            .card-actions button.icon { padding: 0; }
+            .card-actions button:first-child { margin-right: auto; }
+            .card-actions button:hover,
+            .card-actions button:focus-visible { background: var(--surface-container-highest); color: var(--on-surface); }
+            .card-actions button.danger:hover,
+            .card-actions button.danger:focus-visible { background: var(--error-container); color: var(--error); }
+            .card-actions .material-symbols-outlined { font-size: 18px; }
 
-            .confirm { display: flex; align-items: center; gap: 8px; font: var(--type-body-sm); color: var(--error); }
-            .confirm button { border: none; border-radius: var(--radius-sm); padding: 5px 9px; font: var(--type-label-caps); letter-spacing: 0.03em; text-transform: uppercase; cursor: pointer; }
-            .confirm .yes { background: var(--error); color: var(--on-primary); }
+            .confirm {
+                display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding-left: 20px;
+                font: var(--type-body-sm); color: var(--on-surface);
+            }
+            .confirm span { flex: 1 1 100%; }
+            .confirm button {
+                min-height: 32px; padding: 0 14px; border-radius: var(--radius-full);
+                font: 500 13px/18px var(--font-body);
+                transition: filter 0.15s ease, background 0.15s ease;
+            }
+            .confirm .yes { background: var(--error-container); color: var(--error); font-weight: 600; }
+            .confirm .yes:hover { filter: brightness(1.15); }
             .confirm .no { background: var(--surface-container-high); color: var(--on-surface); }
+            .confirm .no:hover { background: var(--surface-container-highest); }
 
             .panel-empty { padding: 24px 16px; text-align: center; color: var(--on-surface-variant); font: var(--type-body-sm); }
 
-            /* Same search treatment as the fleet list view, sized for the panel. */
+            /* Same search field as the vehicles panel. */
             .search-wrap {
                 display: flex;
                 align-items: center;
                 gap: 8px;
-                background: var(--surface-container);
-                border: 1px solid var(--outline-variant);
+                height: 40px;
+                padding: 0 12px;
+                margin: 4px 16px 12px;
                 border-radius: var(--radius-md);
-                padding: 6px 10px;
-                margin: 0 12px 8px;
+                background: var(--surface-container-high);
+                transition: box-shadow 0.15s ease;
             }
-            .search-wrap .material-symbols-outlined { font-size: 16px; color: var(--on-surface-variant); }
+            .search-wrap:focus-within { box-shadow: 0 0 0 2px var(--accent-soft-strong); }
+            .search-wrap > .material-symbols-outlined { font-size: 18px; color: var(--on-surface-variant); flex-shrink: 0; }
             .search-wrap input {
                 background: none;
                 border: none;
@@ -451,36 +543,38 @@ export class GeofencesManagementView extends LitElement {
                 flex: 1;
                 min-width: 0;
             }
+            .search-wrap input::placeholder { color: var(--on-surface-variant); }
+            .search-wrap input::-webkit-search-cancel-button { display: none; }
             .clear-btn {
-                background: none;
-                border: none;
-                padding: 0;
+                padding: 2px;
                 color: var(--on-surface-variant);
-                cursor: pointer;
-                display: flex;
+                border-radius: var(--radius-full);
+                display: inline-flex;
             }
-            .clear-btn .material-symbols-outlined { font-size: 14px; }
+            .clear-btn:hover { color: var(--primary); background: var(--surface-container-highest); }
+            .clear-btn .material-symbols-outlined { font-size: 16px; }
 
             .draw-bar {
                 position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 35;
-                display: flex; align-items: center; gap: 12px;
-                background: var(--surface-container-high); border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-full); padding: 10px 16px; box-shadow: var(--shadow-md, 0 4px 16px rgba(0,0,0,0.4));
+                display: flex; align-items: center; gap: 8px;
+                max-width: calc(100% - 48px);
+                padding: 6px 6px 6px 20px;
+                border-radius: var(--radius-full);
+                background: var(--glass-bg);
+                backdrop-filter: blur(24px) saturate(1.4);
+                -webkit-backdrop-filter: blur(24px) saturate(1.4);
+                box-shadow: var(--shadow-float);
             }
-            .draw-bar .hint { font: var(--type-body-sm); color: var(--on-surface); }
-            .draw-bar button {
-                padding: 8px 14px; border-radius: var(--radius-full);
-                font: var(--type-label-caps); letter-spacing: 0.04em; text-transform: uppercase; font-weight: 700; cursor: pointer; border: 1px solid transparent;
-            }
-            .draw-bar .finish { background: var(--primary); color: var(--on-primary); }
-            .draw-bar .finish:disabled { opacity: 0.5; cursor: not-allowed; }
-            .draw-bar .cancel { background: transparent; color: var(--on-surface-variant); border-color: var(--outline-variant); }
+            .draw-bar .hint { font: var(--type-body-sm); color: var(--on-surface); margin-right: 8px; }
+            .draw-bar button { min-height: 36px; flex-shrink: 0; }
 
             .toast-error {
-                position: absolute; top: 16px; left: 16px; z-index: 35; max-width: 340px;
-                padding: 12px 14px; background: var(--surface-container-high);
-                border: 1px solid rgba(255,180,171,0.3); color: var(--error);
-                border-radius: var(--radius-md); font: var(--type-body-sm);
+                position: absolute; top: calc(var(--top-bar-height) + 16px); left: 50%; transform: translateX(-50%);
+                z-index: 35; max-width: 360px;
+                padding: 10px 14px;
+                background: var(--error-container); color: var(--error);
+                border-radius: var(--radius-md); box-shadow: var(--shadow-float);
+                font: var(--type-body-sm);
             }
         `,
     ];
@@ -496,9 +590,9 @@ export class GeofencesManagementView extends LitElement {
         const confirming = this.confirmingDeleteId === g.id;
         const count = g.vehicleCount ?? 0;
         return html`
-            <div class=${this.selectedId === g.id ? 'gf-card selected' : 'gf-card'} @click=${() => this.selectGeofence(g.id)}>
+            <div class=${this.selectedId === g.id ? 'gf-card selected' : 'gf-card'} style="--c:${g.color}" @click=${() => this.selectGeofence(g.id)}>
                 <div class="gf-head">
-                    <span class="dot" style="background:${g.color}"></span>
+                    <span class="dot"></span>
                     <span class="name">${g.name}</span>
                 </div>
                 <div class="gf-meta">
@@ -518,17 +612,17 @@ export class GeofencesManagementView extends LitElement {
                             <span class="material-symbols-outlined">history</span> ${msg('Activity')}
                         </button>
                         ${!this.readOnly && g.scope === 'manual'
-                            ? html`<button @click=${() => { this.managing = g; }}>
-                                <span class="material-symbols-outlined">directions_car</span> ${msg('Vehicles')}
+                            ? html`<button class="icon" aria-label=${msg('Vehicles')} title=${msg('Vehicles')} @click=${() => { this.managing = g; }}>
+                                <span class="material-symbols-outlined">directions_car</span>
                             </button>`
                             : nothing}
                         ${!this.readOnly
                             ? html`
-                                <button @click=${() => { this.editing = g; }}>
-                                    <span class="material-symbols-outlined">edit</span> ${msg('Edit')}
+                                <button class="icon" aria-label=${msg('Edit')} title=${msg('Edit')} @click=${() => { this.editing = g; }}>
+                                    <span class="material-symbols-outlined">edit</span>
                                 </button>
-                                <button class="danger" @click=${() => { this.confirmingDeleteId = g.id; }}>
-                                    <span class="material-symbols-outlined">delete</span> ${msg('Delete')}
+                                <button class="icon danger" aria-label=${msg('Delete')} title=${msg('Delete')} @click=${() => { this.confirmingDeleteId = g.id; }}>
+                                    <span class="material-symbols-outlined">delete</span>
                                 </button>
                               `
                             : nothing}
@@ -552,7 +646,7 @@ export class GeofencesManagementView extends LitElement {
                         ${msg('Vehicles')}
                     </button>
                     ${!this.readOnly
-                        ? html`<button class="new-btn" ?disabled=${this.drawing} @click=${() => this.startDraw()}>
+                        ? html`<button class="btn-primary new-btn" ?disabled=${this.drawing} @click=${() => this.startDraw()}>
                             <span class="material-symbols-outlined">add_location_alt</span> ${msg('New geofence')}
                         </button>`
                         : nothing}
@@ -565,7 +659,7 @@ export class GeofencesManagementView extends LitElement {
                 ${this.errorMessage ? html`<div class="toast-error">${this.errorMessage}</div>` : nothing}
 
                 <div class="panel">
-                    <div class="panel-head">${msg('Geofences')} ${this.geofences.length ? `(${this.geofences.length})` : ''}</div>
+                    <div class="panel-head">${msg('Geofences')} ${this.geofences.length ? html`<span class="n">(${this.geofences.length})</span>` : ''}</div>
                     ${this.geofences.length > 0
                         ? html`
                             <div class="search-wrap">
@@ -598,8 +692,8 @@ export class GeofencesManagementView extends LitElement {
                 ${this.drawing
                     ? html`<div class="draw-bar">
                         <span class="hint">${msg(str`${this.drawCount} point(s) — click the map to add, the first point to finish.`)}</span>
-                        <button class="finish" ?disabled=${this.drawCount < 3} @click=${() => this.finishDraw()}>${msg('Finish')}</button>
-                        <button class="cancel" @click=${() => this.cancelDraw()}>${msg('Cancel')}</button>
+                        <button class="btn-primary finish" ?disabled=${this.drawCount < 3} @click=${() => this.finishDraw()}>${msg('Finish')}</button>
+                        <button class="btn-secondary cancel" @click=${() => this.cancelDraw()}>${msg('Cancel')}</button>
                     </div>`
                     : nothing}
             </div>

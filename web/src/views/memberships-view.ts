@@ -75,58 +75,74 @@ export class MembershipsView extends LitElement {
                 overflow-y: auto;
                 background: var(--background);
             }
+            :host > * { flex-shrink: 0; }
 
             header.top-bar {
                 position: sticky;
                 top: 0;
                 z-index: 40;
-                height: var(--top-bar-height, 80px);
-                flex-shrink: 0;
+                height: var(--top-bar-height);
                 background: var(--background);
-                border-bottom: 1px solid var(--outline-variant);
                 display: flex;
                 align-items: center;
                 gap: 8px;
-                padding: 0 var(--margin-desktop);
+                padding: 0 var(--gutter);
             }
             @media (max-width: 768px) {
                 header.top-bar { padding: 0 var(--margin-mobile); height: 64px; }
             }
-            header.top-bar h2 { font: var(--type-headline-md); color: var(--primary); }
+            header.top-bar h2 { font: var(--type-headline-md); letter-spacing: -0.01em; color: var(--primary); }
             .back {
                 display: inline-flex;
                 align-items: center;
+                justify-content: center;
+                width: 36px;
+                height: 36px;
+                margin-left: -8px;
                 color: var(--on-surface-variant);
                 text-decoration: none;
-                padding: 8px;
                 border-radius: var(--radius-full);
+                transition: background 0.15s ease, color 0.15s ease;
             }
-            .back:hover { background: var(--surface-container-high); color: var(--primary); }
+            .back .material-symbols-outlined { font-size: 22px; }
+            .back:hover { background: var(--surface-container-high); color: var(--on-surface); }
 
             .canvas {
                 flex: 1;
                 width: 100%;
                 max-width: 800px;
                 margin: 0 auto;
-                padding: var(--stack-lg) var(--gutter);
+                padding: var(--stack-md) var(--gutter) var(--stack-lg);
             }
             @media (max-width: 768px) {
-                .canvas { padding: var(--stack-lg) var(--margin-mobile); }
+                .canvas { padding: var(--stack-md) var(--margin-mobile) var(--stack-lg); }
             }
 
+            /* Informational callout: tonal, no border, leading info glyph. */
             .note {
-                padding: 16px;
-                margin-bottom: var(--stack-lg);
-                border: 1px solid var(--outline-variant);
+                display: flex;
+                gap: 12px;
+                padding: 14px 16px;
+                margin-bottom: 12px;
                 border-radius: var(--radius-lg);
                 background: var(--surface-container-low);
-                color: var(--on-surface-variant);
-                font: var(--type-body-md);
+                color: var(--on-surface);
+                font: var(--type-body-sm);
             }
+            .note::before {
+                content: 'info';
+                font-family: 'Material Symbols Outlined';
+                font-size: 20px;
+                line-height: 20px;
+                font-feature-settings: 'liga';
+                font-variation-settings: 'wght' 350;
+                color: var(--on-surface-variant);
+                flex-shrink: 0;
+            }
+            .note + .list, .note + .empty { margin-top: 24px; }
 
             .list {
                 background: var(--surface-container-low);
-                border: 1px solid var(--outline-variant);
                 border-radius: var(--radius-lg);
                 overflow: hidden;
             }
@@ -135,40 +151,51 @@ export class MembershipsView extends LitElement {
                 align-items: center;
                 justify-content: space-between;
                 gap: 16px;
-                padding: 16px;
+                min-height: 68px;
+                padding: 12px 20px;
                 border-bottom: 1px solid var(--outline-variant);
             }
             .item:last-child { border-bottom: none; }
-            .item .title { font: var(--type-body-lg); color: var(--primary); }
+            .item .title { font: 600 15px/22px var(--font-headline); color: var(--primary); }
             .item .sub {
                 font: var(--type-body-sm);
                 color: var(--on-surface-variant);
-                margin-top: 4px;
+                margin-top: 2px;
             }
 
+            /* Status chip: tint + dot. Mint only for a live (active) membership. */
             .pill {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
                 flex-shrink: 0;
-                padding: 4px 10px;
+                padding: 3px 10px;
                 border-radius: var(--radius-full);
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                border: 1px solid currentColor;
+                font: var(--type-label);
                 white-space: nowrap;
             }
-            .pill.active { color: var(--success, #1b7f4d); }
-            .pill.soon { color: var(--warning, #8a6100); }
-            .pill.expired { color: var(--error, #b3261e); }
+            .pill::before {
+                content: '';
+                width: 6px;
+                height: 6px;
+                border-radius: var(--radius-full);
+                background: currentColor;
+            }
+            .pill.active { color: var(--accent-ink); background: var(--accent-soft); }
+            .pill.soon { color: var(--warning); background: color-mix(in srgb, var(--warning) 14%, transparent); }
+            .pill.expired { color: var(--error); background: color-mix(in srgb, var(--error) 12%, transparent); }
 
             .empty {
-                padding: 32px 16px;
+                padding: 40px 24px;
                 text-align: center;
                 color: var(--on-surface-variant);
                 font: var(--type-body-md);
+                background: var(--surface-container-low);
+                border-radius: var(--radius-lg);
             }
             .empty .lead {
                 color: var(--primary);
-                font: var(--type-body-lg);
+                font: 600 17px/24px var(--font-headline);
                 margin-bottom: 8px;
             }
         `,

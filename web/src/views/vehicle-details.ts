@@ -305,135 +305,161 @@ export class VehicleDetailsView extends LitElement {
                 background: var(--background);
             }
 
+            /* Page header: 72px, no divider. Sticky, so it carries the sheet's
+               own tone (reads as transparent) to keep scrolled content legible. */
             header.top-bar {
                 position: sticky;
                 top: 0;
                 z-index: 10;
-                height: var(--top-bar-height, 80px);
+                height: var(--top-bar-height);
                 flex-shrink: 0;
-                background: var(--glass-bg);
-                backdrop-filter: blur(12px);
-                -webkit-backdrop-filter: blur(12px);
+                background: var(--background);
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
                 padding: 0 var(--gutter);
-                border-bottom: 1px solid var(--outline-variant);
             }
-            header.top-bar .left { display: flex; align-items: center; gap: 32px; }
-            header.top-bar h2 { font: var(--type-headline-md); color: var(--primary); }
-            header.top-bar nav { display: flex; gap: 24px; }
+            header.top-bar .left { display: flex; align-items: center; gap: 20px; min-width: 0; }
+            header.top-bar h2 {
+                font: var(--type-headline-md);
+                letter-spacing: -0.01em;
+                color: var(--primary);
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            /* Segmented control: the sections are one choice, not three links. */
+            header.top-bar nav {
+                display: flex;
+                flex-shrink: 0;
+                gap: 2px;
+                padding: 3px;
+                border-radius: var(--radius-full);
+                background: var(--surface-container-high);
+            }
             header.top-bar nav a {
                 text-decoration: none;
-                font: var(--type-body-md);
+                font: 500 13px/18px var(--font-body);
                 color: var(--on-surface-variant);
-                padding-bottom: 4px;
+                padding: 6px 14px;
+                border-radius: var(--radius-full);
+                transition: background 0.15s ease, color 0.15s ease;
             }
+            header.top-bar nav a:hover { color: var(--on-surface); }
             header.top-bar nav a.active {
                 color: var(--primary);
-                border-bottom: 2px solid var(--primary);
+                background: var(--surface-bright);
+                box-shadow: var(--shadow-sm);
             }
             header.top-bar .right { display: flex; align-items: center; gap: 16px; }
+            @media (max-width: 768px) {
+                header.top-bar nav { display: none; }
+            }
+
             .canvas {
                 flex: 1;
-                padding: var(--margin-desktop);
+                padding: 8px var(--margin-desktop) var(--margin-desktop);
                 max-width: var(--container-max-width);
                 margin: 0 auto;
                 width: 100%;
             }
+            @media (max-width: 768px) {
+                .canvas { padding: 8px var(--margin-mobile) var(--margin-mobile); }
+            }
 
+            /* ---- identity row ---- */
             .hero-status {
                 display: flex;
+                flex-wrap: wrap;
                 align-items: center;
-                gap: 16px;
-                margin-bottom: 32px;
+                gap: 8px 12px;
+                margin-bottom: 24px;
             }
             .hero-status .favorite-btn {
                 margin-left: auto;
-                background: none;
-                border: none;
-                padding: 4px 8px;
-                cursor: pointer;
-                display: flex;
+                display: inline-flex;
                 align-items: center;
                 gap: 6px;
-                color: var(--on-surface-variant);
-                font: var(--type-body-sm);
-            }
-            .hero-status .favorite-btn .material-symbols-outlined { font-size: 20px; }
-            .hero-status .favorite-btn .favorite-on { color: #ffb432; }
-            .hero-status .chip {
-                background: var(--surface-container-high);
-                border: 1px solid var(--outline-variant);
-                color: var(--on-surface-variant);
-                padding: 4px 12px;
+                min-height: 36px;
+                padding: 0 14px 0 10px;
                 border-radius: var(--radius-full);
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                display: flex;
-                align-items: center;
-                gap: 8px;
+                background: var(--surface-container-high);
+                color: var(--on-surface);
+                font: 500 13px/18px var(--font-body);
+                transition: background 0.15s ease;
             }
-            .hero-status .chip .material-symbols-outlined { font-size: 16px; }
-            /* License-plate chip: same shape as the token chip, accented to read
-               as the plate (primary-tinted icon + monospace plate value). */
+            .hero-status .favorite-btn:hover { background: var(--surface-container-highest); }
+            .hero-status .favorite-btn:disabled { opacity: 0.6; cursor: default; }
+            .hero-status .favorite-btn .material-symbols-outlined { font-size: 18px; color: var(--on-surface-variant); }
+            .hero-status .favorite-btn .favorite-on {
+                color: var(--favorite);
+                font-variation-settings: 'FILL' 1, 'wght' 400;
+            }
+            /* Token id: a quiet label chip. */
+            .hero-status .chip {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                padding: 3px 8px 3px 6px;
+                border-radius: var(--radius-sm);
+                background: var(--surface-container-high);
+                color: var(--on-surface-variant);
+                font: var(--type-label);
+            }
+            .hero-status .chip .material-symbols-outlined { font-size: 14px; }
+            /* License plate chip, per the plate-chip spec. */
             .hero-status .plate-chip {
-                background: var(--surface-container-low);
+                padding: 3px 8px 3px 6px;
+                border-radius: 5px;
+                background: var(--surface-container-highest);
+                color: var(--on-surface);
+                font: 600 11px/16px var(--font-body);
+                letter-spacing: 0.06em;
                 cursor: default;
             }
-            .hero-status .plate-chip .material-symbols-outlined { color: var(--primary); }
-            .hero-status .plate-chip .plate {
-                font-family: var(--font-mono);
-                color: var(--primary);
-                letter-spacing: 0.08em;
-            }
+            .hero-status .plate-chip .material-symbols-outlined { font-size: 13px; color: var(--on-surface-variant); }
+            .hero-status .plate-chip .plate { color: var(--on-surface); }
             .hero-status .meta {
-                font: var(--type-body-md);
+                font: var(--type-body-sm);
                 color: var(--on-surface-variant);
                 display: flex;
                 align-items: center;
-                gap: 8px;
+                gap: 10px;
             }
             .hero-status .meta .dot {
-                width: 4px;
-                height: 4px;
+                width: 3px;
+                height: 3px;
                 border-radius: var(--radius-full);
-                background: var(--outline-variant);
+                background: var(--outline);
             }
 
-            /* Group-membership chips, each tinted with its own group color
-               (--gc, set inline). Neutral text keeps every color legible in
-               both themes; the dot + tint carry the color. */
+            /* Group chips: 12px/500 text on a 14% tint of the group color
+               (--gc, set inline) with a 6px dot. */
             .hero-groups {
                 display: flex;
                 flex-wrap: wrap;
                 align-items: center;
-                gap: 8px;
-                margin: -16px 0 32px;
+                gap: 6px;
+                margin: -12px 0 24px;
             }
             .hero-groups .group-chip {
                 display: inline-flex;
                 align-items: center;
-                gap: 8px;
-                padding: 5px 12px 5px 10px;
+                gap: 6px;
+                padding: 4px 10px 4px 8px;
                 border-radius: var(--radius-full);
-                background: color-mix(in srgb, var(--gc) 14%, var(--surface-container-high));
-                border: 1px solid color-mix(in srgb, var(--gc) 45%, var(--outline-variant));
+                background: color-mix(in srgb, var(--gc) 14%, transparent);
                 color: var(--on-surface);
-                font: var(--type-body-sm);
-                font-weight: 500;
+                font: var(--type-label);
                 white-space: nowrap;
                 text-decoration: none;
                 cursor: pointer;
-                transition: background 0.15s ease, border-color 0.15s ease;
+                transition: background 0.15s ease;
             }
-            .hero-groups .group-chip:hover {
-                background: color-mix(in srgb, var(--gc) 24%, var(--surface-container-high));
-                border-color: color-mix(in srgb, var(--gc) 70%, var(--outline-variant));
-            }
+            .hero-groups .group-chip:hover { background: color-mix(in srgb, var(--gc) 24%, transparent); }
             .hero-groups .group-chip .dot {
-                width: 10px;
-                height: 10px;
+                width: 6px;
+                height: 6px;
                 border-radius: var(--radius-full);
                 background: var(--gc);
                 flex-shrink: 0;
@@ -442,34 +468,36 @@ export class VehicleDetailsView extends LitElement {
             .grid {
                 display: grid;
                 grid-template-columns: repeat(12, 1fr);
-                gap: var(--gutter);
+                gap: 16px;
                 margin-bottom: 48px;
             }
             @media (max-width: 768px) {
                 .grid { grid-template-columns: 1fr; }
             }
 
+            /* ---- cards: tonal surfaces, no outline ---- */
             .data-card {
                 background: var(--surface-container-low);
-                border: 1px solid var(--outline-variant);
                 border-radius: var(--radius-lg);
-                padding: var(--gutter);
-                transition: background 0.2s ease;
+                padding: 20px;
+                min-width: 0;
+                transition: background 0.15s ease;
             }
-            .data-card:hover { background: var(--surface-container-high); }
+            .data-card:hover { background: var(--surface-container); }
             .data-card h4 {
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                color: var(--on-surface-variant);
+                font: 600 15px/22px var(--font-headline);
+                color: var(--primary);
             }
             .data-card-head {
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
-                margin-bottom: 24px;
+                margin-bottom: 20px;
             }
-            .data-card-head .material-symbols-outlined { color: var(--on-surface-variant); }
+            .data-card-head .material-symbols-outlined { font-size: 20px; color: var(--on-surface-variant); }
+
+            /* Tab jumps land below the sticky header, not under it. */
+            #trips, #behavior, #status { scroll-margin-top: calc(var(--top-bar-height) + 8px); }
 
             .col-12 { grid-column: span 12; }
             .col-6  { grid-column: span 6; }
@@ -479,20 +507,14 @@ export class VehicleDetailsView extends LitElement {
                 .col-12, .col-6, .col-4, .col-3 { grid-column: span 1; }
             }
 
-
-            .section-label {
-                grid-column: span 12;
-                margin-top: 16px;
-                font: var(--type-body-lg);
-                font-weight: 500;
-                color: var(--primary);
-            }
+            /* Section titles: sentence case headline, not tiny labels. */
+            .section-label,
             .section-headline {
                 grid-column: span 12;
-                margin-top: 16px;
+                margin-top: 24px;
                 font: var(--type-headline-md);
+                letter-spacing: -0.01em;
                 color: var(--primary);
-                font-weight: 500;
             }
 
             .stat-row {
@@ -500,16 +522,16 @@ export class VehicleDetailsView extends LitElement {
                 gap: 32px;
                 flex: 1;
                 height: 100%;
+                min-width: 0;
             }
             .stat-col {
                 display: flex;
                 flex-direction: column;
                 justify-content: space-between;
+                flex-shrink: 0;
             }
             .stat-label {
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
+                font: var(--type-label);
                 color: var(--on-surface-variant);
                 margin-bottom: 4px;
             }
@@ -523,7 +545,8 @@ export class VehicleDetailsView extends LitElement {
                 letter-spacing: -0.03em;
                 color: var(--primary);
             }
-            .stat-value-lg .unit {
+            .stat-value-lg .unit,
+            .stat-value-md .unit {
                 font: var(--type-body-sm);
                 color: var(--on-surface-variant);
             }
@@ -534,25 +557,24 @@ export class VehicleDetailsView extends LitElement {
             }
             .stat-value-md .num {
                 font: var(--type-headline-lg);
-                letter-spacing: -0.01em;
+                letter-spacing: -0.02em;
                 color: var(--primary);
             }
-            .stat-value-md .unit {
-                font: var(--type-body-sm);
-                color: var(--on-surface-variant);
-            }
 
+            /* ---- bar charts ---- */
             .chart {
                 flex: 1;
+                min-width: 0;
                 display: flex;
                 align-items: flex-end;
                 justify-content: space-between;
-                gap: 6px;
+                gap: 4px;
                 height: 100%;
                 padding-bottom: 4px;
                 position: relative;
+                overflow: hidden;
             }
-            .chart.narrow { gap: 4px; }
+            .chart.narrow { gap: 3px; }
             .chart.empty { opacity: 0.6; }
 
             .bar-col {
@@ -569,13 +591,17 @@ export class VehicleDetailsView extends LitElement {
 
             .bar {
                 width: 100%;
-                border-radius: 3px 3px 0 0;
+                border-radius: 4px 4px 1px 1px;
                 min-height: 2px;
                 transition: height 0.45s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
             }
-            .bar.orange { background: linear-gradient(to top, transparent 0%, rgba(234, 107, 24, 0.35) 30%, var(--secondary-container) 100%); }
-            .bar.green  { background: linear-gradient(to top, transparent 0%, rgba(105, 219, 173, 0.3) 30%, var(--tertiary-fixed-dim) 100%); }
-            .bar.blue   { background: linear-gradient(to top, transparent 0%, rgba(59, 130, 246, 0.3) 30%, #3b82f6 100%); }
+            /* Data series are calm sky; mint stays reserved for live/actionable. */
+            .bar.orange,
+            .bar.blue {
+                background: linear-gradient(to top, color-mix(in srgb, var(--data-1) 20%, transparent) 0%, var(--data-1) 100%);
+            }
+            .bar.green { background: linear-gradient(to top, var(--accent-soft) 0%, var(--accent) 100%); }
+            .bar-col:hover .bar:not(.ghost) { filter: brightness(1.12); }
             .bar.missing { opacity: 0; }
 
             .bar.ghost {
@@ -599,17 +625,13 @@ export class VehicleDetailsView extends LitElement {
             }
 
             .bar-label {
-                font-family: var(--font-mono);
-                font-size: 9px;
-                letter-spacing: 0.08em;
-                text-transform: uppercase;
+                font: 500 10px/14px var(--font-body);
                 color: var(--on-surface-variant);
                 text-align: center;
                 margin-top: 6px;
-                opacity: 0.7;
                 white-space: nowrap;
                 overflow: hidden;
-                text-overflow: ellipsis;
+                text-overflow: clip;
             }
             .chart.empty .bar-label { color: transparent; }
 
@@ -619,25 +641,23 @@ export class VehicleDetailsView extends LitElement {
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                font: var(--type-label-caps);
-                letter-spacing: 0.1em;
-                text-transform: uppercase;
+                font: var(--type-label);
                 color: var(--on-surface-variant);
                 pointer-events: none;
             }
-            .chart.narrow .chart-empty-overlay { font-size: 9px; }
+            .chart.narrow .chart-empty-overlay { font-size: 11px; }
 
             /* Animate the value swap on units toggle (subtle) */
             .num { transition: opacity 0.18s ease; }
 
             .card-tall  { height: 280px; display: flex; flex-direction: column; }
             .card-mid   { height: 200px; display: flex; flex-direction: column; justify-content: space-between; }
-            .card-short { height: 180px; display: flex; flex-direction: column; justify-content: space-between; }
+            .card-short { height: 168px; display: flex; flex-direction: column; justify-content: space-between; }
 
             .fuel-bar {
                 width: 100%;
-                height: 32px;
-                border-radius: var(--radius-sm);
+                height: 8px;
+                border-radius: var(--radius-full);
                 background: var(--surface-container-highest);
                 position: relative;
                 overflow: hidden;
@@ -645,56 +665,50 @@ export class VehicleDetailsView extends LitElement {
             .fuel-bar-fill {
                 position: absolute;
                 inset: 0 auto 0 0;
-                background: linear-gradient(to top, var(--secondary-container), rgba(234, 107, 24, 0.4));
+                border-radius: var(--radius-full);
+                background: var(--data-1);
                 transition: width 0.5s ease;
             }
 
+            /* Missing-permissions notice: warning tint, no outline. */
             .perms-banner {
                 grid-column: span 12;
                 display: flex;
                 align-items: center;
                 gap: 16px;
-                padding: 16px;
-                background: rgba(255, 182, 145, 0.06);
-                border: 1px solid rgba(255, 182, 145, 0.2);
-                border-radius: var(--radius-md);
-                margin-bottom: 16px;
+                padding: 16px 20px;
+                background: color-mix(in srgb, var(--warning) 10%, transparent);
+                border-radius: var(--radius-lg);
             }
-            .perms-banner strong { color: var(--secondary); font: var(--type-body-md); font-weight: 600; }
-            .perms-banner p { font: var(--type-body-sm); color: var(--on-surface-variant); margin-top: 4px; line-height: 1.5; }
-            .perms-banner code { font-family: var(--font-mono); font-size: 11px; color: var(--secondary); }
+            .perms-banner strong { color: var(--primary); font: 600 15px/22px var(--font-body); }
+            .perms-banner p { font: var(--type-body-sm); color: var(--on-surface-variant); margin-top: 4px; }
+            .perms-banner code { font: 600 12px/16px var(--font-body); color: var(--warning); }
             .perms-banner a.grant {
                 flex-shrink: 0;
-                background: var(--primary);
-                color: var(--on-primary);
-                padding: 10px 16px;
-                border-radius: var(--radius-md);
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                font-weight: 700;
-                text-decoration: none;
                 display: inline-flex;
                 align-items: center;
-                gap: 4px;
+                gap: 6px;
+                min-height: 40px;
+                padding: 0 18px;
+                border-radius: var(--radius-full);
+                background: var(--brand-gradient);
+                color: var(--on-accent);
+                font: 600 14px/20px var(--font-body);
+                text-decoration: none;
+                transition: filter 0.15s ease, box-shadow 0.15s ease;
             }
+            .perms-banner a.grant:hover { filter: brightness(1.06); box-shadow: var(--accent-glow); }
 
             .data-card.placeholder { opacity: 0.55; }
             .placeholder-body p { font: var(--type-body-sm); color: var(--on-surface-variant); margin-bottom: 4px; }
-            .placeholder-body p.small {
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-            }
+            .placeholder-body p.small { font: var(--type-label); }
 
             .pill-normal {
-                padding: 4px 8px;
+                padding: 2px 8px;
                 border-radius: var(--radius-sm);
-                background: rgba(105, 219, 173, 0.1);
-                border: 1px solid rgba(105, 219, 173, 0.2);
-                color: var(--tertiary-fixed-dim);
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
+                background: color-mix(in srgb, var(--positive) 14%, transparent);
+                color: var(--positive);
+                font: var(--type-label);
             }
 
             .distance-row {
@@ -703,6 +717,7 @@ export class VehicleDetailsView extends LitElement {
                 justify-content: space-between;
                 height: 100%;
                 margin-top: 16px;
+                min-width: 0;
             }
             .distance-row .chart { flex: 1; margin-left: 16px; max-width: 60%; }
 
@@ -712,7 +727,7 @@ export class VehicleDetailsView extends LitElement {
                 right: 16px;
                 font-size: 48px;
                 color: var(--outline-variant);
-                opacity: 0.3;
+                opacity: 0.5;
                 pointer-events: none;
             }
             .relative { position: relative; overflow: hidden; }
@@ -825,7 +840,7 @@ export class VehicleDetailsView extends LitElement {
         const normal = typeof c === 'number' && c >= 70 && c <= 110;
         return html`
             <div class="data-card col-4 card-mid">
-                <div class="data-card-head" style="border-bottom: 1px solid var(--outline-variant); padding-bottom: 16px; margin-bottom: 16px;">
+                <div class="data-card-head">
                     <h4>${msg('Coolant temperature')}</h4>
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:flex-end;">

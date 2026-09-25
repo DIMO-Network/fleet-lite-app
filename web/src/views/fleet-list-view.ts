@@ -346,9 +346,8 @@ export class FleetListView extends LitElement {
                 <td class="col-location mono">${this.formatLocation(v.tokenId)}</td>
                 <td class="col-groups">
                     ${(v.groups ?? []).map((g) => html`
-                        <span class="group-chip"
-                            style="background:${g.color}22;border-color:${g.color}55;color:${g.color}">
-                            ${g.name}
+                        <span class="group-chip" style="--group-color:${g.color}">
+                            <span class="dot"></span>${g.name}
                         </span>
                     `)}
                 </td>
@@ -501,31 +500,42 @@ export class FleetListView extends LitElement {
                 background: var(--background);
             }
 
+            /* Same header + segmented view switch as fleet-overview, so moving
+               between Map View and List View only swaps the body. */
             header.top-bar {
                 position: sticky;
                 top: 0;
                 z-index: 40;
                 flex-shrink: 0;
-                height: var(--top-bar-height, 80px);
+                height: var(--top-bar-height);
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
                 padding: 0 var(--gutter);
                 background: var(--background);
-                border-bottom: 1px solid var(--outline-variant);
             }
-            header.top-bar .left { display: flex; align-items: center; gap: 32px; }
-            header.top-bar h2 { font: var(--type-headline-md); color: var(--primary); }
-            header.top-bar nav { display: flex; gap: 24px; }
+            header.top-bar .left { display: flex; align-items: center; gap: 20px; }
+            header.top-bar h2 { font: var(--type-headline-md); letter-spacing: -0.01em; color: var(--primary); }
+            header.top-bar nav {
+                display: flex;
+                gap: 2px;
+                padding: 3px;
+                border-radius: var(--radius-full);
+                background: var(--surface-container-high);
+            }
             header.top-bar nav a {
                 text-decoration: none;
-                font: var(--type-body-md);
+                font: 500 13px/18px var(--font-body);
                 color: var(--on-surface-variant);
-                padding-bottom: 4px;
+                padding: 6px 14px;
+                border-radius: var(--radius-full);
+                transition: background 0.15s ease, color 0.15s ease;
             }
+            header.top-bar nav a:hover { color: var(--on-surface); }
             header.top-bar nav a.active {
                 color: var(--primary);
-                border-bottom: 2px solid var(--primary);
+                background: var(--surface-bright);
+                box-shadow: var(--shadow-sm);
             }
             header.top-bar .right { display: flex; align-items: center; gap: 16px; }
 
@@ -533,76 +543,103 @@ export class FleetListView extends LitElement {
             .controls {
                 display: flex;
                 align-items: center;
-                gap: 12px;
-                padding: 16px var(--gutter);
-                border-bottom: 1px solid var(--outline-variant);
+                gap: 10px;
+                padding: 4px var(--gutter) 16px;
                 flex-shrink: 0;
             }
             .search-wrap {
                 display: flex;
                 align-items: center;
                 gap: 8px;
-                background: var(--surface-container);
-                border: 1px solid var(--outline-variant);
+                height: 40px;
+                padding: 0 12px;
+                background: var(--surface-container-high);
                 border-radius: var(--radius-md);
-                padding: 8px 12px;
                 flex: 1;
                 max-width: 360px;
+                transition: box-shadow 0.15s ease;
             }
-            .search-wrap .material-symbols-outlined { font-size: 18px; color: var(--on-surface-variant); }
+            .search-wrap:focus-within { box-shadow: 0 0 0 2px var(--accent-soft-strong); }
+            .search-wrap > .material-symbols-outlined { font-size: 18px; color: var(--on-surface-variant); flex-shrink: 0; }
             .search-wrap input {
                 background: none;
                 border: none;
                 outline: none;
                 color: var(--on-surface);
-                font: var(--type-body-md);
+                font: var(--type-body-sm);
                 flex: 1;
+                min-width: 0;
             }
+            .search-wrap input:focus-visible { box-shadow: none; }
+            .search-wrap input::placeholder { color: var(--on-surface-variant); }
+            .search-wrap input::-webkit-search-cancel-button { display: none; }
             .clear-btn {
-                background: none;
-                border: none;
-                padding: 0;
+                display: inline-flex;
+                padding: 2px;
+                border-radius: var(--radius-full);
                 color: var(--on-surface-variant);
-                cursor: pointer;
-                display: flex;
             }
+            .clear-btn:hover { color: var(--primary); background: var(--surface-container-highest); }
             .clear-btn .material-symbols-outlined { font-size: 16px; }
             .group-select {
-                background: var(--surface-container);
-                border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-md);
+                height: 40px;
+                padding: 0 12px;
+                font: 500 13px/18px var(--font-body);
                 color: var(--on-surface);
-                font: var(--type-body-sm);
-                padding: 8px 12px;
-                outline: none;
-                cursor: pointer;
             }
             .vehicle-count {
-                font: var(--type-body-sm);
+                font: var(--type-label);
                 color: var(--on-surface-variant);
                 margin-left: auto;
+                white-space: nowrap;
             }
             .refresh-btn {
-                background: none;
-                border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-md);
-                color: var(--on-surface-variant);
-                padding: 8px;
-                cursor: pointer;
-                display: flex;
+                width: 40px;
+                height: 40px;
+                flex-shrink: 0;
+                display: inline-flex;
                 align-items: center;
-                transition: color 0.15s;
+                justify-content: center;
+                border-radius: var(--radius-full);
+                color: var(--on-surface-variant);
+                transition: background 0.15s ease, color 0.15s ease;
             }
-            .refresh-btn:hover { color: var(--primary); }
+            .refresh-btn .material-symbols-outlined { font-size: 20px; }
+            .refresh-btn:hover { background: var(--surface-container-high); color: var(--on-surface); }
+            .refresh-btn:disabled { cursor: default; opacity: 0.6; }
             .refresh-btn.spinning .material-symbols-outlined {
                 animation: spin 0.8s linear infinite;
             }
             @keyframes spin { to { transform: rotate(360deg); } }
 
+            /* Toggle: tonal pill at rest, accent tint when on. */
+            .show-hidden-btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                height: 40px;
+                padding: 0 14px;
+                border-radius: var(--radius-full);
+                background: var(--surface-container-high);
+                color: var(--on-surface-variant);
+                font: 500 13px/18px var(--font-body);
+                white-space: nowrap;
+                transition: background 0.15s ease, color 0.15s ease;
+            }
+            .show-hidden-btn:hover { background: var(--surface-container-highest); color: var(--on-surface); }
+            .show-hidden-btn.active,
+            .show-hidden-btn.active:hover {
+                background: var(--accent-soft-strong);
+                color: var(--accent-ink);
+            }
+            .show-hidden-btn .material-symbols-outlined { font-size: 18px; }
+            .show-hidden-btn .hidden-count { font-weight: 600; }
+
             /* ── Table ────────────────────────────────────────────── */
             .table-wrap {
                 flex: 1;
                 overflow: auto;
+                padding: 0 var(--gutter) var(--gutter);
             }
             table {
                 width: 100%;
@@ -610,65 +647,67 @@ export class FleetListView extends LitElement {
                 font: var(--type-body-sm);
                 color: var(--on-surface);
             }
+            /* Opaque so rows scroll under it, but the same tone as the page —
+               the header reads as unfilled. */
             thead {
                 position: sticky;
                 top: 0;
                 z-index: 2;
-                background: var(--surface-container-low);
+                background: var(--background);
             }
             th {
-                padding: 12px 16px;
+                height: 40px;
+                padding: 0 12px;
                 text-align: left;
-                font: var(--type-label-caps);
-                letter-spacing: 0.06em;
-                text-transform: uppercase;
+                font: var(--type-label);
                 color: var(--on-surface-variant);
                 border-bottom: 1px solid var(--outline-variant);
                 white-space: nowrap;
                 user-select: none;
             }
-            th.sortable { cursor: pointer; }
-            th.sortable:hover { color: var(--primary); }
+            th.sortable { cursor: pointer; transition: color 0.15s ease; }
+            th.sortable:hover { color: var(--on-surface); }
             .sort-icon {
                 font-size: 14px;
-                vertical-align: middle;
-                margin-left: 4px;
-                opacity: 0.9;
+                vertical-align: -3px;
+                margin-left: 2px;
             }
-            .sort-icon.muted { opacity: 0.35; }
+            .sort-icon.muted { opacity: 0.4; }
 
             tbody tr {
                 border-bottom: 1px solid var(--outline-variant);
                 cursor: pointer;
-                transition: background 0.1s;
+                transition: background 0.12s ease;
             }
-            tbody tr:hover { background: var(--surface-container); }
+            tbody tr:hover { background: var(--surface-container-low); }
             tbody tr:last-child { border-bottom: none; }
 
             td {
-                padding: 14px 16px;
+                height: 56px;
+                padding: 8px 12px;
                 vertical-align: middle;
             }
 
             /* ── Column widths ────────────────────────────────────── */
-            .col-status   { width: 48px; text-align: center; }
+            .col-status   { width: 56px; text-align: center; }
             .col-vehicle  { min-width: 200px; }
             .col-identifier { width: 180px; }
-            .col-location { width: 180px; }
-            .col-groups   { width: 180px; }
-            .col-token    { width: 100px; }
-            .col-action   { width: 48px; text-align: center; }
+            .col-location { width: 170px; }
+            .col-groups   { width: 170px; }
+            .col-token    { width: 96px; text-align: right; }
+            .col-action   { width: 124px; }
 
             /* ── Status dot ───────────────────────────────────────── */
             .status-dot {
                 display: inline-block;
                 width: 8px;
                 height: 8px;
-                border-radius: 50%;
+                border-radius: var(--radius-full);
+                vertical-align: middle;
             }
-            .status-green  { background: var(--tertiary-container); box-shadow: 0 0 6px var(--tertiary-container); }
-            .status-amber  { background: #ffb432; box-shadow: 0 0 6px #ffb43255; }
-            .status-red    { background: var(--error); opacity: 0.6; }
+            .status-green  { background: var(--accent); box-shadow: 0 0 8px var(--accent-soft-strong); }
+            .status-amber  { background: var(--warning); }
+            .status-red    { background: var(--error); }
 
             /* ── Vehicle cell ─────────────────────────────────────── */
             .vehicle-cell {
@@ -679,195 +718,164 @@ export class FleetListView extends LitElement {
             .vehicle-name {
                 display: flex;
                 flex-direction: column;
+                align-items: flex-start;
                 gap: 4px;
             }
             .vehicle-name .title {
                 display: flex;
                 align-items: center;
-                gap: 4px;
-                font: var(--type-body-md);
-                color: var(--on-surface);
+                gap: 6px;
+                font: 500 14px/20px var(--font-body);
+                color: var(--primary);
             }
-            .star-icon { font-size: 14px; color: #f5c84b; }
+            .star-icon {
+                font-size: 15px;
+                color: var(--favorite);
+                font-variation-settings: 'FILL' 1;
+            }
             .no-perm-badge {
                 display: inline-flex;
                 align-items: center;
-                gap: 3px;
-                font: var(--type-label-caps);
-                letter-spacing: 0.04em;
-                color: #ffb432;
-                font-size: 10px;
+                gap: 4px;
+                padding: 1px 8px;
+                border-radius: var(--radius-sm);
+                background: color-mix(in srgb, var(--warning) 14%, transparent);
+                color: var(--warning);
+                font: 500 11px/16px var(--font-body);
             }
-            .no-perm-badge .material-symbols-outlined { font-size: 11px; }
+            .no-perm-badge .material-symbols-outlined { font-size: 12px; }
 
             /* ── Identifier cell ─────────────────────────────────── */
             .identifier-plate {
                 display: inline-flex;
                 align-items: center;
                 gap: 4px;
-                background: var(--surface-container-high);
-                border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-sm);
-                padding: 3px 8px;
-                font: var(--type-label-caps);
-                letter-spacing: 0.04em;
-                color: var(--on-surface-variant);
+                padding: 1px 6px;
+                border-radius: 5px;
+                background: var(--surface-container-highest);
+                font: 600 11px/16px var(--font-body);
+                letter-spacing: 0.06em;
+                color: var(--on-surface);
                 white-space: nowrap;
             }
-            .identifier-plate .material-symbols-outlined { font-size: 14px; }
+            .identifier-plate .material-symbols-outlined { font-size: 13px; color: var(--on-surface-variant); }
             .identifier-plate + .identifier-vin { margin-top: 4px; }
 
             .identifier-vin {
                 display: block;
-                font-family: var(--font-mono);
-                font-size: 11px;
+                font: 400 12px/16px var(--font-body);
+                letter-spacing: 0.02em;
                 color: var(--on-surface-variant);
-                margin-top: 0;
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
-                max-width: 148px;
+                max-width: 160px;
             }
 
             .upload-id-btn {
                 display: inline-flex;
                 align-items: center;
+                justify-content: center;
+                width: 32px;
+                height: 32px;
+                border-radius: var(--radius-full);
                 color: var(--on-surface-variant);
-                opacity: 0.4;
+                opacity: 0.55;
                 text-decoration: none;
-                transition: opacity 0.15s, color 0.15s;
+                transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
             }
-            .upload-id-btn:hover { opacity: 1; color: var(--primary); }
-            .upload-id-btn .material-symbols-outlined { font-size: 20px; }
+            .upload-id-btn:hover { opacity: 1; color: var(--on-surface); background: var(--surface-container-high); }
+            .upload-id-btn .material-symbols-outlined { font-size: 18px; }
 
-            /* ── Location ─────────────────────────────────────────── */
+            /* ── Location / token ─────────────────────────────────── */
             .mono {
-                font-family: var(--font-mono);
-                font-size: 12px;
+                font: 400 13px/18px var(--font-body);
                 color: var(--on-surface-variant);
-            }
-
-            /* ── Group chips ──────────────────────────────────────── */
-            .col-groups { display: table-cell; }
-            .group-chip {
-                display: inline-block;
-                border: 1px solid;
-                border-radius: var(--radius-sm);
-                padding: 2px 8px;
-                font: var(--type-label-caps);
-                letter-spacing: 0.04em;
-                font-size: 10px;
-                margin: 2px 2px 2px 0;
                 white-space: nowrap;
             }
 
-            /* ── Action cell ──────────────────────────────────────── */
-            .col-action { width: 80px; }
+            /* ── Group chips: 14% tint of the group color + a dot ─── */
+            .group-chip {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                margin: 2px 4px 2px 0;
+                padding: 2px 8px;
+                border-radius: var(--radius-sm);
+                background: color-mix(in srgb, var(--group-color, var(--outline)) 14%, transparent);
+                font: var(--type-label);
+                color: var(--on-surface);
+                white-space: nowrap;
+            }
+            .group-chip .dot {
+                width: 6px;
+                height: 6px;
+                border-radius: var(--radius-full);
+                background: var(--group-color, var(--outline));
+                flex-shrink: 0;
+            }
+
+            /* ── Action cell: quiet round icon buttons ────────────── */
             .action-cell {
                 display: flex;
                 align-items: center;
-                justify-content: center;
-                gap: 4px;
+                justify-content: flex-end;
+                gap: 2px;
             }
-            .col-action a {
-                color: var(--on-surface-variant);
-                display: flex;
+            .col-action a,
+            .hide-row-btn,
+            .share-row-btn,
+            .unhide-row-btn {
+                display: inline-flex;
                 align-items: center;
                 justify-content: center;
-                transition: color 0.15s;
-            }
-            tbody tr:hover .col-action a { color: var(--primary); }
-
-            .hide-row-btn {
-                background: none;
-                border: none;
-                padding: 4px;
+                width: 32px;
+                height: 32px;
+                flex-shrink: 0;
+                border-radius: var(--radius-full);
                 color: var(--on-surface-variant);
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                border-radius: var(--radius-sm);
-                opacity: 0;
-                transition: opacity 0.15s, color 0.15s;
+                text-decoration: none;
+                transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
             }
-            tbody tr:hover .hide-row-btn { opacity: 1; }
-            .hide-row-btn:hover { color: var(--error); }
-            .hide-row-btn .material-symbols-outlined { font-size: 18px; }
+            .col-action .material-symbols-outlined { font-size: 18px; }
+            .col-action a .material-symbols-outlined { font-size: 20px; }
+            tbody tr:hover .col-action a {
+                color: var(--on-surface);
+                background: var(--surface-container-high);
+            }
+            .col-action a:hover { color: var(--primary); }
 
+            .hide-row-btn { opacity: 0; }
+            tbody tr:hover .hide-row-btn,
+            .hide-row-btn:focus-visible { opacity: 1; }
+            .hide-row-btn:hover { color: var(--error); background: var(--error-container); }
+
+            /* Reveals on row hover like the hide button beside it, but stays
+               visible on keyboard focus — hover-only would make it reachable by
+               tab and invisible while focused. */
+            .share-row-btn { opacity: 0; }
+            tbody tr:hover .share-row-btn,
+            .share-row-btn:focus-visible { opacity: 1; }
+            .share-row-btn:hover { color: var(--on-surface); background: var(--surface-container-high); }
             /* Dimmed because sharing this vehicle won't work, but still a live
                button: it opens the modal that says why. No not-allowed cursor —
                the click does something, and pretending otherwise is what stopped
                anyone finding the reason in the first place. */
-            .share-row-btn--blocked {
-                opacity: 0.35;
-            }
-            .share-row-btn--blocked:hover {
+            tbody tr:hover .share-row-btn--blocked { opacity: 0.4; }
+            .share-row-btn--blocked:hover,
+            tbody tr:hover .share-row-btn--blocked:hover {
                 color: var(--on-surface-variant);
-                opacity: 0.6;
-            }
-            /* Reveals on row hover like the hide button beside it, but stays
-               visible on keyboard focus — hover-only would make it reachable by
-               tab and invisible while focused. */
-            .share-row-btn {
                 background: none;
-                border: none;
-                padding: 4px;
-                color: var(--on-surface-variant);
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                border-radius: var(--radius-sm);
-                opacity: 0;
-                transition: opacity 0.15s, color 0.15s;
+                opacity: 0.7;
             }
-            tbody tr:hover .share-row-btn,
-            .share-row-btn:focus-visible { opacity: 1; }
-            .share-row-btn:hover { color: var(--primary); }
-            .share-row-btn .material-symbols-outlined { font-size: 18px; }
 
-            .unhide-row-btn {
-                background: none;
-                border: none;
-                padding: 4px;
-                color: var(--primary);
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                border-radius: var(--radius-sm);
-                transition: color 0.15s;
-            }
-            .unhide-row-btn:hover { color: var(--secondary); }
-            .unhide-row-btn .material-symbols-outlined { font-size: 18px; }
+            td.col-action { text-align: right; }
+            .unhide-row-btn { color: var(--on-surface); }
+            .unhide-row-btn:hover { color: var(--accent-ink); background: var(--accent-soft); }
 
-            tbody tr.hidden-row { opacity: 0.45; cursor: default; }
-            tbody tr.hidden-row:hover { opacity: 0.7; background: var(--surface-container); }
-
-            .show-hidden-btn {
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                background: none;
-                border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-md);
-                color: var(--on-surface-variant);
-                font: var(--type-body-sm);
-                padding: 8px 12px;
-                cursor: pointer;
-                transition: background 0.15s, color 0.15s, border-color 0.15s;
-                white-space: nowrap;
-            }
-            .show-hidden-btn:hover { color: var(--primary); border-color: var(--primary); }
-            .show-hidden-btn.active {
-                background: var(--primary-container);
-                color: var(--on-primary-container);
-                border-color: var(--primary);
-            }
-            .show-hidden-btn .material-symbols-outlined { font-size: 18px; }
-            .show-hidden-btn .hidden-count {
-                font-weight: 700;
-                font-size: 12px;
-            }
+            tbody tr.hidden-row { cursor: default; }
+            tbody tr.hidden-row td:not(.col-action) { opacity: 0.45; }
+            tbody tr.hidden-row:hover td:not(.col-action) { opacity: 0.7; }
 
             /* ── Empty / loading state ────────────────────────────── */
             .state-msg {
@@ -882,7 +890,7 @@ export class FleetListView extends LitElement {
             .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
             .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
             .custom-scrollbar::-webkit-scrollbar-thumb {
-                background: var(--surface-container-highest);
+                background: var(--outline-variant);
                 border-radius: 3px;
             }
         `,

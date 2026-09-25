@@ -136,90 +136,111 @@ export class GeofenceActivityModal extends LitElement {
         sharedStyles,
         css`
             :host {
+                /* Panel tone. --surface-overlay is a requested token (white in
+                   light mode); until it exists this falls back to the card tone. */
+                --modal-bg: var(--surface-overlay, var(--surface-container-low));
                 position: fixed; inset: 0; z-index: 100;
                 display: flex; align-items: center; justify-content: center;
-                background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px);
+                padding: 16px;
+                background: color-mix(in srgb, var(--canvas) 72%, transparent);
+                backdrop-filter: blur(8px);
+                -webkit-backdrop-filter: blur(8px);
             }
             .card {
-                width: 100%; max-width: 640px; max-height: calc(100vh - 40px);
-                background: var(--surface-container); border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-lg); padding: 24px; color: var(--on-surface);
+                width: 100%; max-width: 680px; max-height: calc(100vh - 40px);
+                background: var(--modal-bg); border: none;
+                border-radius: var(--radius-xl); box-shadow: var(--shadow-float);
+                padding: 24px; color: var(--on-surface);
                 position: relative; display: flex; flex-direction: column;
             }
-            h2 { font: var(--type-headline-md); margin-bottom: 4px; display: flex; align-items: center; gap: 10px; }
-            h2 .dot { width: 14px; height: 14px; border-radius: var(--radius-full); }
+            h2 {
+                font: var(--type-headline-md); letter-spacing: -0.01em; color: var(--primary);
+                margin-bottom: 4px; padding-right: 40px;
+                display: flex; align-items: center; gap: 10px;
+            }
+            h2 .dot {
+                width: 12px; height: 12px; border-radius: var(--radius-full); flex-shrink: 0;
+                background: var(--c);
+                box-shadow: 0 0 8px color-mix(in srgb, var(--c) 55%, transparent);
+            }
             .close {
                 position: absolute; top: 16px; right: 16px;
-                background: none; border: none; color: var(--on-surface-variant); padding: 4px; cursor: pointer;
+                width: 36px; height: 36px;
+                display: flex; align-items: center; justify-content: center;
+                border-radius: var(--radius-full);
+                color: var(--on-surface-variant);
+                transition: background 0.15s ease, color 0.15s ease;
             }
-            .close:hover { color: var(--primary); }
+            .close:hover { background: var(--surface-container-high); color: var(--on-surface); }
+            .close .material-symbols-outlined { font-size: 20px; }
 
-            .controls { display: flex; align-items: center; gap: 10px; margin: 12px 0; }
+            .controls { display: flex; align-items: center; gap: 10px; margin: 12px 0 14px; }
             .controls select {
-                background: var(--surface-container-high); border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-md); color: var(--on-surface); font: var(--type-body-sm); padding: 8px 10px;
+                height: 36px; padding: 0 12px;
+                font: 500 13px/18px var(--font-body);
+                color: var(--on-surface);
+                border-radius: var(--radius-full);
             }
-            .controls select:focus { outline: 1px solid var(--primary); }
 
-            .progress { display: flex; align-items: center; gap: 8px; font: var(--type-body-sm); color: var(--on-surface-variant); }
+            .progress { display: flex; align-items: center; gap: 12px; font: var(--type-body-sm); color: var(--on-surface-variant); }
             .bar { flex: 1; height: 4px; border-radius: var(--radius-full); background: var(--surface-container-high); overflow: hidden; }
-            .bar > i { display: block; height: 100%; background: var(--primary); transition: width 0.25s ease; }
-            .capped { font: var(--type-body-sm); color: #f5c84b; margin: 4px 0 0; display: flex; gap: 6px; align-items: flex-start; }
-            .capped .material-symbols-outlined { font-size: 16px; margin-top: 1px; }
+            .bar > i { display: block; height: 100%; border-radius: inherit; background: var(--brand-gradient); transition: width 0.25s ease; }
+            .capped { font: var(--type-body-sm); color: var(--warning); margin: 8px 0 0; display: flex; gap: 6px; align-items: flex-start; }
+            .capped .material-symbols-outlined { font-size: 16px; margin-top: 2px; }
 
             /* Legend clarifying the two duration-like columns (users confused
                dwell-inside vs engine-on time). */
-            .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 10px 0 0; font: var(--type-body-sm); color: var(--on-surface-variant); }
-            .legend b { color: var(--on-surface); font-weight: 600; }
+            .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 10px 0 0; font: var(--type-label); color: var(--on-surface-variant); }
+            .legend b { color: var(--on-surface); font-weight: 500; }
 
-            .list { flex: 1; overflow-y: auto; margin-top: 12px; }
+            .list { flex: 1; overflow-y: auto; margin: 12px -8px 0; padding: 0 8px; }
             .list::-webkit-scrollbar { width: 6px; }
             .list::-webkit-scrollbar-thumb { background-color: var(--outline-variant); border-radius: 10px; }
 
             table.passes { width: 100%; border-collapse: collapse; }
             .passes thead th {
-                position: sticky; top: 0; z-index: 1; background: var(--surface-container);
-                text-align: left; padding: 9px 12px; white-space: nowrap;
-                color: var(--on-surface-variant); font: var(--type-label-caps);
-                letter-spacing: 0.05em; text-transform: uppercase;
-                border-bottom: 1px solid var(--outline-variant);
+                position: sticky; top: 0; z-index: 1;
+                /* Opaque so rows scroll under it; same tone as the modal. */
+                background: var(--modal-bg);
+                text-align: left; padding: 10px 12px; white-space: nowrap;
+                color: var(--on-surface-variant); font: var(--type-label);
+                box-shadow: inset 0 -1px 0 var(--outline-variant);
             }
             .passes th.num, .passes td.num { text-align: right; }
             .passes tbody td {
-                padding: 9px 12px; white-space: nowrap;
+                height: 44px; padding: 0 12px; white-space: nowrap;
                 font: var(--type-body-sm); color: var(--on-surface);
-                border-bottom: 1px solid var(--surface-container-high);
+                border-bottom: 1px solid var(--outline-variant);
             }
+            .pass-row:hover td { background: var(--surface-container); }
             /* Per-vehicle grouping row spanning the table width. */
-            .veh-row td {
-                padding: 14px 12px 6px; border-bottom: 1px solid var(--outline-variant);
-            }
+            .veh-row td { height: auto; padding: 20px 12px 8px; }
+            .passes tbody:first-of-type .veh-row td { padding-top: 12px; }
             .veh-head { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; }
-            .veh-head .name { font: var(--type-body-md); font-weight: 700; color: var(--primary); }
+            .veh-head .name { font: 600 15px/22px var(--font-headline); color: var(--primary); }
+            /* Plate chip per the design spec. */
             .veh-head .plate {
-                display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px;
-                border-radius: var(--radius-full); background: var(--surface-container-low);
-                font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; color: var(--on-surface);
+                display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px;
+                border-radius: 5px; background: var(--surface-container-highest);
+                font: 600 11px/16px var(--font-body); letter-spacing: 0.06em; color: var(--on-surface);
             }
-            .veh-head .plate .material-symbols-outlined { font-size: 14px; color: var(--primary); }
-            .veh-head .vin {
-                font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.02em; color: var(--on-surface-variant);
-            }
+            .veh-head .plate .material-symbols-outlined { font-size: 13px; color: var(--on-surface-variant); }
+            .veh-head .vin { font: 400 12px/16px var(--font-body); letter-spacing: 0.02em; color: var(--on-surface-variant); }
             .veh-head .count {
-                margin-left: auto; padding: 1px 8px;
-                border-radius: var(--radius-full); background: var(--surface-container-high);
-                color: var(--on-surface-variant); font: var(--type-label-caps); letter-spacing: 0.03em;
+                margin-left: auto; padding: 2px 8px;
+                border-radius: var(--radius-sm); background: var(--surface-container-high);
+                color: var(--on-surface-variant); font: var(--type-label);
             }
             .pass-row td:first-child { color: var(--on-surface); }
             .pass-row td { color: var(--on-surface-variant); }
             .speed.over { color: var(--error); font-weight: 600; }
             .dash { color: var(--outline); }
 
-            .empty-state { color: var(--on-surface-variant); font: var(--type-body-sm); padding: 24px; text-align: center; }
+            .empty-state { color: var(--on-surface-variant); font: var(--type-body-sm); padding: 32px 24px; text-align: center; }
             .error-text {
-                padding: 12px; background: rgba(255, 180, 171, 0.04);
-                border: 1px solid rgba(255, 180, 171, 0.2); color: var(--error);
-                border-radius: var(--radius-md); font: var(--type-body-sm); margin-top: 12px;
+                padding: 10px 12px; margin-top: 12px;
+                background: var(--error-container); color: var(--error);
+                border-radius: var(--radius-md); font: var(--type-body-sm);
             }
         `,
     ];
@@ -247,10 +268,10 @@ export class GeofenceActivityModal extends LitElement {
         const passCount = this.results.reduce((n, r) => n + r.passes.length, 0);
         return html`
             <div class="card" @click=${(e: Event) => e.stopPropagation()}>
-                <button class="close" @click=${this.dispatchClose}>
+                <button class="close" aria-label=${msg('Close')} @click=${this.dispatchClose}>
                     <span class="material-symbols-outlined">close</span>
                 </button>
-                <h2><span class="dot" style="background:${this.geofence.color}"></span>${this.geofence.name}</h2>
+                <h2 style="--c:${this.geofence.color}"><span class="dot"></span>${this.geofence.name}</h2>
 
                 <div class="controls">
                     <select @change=${this.onWindowChange} .value=${String(this.windowIndex)}>

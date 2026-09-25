@@ -5,6 +5,7 @@ import { sharedStyles } from '../global-styles.ts';
 import { ApiService, ApiError } from '../services/api-service.ts';
 import { SettingsService } from '../services/settings-service.ts';
 import { logout } from '../utils/token.ts';
+import { themeService } from '../services/theme-service.ts';
 
 interface CreatedTenant {
     id: string;
@@ -117,62 +118,101 @@ export class OnboardTenantView extends LitElement {
         sharedStyles,
         css`
             :host {
-                position: relative;
-                display: flex;
-                align-items: center;
-                justify-content: center;
+                display: block;
                 width: 100%;
                 height: 100vh;
-                background: var(--background);
-                color: var(--on-surface);
+                height: 100dvh;
                 overflow: auto;
+                background: var(--canvas);
+                color: var(--on-surface);
+            }
+            .stage {
+                position: relative;
+                isolation: isolate;
+                overflow: hidden;
+                min-height: 100%;
+                display: flex;
+                flex-direction: column;
             }
             .topbar {
-                position: absolute;
-                top: 0;
-                left: 0;
-                right: 0;
                 display: flex;
-                justify-content: flex-end;
-                padding: var(--stack-md) var(--margin-desktop);
+                align-items: center;
+                justify-content: space-between;
+                gap: var(--stack-md);
+                height: var(--top-bar-height, 72px);
+                padding: 0 var(--margin-desktop);
+                flex-shrink: 0;
             }
-            @media (max-width: 768px) {
-                .topbar { padding: var(--stack-md) var(--margin-mobile); }
+            .brand {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            .brand .wordmark { height: 18px; width: auto; display: block; }
+            /* The gradient wordmark is drawn for dark backgrounds. */
+            .brand .wordmark.on-light { filter: brightness(0) opacity(0.88); }
+            .brand .product {
+                font: 500 18px/1 var(--font-headline);
+                color: var(--on-surface);
+                letter-spacing: -0.01em;
+                padding-left: 10px;
+                border-left: 1px solid var(--outline-variant);
             }
             .logout-btn {
                 display: inline-flex;
                 align-items: center;
-                gap: 8px;
-                background: none;
-                border: 1px solid var(--outline-variant);
-                color: var(--on-surface-variant);
+                gap: 6px;
+                min-height: 36px;
+                padding: 0 14px 0 12px;
                 border-radius: var(--radius-full);
-                padding: 8px 16px;
-                font: var(--type-body-sm);
-                cursor: pointer;
-                transition: color 0.15s ease, border-color 0.15s ease;
-                width: auto;
-                margin: 0;
+                color: var(--on-surface-variant);
+                font: 500 14px/20px var(--font-body);
+                transition: background 0.15s ease, color 0.15s ease;
             }
-            .logout-btn:hover { color: var(--primary); border-color: var(--outline); }
+            .logout-btn:hover { background: var(--surface-container-high); color: var(--on-surface); }
             .logout-btn .material-symbols-outlined { font-size: 18px; }
+
+            .center {
+                flex: 1;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: var(--stack-md) var(--margin-mobile) 56px;
+            }
+            .hero { position: relative; width: min(460px, 100%); }
+            /* Same soft sky→mint glow as the sign-in page. */
+            .hero::before {
+                content: '';
+                position: absolute;
+                z-index: -1;
+                inset: -200px -300px;
+                background:
+                    radial-gradient(closest-side at 36% 40%, color-mix(in srgb, var(--dimo-sky) 12%, transparent), transparent),
+                    radial-gradient(closest-side at 64% 62%, color-mix(in srgb, var(--dimo-mint) 10%, transparent), transparent);
+                pointer-events: none;
+            }
             .card {
-                width: min(480px, 92vw);
-                background: var(--surface-container);
-                border: 1px solid var(--outline-variant);
-                border-radius: 16px;
-                padding: 32px;
+                background: var(--glass-bg);
+                -webkit-backdrop-filter: blur(24px) saturate(1.4);
+                backdrop-filter: blur(24px) saturate(1.4);
+                box-shadow: var(--shadow-float);
+                border-radius: var(--radius-2xl);
+                padding: 36px;
+            }
+            @media (prefers-reduced-motion: no-preference) {
+                .card { animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+                @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
             }
             h1 {
-                font-size: 24px;
-                font-weight: 700;
-                margin: 0 0 8px;
+                font: var(--type-headline-lg);
+                letter-spacing: -0.02em;
+                color: var(--primary);
+                margin-bottom: 8px;
             }
             p.sub {
+                font: var(--type-body-md);
                 color: var(--on-surface-variant);
-                font-size: 14px;
-                line-height: 1.5;
-                margin: 0 0 24px;
+                margin-bottom: 28px;
             }
             .provision-btn {
                 display: flex;
@@ -180,27 +220,25 @@ export class OnboardTenantView extends LitElement {
                 justify-content: center;
                 gap: 8px;
                 width: 100%;
-                padding: 12px;
-                background: var(--secondary-container);
-                color: var(--on-secondary-container);
-                border: none;
-                border-radius: 999px;
-                font-size: 14px;
-                font-weight: 600;
-                cursor: pointer;
-                margin-bottom: 20px;
-                transition: opacity 0.15s ease;
+                min-height: 44px;
+                padding: 0 18px;
+                border-radius: var(--radius-full);
+                background: var(--surface-container-high);
+                border: 1px solid var(--outline-variant);
+                color: var(--on-surface);
+                font: 500 15px/20px var(--font-body);
+                transition: background 0.15s ease, border-color 0.15s ease;
             }
-            .provision-btn:hover { opacity: 0.85; }
+            .provision-btn:hover { background: var(--surface-container-highest); border-color: var(--outline); }
             .provision-btn[disabled] { opacity: 0.6; cursor: default; }
-            .provision-btn .material-symbols-outlined { font-size: 18px; }
+            .provision-btn .material-symbols-outlined { font-size: 18px; color: var(--accent-ink); }
             .divider {
                 display: flex;
                 align-items: center;
                 gap: 12px;
-                margin-bottom: 20px;
+                margin: 24px 0 4px;
+                font: var(--type-label);
                 color: var(--on-surface-variant);
-                font-size: 12px;
             }
             .divider::before, .divider::after {
                 content: '';
@@ -209,192 +247,212 @@ export class OnboardTenantView extends LitElement {
             }
             label {
                 display: block;
-                font-size: 12px;
-                letter-spacing: 0.04em;
-                text-transform: uppercase;
+                font: var(--type-label);
                 color: var(--on-surface-variant);
-                margin: 16px 0 6px;
+                margin: 18px 0 6px;
             }
             input {
+                display: block;
                 width: 100%;
-                box-sizing: border-box;
+                height: 40px;
+                padding: 0 12px;
                 background: var(--surface-container-high);
                 border: 1px solid var(--outline-variant);
-                border-radius: 8px;
-                padding: 12px 14px;
+                border-radius: var(--radius-md);
                 color: var(--on-surface);
-                font-size: 14px;
-                font-family: var(--font-mono);
+                font: var(--type-body-sm);
+                transition: border-color 0.15s ease, box-shadow 0.15s ease;
             }
-            input:focus {
+            input::placeholder { color: var(--on-surface-variant); opacity: 0.7; }
+            input:focus,
+            input:focus-visible {
                 outline: none;
-                border-color: var(--secondary-container);
+                border-color: var(--accent);
+                box-shadow: 0 0 0 3px var(--accent-soft);
             }
-            .api-key-row {
-                position: relative;
-            }
-            .api-key-row input {
-                padding-right: 44px;
-            }
+            .api-key-row { position: relative; }
+            .api-key-row input { padding-right: 44px; }
             .copy-inline-btn {
                 position: absolute;
-                right: 10px;
+                right: 6px;
                 top: 50%;
                 transform: translateY(-50%);
-                background: none;
-                border: none;
+                display: grid;
+                place-items: center;
+                width: 30px;
+                height: 30px;
+                border-radius: var(--radius-sm);
                 color: var(--on-surface-variant);
-                cursor: pointer;
-                padding: 4px;
-                width: auto;
-                margin: 0;
-                border-radius: 4px;
+                transition: background 0.15s ease, color 0.15s ease;
             }
-            .copy-inline-btn:hover { color: var(--primary); }
+            .copy-inline-btn:hover { background: var(--surface-container-highest); color: var(--on-surface); }
             .copy-inline-btn .material-symbols-outlined { font-size: 18px; display: block; }
+            .hint {
+                font: var(--type-label);
+                font-weight: 400;
+                color: var(--on-surface-variant);
+                margin-top: 8px;
+            }
             .copy-banner {
                 display: flex;
                 align-items: flex-start;
                 gap: 10px;
-                margin-top: 12px;
+                margin-top: 16px;
                 padding: 12px 14px;
-                background: color-mix(in srgb, var(--secondary-container) 30%, transparent);
-                border: 1px solid var(--secondary-container);
-                border-radius: 8px;
-                font-size: 13px;
-                line-height: 1.4;
+                background: color-mix(in srgb, var(--warning) 12%, transparent);
+                border-radius: var(--radius-md);
+                font: var(--type-body-sm);
                 color: var(--on-surface);
             }
-            .copy-banner .material-symbols-outlined { font-size: 18px; color: var(--secondary); flex-shrink: 0; margin-top: 1px; }
+            .copy-banner .material-symbols-outlined { font-size: 18px; color: var(--warning); flex-shrink: 0; margin-top: 1px; }
             .copy-banner-text { flex: 1; }
             .copy-banner-btn {
                 display: inline-flex;
                 align-items: center;
-                gap: 4px;
-                margin-top: 6px;
-                background: none;
-                border: 1px solid var(--secondary-container);
-                border-radius: 999px;
-                color: var(--secondary);
-                padding: 4px 10px;
-                font-size: 12px;
-                font-weight: 600;
-                cursor: pointer;
-                width: auto;
+                gap: 6px;
+                min-height: 30px;
+                margin-top: 10px;
+                padding: 0 12px;
+                border-radius: var(--radius-full);
+                background: var(--surface-container-high);
+                border: 1px solid var(--outline-variant);
+                color: var(--on-surface);
+                font: 500 13px/18px var(--font-body);
+                transition: background 0.15s ease;
             }
-            .copy-banner-btn:hover { background: var(--secondary-container); }
-            .copy-banner-btn .material-symbols-outlined { font-size: 14px; }
+            .copy-banner-btn:hover { background: var(--surface-container-highest); }
+            .copy-banner-btn .material-symbols-outlined { font-size: 14px; color: var(--on-surface-variant); margin: 0; }
             button[type="submit"] {
+                display: flex;
+                align-items: center;
+                justify-content: center;
                 width: 100%;
-                margin-top: 24px;
-                background: var(--primary);
-                color: var(--on-primary);
-                border: none;
-                border-radius: 999px;
-                padding: 14px;
-                font-size: 14px;
-                font-weight: 700;
-                cursor: pointer;
+                min-height: 48px;
+                margin-top: 28px;
+                padding: 0 24px;
+                border-radius: var(--radius-full);
+                background: var(--brand-gradient);
+                color: var(--on-accent);
+                font: 600 15px/20px var(--font-body);
+                transition: filter 0.15s ease, box-shadow 0.15s ease;
             }
+            button[type="submit"]:hover { filter: brightness(1.06); box-shadow: var(--accent-glow); }
             button[type="submit"][disabled] {
-                opacity: 0.6;
+                filter: grayscale(1) opacity(0.5);
+                box-shadow: none;
                 cursor: default;
             }
             .error {
                 margin-top: 16px;
-                color: var(--error);
-                font-size: 13px;
+                padding: 10px 14px;
+                border-radius: var(--radius-md);
+                background: var(--error-container);
+                color: var(--on-error-container);
+                font: var(--type-body-sm);
             }
-            .hint {
-                color: var(--on-surface-variant);
-                font-size: 12px;
-                margin-top: 4px;
+
+            @media (max-width: 768px) {
+                .topbar { padding: 0 var(--margin-mobile); height: 64px; }
+                .center { align-items: flex-start; padding-top: 8px; }
+                .card { padding: 28px 20px 24px; border-radius: var(--radius-xl); }
+                h1 { font: var(--type-headline-md); font-size: 24px; line-height: 30px; }
             }
         `,
     ];
 
     render() {
         return html`
-            <div class="topbar">
-                <button class="logout-btn" type="button" @click=${() => logout()}>
-                    <span class="material-symbols-outlined">logout</span>
-                    ${msg('Log out')}
-                </button>
-            </div>
-            <form class="card" @submit=${this.submit}>
-                <h1>${msg('Set up your fleet')}</h1>
-                <p class="sub">
-                    ${msg(`You're not part of a fleet yet. Create one with your DIMO developer
-                    license — the client ID and API key from your DIMO developer console.`)}
-                </p>
-
-                <button
-                    type="button"
-                    class="provision-btn"
-                    ?disabled=${this.provisioning}
-                    @click=${this.openProvisionPopup}
-                >
-                    <span class="material-symbols-outlined">key</span>
-                    ${this.provisioning ? msg('Opening DIMO…') : msg('Get credentials from DIMO')}
-                </button>
-
-                <div class="divider">${msg('or enter manually')}</div>
-
-                <label for="name">${msg('Fleet name')}</label>
-                <input
-                    id="name"
-                    .value=${this.name}
-                    @input=${(e: Event) => (this.name = (e.target as HTMLInputElement).value)}
-                    placeholder="${msg('My Fleet (optional)')}"
-                />
-
-                <label for="clientId">${msg('DIMO client ID')}</label>
-                <input
-                    id="clientId"
-                    .value=${this.clientId}
-                    @input=${(e: Event) => (this.clientId = (e.target as HTMLInputElement).value)}
-                    placeholder="0x…"
-                    autocomplete="off"
-                />
-
-                <label for="apiKey">${msg('DIMO API key')}</label>
-                <div class="api-key-row">
-                    <input
-                        id="apiKey"
-                        type="password"
-                        .value=${this.apiKey}
-                        @input=${(e: Event) => (this.apiKey = (e.target as HTMLInputElement).value)}
-                        placeholder="${msg('developer API key')}"
-                        autocomplete="off"
-                    />
-                    ${this.apiKey ? html`
-                        <button type="button" class="copy-inline-btn" title="${msg('Copy API key')}" @click=${this.copyApiKey}>
-                            <span class="material-symbols-outlined">content_copy</span>
-                        </button>
-                    ` : ''}
-                </div>
-                <div class="hint">${msg(`Stored encrypted; used to read your fleet's vehicles and telemetry.`)}</div>
-
-                ${this.showCopyBanner ? html`
-                    <div class="copy-banner">
-                        <span class="material-symbols-outlined">warning</span>
-                        <div class="copy-banner-text">
-                            ${msg('Save your API key now — it cannot be retrieved after this step.')}
-                            <br />
-                            <button type="button" class="copy-banner-btn" @click=${this.copyApiKey}>
-                                <span class="material-symbols-outlined">content_copy</span>
-                                ${msg('Copy API key')}
-                            </button>
-                        </div>
+            <div class="stage">
+                <header class="topbar">
+                    <div class="brand" role="img" aria-label="DIMO Fleet">
+                        <img class="wordmark ${themeService.current === 'light' ? 'on-light' : ''}"
+                            src="/assets/dimo-wordmark.png" alt="" />
+                        <span class="product">Fleet</span>
                     </div>
-                ` : ''}
+                    <button class="logout-btn" type="button" @click=${() => logout()}>
+                        <span class="material-symbols-outlined">logout</span>
+                        ${msg('Log out')}
+                    </button>
+                </header>
+                <main class="center">
+                    <div class="hero">
+                        <form class="card" @submit=${this.submit}>
+                            <h1>${msg('Set up your fleet')}</h1>
+                            <p class="sub">
+                                ${msg(`You're not part of a fleet yet. Create one with your DIMO developer
+                    license — the client ID and API key from your DIMO developer console.`)}
+                            </p>
 
-                ${this.error ? html`<div class="error">${this.error}</div>` : ''}
+                            <button
+                                type="button"
+                                class="provision-btn"
+                                ?disabled=${this.provisioning}
+                                @click=${this.openProvisionPopup}
+                            >
+                                <span class="material-symbols-outlined">key</span>
+                                ${this.provisioning ? msg('Opening DIMO…') : msg('Get credentials from DIMO')}
+                            </button>
 
-                <button type="submit" ?disabled=${this.submitting}>
-                    ${this.submitting ? msg('Creating…') : msg('Create fleet')}
-                </button>
-            </form>
+                            <div class="divider">${msg('or enter manually')}</div>
+
+                            <label for="name">${msg('Fleet name')}</label>
+                            <input
+                                id="name"
+                                .value=${this.name}
+                                @input=${(e: Event) => (this.name = (e.target as HTMLInputElement).value)}
+                                placeholder="${msg('My Fleet (optional)')}"
+                            />
+
+                            <label for="clientId">${msg('DIMO client ID')}</label>
+                            <input
+                                id="clientId"
+                                .value=${this.clientId}
+                                @input=${(e: Event) => (this.clientId = (e.target as HTMLInputElement).value)}
+                                placeholder="0x…"
+                                autocomplete="off"
+                            />
+
+                            <label for="apiKey">${msg('DIMO API key')}</label>
+                            <div class="api-key-row">
+                                <input
+                                    id="apiKey"
+                                    type="password"
+                                    .value=${this.apiKey}
+                                    @input=${(e: Event) => (this.apiKey = (e.target as HTMLInputElement).value)}
+                                    placeholder="${msg('developer API key')}"
+                                    autocomplete="off"
+                                />
+                                ${this.apiKey ? html`
+                                    <button type="button" class="copy-inline-btn" title="${msg('Copy API key')}" @click=${this.copyApiKey}>
+                                        <span class="material-symbols-outlined">content_copy</span>
+                                    </button>
+                                ` : ''}
+                            </div>
+                            <div class="hint">${msg(`Stored encrypted; used to read your fleet's vehicles and telemetry.`)}</div>
+
+                            ${this.showCopyBanner ? html`
+                                <div class="copy-banner">
+                                    <span class="material-symbols-outlined">warning</span>
+                                    <div class="copy-banner-text">
+                                        ${msg('Save your API key now — it cannot be retrieved after this step.')}
+                                        <br />
+                                        <button type="button" class="copy-banner-btn" @click=${this.copyApiKey}>
+                                            <span class="material-symbols-outlined">content_copy</span>
+                                            ${msg('Copy API key')}
+                                        </button>
+                                    </div>
+                                </div>
+                            ` : ''}
+
+                            ${this.error ? html`<div class="error">${this.error}</div>` : ''}
+
+                            <button type="submit" ?disabled=${this.submitting}>
+                                ${this.submitting ? msg('Creating…') : msg('Create fleet')}
+                            </button>
+                        </form>
+                    </div>
+                </main>
+            </div>
         `;
     }
 }

@@ -45,7 +45,6 @@ export class TenantMembers extends LitElement {
             :host { display: block; }
             .row-group {
                 background: var(--surface-container-low);
-                border: 1px solid var(--outline-variant);
                 border-radius: var(--radius-lg);
                 overflow: hidden;
             }
@@ -54,219 +53,197 @@ export class TenantMembers extends LitElement {
                 align-items: center;
                 justify-content: space-between;
                 gap: 12px;
-                padding: 16px;
+                min-height: 64px;
+                padding: 10px 12px 10px 16px;
                 border-bottom: 1px solid var(--outline-variant);
             }
             .member:last-child { border-bottom: none; }
             .member .left-group { display: flex; align-items: center; gap: 16px; min-width: 0; }
-            .member .right-group { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+            .member .left-group > .material-symbols-outlined { font-size: 22px; flex-shrink: 0; }
+            .member .right-group { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
             .member .identity { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
             .member .wallet {
-                font: var(--type-body-md);
-                font-family: var(--font-mono);
+                font: 500 15px/22px var(--font-body);
+                letter-spacing: 0.01em;
                 color: var(--primary);
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: nowrap;
             }
-            /* When we have an email, show it in the normal UI font, not mono. */
-            .member .wallet.email { font-family: inherit; color: var(--on-surface); }
-            .member .last-seen { font-size: 12px; color: var(--on-surface-variant); }
+            .member .wallet.email { letter-spacing: normal; color: var(--on-surface); }
+            .member .last-seen { font: var(--type-label); font-weight: 400; color: var(--on-surface-variant); }
             .member .you {
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                color: var(--on-surface-variant);
-            }
-            .badge {
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                padding: 4px 10px;
-                border-radius: var(--radius-full);
-                color: var(--on-surface-variant);
+                padding: 1px 7px;
+                border-radius: var(--radius-sm);
                 background: var(--surface-container-high);
-                border: 1px solid var(--outline-variant);
-            }
-            .badge.owner {
-                color: var(--tertiary-container);
-                border-color: var(--tertiary-container);
-            }
-            .remove-btn {
-                background: none;
-                border: none;
+                font: 500 11px/16px var(--font-body);
                 color: var(--on-surface-variant);
-                padding: 6px;
-                border-radius: var(--radius-full);
-                cursor: pointer;
+                white-space: nowrap;
+            }
+            /* Role / status chips: tonal, sentence case, no outline. */
+            .badge {
                 display: inline-flex;
+                align-items: center;
+                height: 22px;
+                padding: 0 8px;
+                border-radius: var(--radius-sm);
+                background: var(--surface-container-high);
+                color: var(--on-surface-variant);
+                font: var(--type-label);
+                white-space: nowrap;
+            }
+            /* Role values arrive raw ("owner", "member"). */
+            .badge:not(.access):not(.delivery) { text-transform: capitalize; }
+            .badge.owner { background: var(--surface-container-highest); color: var(--primary); }
+            .remove-btn {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 32px;
+                height: 32px;
+                border-radius: var(--radius-full);
+                color: var(--on-surface-variant);
                 transition: background 0.15s ease, color 0.15s ease;
             }
-            .remove-btn:hover { background: var(--surface-container-high); color: var(--error); }
+            .remove-btn:hover { background: var(--error-container); color: var(--error); }
             .remove-btn[disabled] { opacity: 0.5; cursor: default; }
-            .remove-btn .material-symbols-outlined { font-size: 20px; }
+            .remove-btn .material-symbols-outlined { font-size: 18px; }
 
             .add-form {
                 display: flex;
-                gap: 12px;
-                margin-top: var(--stack-md);
+                gap: 10px;
             }
-            .add-form input {
-                flex: 1;
-                min-width: 0;
-                box-sizing: border-box;
-                background: var(--surface-container-high);
-                border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-md);
-                padding: 12px 14px;
-                color: var(--on-surface);
-                font: var(--type-body-sm);
-                font-family: var(--font-mono);
-            }
-            .add-form input:focus { outline: none; border-color: var(--secondary-container); }
-            .add-form button {
-                background: var(--primary);
-                color: var(--on-primary);
-                border: none;
-                border-radius: var(--radius-full);
-                padding: 0 22px;
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                cursor: pointer;
-                white-space: nowrap;
-            }
-            .add-form button[disabled] { opacity: 0.6; cursor: default; }
-
-            .state { padding: 16px; font: var(--type-body-sm); color: var(--on-surface-variant); }
-            .error { color: var(--error); font: var(--type-body-sm); margin-top: var(--stack-sm); }
-            .notice { color: var(--tertiary-fixed-dim, var(--on-surface-variant)); font: var(--type-body-sm); margin-top: var(--stack-sm); }
-
-            .section-label {
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                color: var(--on-surface-variant);
-                margin: var(--stack-lg) 0 var(--stack-sm);
-            }
-            /* Invite-by-email form: email input grows, role select + button hug right. */
-            .invite-form { display: flex; gap: 12px; flex-wrap: wrap; }
+            .add-form input,
             .invite-form input[type='email'] {
                 flex: 1;
                 min-width: 0;
+                height: 40px;
                 box-sizing: border-box;
                 background: var(--surface-container-high);
                 border: 1px solid var(--outline-variant);
                 border-radius: var(--radius-md);
-                padding: 12px 14px;
+                padding: 0 14px;
                 color: var(--on-surface);
                 font: var(--type-body-sm);
             }
-            .invite-form input[type='email']:focus { outline: none; border-color: var(--secondary-container); }
-            .invite-form select {
-                background: var(--surface-container-high);
-                border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-md);
-                padding: 0 12px;
-                color: var(--on-surface);
-                font: var(--type-body-sm);
-            }
+            .add-form input::placeholder,
+            .invite-form input::placeholder { color: var(--on-surface-variant); }
+            /* Secondary action: tonal pill with a hairline. */
+            .add-form button,
             .invite-form button {
-                background: var(--primary);
-                color: var(--on-primary);
-                border: none;
+                min-height: 40px;
+                padding: 0 18px;
                 border-radius: var(--radius-full);
-                padding: 0 22px;
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                cursor: pointer;
+                background: var(--surface-container-high);
+                color: var(--on-surface);
+                border: 1px solid var(--outline-variant);
+                font: 500 14px/20px var(--font-body);
                 white-space: nowrap;
+                transition: background 0.15s ease, border-color 0.15s ease;
             }
+            .add-form button:hover,
+            .invite-form button:hover { background: var(--surface-container-highest); border-color: var(--outline); }
+            .add-form button[disabled],
             .invite-form button[disabled] { opacity: 0.6; cursor: default; }
 
-            /* Pending-invite rows reuse the .member layout but key off the email. */
-            .invite-row .email-id { font: var(--type-body-md); color: var(--on-surface); }
-            .invite-row .meta { font-size: 12px; color: var(--on-surface-variant); }
-            .text-btn {
-                background: none;
-                border: 1px solid var(--outline-variant);
+            .state { padding: 16px; font: var(--type-body-sm); color: var(--on-surface-variant); }
+            .error { color: var(--error); font: var(--type-body-sm); margin-top: var(--stack-sm); }
+            .notice { color: var(--positive); font: var(--type-body-sm); margin-top: var(--stack-sm); }
+
+            .section-label {
+                font: 500 13px/18px var(--font-body);
                 color: var(--on-surface-variant);
-                padding: 6px 12px;
+                margin: 28px 4px 10px;
+            }
+            /* Invite-by-email form: email input grows, role select + button hug right. */
+            .invite-form { display: flex; gap: 10px; flex-wrap: wrap; }
+            .invite-form select {
+                height: 40px;
+                padding: 0 12px;
+                font: var(--type-body-sm);
+            }
+
+            /* Pending-invite rows reuse the .member layout but key off the email. */
+            .invite-row .email-id { font: 500 15px/22px var(--font-body); color: var(--on-surface); }
+            .invite-row .meta { font: var(--type-label); font-weight: 400; color: var(--on-surface-variant); }
+            .text-btn {
+                height: 30px;
+                padding: 0 12px;
                 border-radius: var(--radius-full);
-                cursor: pointer;
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
+                background: var(--surface-container-high);
+                color: var(--on-surface);
+                font: 500 13px/18px var(--font-body);
+                white-space: nowrap;
                 transition: background 0.15s ease, color 0.15s ease;
             }
-            .text-btn:hover { background: var(--surface-container-high); color: var(--on-surface); }
-            .text-btn.danger:hover { color: var(--error); border-color: var(--error); }
+            .text-btn:hover { background: var(--surface-container-highest); }
+            .text-btn.danger:hover { background: var(--error-container); color: var(--error); }
             .text-btn[disabled] { opacity: 0.5; cursor: default; }
 
+            /* Primary action: DIMO gradient pill. */
             .invite-btn {
                 display: inline-flex;
                 align-items: center;
                 gap: 8px;
-                background: var(--primary);
-                color: var(--on-primary);
-                border: none;
+                min-height: 40px;
+                padding: 0 18px 0 14px;
                 border-radius: var(--radius-full);
-                padding: 12px 22px;
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                cursor: pointer;
+                background: var(--brand-gradient);
+                color: var(--on-accent);
+                font: 600 14px/20px var(--font-body);
+                transition: filter 0.15s ease, box-shadow 0.15s ease;
             }
+            .invite-btn:hover { filter: brightness(1.06); box-shadow: var(--accent-glow); }
             .invite-btn .material-symbols-outlined { font-size: 18px; }
-            .badge.access { text-transform: none; letter-spacing: normal; }
 
             /* Email-delivery badge on a pending invite. Tone maps to the
                Postmark status: delivered/opened good, bounced bad, never-sent
                warn, sent neutral (the default .badge look). */
             .badge.delivery {
-                display: inline-flex;
-                align-items: center;
                 gap: 5px;
                 cursor: help;
             }
             .badge.delivery .material-symbols-outlined { font-size: 14px; }
-            .badge.delivery.good { color: var(--tertiary-container); border-color: var(--tertiary-container); }
-            .badge.delivery.bad { color: var(--error); border-color: var(--error); }
-            .badge.delivery.warn { color: var(--secondary); border-color: var(--secondary); }
+            .badge.delivery.good { color: var(--positive); background: color-mix(in srgb, var(--positive) 14%, transparent); }
+            .badge.delivery.bad { color: var(--error); background: color-mix(in srgb, var(--error) 12%, transparent); }
+            .badge.delivery.warn { color: var(--warning); background: color-mix(in srgb, var(--warning) 14%, transparent); }
             .access-panel { display: flex; gap: 14px; padding: 16px; align-items: flex-start; }
-            .access-text { display: flex; flex-direction: column; gap: 8px; font: var(--type-body-md); color: var(--on-surface); }
+            .access-text { display: flex; flex-direction: column; gap: 10px; font: var(--type-body-md); color: var(--on-surface); }
             .access-chips { display: flex; flex-wrap: wrap; gap: 6px; }
             .access-chips .none { font: var(--type-body-sm); color: var(--on-surface-variant); }
+            /* Group chip: 14% tint of the group color + a 6px dot. */
             .group-chip {
-                display: inline-block;
-                border: 1px solid;
-                border-radius: var(--radius-sm);
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
                 padding: 2px 8px;
-                font: var(--type-label-caps);
-                letter-spacing: 0.04em;
-                font-size: 10px;
+                border-radius: var(--radius-sm);
+                background: color-mix(in srgb, var(--group-color, var(--outline)) 14%, transparent);
+                font: var(--type-label);
+                color: var(--on-surface);
                 white-space: nowrap;
+            }
+            .group-chip .dot {
+                width: 6px;
+                height: 6px;
+                border-radius: var(--radius-full);
+                background: var(--group-color, var(--outline));
             }
 
             /* Collapsible "Past invitations" header: section-label styling on a button. */
             .section-toggle {
                 display: flex;
                 align-items: center;
-                gap: 4px;
-                background: none;
-                border: none;
+                gap: 2px;
                 padding: 0;
-                cursor: pointer;
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
+                font: 500 13px/18px var(--font-body);
                 color: var(--on-surface-variant);
-                margin: var(--stack-lg) 0 var(--stack-sm);
+                margin: 28px 0 10px;
+                transition: color 0.15s ease;
             }
             .section-toggle:hover { color: var(--on-surface); }
             .section-toggle .material-symbols-outlined { font-size: 18px; }
-            .badge.expired { color: var(--error); border-color: var(--error); }
+            .badge.expired { color: var(--error); background: color-mix(in srgb, var(--error) 12%, transparent); }
         `,
     ];
 
@@ -552,7 +529,7 @@ export class TenantMembers extends LitElement {
                                 <span>${msg('Limited access to the following groups:')}</span>
                                 <div class="access-chips">
                                     ${this.groups.map((g) => html`
-                                        <span class="group-chip" style="border-color:${g.color}; color:${g.color}">${g.name}</span>
+                                        <span class="group-chip" style="--group-color:${g.color}"><span class="dot"></span>${g.name}</span>
                                     `)}
                                     ${this.groups.length === 0 ? html`<span class="none">${msg('No groups assigned yet — ask an owner.')}</span>` : ''}
                                 </div>

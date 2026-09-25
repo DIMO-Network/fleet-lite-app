@@ -28,17 +28,18 @@ export class TenantSwitcher extends LitElement {
                 display: flex;
                 align-items: center;
                 gap: 8px;
+                height: 36px;
+                padding: 0 10px 0 12px;
                 background: var(--surface-container-high);
-                border: 1px solid var(--outline-variant);
                 color: var(--on-surface);
-                border-radius: 999px;
-                padding: 8px 14px;
-                font-size: 13px;
-                font-weight: 600;
-                cursor: pointer;
+                border-radius: var(--radius-full);
+                font: 500 13px/18px var(--font-body);
                 max-width: 220px;
+                transition: background 0.15s ease;
             }
-            button.trigger:hover { border-color: var(--outline); }
+            button.trigger:hover,
+            button.trigger[aria-expanded='true'] { background: var(--surface-container-highest); }
+            button.trigger .glyph { font-size: 18px; color: var(--on-surface-variant); }
             .name {
                 overflow: hidden;
                 text-overflow: ellipsis;
@@ -50,33 +51,38 @@ export class TenantSwitcher extends LitElement {
                 top: calc(100% + 8px);
                 right: 0;
                 min-width: 240px;
-                background: var(--surface-container-high);
-                border: 1px solid var(--outline-variant);
-                border-radius: 12px;
+                max-width: 320px;
+                background: var(--surface-overlay);
+                border-radius: var(--radius-lg);
                 padding: 6px;
                 z-index: 100;
-                box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+                box-shadow: var(--shadow-float);
+                transform-origin: top right;
+                animation: menu-in 0.14s ease-out;
+            }
+            @keyframes menu-in {
+                from { opacity: 0; transform: translateY(-4px) scale(0.98); }
             }
             .item {
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
-                gap: 8px;
+                gap: 10px;
                 width: 100%;
-                box-sizing: border-box;
-                padding: 10px 12px;
-                border-radius: 8px;
-                background: none;
-                border: none;
+                height: 36px;
+                padding: 0 10px;
+                border-radius: var(--radius-md);
                 color: var(--on-surface);
-                font-size: 13px;
+                font: var(--type-body-sm);
                 text-align: left;
-                cursor: pointer;
+                transition: background 0.15s ease, color 0.15s ease;
             }
-            .item:hover { background: var(--surface-container-highest); }
-            .item .check { color: var(--tertiary-container); font-size: 18px; }
+            .item:hover { background: var(--surface-container-high); }
+            .item.current { font-weight: 500; color: var(--primary); }
+            .item .check { color: var(--accent-ink); font-size: 18px; flex: none; }
             .sep { height: 1px; background: var(--outline-variant); margin: 6px 4px; }
-            .item.add { color: var(--on-surface-variant); }
+            .item.add { justify-content: flex-start; color: var(--on-surface-variant); }
+            .item.add:hover { color: var(--on-surface); }
             .item.add .material-symbols-outlined { font-size: 18px; }
         `,
     ];
@@ -117,15 +123,15 @@ export class TenantSwitcher extends LitElement {
 
     render() {
         return html`
-            <button class="trigger" @click=${(e: Event) => { e.stopPropagation(); this.open = !this.open; }}>
-                <span class="material-symbols-outlined" style="font-size:18px;">garage</span>
+            <button class="trigger" aria-haspopup="menu" aria-expanded=${this.open ? 'true' : 'false'} @click=${(e: Event) => { e.stopPropagation(); this.open = !this.open; }}>
+                <span class="material-symbols-outlined glyph">garage</span>
                 <span class="name">${this.currentName()}</span>
                 <span class="material-symbols-outlined chev">${this.open ? 'expand_less' : 'expand_more'}</span>
             </button>
             ${this.open ? html`
                 <div class="menu">
                     ${this.tenants.map(t => html`
-                        <button class="item" @click=${() => this.select(t.id)}>
+                        <button class="item ${t.id === this.currentTenantId ? 'current' : ''}" @click=${() => this.select(t.id)}>
                             <span class="name">${t.name}</span>
                             ${t.id === this.currentTenantId
                                 ? html`<span class="material-symbols-outlined check">check</span>`

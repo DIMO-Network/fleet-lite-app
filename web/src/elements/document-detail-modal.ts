@@ -25,83 +25,121 @@ export class DocumentDetailModal extends LitElement {
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                background: rgba(0, 0, 0, 0.6);
-                backdrop-filter: blur(4px);
+                background: color-mix(in srgb, var(--canvas) 70%, transparent);
+                backdrop-filter: blur(6px);
+                -webkit-backdrop-filter: blur(6px);
             }
             .card {
-                width: 100%;
+                width: calc(100% - 32px);
                 max-width: 560px;
                 max-height: 90vh;
                 overflow-y: auto;
-                background: var(--surface-container);
-                border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-lg);
+                background: var(--surface-overlay);
+                border-radius: var(--radius-xl);
+                box-shadow: var(--shadow-float);
                 padding: 24px;
                 color: var(--on-surface);
                 position: relative;
+                animation: modal-in 0.18s ease-out;
+            }
+            @keyframes modal-in {
+                from { opacity: 0; transform: translateY(8px) scale(0.98); }
             }
             .close {
-                position: absolute;
-                top: 16px;
-                right: 16px;
-                background: none;
-                border: none;
-                color: var(--on-surface-variant);
-                padding: 4px;
-                cursor: pointer;
+                position: absolute; top: 16px; right: 16px;
+                width: 32px; height: 32px; padding: 0;
+                display: inline-flex; align-items: center; justify-content: center;
+                border-radius: var(--radius-full); color: var(--on-surface-variant);
+                transition: background 0.15s ease, color 0.15s ease;
             }
-            .close:hover { color: var(--primary); }
+            .close .material-symbols-outlined { font-size: 20px; }
+            .close:hover { background: var(--surface-container-high); color: var(--on-surface); }
 
-            h2 { font: var(--type-headline-md); margin-bottom: 4px; }
+            h2 {
+                font: var(--type-headline-md);
+                letter-spacing: -0.01em;
+                color: var(--primary);
+                padding-right: 40px;
+                margin-bottom: 4px;
+            }
             .sub {
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
+                font: var(--type-body-sm);
                 color: var(--on-surface-variant);
-                margin-bottom: 24px;
+                margin-bottom: 20px;
             }
 
-            dl { display: grid; grid-template-columns: 140px 1fr; gap: 8px 16px; margin-bottom: 24px; }
+            /* Key/value sheet: one tonal block with hairline row dividers, so a
+               long list of extracted fields scans as a table, not a wall. */
+            dl {
+                display: grid;
+                grid-template-columns: minmax(96px, 140px) 1fr;
+                padding: 4px 16px;
+                margin-bottom: 8px;
+                background: var(--surface-container);
+                border-radius: var(--radius-lg);
+            }
+            dt, dd {
+                padding: 11px 0;
+                border-top: 1px solid var(--outline-variant);
+            }
+            dt:first-of-type, dt:first-of-type + dd { border-top: none; }
             dt {
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
+                font: var(--type-label);
                 color: var(--on-surface-variant);
-                padding-top: 2px;
+                padding-right: 16px;
+                padding-top: 13px;
             }
             dd {
-                font: var(--type-body-md);
+                font: var(--type-body-sm);
                 color: var(--on-surface);
                 word-break: break-word;
             }
-            dd.empty { color: var(--on-surface-variant); font-style: italic; }
+            dd.empty { color: var(--on-surface-variant); }
             dd code {
                 font-family: var(--font-mono);
-                font-size: 12px;
+                font-size: 13px;
                 color: var(--on-surface-variant);
+                word-break: break-all;
             }
 
-            .actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px; }
+            .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 24px; }
             .actions button {
-                padding: 10px 18px;
-                border-radius: var(--radius-md);
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                font-weight: 700;
-                border: 1px solid transparent;
-                cursor: pointer;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 40px;
+                padding: 0 18px;
+                border-radius: var(--radius-full);
+                font: 600 14px/20px var(--font-body);
+                transition: background 0.15s ease, border-color 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease;
             }
             .actions button:disabled { opacity: 0.5; cursor: not-allowed; }
-            .actions .primary { background: var(--primary); color: var(--on-primary); }
-            .actions .ghost { background: transparent; color: var(--on-surface-variant); border-color: var(--outline-variant); }
-            .actions .danger { background: transparent; color: var(--error); border-color: var(--error); }
-            .actions .danger:hover { background: rgba(255, 180, 171, 0.08); }
+            .actions .primary { background: var(--brand-gradient); color: var(--on-accent); }
+            .actions .primary:hover:not(:disabled) { filter: brightness(1.06); box-shadow: var(--accent-glow); }
+            .actions .primary:disabled { filter: grayscale(1); }
+            .actions .ghost {
+                padding: 0 16px;
+                font-weight: 500;
+                background: var(--surface-container-high);
+                color: var(--on-surface);
+                border: 1px solid var(--outline-variant);
+            }
+            .actions .ghost:hover { background: var(--surface-container-highest); border-color: var(--outline); }
+            /* Destructive sits apart from the way out and the main action. */
+            .actions .danger {
+                margin-right: auto;
+                padding: 0 16px;
+                font-weight: 500;
+                background: var(--error-container);
+                color: var(--error);
+            }
+            .actions .danger:hover:not(:disabled) {
+                background: color-mix(in srgb, var(--error) 18%, var(--error-container));
+            }
 
             .error-text {
-                padding: 12px;
-                background: rgba(255, 180, 171, 0.04);
-                border: 1px solid rgba(255, 180, 171, 0.2);
+                padding: 12px 14px;
+                background: var(--error-container);
                 color: var(--error);
                 border-radius: var(--radius-md);
                 font: var(--type-body-sm);

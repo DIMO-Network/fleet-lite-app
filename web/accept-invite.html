@@ -2,137 +2,304 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/x-icon" href="https://www.dimo.org/img/favicon.ico" />
+    <link rel="icon" type="image/png" href="/assets/dimo-mark.png" />
+    <meta name="theme-color" content="#0E0F11" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FLEET_LITE_OS — Accept invitation</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+    <title>DIMO Fleet — Accept invitation</title>
+    <link rel="preload" href="/assets/fonts/EuclidCircularA-Regular.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/assets/fonts/EuclidCircularA-Semibold.woff2" as="font" type="font/woff2" crossorigin />
     <script type="module" src="./src/accept-invite.ts"></script>
     <style>
-        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        /* This page does not load global-styles.ts, so it carries the brand faces
+           and a mirror of its dark tokens itself. */
+        @font-face { font-family: 'Euclid Circular A'; font-weight: 400; font-style: normal; font-display: swap; src: url('/assets/fonts/EuclidCircularA-Regular.woff2') format('woff2'); }
+        @font-face { font-family: 'Euclid Circular A'; font-weight: 500; font-style: normal; font-display: swap; src: url('/assets/fonts/EuclidCircularA-Medium.woff2') format('woff2'); }
+        @font-face { font-family: 'Euclid Circular A'; font-weight: 600; font-style: normal; font-display: swap; src: url('/assets/fonts/EuclidCircularA-Semibold.woff2') format('woff2'); }
+        @font-face { font-family: 'Euclid Circular A'; font-weight: 700; font-style: normal; font-display: swap; src: url('/assets/fonts/EuclidCircularA-Bold.woff2') format('woff2'); }
+
         :root {
-            --surface:                #131313;
-            --surface-container-low:  #1c1b1b;
-            --on-surface:             #e5e2e1;
-            --on-surface-variant:     #c4c7c8;
-            --outline-variant:        #444748;
-            --secondary:              #ffb691;
-            --error:                  #ffb4ab;
+            color-scheme: dark;
+            --font-body: 'Euclid Circular A', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+            --dimo-sky: #8CD0FF;
+            --dimo-mint: #46F1E4;
+            --brand-gradient: linear-gradient(105deg, #8CD0FF 0%, #46F1E4 100%);
+            --glow-sky: rgba(140, 208, 255, 0.14);
+            --glow-mint: rgba(70, 241, 228, 0.11);
+
+            --accent: #46F1E4;
+            --accent-ink: #46F1E4;
+            --on-accent: #06201E;
+            --accent-soft: rgba(70, 241, 228, 0.12);
+            --accent-soft-strong: rgba(70, 241, 228, 0.28);
+            --accent-glow: 0 0 0 1px rgba(70, 241, 228, 0.35), 0 6px 24px -6px rgba(70, 241, 228, 0.45);
+
+            --canvas: #0E0F11;
+            --surface: #16181B;
+            --surface-container-low: #1C1F22;
+            --surface-container-high: #272A2E;
+            --glass-bg: rgba(22, 24, 27, 0.78);
+            --shadow-float: 0 16px 48px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.06);
+
+            --primary: #F6F7F7;
+            --on-surface: #EDEEEE;
+            --on-surface-variant: #A0A3A2;
+            --outline-variant: #2A2E32;
+            --error: #FF6060;
+            --error-container: #402321;
+            --on-error-container: #FFCCCC;
+
+            --radius-md: 10px;
+            --radius-2xl: 28px;
+            --radius-full: 9999px;
         }
+
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Inter', sans-serif;
-            background: var(--surface);
+            background: var(--canvas);
             color: var(--on-surface);
+            font: 400 15px/22px var(--font-body);
+            font-feature-settings: 'tnum' 1;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            overflow-x: hidden;
+        }
+        ::selection { background: var(--accent-soft); }
+        :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+        .stage {
+            position: relative;
+            isolation: isolate;
+            overflow: hidden;
             min-height: 100vh;
+            min-height: 100dvh;
             display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 16px 28px;
+        }
+        .center {
+            flex: 1;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 24px;
+            gap: 32px;
+            padding: 24px 0;
         }
-        .card {
-            width: 100%;
-            max-width: 420px;
-            text-align: center;
-            background: var(--surface-container-low);
-            border: 1px solid var(--outline-variant);
-            border-radius: 16px;
-            padding: 40px 32px;
+
+        .hero { position: relative; width: 100%; max-width: 420px; }
+        .hero::before {
+            content: '';
+            position: absolute;
+            z-index: -1;
+            inset: -220px -320px;
+            background:
+                radial-gradient(closest-side at 36% 42%, var(--glow-sky), transparent),
+                radial-gradient(closest-side at 64% 60%, var(--glow-mint), transparent);
+            pointer-events: none;
         }
-        .brand-label {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--secondary);
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            margin-bottom: 24px;
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
         }
-        h1 { font-size: 22px; font-weight: 600; margin-bottom: 10px; }
-        p { font-size: 14px; color: var(--on-surface-variant); line-height: 1.6; }
-        .spacer { margin-top: 24px; }
-        .error-text { color: var(--error); }
-        .identity {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 14px;
+        .brand .wordmark { height: 22px; width: auto; display: block; }
+        .brand .product {
+            font: 500 21px/1 var(--font-body);
             color: var(--on-surface);
-            margin-top: 8px;
+            letter-spacing: -0.01em;
+            padding-left: 12px;
+            border-left: 1px solid var(--outline-variant);
+        }
+
+        .card {
+            background: var(--glass-bg);
+            -webkit-backdrop-filter: blur(24px) saturate(1.4);
+            backdrop-filter: blur(24px) saturate(1.4);
+            box-shadow: var(--shadow-float);
+            border-radius: var(--radius-2xl);
+            padding: 40px 36px 36px;
+            text-align: center;
+        }
+        @media (prefers-reduced-motion: no-preference) {
+            .card { animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+            @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+        }
+
+        /* State glyph at the top of each view. */
+        .glyph {
+            width: 52px;
+            height: 52px;
+            margin: 0 auto 20px;
+            display: grid;
+            place-items: center;
+            border-radius: var(--radius-full);
+            background: var(--accent-soft);
+            color: var(--accent-ink);
+        }
+        .glyph svg { width: 24px; height: 24px; }
+        .glyph.error { background: var(--error-container); color: var(--error); }
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border-radius: var(--radius-full);
+            border: 2.5px solid var(--accent-soft-strong);
+            border-top-color: var(--accent);
+            animation: spin 0.9s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
+
+        h1 {
+            font: 600 24px/30px var(--font-body);
+            letter-spacing: -0.015em;
+            color: var(--primary);
+            margin-bottom: 8px;
+        }
+        p { color: var(--on-surface-variant); }
+        .spacer { margin-top: 28px; }
+        .error-text { color: var(--on-error-container); }
+
+        .identity {
+            display: inline-block;
+            max-width: 100%;
+            margin-top: 12px;
+            padding: 8px 14px;
+            border-radius: var(--radius-md);
+            background: var(--surface-container-high);
+            font: 500 14px/20px var(--font-body);
+            color: var(--on-surface);
             word-break: break-all;
         }
         .primary-btn {
-            font-family: 'Inter', sans-serif;
-            font-size: 14px;
-            font-weight: 600;
-            background: var(--secondary);
-            color: #131313;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            min-height: 48px;
+            padding: 0 24px;
+            background: var(--brand-gradient);
+            color: var(--on-accent);
             border: none;
-            border-radius: 999px;
-            padding: 12px 28px;
+            border-radius: var(--radius-full);
+            font: 600 15px/20px var(--font-body);
             cursor: pointer;
+            transition: filter 0.15s ease, box-shadow 0.15s ease;
         }
-        .primary-btn:hover { filter: brightness(1.1); }
+        .primary-btn:hover { filter: brightness(1.06); box-shadow: var(--accent-glow); }
+        .switch {
+            margin-top: 20px;
+            font: 400 14px/20px var(--font-body);
+        }
         .link-btn {
-            font-family: 'Inter', sans-serif;
-            font-size: 13px;
+            font: 500 14px/20px var(--font-body);
             background: none;
             border: none;
-            color: var(--secondary);
+            color: var(--accent-ink);
             cursor: pointer;
-            text-decoration: underline;
+            border-radius: 4px;
         }
+        .link-btn:hover { text-decoration: underline; }
+        .secondary-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 40px;
+            padding: 0 18px;
+            border-radius: var(--radius-full);
+            background: var(--surface-container-high);
+            border: 1px solid var(--outline-variant);
+            color: var(--on-surface);
+            font: 500 14px/20px var(--font-body);
+            text-decoration: none;
+            transition: background 0.15s ease;
+        }
+        .secondary-link:hover { background: var(--surface-container-low); }
+
         .footer {
-            margin-top: 32px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 11px;
+            font: 400 13px/18px var(--font-body);
             color: var(--on-surface-variant);
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
         }
-        .footer a { color: var(--secondary); text-decoration: none; }
+        .footer a { color: var(--on-surface); text-decoration: none; font-weight: 500; }
+        .footer a:hover { color: var(--accent-ink); }
+
+        @media (max-width: 480px) {
+            .stage { padding-top: 24px; }
+            .card { padding: 32px 22px 28px; border-radius: 24px; }
+            h1 { font-size: 22px; line-height: 28px; }
+        }
     </style>
 </head>
 <body>
-<div class="card">
-    <div class="brand-label">FLEET_LITE_OS</div>
+<div class="stage">
+    <main class="center">
+        <a class="brand" href="/" aria-label="DIMO Fleet">
+            <img class="wordmark" src="/assets/dimo-wordmark.png" alt="" width="85" height="22" />
+            <span class="product">Fleet</span>
+        </a>
 
-    <div id="view-loading">
-        <h1>Joining…</h1>
-        <p>Accepting your invitation, one moment.</p>
-    </div>
+        <div class="hero">
+            <div class="card">
+                <div id="view-loading" role="status">
+                    <div class="glyph"><span class="spinner" aria-hidden="true"></span></div>
+                    <h1>Joining…</h1>
+                    <p>Accepting your invitation, one moment.</p>
+                </div>
 
-    <div id="view-login" style="display: none;">
-        <h1>You've been invited</h1>
-        <p>Sign in with your DIMO account to join this fleet.</p>
-        <div class="spacer">
-            <login-element></login-element>
+                <div id="view-login" style="display: none;">
+                    <div class="glyph">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7 8 6 8-6"/></svg>
+                    </div>
+                    <h1>You've been invited</h1>
+                    <p>Sign in with your DIMO account to join this fleet.</p>
+                    <div class="spacer">
+                        <login-element></login-element>
+                    </div>
+                </div>
+
+                <div id="view-confirm" style="display: none;">
+                    <div class="glyph">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7 8 6 8-6"/></svg>
+                    </div>
+                    <h1>You've been invited</h1>
+                    <p>You're accepting this invitation as</p>
+                    <p class="identity" id="confirm-identity"></p>
+                    <div class="spacer">
+                        <button class="primary-btn" id="confirm-accept">Accept invitation</button>
+                    </div>
+                    <p class="switch">
+                        Not you?
+                        <button class="link-btn" id="confirm-switch">Sign in with a different account</button>
+                    </p>
+                </div>
+
+                <div id="view-success" style="display: none;" role="status">
+                    <div class="glyph">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+                    </div>
+                    <h1>You're in</h1>
+                    <p>Invitation accepted — taking you to the fleet.</p>
+                </div>
+
+                <div id="view-error" style="display: none;" role="alert">
+                    <div class="glyph error">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/></svg>
+                    </div>
+                    <h1>Invitation problem</h1>
+                    <p class="error-text" id="error-message">This invitation is invalid, already used, or expired.</p>
+                    <p class="spacer"><a class="secondary-link" href="/">Go to DIMO Fleet</a></p>
+                </div>
+            </div>
         </div>
-    </div>
+    </main>
 
-    <div id="view-confirm" style="display: none;">
-        <h1>You've been invited</h1>
-        <p>You're accepting this invitation as</p>
-        <p class="identity" id="confirm-identity"></p>
-        <div class="spacer">
-            <button class="primary-btn" id="confirm-accept">Accept invitation</button>
-        </div>
-        <p class="spacer">
-            Not you?
-            <button class="link-btn" id="confirm-switch">Sign in with a different account</button>
-        </p>
-    </div>
-
-    <div id="view-success" style="display: none;">
-        <h1>You're in</h1>
-        <p>Invitation accepted — taking you to the fleet.</p>
-    </div>
-
-    <div id="view-error" style="display: none;">
-        <h1>Invitation problem</h1>
-        <p class="error-text" id="error-message">This invitation is invalid, already used, or expired.</p>
-        <p class="spacer"><a href="/" style="color: var(--secondary); text-decoration: none;">Go to FLEET_LITE_OS</a></p>
-    </div>
-
-    <div class="footer">
+    <footer class="footer">
         Powered by <a href="https://dimo.org" target="_blank" rel="noopener">DIMO</a>
-    </div>
+    </footer>
 </div>
 </body>
 </html>

@@ -217,11 +217,13 @@ export class GloveboxView extends LitElement {
                 height: 100%;
                 overflow: hidden;
                 position: relative;
+                background: var(--background);
             }
 
             /* ── Left list panel ────────────────────────────────── */
             .list-panel {
-                width: 400px;
+                width: 380px;
+                /* A split pane is one of the few places a hairline carries meaning. */
                 border-right: 1px solid var(--outline-variant);
                 display: flex;
                 flex-direction: column;
@@ -232,120 +234,113 @@ export class GloveboxView extends LitElement {
             @media (max-width: 768px)  { .list-panel { display: none; } }
 
             .list-header {
-                height: var(--top-bar-height, 80px);
+                height: var(--top-bar-height);
                 flex-shrink: 0;
-                padding: 0 var(--margin-desktop);
-                border-bottom: 1px solid var(--outline-variant);
-                background: var(--glass-bg);
-                backdrop-filter: blur(12px);
-                -webkit-backdrop-filter: blur(12px);
-                position: sticky;
-                top: 0;
-                z-index: 10;
+                padding: 0 20px 0 var(--gutter);
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
             }
-            .list-header h1 { font: var(--type-headline-md); color: var(--primary); }
+            .list-header h1 { font: var(--type-headline-md); letter-spacing: -0.01em; color: var(--primary); }
+            /* The page's primary action, as a round gradient button. */
             .list-header button {
-                width: 40px; height: 40px;
+                width: 36px; height: 36px;
                 border-radius: var(--radius-full);
-                background: none; border: none;
-                color: var(--primary);
+                background: var(--brand-gradient);
+                color: var(--on-accent);
                 display: flex; align-items: center; justify-content: center;
-                transition: background 0.15s ease;
-                cursor: pointer;
+                transition: filter 0.15s ease, box-shadow 0.15s ease;
             }
-            .list-header button:hover { background: var(--surface-container); }
+            .list-header button .material-symbols-outlined { font-size: 22px; }
+            .list-header button:hover { filter: brightness(1.06); box-shadow: var(--accent-glow); }
+            .list-header button:disabled { filter: grayscale(1) opacity(0.5); box-shadow: none; cursor: not-allowed; }
 
             .vehicle-list {
                 flex: 1;
                 overflow-y: auto;
-                padding: var(--stack-md) var(--margin-mobile);
-                display: flex; flex-direction: column; gap: 12px;
+                padding: 4px 12px var(--stack-md);
+                display: flex; flex-direction: column; gap: 2px;
             }
+            .list-note { padding: 24px 12px; font: var(--type-body-sm); color: var(--on-surface-variant); }
 
+            /* Rows like the vehicles panel; the active one follows the nav idiom. */
             .vehicle-card {
-                background: var(--surface-container-low);
-                border: 1px solid var(--outline-variant);
-                border-radius: var(--radius-lg);
-                padding: 12px;
-                display: flex; align-items: center; gap: 16px;
+                border-radius: 14px;
+                padding: 10px 8px 10px 10px;
+                display: flex; align-items: center; gap: 14px;
                 cursor: pointer;
                 transition: background 0.15s ease;
                 color: inherit;
-            }
-            .vehicle-card:hover { background: var(--surface-container); }
-            .vehicle-card.active { background: var(--surface-container-highest); }
-
-            .vehicle-icon {
-                width: 48px; height: 48px;
-                border-radius: var(--radius-full);
-                background: var(--surface-container-highest);
-                border: 1px solid var(--outline-variant);
-                display: flex; align-items: center; justify-content: center;
                 flex-shrink: 0;
             }
-            .vehicle-icon .material-symbols-outlined { color: var(--on-surface-variant); }
-            .vehicle-card.active .vehicle-icon .material-symbols-outlined { color: var(--primary); }
+            .vehicle-card:hover { background: var(--surface-container-low); }
+            .vehicle-card.active { background: var(--surface-container-high); }
+
+            .vehicle-icon {
+                width: 44px; height: 44px;
+                border-radius: var(--radius-full);
+                background: var(--surface-container-high);
+                display: flex; align-items: center; justify-content: center;
+                flex-shrink: 0;
+                transition: background 0.15s ease;
+            }
+            .vehicle-icon .material-symbols-outlined { font-size: 22px; color: var(--on-surface-variant); }
+            .vehicle-card.active .vehicle-icon { background: var(--accent-soft); }
+            .vehicle-card.active .vehicle-icon .material-symbols-outlined { color: var(--accent-ink); }
 
             .vehicle-meta { flex: 1; min-width: 0; }
             .vehicle-meta h3 {
-                font: var(--type-body-md);
-                font-weight: 700;
+                font: 600 15px/22px var(--font-headline);
                 color: var(--primary);
                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
             }
             .vehicle-meta p {
-                font: var(--type-body-sm);
+                font: 400 13px/18px var(--font-body);
                 color: var(--on-surface-variant);
+                margin-top: 2px;
                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
             }
 
             .vehicle-card .right-group { display: flex; align-items: center; gap: 8px; }
-            .vehicle-card .right-group .material-symbols-outlined { color: var(--on-surface-variant); }
+            .vehicle-card .right-group .material-symbols-outlined { font-size: 20px; color: var(--outline); }
+            .vehicle-card.active .right-group .material-symbols-outlined { color: var(--on-surface-variant); }
 
             /* ── Right detail panel ─────────────────────────────── */
             .detail-panel {
                 flex: 1;
+                min-width: 0;
                 display: flex;
                 flex-direction: column;
                 height: 100%;
                 overflow-y: auto;
-                background: var(--background);
             }
             .detail-header {
-                padding: 32px var(--gutter) 24px var(--gutter);
-                display: flex; align-items: center; gap: 24px;
-                border-bottom: 1px solid rgba(68, 71, 72, 0.3);
+                padding: 16px var(--gutter) 8px;
+                display: flex; align-items: center; gap: 20px;
             }
+            /* Top-aligned so it sits where every other page header puts it. */
+            .detail-header tenant-switcher { align-self: flex-start; }
             .detail-icon {
-                width: 80px; height: 80px;
+                width: 64px; height: 64px;
                 border-radius: var(--radius-full);
-                background: var(--surface-container);
-                border: 1px solid var(--outline-variant);
+                background: var(--surface-container-high);
                 display: flex; align-items: center; justify-content: center;
-                box-shadow: 0 0 15px rgba(255, 255, 255, 0.05);
                 flex-shrink: 0;
             }
             .detail-icon .material-symbols-outlined {
-                font-size: 40px;
+                font-size: 32px;
                 color: var(--on-surface-variant);
-                font-variation-settings: 'wght' 200;
             }
-            .detail-header h2 { font: var(--type-headline-lg); color: var(--primary); letter-spacing: -0.01em; }
+            .detail-header h2 { font: var(--type-headline-lg); color: var(--primary); letter-spacing: -0.015em; }
             .detail-header p {
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
+                font: var(--type-label);
                 color: var(--on-surface-variant);
                 margin-top: 4px;
             }
 
             .detail-body {
-                padding: var(--stack-lg) var(--gutter);
+                padding: var(--stack-md) var(--gutter) var(--stack-lg);
                 max-width: var(--container-max-width);
-                margin: 0 auto;
                 width: 100%;
                 flex: 1;
                 display: flex;
@@ -356,114 +351,125 @@ export class GloveboxView extends LitElement {
                 display: flex;
                 align-items: center;
                 gap: 16px;
-                padding: 16px;
-                background: rgba(255, 182, 145, 0.06);
-                border: 1px solid rgba(255, 182, 145, 0.2);
-                border-radius: var(--radius-md);
+                padding: 16px 16px 16px 20px;
+                background: color-mix(in srgb, var(--warning) 10%, transparent);
+                border-radius: var(--radius-lg);
                 margin-bottom: var(--stack-lg);
             }
-            .perms-banner strong { color: var(--secondary); font: var(--type-body-md); font-weight: 600; }
+            .perms-banner strong { color: var(--warning); font: 600 15px/22px var(--font-body); }
             .perms-banner p {
                 font: var(--type-body-sm);
                 color: var(--on-surface-variant);
                 margin-top: 4px;
-                line-height: 1.5;
             }
             .perms-banner code {
-                font-family: var(--font-mono);
-                font-size: 11px;
-                color: var(--secondary);
+                font: 500 12px/16px var(--font-mono);
+                color: var(--on-surface);
+                background: var(--surface-container-high);
+                border-radius: 5px;
+                padding: 1px 5px;
+                word-break: break-all;
             }
             .perms-banner a.grant {
                 flex-shrink: 0;
-                background: var(--primary);
-                color: var(--on-primary);
-                padding: 10px 16px;
-                border-radius: var(--radius-md);
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                font-weight: 700;
+                min-height: 36px;
+                padding: 0 14px 0 16px;
+                border-radius: var(--radius-full);
+                background: var(--brand-gradient);
+                color: var(--on-accent);
+                font: 600 13px/18px var(--font-body);
                 text-decoration: none;
                 display: inline-flex;
                 align-items: center;
-                gap: 4px;
+                gap: 6px;
+                transition: filter 0.15s ease, box-shadow 0.15s ease;
             }
-            .perms-banner a.grant:hover { opacity: 0.9; }
+            .perms-banner a.grant:hover { filter: brightness(1.06); box-shadow: var(--accent-glow); }
 
-            .filter-row { margin-bottom: var(--stack-lg); display: flex; gap: 8px; }
+            .filter-row { margin-bottom: 28px; display: flex; gap: 8px; }
+            /* The (only) filter is selected: toggled-control treatment. */
             .filter-pill {
-                padding: 8px 16px;
-                background: var(--primary);
-                color: var(--on-primary);
+                min-height: 32px;
+                padding: 0 14px;
+                background: var(--accent-soft-strong);
+                color: var(--accent-ink);
                 border-radius: var(--radius-full);
-                font: var(--type-label-caps);
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                font-weight: 700;
-                display: inline-flex; align-items: center; gap: 4px;
-                border: none; cursor: pointer;
+                font: 500 13px/18px var(--font-body);
+                display: inline-flex; align-items: center; gap: 6px;
             }
             .filter-pill .sep { opacity: 0.6; }
 
-            /* Missing rail */
-            .missing-section { margin-bottom: 48px; }
-            .missing-head { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
-            .missing-head .dot { width: 4px; height: 4px; background: var(--secondary); border-radius: var(--radius-full); }
-            .missing-head h3 {
-                font: var(--type-label-caps);
-                letter-spacing: 0.1em;
-                text-transform: uppercase;
-                color: var(--on-surface-variant);
-            }
+            /* Missing: actionable prompts, laid out as quiet add-cards. */
+            .missing-section { margin-bottom: 40px; }
+            .missing-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+            .missing-head .dot { width: 6px; height: 6px; background: var(--warning); border-radius: var(--radius-full); }
+            .missing-head h3 { font: var(--type-label); color: var(--on-surface-variant); }
             .missing-list {
-                border-left: 2px solid var(--surface-container-high);
-                padding-left: 24px;
-                display: flex; flex-direction: column; gap: 24px;
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+                gap: 12px;
             }
-            .missing-item { cursor: pointer; }
-            .missing-item h4 {
-                font: var(--type-body-lg);
-                color: var(--primary);
-                transition: color 0.15s ease;
+            .missing-item {
+                display: flex; align-items: center; gap: 14px;
+                padding: 14px 16px 14px 14px;
+                border-radius: var(--radius-lg);
+                background: var(--surface-container-low);
+                cursor: pointer;
+                transition: background 0.15s ease;
             }
-            .missing-item:hover h4 { color: var(--secondary); }
-            .missing-item p { font: var(--type-body-sm); color: var(--on-surface-variant); margin-top: 4px; }
+            .missing-item:hover { background: var(--surface-container); }
+            .missing-item .add {
+                width: 36px; height: 36px; flex-shrink: 0;
+                display: flex; align-items: center; justify-content: center;
+                border-radius: var(--radius-full);
+                background: var(--surface-container-high);
+                color: var(--on-surface-variant);
+                font-size: 20px;
+                transition: background 0.15s ease, color 0.15s ease;
+            }
+            .missing-item:hover .add { background: var(--accent-soft); color: var(--accent-ink); }
+            .missing-item h4 { font: 500 15px/22px var(--font-body); color: var(--primary); }
+            .missing-item p { font: 400 13px/18px var(--font-body); color: var(--on-surface-variant); margin-top: 2px; }
 
             /* Doc groups */
-            .group { margin-bottom: 32px; }
+            .group { margin-bottom: 28px; }
             .group-head {
-                font: var(--type-label-caps);
-                letter-spacing: 0.1em;
-                text-transform: uppercase;
+                font: var(--type-label);
                 color: var(--on-surface-variant);
-                margin-bottom: 12px;
+                margin-bottom: 8px;
             }
             .doc-row {
                 display: flex;
                 align-items: center;
-                gap: 16px;
-                padding: 12px 16px;
+                gap: 14px;
+                min-height: 64px;
+                padding: 12px 12px 12px 14px;
                 background: var(--surface-container-low);
-                border: 1px solid var(--outline-variant);
                 border-radius: var(--radius-md);
-                margin-bottom: 8px;
+                margin-bottom: 4px;
                 cursor: pointer;
-                transition: background 0.15s ease, border-color 0.15s ease;
+                transition: background 0.15s ease;
             }
-            .doc-row:hover { background: var(--surface-container); border-color: var(--outline); }
+            .doc-row:hover { background: var(--surface-container); }
             .doc-row .file-icon {
                 width: 36px; height: 36px;
                 border-radius: var(--radius-md);
-                background: var(--surface-container-highest);
+                background: var(--surface-container-high);
                 display: flex; align-items: center; justify-content: center;
                 flex-shrink: 0;
             }
-            .doc-row .file-icon .material-symbols-outlined { color: var(--secondary); font-size: 18px; }
+            .doc-row .file-icon .material-symbols-outlined { color: var(--on-surface-variant); font-size: 20px; }
             .doc-row .meta { flex: 1; min-width: 0; }
-            .doc-row .meta .title { font: var(--type-body-md); color: var(--primary); }
-            .doc-row .meta .when { font: var(--type-label-caps); letter-spacing: 0.05em; color: var(--on-surface-variant); margin-top: 4px; }
-            .doc-row .material-symbols-outlined.chev { color: var(--on-surface-variant); }
+            .doc-row .meta .title {
+                font: 500 15px/22px var(--font-body); color: var(--primary);
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            }
+            .doc-row .meta .when {
+                font: var(--type-label); color: var(--on-surface-variant); margin-top: 2px;
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            }
+            .doc-row .material-symbols-outlined.chev { font-size: 20px; color: var(--outline); }
+            .doc-row:hover .material-symbols-outlined.chev { color: var(--on-surface-variant); }
 
             .empty-state {
                 flex: 1;
@@ -472,28 +478,13 @@ export class GloveboxView extends LitElement {
                 padding: 48px 0;
                 margin-top: auto;
             }
-            .empty-state h3 { font: var(--type-headline-md); color: var(--primary); margin-bottom: 8px; }
+            .empty-state h3 { font: var(--type-headline-md); letter-spacing: -0.01em; color: var(--primary); margin-bottom: 8px; }
             .empty-state p {
-                font: var(--type-label-caps);
-                letter-spacing: 0.1em;
-                text-transform: uppercase;
+                font: var(--type-body-sm);
                 color: var(--on-surface-variant);
-                max-width: 280px;
-                margin-bottom: 32px;
-                line-height: 1.6;
+                max-width: 300px;
+                margin-bottom: 24px;
             }
-            .empty-state .add-doc {
-                padding: 12px 24px;
-                border-radius: var(--radius-full);
-                border: 1px solid var(--primary);
-                color: var(--primary);
-                background: none;
-                font: var(--type-body-md);
-                font-weight: 500;
-                cursor: pointer;
-                transition: background 0.3s ease, color 0.3s ease;
-            }
-            .empty-state .add-doc:hover { background: var(--primary); color: var(--on-primary); }
 
             .docs-loading {
                 font: var(--type-body-sm);
@@ -569,15 +560,16 @@ export class GloveboxView extends LitElement {
                     <button
                         ?disabled=${!this.selected}
                         @click=${this.openUpload}
-                        title="${msg('Add a document')}">
+                        title="${msg('Add a document')}"
+                        aria-label="${msg('Add a document')}">
                         <span class="material-symbols-outlined">add</span>
                     </button>
                 </header>
                 <div class="vehicle-list custom-scrollbar">
                     ${this.loadingVehicles
-                        ? html`<p style="padding:24px;color:var(--on-surface-variant);">${msg('Loading…')}</p>`
+                        ? html`<p class="list-note">${msg('Loading…')}</p>`
                         : this.vehicles.length === 0
-                            ? html`<p style="padding:24px;color:var(--on-surface-variant);">${msg('No vehicles on this account.')}</p>`
+                            ? html`<p class="list-note">${msg('No vehicles on this account.')}</p>`
                             : this.vehicles.map((v) => this.renderListCard(v))
                     }
                 </div>
@@ -610,7 +602,7 @@ export class GloveboxView extends LitElement {
                                 ${this.grantUrl() ? html`
                                     <a class="grant" href=${this.grantUrl()} target="_blank" rel="noopener">
                                         ${msg('Grant permissions')}
-                                        <span class="material-symbols-outlined" style="font-size:14px;">open_in_new</span>
+                                        <span class="material-symbols-outlined" style="font-size:16px;">open_in_new</span>
                                     </a>
                                 ` : nothing}
                             </div>
@@ -628,8 +620,11 @@ export class GloveboxView extends LitElement {
                                 <div class="missing-list">
                                     ${missing.map((m) => html`
                                         <div class="missing-item" @click=${this.openUpload}>
-                                            <h4>${m.label}</h4>
-                                            ${m.blurb ? html`<p>${m.blurb}</p>` : nothing}
+                                            <span class="material-symbols-outlined add">add</span>
+                                            <div>
+                                                <h4>${m.label}</h4>
+                                                ${m.blurb ? html`<p>${m.blurb}</p>` : nothing}
+                                            </div>
                                         </div>
                                     `)}
                                 </div>
@@ -643,7 +638,7 @@ export class GloveboxView extends LitElement {
                                     <div class="empty-state">
                                         <h3>${msg('No records yet.')}</h3>
                                         <p>${msg('— upload anything: receipt, insurance pdf, reg card')}</p>
-                                        <button class="add-doc" @click=${this.openUpload}>${msg('Add document')}</button>
+                                        <button class="btn-primary" @click=${this.openUpload}>${msg('Add document')}</button>
                                     </div>
                                 `
                                 : groups.map((g) => html`
