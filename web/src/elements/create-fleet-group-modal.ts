@@ -4,6 +4,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { FleetGroupService } from '../services/fleet-group-service.ts';
 import { FleetGroup } from '../types/group.ts';
+import { ModalController } from '../utils/modal-controller.ts';
 
 /**
  * create-fleet-group-modal — create a new group, or edit an existing one.
@@ -45,6 +46,11 @@ export class CreateFleetGroupModal extends LitElement {
             this.name = this.group.name;
             this.color = this.group.color;
         }
+    }
+
+    constructor() {
+        super();
+        new ModalController(this, { close: () => this.dispatchClose() });
     }
 
     static styles = [
@@ -193,11 +199,11 @@ export class CreateFleetGroupModal extends LitElement {
         const name = this.name.trim();
         const canSave = this.isEdit || !!name;
         return html`
-            <div class="card" @click=${(e: Event) => e.stopPropagation()}>
+            <div class="card" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1" @click=${(e: Event) => e.stopPropagation()}>
                 <button class="close" aria-label=${msg('Close')} @click=${this.dispatchClose}>
                     <span class="material-symbols-outlined">close</span>
                 </button>
-                <h2>${this.isEdit ? msg('Edit group') : msg('New group')}</h2>
+                <h2 id="modal-title">${this.isEdit ? msg('Edit group') : msg('New group')}</h2>
                 <p class="sub">${this.isEdit
                     ? msg('Update the color. Group names can’t be changed.')
                     : msg('Name the group and pick a color. You can assign vehicles next.')}</p>
@@ -206,6 +212,7 @@ export class CreateFleetGroupModal extends LitElement {
                     <label for="name">${msg('Name')}</label>
                     <input
                         id="name"
+                        autofocus
                         type="text"
                         placeholder="${msg('e.g. East Coast')}"
                         .value=${this.name}

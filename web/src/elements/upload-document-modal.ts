@@ -6,6 +6,7 @@ import { DocumentService, fileToBase64 } from '../services/document-service.ts';
 import { ExtractResult } from '../types/document.ts';
 import { Vehicle } from '../types/vehicle.ts';
 import { UPLOAD_CATEGORIES, categoryLabel, COST_ELIGIBLE_CATEGORIES } from '../utils/document-categories.ts';
+import { ModalController } from '../utils/modal-controller.ts';
 
 type Step = 'pick' | 'review' | 'submitting' | 'done' | 'error';
 
@@ -36,6 +37,11 @@ export class UploadDocumentModal extends LitElement {
     @state() private selectedCategory: string = 'dimo.document.unknown';
     @state() private amount: string = '';
     @state() private errorMessage = '';
+
+    constructor() {
+        super();
+        new ModalController(this, { close: () => this.dispatchClose() });
+    }
 
     static styles = [
         sharedStyles,
@@ -348,7 +354,7 @@ export class UploadDocumentModal extends LitElement {
 
     private renderPick() {
         return html`
-            <h2>${msg('Add a document')}</h2>
+            <h2 id="modal-title">${msg('Add a document')}</h2>
             <p class="sub">${msg("PDF, JPG, or PNG. We'll read the VIN and other details automatically, then securely save the document to DIMO.")}</p>
             <label class="drop">
                 <input type="file" accept="application/pdf,image/jpeg,image/png" @change=${this.onFilePicked} />
@@ -369,7 +375,7 @@ export class UploadDocumentModal extends LitElement {
         const vin = this.extractResult.vin?.trim();
         const canSubmit = this.selectedTokenId !== null;
         return html`
-            <h2>${msg('Confirm')}</h2>
+            <h2 id="modal-title">${msg('Confirm')}</h2>
             <p class="sub">${msg('Pick which vehicle this belongs to and confirm the category.')}</p>
 
             ${this.file ? html`
@@ -439,7 +445,7 @@ export class UploadDocumentModal extends LitElement {
 
     private renderDone() {
         return html`
-            <h2>${msg('Saved')}</h2>
+            <h2 id="modal-title">${msg('Saved')}</h2>
             <p class="sub">${msg('Your document has been saved to DIMO. The list will refresh.')}</p>
             <div class="actions"><button class="primary" @click=${this.dispatchClose}>${msg('Done')}</button></div>
         `;
@@ -466,7 +472,7 @@ export class UploadDocumentModal extends LitElement {
 
     private renderError() {
         return html`
-            <h2>${msg('Something went wrong')}</h2>
+            <h2 id="modal-title">${msg('Something went wrong')}</h2>
             <div class="error-text">${this.errorMessage || msg('Unknown error')}</div>
             <div class="actions">
                 <button class="ghost" @click=${this.dispatchClose}>${msg('Close')}</button>
@@ -483,8 +489,8 @@ export class UploadDocumentModal extends LitElement {
             this.step === 'done'       ? this.renderDone() :
                                          this.renderError();
         return html`
-            <div class="card" @click=${(e: Event) => e.stopPropagation()}>
-                <button class="close" @click=${this.dispatchClose}>
+            <div class="card" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1" @click=${(e: Event) => e.stopPropagation()}>
+                <button class="close" aria-label=${msg('Close')} @click=${this.dispatchClose}>
                     <span class="material-symbols-outlined">close</span>
                 </button>
                 ${body}

@@ -12,6 +12,7 @@ import { tripDistanceKm, tripDurationMs, tripSignal } from '../utils/trips.ts';
 import { formatDistance, formatSpeed } from '../utils/units.ts';
 import { buildTileLayer, MAP_COLORS, tripMapStyles } from '../utils/fleet-map.ts';
 import { behaviorColor, isBehaviorEvent } from '../utils/behavior-events.ts';
+import { ModalController } from '../utils/modal-controller.ts';
 
 interface EventFlag {
     name: string;
@@ -48,6 +49,11 @@ function fmtDuration(seconds: number): string {
  */
 @customElement('trip-replay-modal')
 export class TripReplayModal extends LitElement {
+    constructor() {
+        super();
+        new ModalController(this, { close: () => this.dispatchClose() });
+    }
+
     static styles = [
         sharedStyles,
         unsafeCSS(leafletCss),
@@ -348,7 +354,6 @@ export class TripReplayModal extends LitElement {
     private mapInitTimer?: number;
     private connected = false;
 
-    private readonly onKeydown = (e: KeyboardEvent) => { if (e.key === 'Escape') this.dispatchClose(); };
 
     // Trip metadata derived from main's nested segments `Trip` shape.
     private get startTs(): string { return this.trip.start.timestamp; }
@@ -361,7 +366,6 @@ export class TripReplayModal extends LitElement {
     override connectedCallback() {
         super.connectedCallback();
         this.connected = true;
-        document.addEventListener('keydown', this.onKeydown);
         window.addEventListener('theme-change', this.boundOnThemeChange);
         void this.fetchRoute();
     }
@@ -369,7 +373,6 @@ export class TripReplayModal extends LitElement {
     override disconnectedCallback() {
         super.disconnectedCallback();
         this.connected = false;
-        document.removeEventListener('keydown', this.onKeydown);
         window.removeEventListener('theme-change', this.boundOnThemeChange);
         if (this.mapInitTimer !== undefined) { clearTimeout(this.mapInitTimer); this.mapInitTimer = undefined; }
         this.stopAnim();
@@ -551,15 +554,15 @@ export class TripReplayModal extends LitElement {
         const hasControls = !this.isSparse && !this.loading && !this.fetchError;
 
         return html`
-            <div class="card" @click=${(e: Event) => e.stopPropagation()}>
+            <div class="card" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1" @click=${(e: Event) => e.stopPropagation()}>
                 <div class="replay-header">
                     <div>
-                        <span class="replay-title">${msg('Trip Replay')}</span>
+                        <span class="replay-title" id="modal-title">${msg('Trip Replay')}</span>
                         <span class="replay-subtitle">
                             ${dayjs(this.startTs).format('MMM D · HH:mm')} → ${this.endClock} · ${fmtDuration(this.durationSec)}
                         </span>
                     </div>
-                    <button class="close" @click=${this.dispatchClose} title=${msg('Close')}>
+                    <button class="close" aria-label=${msg('Close')} @click=${this.dispatchClose}>
                         <span class="material-symbols-outlined">close</span>
                     </button>
                 </div>

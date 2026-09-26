@@ -5,6 +5,7 @@ import { sharedStyles } from '../global-styles.ts';
 import { DocumentService } from '../services/document-service.ts';
 import { DocumentEntry } from '../types/document.ts';
 import { categoryLabel } from '../utils/document-categories.ts';
+import { ModalController } from '../utils/modal-controller.ts';
 
 @customElement('document-detail-modal')
 export class DocumentDetailModal extends LitElement {
@@ -14,6 +15,11 @@ export class DocumentDetailModal extends LitElement {
     @state() private downloading = false;
     @state() private deleting = false;
     @state() private errorMessage = '';
+
+    constructor() {
+        super();
+        new ModalController(this, { close: () => this.dispatchClose() });
+    }
 
     static styles = [
         sharedStyles,
@@ -217,11 +223,11 @@ export class DocumentDetailModal extends LitElement {
     render() {
         const fields = this.extractFields();
         return html`
-            <div class="card" @click=${(e: Event) => e.stopPropagation()}>
-                <button class="close" @click=${this.dispatchClose}>
+            <div class="card" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1" @click=${(e: Event) => e.stopPropagation()}>
+                <button class="close" aria-label=${msg('Close')} @click=${this.dispatchClose}>
                     <span class="material-symbols-outlined">close</span>
                 </button>
-                <h2>${categoryLabel(this.document.type)}</h2>
+                <h2 id="modal-title">${categoryLabel(this.document.type)}</h2>
                 <p class="sub">${this.document.type} · ${this.formatTime(this.document.time)}</p>
 
                 ${this.errorMessage ? html`<div class="error-text">${this.errorMessage}</div>` : nothing}

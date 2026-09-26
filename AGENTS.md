@@ -99,6 +99,13 @@ These differ slightly from rental-fleets-app and are easy to forget:
 - **Active nav fill.** The active sidebar item uses
   `font-variation-settings: 'FILL' 1` on its Material Symbol. Don't swap icon
   names for filled variants; just toggle the variation setting via a CSS class.
+- **Modals.** Mount a modal while it is open and unmount it to close. Its
+  constructor calls `new ModalController(this, { close, canClose })`
+  (`web/src/utils/modal-controller.ts`: Escape, focus in, Tab wrap, focus back
+  to the opener), and its card is
+  `role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1"`
+  with `id="modal-title"` on the heading. `canClose` mirrors whatever disables
+  the close button; mark a form's first field `autofocus`.
 
 ## Running locally
 

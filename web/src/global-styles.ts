@@ -78,6 +78,12 @@ export const sharedStyles = css`
         outline-offset: 2px;
     }
 
+    /* A modal's dialog takes focus when it opens (ModalController) so a screen
+       reader announces it; the ring belongs on the controls inside it. */
+    [role='dialog']:focus {
+        outline: none;
+    }
+
     ::selection {
         background: var(--accent-soft-strong);
         color: var(--on-surface);

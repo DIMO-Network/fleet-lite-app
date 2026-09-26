@@ -5,6 +5,7 @@ import { sharedStyles } from '../global-styles.ts';
 import { FleetGroupService } from '../services/fleet-group-service.ts';
 import { FleetGroup } from '../types/group.ts';
 import { Vehicle } from '../types/vehicle.ts';
+import { ModalController } from '../utils/modal-controller.ts';
 
 /**
  * manage-group-vehicles-modal — toggle which vehicles belong to a group.
@@ -51,6 +52,11 @@ export class ManageGroupVehiclesModal extends LitElement {
         }
         this.memberIds = members;
         this.initialMemberIds = new Set(members);
+    }
+
+    constructor() {
+        super();
+        new ModalController(this, { close: () => this.dispatchClose() });
     }
 
     static styles = [
@@ -234,11 +240,11 @@ export class ManageGroupVehiclesModal extends LitElement {
         );
 
         return html`
-            <div class="card" @click=${(e: Event) => e.stopPropagation()}>
+            <div class="card" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1" @click=${(e: Event) => e.stopPropagation()}>
                 <button class="close" aria-label=${msg('Close')} @click=${this.dispatchClose}>
                     <span class="material-symbols-outlined">close</span>
                 </button>
-                <h2 style="--c:${this.group.color}"><span class="dot"></span>${this.group.name}</h2>
+                <h2 id="modal-title" style="--c:${this.group.color}"><span class="dot"></span>${this.group.name}</h2>
                 <p class="sub">${msg(str`${this.memberIds.size} of ${this.vehicles.length} vehicles in this group.`)}</p>
 
                 <div class="search">

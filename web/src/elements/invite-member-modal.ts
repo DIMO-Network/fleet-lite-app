@@ -5,6 +5,7 @@ import { sharedStyles } from '../global-styles.ts';
 import { ApiError } from '../services/api-service.ts';
 import { TenantService, Member, ROLE_OWNER, ROLE_MEMBER } from '../services/tenant-service.ts';
 import { FleetGroup } from '../types/group.ts';
+import { ModalController } from '../utils/modal-controller.ts';
 
 /**
  * invite-member-modal — invite a member by email with a group-access scope, or
@@ -49,6 +50,11 @@ export class InviteMemberModal extends LitElement {
                 this.selected = new Set(this.member.allowedGroupIds);
             }
         }
+    }
+
+    constructor() {
+        super();
+        new ModalController(this, { close: () => this.dispatchClose() });
     }
 
     static styles = [
@@ -292,11 +298,11 @@ export class InviteMemberModal extends LitElement {
     render() {
         const showAccess = this.inviteRole !== ROLE_OWNER;
         return html`
-            <div class="card" @click=${(e: Event) => e.stopPropagation()}>
-                <button class="close" @click=${this.dispatchClose}>
+            <div class="card" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1" @click=${(e: Event) => e.stopPropagation()}>
+                <button class="close" aria-label=${msg('Close')} @click=${this.dispatchClose}>
                     <span class="material-symbols-outlined">close</span>
                 </button>
-                <h2>${this.isEdit ? msg('Edit access') : msg('Invite member')}</h2>
+                <h2 id="modal-title">${this.isEdit ? msg('Edit access') : msg('Invite member')}</h2>
                 <p class="sub">${this.isEdit
                     ? msg(str`Change which groups ${this.member?.email || this.member?.wallet || ''} can see.`)
                     : msg('Send an email invitation and choose which groups the new member can see.')}</p>
@@ -306,6 +312,7 @@ export class InviteMemberModal extends LitElement {
                         <label for="email">${msg('Email')}</label>
                         <input
                             id="email"
+                            autofocus
                             type="email"
                             placeholder="${msg('teammate@company.com')}"
                             autocomplete="off"

@@ -7,6 +7,7 @@ import { Geofence, VehiclePasses } from '../types/geofence.ts';
 import { Vehicle } from '../types/vehicle.ts';
 import { formatSpeed } from '../utils/units.ts';
 import { formatDwell, tripTimeShort } from '../utils/trips.ts';
+import { ModalController } from '../utils/modal-controller.ts';
 
 /** Selectable scan windows (server caps at 3 days). */
 interface ScanWindow { label: () => string; days: number; }
@@ -130,6 +131,11 @@ export class GeofenceActivityModal extends LitElement {
                 <span class="count">${passCount}×</span>
             </div>
         `;
+    }
+
+    constructor() {
+        super();
+        new ModalController(this, { close: () => this.dispatchClose() });
     }
 
     static styles = [
@@ -265,11 +271,11 @@ export class GeofenceActivityModal extends LitElement {
         const pct = this.total > 0 ? Math.round((this.scanned / this.total) * 100) : 0;
         const passCount = this.results.reduce((n, r) => n + r.passes.length, 0);
         return html`
-            <div class="card" @click=${(e: Event) => e.stopPropagation()}>
+            <div class="card" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1" @click=${(e: Event) => e.stopPropagation()}>
                 <button class="close" aria-label=${msg('Close')} @click=${this.dispatchClose}>
                     <span class="material-symbols-outlined">close</span>
                 </button>
-                <h2 style="--c:${this.geofence.color}"><span class="dot"></span>${this.geofence.name}</h2>
+                <h2 id="modal-title" style="--c:${this.geofence.color}"><span class="dot"></span>${this.geofence.name}</h2>
 
                 <div class="controls">
                     <select @change=${this.onWindowChange} .value=${String(this.windowIndex)}>

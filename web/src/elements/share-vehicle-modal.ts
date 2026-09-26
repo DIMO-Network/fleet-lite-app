@@ -14,6 +14,7 @@ import {
     remainingShareDays,
     SacdPermission,
 } from '../utils/sacd-permissions.ts';
+import { ModalController } from '../utils/modal-controller.ts';
 
 /** One existing on-chain grant, read back from identity-api. */
 interface ExistingShare {
@@ -422,6 +423,15 @@ export class ShareVehicleModal extends LitElement {
         return msg(str`Until ${when.toLocaleDateString()}`);
     }
 
+    constructor() {
+        super();
+        new ModalController(this, {
+            close: () => this.dispatchClose(),
+            // The same condition that disables the close buttons.
+            canClose: () => !this.submitting && !this.revoking && !this.upgrading,
+        });
+    }
+
     static styles = [
         sharedStyles,
         css`
@@ -798,12 +808,12 @@ export class ShareVehicleModal extends LitElement {
         const inputsOff = this.submitting || this.blocked || !!this.revoking || !!this.upgrading;
 
         return html`
-            <div class="card" role="dialog" aria-modal="true" aria-label=${msg('Share vehicle')}>
+            <div class="card" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1">
                 <button class="close" ?disabled=${this.submitting || !!this.revoking || !!this.upgrading} @click=${this.dispatchClose} aria-label=${msg('Close')}>
                     <span class="material-symbols-outlined">close</span>
                 </button>
                 <div class="head">
-                    <h2>${msg('Share vehicle')}</h2>
+                    <h2 id="modal-title">${msg('Share vehicle')}</h2>
                     <!-- The grant is irreversible once it is on chain, so the id
                          of the vehicle it will be written against is stated
                          before the form rather than left to the title, which a
@@ -825,6 +835,7 @@ export class ShareVehicleModal extends LitElement {
                     <label for="grantee">${msg('Wallet address')}</label>
                     <input
                         id="grantee"
+                        autofocus
                         type="text"
                         class=${showInvalid ? 'invalid' : ''}
                         placeholder="0x…"
