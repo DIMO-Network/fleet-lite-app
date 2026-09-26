@@ -501,7 +501,7 @@ export class ChargingView extends LitElement {
                                     <th>${msg('Ended')}</th>
                                     <th class="num">${msg('Energy')}</th>
                                     <th class="num">${msg('Cost')}</th>
-                                    <th class="num">${msg('Saved')}</th>
+                                    <th class="num">${msg('Savings')}</th>
                                 </tr>
                             </thead>
                             <tbody>
