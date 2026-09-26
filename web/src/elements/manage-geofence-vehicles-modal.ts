@@ -5,6 +5,7 @@ import { sharedStyles } from '../global-styles.ts';
 import { GeofenceService } from '../services/geofence-service.ts';
 import { Geofence } from '../types/geofence.ts';
 import { Vehicle } from '../types/vehicle.ts';
+import { ModalController } from '../utils/modal-controller.ts';
 
 /**
  * manage-geofence-vehicles-modal — toggle which vehicles a manual-scope geofence
@@ -46,6 +47,11 @@ export class ManageGeofenceVehiclesModal extends LitElement {
         } finally {
             this.loading = false;
         }
+    }
+
+    constructor() {
+        super();
+        new ModalController(this, { close: () => this.dispatchClose() });
     }
 
     static styles = [
@@ -95,7 +101,7 @@ export class ManageGeofenceVehiclesModal extends LitElement {
                 flex-shrink: 0; height: 40px; padding: 0 12px; margin-bottom: 12px;
                 border-radius: var(--radius-md);
                 background: var(--surface-container-high);
-                border: 1px solid var(--outline-variant);
+                border: 1px solid var(--control-border);
                 transition: border-color 0.15s ease, box-shadow 0.15s ease;
             }
             .search:focus-within { border-color: var(--focus-ring); box-shadow: 0 0 0 3px var(--accent-soft); }
@@ -204,11 +210,11 @@ export class ManageGeofenceVehiclesModal extends LitElement {
             : this.vehicles;
 
         return html`
-            <div class="card" @click=${(e: Event) => e.stopPropagation()}>
+            <div class="card" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1" @click=${(e: Event) => e.stopPropagation()}>
                 <button class="close" aria-label=${msg('Close')} @click=${this.dispatchClose}>
                     <span class="material-symbols-outlined">close</span>
                 </button>
-                <h2 style="--c:${this.geofence.color}"><span class="dot"></span>${this.geofence.name}</h2>
+                <h2 id="modal-title" style="--c:${this.geofence.color}"><span class="dot"></span>${this.geofence.name}</h2>
                 <p class="sub">${this.loading
                     ? msg('Loading assigned vehicles…')
                     : msg(str`${this.memberIds.size} of ${this.vehicles.length} vehicles assigned.`)}</p>

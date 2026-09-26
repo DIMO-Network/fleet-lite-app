@@ -6,6 +6,7 @@ import { GeofenceService } from '../services/geofence-service.ts';
 import { Geofence, GeoJSONPolygon, GeofenceScope } from '../types/geofence.ts';
 import { FleetGroup } from '../types/group.ts';
 import { polygonAreaM2, formatArea } from '../utils/geo.ts';
+import { ModalController } from '../utils/modal-controller.ts';
 
 /**
  * create-geofence-modal — create a geofence from a freshly-drawn polygon, or
@@ -64,6 +65,11 @@ export class CreateGeofenceModal extends LitElement {
         return this.pendingGeometry ? polygonAreaM2(this.pendingGeometry) : 0;
     }
 
+    constructor() {
+        super();
+        new ModalController(this, { close: () => this.dispatchClose() });
+    }
+
     static styles = [
         sharedStyles,
         css`
@@ -102,7 +108,7 @@ export class CreateGeofenceModal extends LitElement {
                 padding: 0 12px;
                 background: var(--surface-container-high);
                 color: var(--on-surface);
-                border: 1px solid var(--outline-variant);
+                border: 1px solid var(--control-border);
                 border-radius: var(--radius-md);
                 font: var(--type-body-sm);
                 transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -248,11 +254,11 @@ export class CreateGeofenceModal extends LitElement {
     render() {
         const canSave = !!this.name.trim() && (this.isEdit || !!this.pendingGeometry);
         return html`
-            <div class="card" @click=${(e: Event) => e.stopPropagation()}>
+            <div class="card" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1" @click=${(e: Event) => e.stopPropagation()}>
                 <button class="close" aria-label=${msg('Close')} @click=${this.dispatchClose}>
                     <span class="material-symbols-outlined">close</span>
                 </button>
-                <h2>${this.isEdit ? msg('Edit geofence') : msg('New geofence')}</h2>
+                <h2 id="modal-title">${this.isEdit ? msg('Edit geofence') : msg('New geofence')}</h2>
                 <p class="sub">${this.isEdit
                     ? msg('Update the geofence details. Redraw the area by deleting and recreating it.')
                     : msg('Name the area you drew, then choose which vehicles it applies to.')}</p>
@@ -264,7 +270,7 @@ export class CreateGeofenceModal extends LitElement {
 
                 <div class="field">
                     <label for="name">${msg('Name')}</label>
-                    <input id="name" type="text" placeholder="${msg('e.g. Downtown Depot')}"
+                    <input id="name" type="text" autofocus placeholder="${msg('e.g. Downtown Depot')}"
                         .value=${this.name}
                         @input=${(e: Event) => { this.name = (e.target as HTMLInputElement).value; }} />
                 </div>

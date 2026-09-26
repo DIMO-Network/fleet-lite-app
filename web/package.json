@@ -12,7 +12,8 @@
     "localize:extract": "lit-localize extract",
     "localize:build": "lit-localize build",
     "localize": "lit-localize extract && lit-localize build",
-    "localize:check": "npm run localize && git diff --exit-code -- xliff src/generated"
+    "localize:check": "npm run localize && git diff --exit-code -- xliff src/generated",
+    "test": "vitest run"
   },
   "dependencies": {
     "@lit-labs/router": "^0.1.4",
@@ -38,6 +39,7 @@
     "vite": "^8.0.16",
     "vite-plugin-eslint": "^1.8.1",
     "vite-plugin-mkcert": "^1.17.10",
-    "vite-plugin-static-copy": "^3.4.0"
+    "vite-plugin-static-copy": "^3.4.0",
+    "vitest": "^5.0.2"
   }
 }

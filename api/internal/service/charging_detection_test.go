@@ -114,30 +114,105 @@ func TestIsNoise_MeasurableEnergyKeptEvenIfShort(t *testing.T) {
 	}
 }
 
-func TestSettledUntil_NoOngoingCoversWholeWindow(t *testing.T) {
-	to := time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC)
-	segs := []Segment{segment("2026-09-25T08:00:00Z", "2026-09-25T09:00:00Z", 0, 0, nil, nil, nil, nil, nil)}
-	if got := settledUntil(segs, to); !got.Equal(to) {
-		t.Fatalf("settledUntil = %v, want %v", got, to)
+// session builds a detected session from RFC3339 times, the way telemetry-api
+// reports recharge: always an end, never isOngoing.
+func session(t *testing.T, start, end string) detectedChargingSession {
+	t.Helper()
+	return sessionFromSegment(segment(start, end, 0, 0, nil, nil, nil, nil, nil))
+}
+
+func at(t *testing.T, ts string) time.Time {
+	t.Helper()
+	v, err := time.Parse(time.RFC3339, ts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return v
+}
+
+func TestSettleGap_HistoricalGapIsFinalAsAWhole(t *testing.T) {
+	now := at(t, "2026-09-25T12:00:00Z")
+	gap := timeInterval{at(t, "2026-09-01T00:00:00Z"), at(t, "2026-09-20T00:00:00Z")}
+	// Ends exactly at the gap's end (clipped by a covered interval after it):
+	// still final, because nothing before the cutoff can change.
+	s := session(t, "2026-09-19T22:00:00Z", "2026-09-20T00:00:00Z")
+	final, inProgress, coveredTo := settleGap([]detectedChargingSession{s}, gap, now)
+	if len(final) != 1 || len(inProgress) != 0 || !coveredTo.Equal(gap.to) {
+		t.Fatalf("final=%d inProgress=%d coveredTo=%v, want 1, 0, %v", len(final), len(inProgress), coveredTo, gap.to)
 	}
 }
 
-func TestSettledUntil_StopsAtOngoingStart(t *testing.T) {
-	to := time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC)
-	done := segment("2026-09-25T08:00:00Z", "2026-09-25T09:00:00Z", 0, 0, nil, nil, nil, nil, nil)
-	live := segment("2026-09-25T11:00:00Z", "2026-09-25T11:55:00Z", 0, 0, nil, nil, nil, nil, nil)
-	live.IsOngoing = true
-	want := time.Date(2026, 9, 25, 11, 0, 0, 0, time.UTC)
-	if got := settledUntil([]Segment{done, live}, to); !got.Equal(want) {
-		t.Fatalf("settledUntil = %v, want %v", got, want)
+// The bug #181 meant to fix: telemetry-api reports a charge still under way
+// with isOngoing=false and its latest reading as its end.
+func TestSettleGap_ChargeStillRisingIsNotFinal(t *testing.T) {
+	now := at(t, "2026-09-25T12:00:00Z")
+	gap := timeInterval{at(t, "2026-09-25T00:00:00Z"), now}
+	done := session(t, "2026-09-25T02:00:00Z", "2026-09-25T03:00:00Z")
+	charging := session(t, "2026-09-25T11:00:00Z", "2026-09-25T11:58:00Z")
+
+	final, inProgress, coveredTo := settleGap([]detectedChargingSession{done, charging}, gap, now)
+	if len(final) != 1 || !final[0].startedAt.Equal(done.startedAt) {
+		t.Fatalf("final = %+v, want only the 02:00 session", final)
+	}
+	if len(inProgress) != 1 || !inProgress[0].startedAt.Equal(charging.startedAt) {
+		t.Fatalf("inProgress = %+v, want the 11:00 session", inProgress)
+	}
+	// The live session starts after the cutoff, so coverage stops at the
+	// cutoff: the next request re-reads from there and finds it again.
+	if want := now.Add(-rechargeSettleMargin); !coveredTo.Equal(want) {
+		t.Fatalf("coveredTo = %v, want the cutoff %v", coveredTo, want)
 	}
 }
 
-func TestSettledUntil_UnparseableOngoingStartCoversNothing(t *testing.T) {
-	to := time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC)
-	live := segment("garbage", "", 0, 0, nil, nil, nil, nil, nil)
-	live.IsOngoing = true
-	if got := settledUntil([]Segment{live}, to); !got.IsZero() {
-		t.Fatalf("settledUntil = %v, want zero", got)
+// A long charge that began before the cutoff holds coverage at its start, so
+// the whole session is re-read, and stored once, when it finishes.
+func TestSettleGap_LongChargeHoldsCoverageAtItsStart(t *testing.T) {
+	now := at(t, "2026-09-25T12:00:00Z")
+	gap := timeInterval{at(t, "2026-09-25T00:00:00Z"), now}
+	long := session(t, "2026-09-25T08:00:00Z", "2026-09-25T11:59:00Z")
+	final, inProgress, coveredTo := settleGap([]detectedChargingSession{long}, gap, now)
+	if len(final) != 0 || len(inProgress) != 1 || !coveredTo.Equal(long.startedAt) {
+		t.Fatalf("final=%d inProgress=%d coveredTo=%v, want 0, 1, %v", len(final), len(inProgress), coveredTo, long.startedAt)
+	}
+}
+
+// telemetry-api merges rises up to two hours apart, so a session that ended an
+// hour ago can still be extended by the next top-up.
+func TestSettleGap_RecentlyEndedSessionCanStillBeExtended(t *testing.T) {
+	now := at(t, "2026-09-25T12:00:00Z")
+	gap := timeInterval{at(t, "2026-09-25T00:00:00Z"), now}
+	recent := session(t, "2026-09-25T09:30:00Z", "2026-09-25T11:00:00Z")
+	final, inProgress, coveredTo := settleGap([]detectedChargingSession{recent}, gap, now)
+	if len(final) != 0 || len(inProgress) != 1 || !coveredTo.Equal(recent.startedAt) {
+		t.Fatalf("final=%d inProgress=%d coveredTo=%v, want 0, 1, %v", len(final), len(inProgress), coveredTo, recent.startedAt)
+	}
+}
+
+func TestSettleGap_NothingInProgressStillLeavesAMarginForLateReadings(t *testing.T) {
+	now := at(t, "2026-09-25T12:00:00Z")
+	gap := timeInterval{at(t, "2026-09-25T00:00:00Z"), now}
+	_, _, coveredTo := settleGap(nil, gap, now)
+	if want := now.Add(-rechargeSettleMargin); !coveredTo.Equal(want) {
+		t.Fatalf("coveredTo = %v, want %v", coveredTo, want)
+	}
+}
+
+func TestSettleGap_OngoingWithoutAnEndIsInProgress(t *testing.T) {
+	now := at(t, "2026-09-25T12:00:00Z")
+	gap := timeInterval{at(t, "2026-09-25T00:00:00Z"), now}
+	open := sessionFromSegment(segment("2026-09-25T01:00:00Z", "", 0, 0, nil, nil, nil, nil, nil))
+	open.ongoing = true
+	final, inProgress, coveredTo := settleGap([]detectedChargingSession{open}, gap, now)
+	if len(final) != 0 || len(inProgress) != 1 || !coveredTo.Equal(open.startedAt) {
+		t.Fatalf("final=%d inProgress=%d coveredTo=%v", len(final), len(inProgress), coveredTo)
+	}
+}
+
+func TestSettleGap_GapInsideTheMarginRecordsNothing(t *testing.T) {
+	now := at(t, "2026-09-25T12:00:00Z")
+	gap := timeInterval{at(t, "2026-09-25T11:00:00Z"), now}
+	final, _, coveredTo := settleGap(nil, gap, now)
+	if len(final) != 0 || !coveredTo.Equal(gap.from) {
+		t.Fatalf("final=%d coveredTo=%v, want 0 and the gap start (nothing to record)", len(final), coveredTo)
 	}
 }

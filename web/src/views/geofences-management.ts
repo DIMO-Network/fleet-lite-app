@@ -583,6 +583,12 @@ export class GeofencesManagementView extends LitElement {
                 border-radius: var(--radius-md); box-shadow: var(--shadow-float);
                 font: var(--type-body-sm);
             }
+            /* Under ~500px the gap between the zoom control and the panel goes
+               negative and the toast collapsed to one word per line: span the
+               width instead. */
+            @media (max-width: 768px) {
+                .toast-error { left: 16px; right: 16px; width: auto; max-width: none; }
+            }
         `,
     ];
 

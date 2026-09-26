@@ -1,3 +1,4 @@
+import { msg } from '@lit/localize';
 import { ApiService } from './api-service.ts';
 
 /** POST /vehicles/:tokenId/share and DELETE …/share/:grantee — the queued job. */
@@ -14,6 +15,12 @@ interface ShareResponse {
  * still running would have somebody re-issue a grant they already withdrew.
  */
 export class JobTimeoutError extends Error {}
+
+/**
+ * The caller stopped waiting (the modal closed). Like a timeout the job itself
+ * carries on; unlike one, there is nobody left to tell.
+ */
+export class JobWaitAbortedError extends Error {}
 
 /**
  * GET /vehicles/:tokenId/share/status.
@@ -33,13 +40,21 @@ export interface ShareStatus {
 /** How long a share may take before the UI gives up waiting. */
 const POLL_INTERVAL_MS = 4000;
 const POLL_ATTEMPTS = 30;
+/**
+ * Status reads that may fail in a row before the outcome is reported as
+ * unknown. One dropped request is not news about the job, and reporting it as
+ * a failure used to re-offer the action while the job was still running.
+ */
+const POLL_ERRORS_TOLERATED = 3;
 
 /**
  * Singleton client over the tenant-scoped vehicle-sharing API.
  *
  * A share is an on-chain SACD grant made by fleet-tenancy-api's signer on the
  * vehicle owner's kernel account. It waits on a bundler, so the endpoint
- * returns a job id and this service polls.
+ * returns a job id and this service polls. fleet-tenancy-api runs one job per
+ * vehicle at a time, in the order they were queued, so a revoke queued after a
+ * slow upgrade lands after it.
  */
 export class SharingService {
     private static instance: SharingService;
@@ -89,14 +104,13 @@ export class SharingService {
      * Running out of attempts throws rather than resolving false, and says so:
      * the grant may still land afterwards, because the job is not cancelled by
      * our giving up on it. Telling the customer "it failed" would be wrong, and
-     * silently resolving would be worse.
+     * silently resolving would be worse. `signal` stops the waiting (not the
+     * job) when the caller goes away.
      */
-    public waitForShare(tokenId: number, jobId: number): Promise<void> {
-        return this.waitForJob(tokenId, jobId, {
-            failed: 'The share could not be completed.',
-            timeout:
-                'The share is taking longer than expected. It may still complete — ' +
-                'check the shared-with list in a moment.',
+    public waitForShare(tokenId: number, jobId: number, signal?: AbortSignal): Promise<void> {
+        return this.waitForJob(tokenId, jobId, signal, {
+            failed: msg('The share could not be completed.'),
+            timeout: msg('The share is taking longer than expected. It may still complete — check the shared-with list in a moment.'),
         });
     }
 
@@ -107,12 +121,10 @@ export class SharingService {
      * no revoke-status endpoint — so this is the same poller with the wording
      * the customer needs.
      */
-    public waitForRevoke(tokenId: number, jobId: number): Promise<void> {
-        return this.waitForJob(tokenId, jobId, {
-            failed: 'The access could not be revoked.',
-            timeout:
-                'The revoke is taking longer than expected. It may still complete — ' +
-                'check the shared-with list in a moment.',
+    public waitForRevoke(tokenId: number, jobId: number, signal?: AbortSignal): Promise<void> {
+        return this.waitForJob(tokenId, jobId, signal, {
+            failed: msg('The access could not be revoked.'),
+            timeout: msg('The revoke is taking longer than expected. It may still complete — check the shared-with list in a moment.'),
         });
     }
 
@@ -126,12 +138,23 @@ export class SharingService {
     private async waitForJob(
         tokenId: number,
         jobId: number,
+        signal: AbortSignal | undefined,
         messages: { failed: string; timeout: string },
     ): Promise<void> {
+        let failedReads = 0;
         for (let attempt = 0; attempt < POLL_ATTEMPTS; attempt++) {
-            await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+            await sleep(POLL_INTERVAL_MS, signal);
 
-            const status = await this.status(tokenId, jobId);
+            let status: ShareStatus;
+            try {
+                status = await this.status(tokenId, jobId);
+                failedReads = 0;
+            } catch {
+                // The read failed, not the job. Keep polling for a while, then
+                // report "unknown", never "failed": the job may well land.
+                if (++failedReads >= POLL_ERRORS_TOLERATED) throw new JobTimeoutError(messages.timeout);
+                continue;
+            }
             if (status.isSuccessful) return;
 
             // A terminal failure is worth surfacing immediately rather than
@@ -142,4 +165,23 @@ export class SharingService {
         }
         throw new JobTimeoutError(messages.timeout);
     }
+}
+
+/** setTimeout as a promise; rejects with JobWaitAbortedError when `signal` aborts. */
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+    return new Promise((resolve, reject) => {
+        if (signal?.aborted) {
+            reject(new JobWaitAbortedError());
+            return;
+        }
+        const onAbort = () => {
+            clearTimeout(timer);
+            reject(new JobWaitAbortedError());
+        };
+        const timer = setTimeout(() => {
+            signal?.removeEventListener('abort', onAbort);
+            resolve();
+        }, ms);
+        signal?.addEventListener('abort', onAbort, { once: true });
+    });
 }

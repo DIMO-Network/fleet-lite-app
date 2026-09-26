@@ -814,27 +814,35 @@
 </trans-unit>
 <trans-unit id="s15b883e99cead0b5">
   <source>Grant DIMO permissions on this vehicle to see trip replay.</source>
+  <target>Otorgue permisos de DIMO en este vehículo para ver la reproducción del viaje.</target>
 </trans-unit>
 <trans-unit id="s6efdcceb044bc229">
   <source>Failed to load GPS data</source>
+  <target>No se pudieron cargar los datos GPS</target>
 </trans-unit>
 <trans-unit id="sae1c7f13b7c0c47f">
   <source>Start</source>
+  <target>Inicio</target>
 </trans-unit>
 <trans-unit id="sd8f923198e0c5c6a">
   <source>End</source>
+  <target>Fin</target>
 </trans-unit>
 <trans-unit id="s081e293c762bd669">
   <source>Trip Replay</source>
+  <target>Reproducción del viaje</target>
 </trans-unit>
 <trans-unit id="sb3da51086daed9ed">
   <source>Loading GPS data…</source>
+  <target>Cargando datos GPS…</target>
 </trans-unit>
 <trans-unit id="s12c55576515ce3a6">
   <source>GPS data sparse — showing start and end only</source>
+  <target>Pocos datos GPS — solo se muestran el inicio y el fin</target>
 </trans-unit>
 <trans-unit id="s30d8afddc9716922">
   <source>Distance</source>
+  <target>Distancia</target>
 </trans-unit>
 <trans-unit id="s92921878e886e36d">
   <source>Duration</source>
@@ -842,6 +850,7 @@
 </trans-unit>
 <trans-unit id="s106f6269e3ce9d0c">
   <source>Avg speed</source>
+  <target>Vel. prom.</target>
 </trans-unit>
 <trans-unit id="s1d4ddddf4ee38ea6">
   <source>Max speed</source>
@@ -849,84 +858,111 @@
 </trans-unit>
 <trans-unit id="s061cc20e3432dead">
   <source>Pause</source>
+  <target>Pausar</target>
 </trans-unit>
 <trans-unit id="scd105819b5a10243">
   <source>Play</source>
+  <target>Reproducir</target>
 </trans-unit>
 <trans-unit id="s255857544a9d5ec0">
   <source>Reset</source>
+  <target>Reiniciar</target>
 </trans-unit>
 <trans-unit id="sd7b61a3aef0fc1ef">
   <source>Playback speed</source>
+  <target>Velocidad de reproducción</target>
 </trans-unit>
 <trans-unit id="sdb73788b3c975f16">
   <source>Auto</source>
+  <target>Automático</target>
 </trans-unit>
 <trans-unit id="s250bde15254b34c6">
   <source>Ignition</source>
+  <target>Encendido</target>
 </trans-unit>
 <trans-unit id="s4bfaefac9bc26241">
   <source>Frequency</source>
+  <target>Frecuencia</target>
 </trans-unit>
 <trans-unit id="s7a7ef8a51174479f">
   <source>Change point</source>
+  <target>Punto de cambio</target>
 </trans-unit>
 <trans-unit id="s76489bceca430574">
   <source>Idling</source>
+  <target>Ralentí</target>
 </trans-unit>
 <trans-unit id="s0ff0b4d5da99de74">
   <source>Refuel</source>
+  <target>Repostaje</target>
 </trans-unit>
 <trans-unit id="s1f6629a2888c955c">
   <source>Recharge</source>
+  <target>Recarga</target>
 </trans-unit>
 <trans-unit id="s26f417d2ab77db2d">
   <source>Replay trip</source>
+  <target>Reproducir viaje</target>
 </trans-unit>
 <trans-unit id="sde36bd94f0c19183">
   <source>Failed to load trips — check console for details.</source>
+  <target>No se pudieron cargar los viajes — revise la consola para más detalles.</target>
 </trans-unit>
 <trans-unit id="s3578d562c2b5bada">
   <source>Trip detection method</source>
+  <target>Método de detección de viajes</target>
 </trans-unit>
 <trans-unit id="s51cf5795e7631ded">
   <source>No telemetry access</source>
+  <target>Sin acceso a la telemetría</target>
 </trans-unit>
 <trans-unit id="s3cf3a9dbc14e94f6">
   <source><x id="0" equiv-text="${this.visibleCards().length}"/> vehicles</source>
+  <target><x id="0" equiv-text="${this.visibleCards().length}"/> vehículos</target>
 </trans-unit>
 <trans-unit id="s7b7163270e57e8b4">
   <source>Refresh</source>
+  <target>Actualizar</target>
 </trans-unit>
 <trans-unit id="s160db8e7aaf41fd7">
   <source>No vehicles found.</source>
+  <target>No se encontraron vehículos.</target>
 </trans-unit>
 <trans-unit id="sad3e3c8146fc920f">
   <source>Status</source>
+  <target>Estado</target>
 </trans-unit>
 <trans-unit id="s9b38dee53cc7751c">
   <source>Last Location</source>
+  <target>Última ubicación</target>
 </trans-unit>
 <trans-unit id="se68398e3c2c760b2">
   <source>Token</source>
+  <target>Token</target>
 </trans-unit>
 <trans-unit id="s4e606ce6a461df05">
   <source>Close search</source>
+  <target>Cerrar búsqueda</target>
 </trans-unit>
 <trans-unit id="s31196398a641533e">
   <source>Search vehicles</source>
+  <target>Buscar vehículos</target>
 </trans-unit>
 <trans-unit id="s5017b86392faf520">
   <source>Comfortable view</source>
+  <target>Vista amplia</target>
 </trans-unit>
 <trans-unit id="s6e91993ea649ee1b">
   <source>Compact view</source>
+  <target>Vista compacta</target>
 </trans-unit>
 <trans-unit id="s36c7ff52d04afe46">
   <source>Remove from Favorites</source>
+  <target>Quitar de favoritos</target>
 </trans-unit>
 <trans-unit id="se15c9243be269005">
   <source>Make Favorite</source>
+  <target>Marcar como favorito</target>
 </trans-unit>
 <trans-unit id="s879ecc0cdb12e5e3">
   <source>Please enter a geofence name.</source>
@@ -1194,21 +1230,27 @@
 </trans-unit>
 <trans-unit id="s80b97d0375031960">
   <source>Could not load DIMO settings. Please enter credentials manually.</source>
+  <target>No se pudo cargar la configuración de DIMO. Ingrese las credenciales manualmente.</target>
 </trans-unit>
 <trans-unit id="s6a47adf8f680d9fc">
   <source>Opening DIMO…</source>
+  <target>Abriendo DIMO…</target>
 </trans-unit>
 <trans-unit id="sc9b959bf636dd8ca">
   <source>Get credentials from DIMO</source>
+  <target>Obtener credenciales de DIMO</target>
 </trans-unit>
 <trans-unit id="s3220e57d36c47737">
   <source>or enter manually</source>
+  <target>o ingréselas manualmente</target>
 </trans-unit>
 <trans-unit id="s4280e090367d36bb">
   <source>Copy API key</source>
+  <target>Copiar API key</target>
 </trans-unit>
 <trans-unit id="s65d89f28a70694dd">
   <source>Save your API key now — it cannot be retrieved after this step.</source>
+  <target>Guarde su API key ahora: no se podrá recuperar después de este paso.</target>
 </trans-unit>
 <trans-unit id="sc15b37bfacfecb31">
   <source>Stop real-time updates</source>
@@ -1224,9 +1266,11 @@
 </trans-unit>
 <trans-unit id="se0ebd1b6c2f24183">
   <source>Upload vehicle documents to identify this vehicle</source>
+  <target>Suba documentos del vehículo para identificarlo</target>
 </trans-unit>
 <trans-unit id="s7468e87263dfff7e">
   <source>Identifier</source>
+  <target>Identificador</target>
 </trans-unit>
 <trans-unit id="s7b7e8e2fc035021f">
   <source>time inside the geofence</source>
@@ -1418,99 +1462,119 @@
 </trans-unit>
 <trans-unit id="s6c6cb319e19e97fd">
   <source>TCO</source>
+  <target>TCO</target>
 </trans-unit>
 <trans-unit id="s73cddee970a10604">
   <source>Amount (optional)</source>
+  <target>Monto (opcional)</target>
 </trans-unit>
 <trans-unit id="s48bab881332d164c">
   <source>Failed to load vehicle detail</source>
+  <target>No se pudo cargar el detalle del vehículo</target>
 </trans-unit>
 <trans-unit id="sf345ddcc2e10c7ba">
   <source>Failed to save</source>
+  <target>No se pudo guardar</target>
 </trans-unit>
 <trans-unit id="s1d6b1bc152eb6e81">
   <source>Enter an amount greater than 0</source>
+  <target>Ingrese un monto mayor que 0</target>
 </trans-unit>
 <trans-unit id="s4d5a15b20f0dd5b6">
   <source>DIMO permissions required to read this vehicle’s documents</source>
+  <target>Se requieren permisos de DIMO para leer los documentos de este vehículo</target>
 </trans-unit>
 <trans-unit id="sb83d6c0b89001488">
   <source>No access</source>
+  <target>Sin acceso</target>
 </trans-unit>
 <trans-unit id="s48ce58ef9178285d">
   <source>All vehicles on this account are hidden.</source>
+  <target>Todos los vehículos de esta cuenta están ocultos.</target>
 </trans-unit>
 <trans-unit id="se78b336d8a6f6c3d">
   <source>Operating cost</source>
+  <target>Costo operativo</target>
 </trans-unit>
 <trans-unit id="sda845aa996d5d504">
   <source>Acquisition</source>
+  <target>Adquisición</target>
 </trans-unit>
 <trans-unit id="s4718bce90803b027">
   <source>Depreciation to date</source>
+  <target>Depreciación a la fecha</target>
 </trans-unit>
 <trans-unit id="s2723579f71ec1e23">
   <source>Total TCO</source>
+  <target>TCO total</target>
 </trans-unit>
 <trans-unit id="s5c3e8af8729be9e5">
   <source>Fleet total</source>
-</trans-unit>
-<trans-unit id="se6f09b190519daa4">
-  <source>all</source>
-</trans-unit>
-<trans-unit id="s40664bffa760c01c">
-  <source>Showing</source>
-</trans-unit>
-<trans-unit id="s08b06007b5567108">
-  <source>of</source>
+  <target>Total de la flota</target>
 </trans-unit>
 <trans-unit id="s830486d6803c1dab">
   <source>Back to fleet</source>
+  <target>Volver a la flota</target>
 </trans-unit>
 <trans-unit id="sd5e67ee988f58e19">
   <source>Exporting…</source>
+  <target>Exportando…</target>
 </trans-unit>
 <trans-unit id="s8b409dc1f261b173">
   <source>Export CSV</source>
+  <target>Exportar CSV</target>
 </trans-unit>
 <trans-unit id="sbbd1f5edf6ff8df8">
   <source>Grant DIMO permissions to this vehicle to include its documents in operating cost. Acquisition and depreciation below are unaffected.</source>
+  <target>Otorgue permisos de DIMO a este vehículo para incluir sus documentos en el costo operativo. La adquisición y la depreciación de abajo no cambian.</target>
 </trans-unit>
 <trans-unit id="s0f485ae78a8ee23b">
   <source>Acquisition &amp; depreciation</source>
+  <target>Adquisición y depreciación</target>
 </trans-unit>
 <trans-unit id="sb2bd6a3049d96b37">
   <source>Purchase price</source>
+  <target>Precio de compra</target>
 </trans-unit>
 <trans-unit id="s59775f70a95321b2">
   <source>Purchase date</source>
+  <target>Fecha de compra</target>
 </trans-unit>
 <trans-unit id="sc281195c481f85de">
   <source>Useful life (years)</source>
+  <target>Vida útil (años)</target>
 </trans-unit>
 <trans-unit id="seb30df772c5df3ee">
   <source>Missing amounts</source>
+  <target>Montos faltantes</target>
 </trans-unit>
 <trans-unit id="sfd8205687425cedd">
   <source>These documents don’t have a cost amount on file. Add one to include them in this vehicle’s totals.</source>
+  <target>Estos documentos no tienen un monto registrado. Agregue uno para incluirlos en los totales de este vehículo.</target>
 </trans-unit>
 <trans-unit id="sac8252732f2edb19">
   <source>Date</source>
+  <target>Fecha</target>
 </trans-unit>
 <trans-unit id="s63d894b1ddb06289">
   <source>Description</source>
+  <target>Descripción</target>
 </trans-unit>
 <trans-unit id="sba98a7152d80b949">
   <source>Amount</source>
+  <target>Monto</target>
 </trans-unit>
 <trans-unit id="sbf782021bf42916f">
   <source>Line items</source>
+  <target>Partidas</target>
 </trans-unit>
 <trans-unit id="s0d2ba7a853a4934b">
   <source>No cost documents on file for this vehicle yet.</source>
+  <target>Aún no hay documentos de costos registrados para este vehículo.</target>
 </trans-unit>
 <trans-unit id="s22d5fa291f2d7672">
   <source>Total Cost of Ownership</source>
+  <target>Costo total de propiedad</target>
 </trans-unit>
 <trans-unit id="s7eb4925fb142e286">
   <source>group total</source>
@@ -1670,36 +1734,47 @@
 </trans-unit>
 <trans-unit id="s26156a5bcb44ac99">
   <source>30 days</source>
+  <target>30 días</target>
 </trans-unit>
 <trans-unit id="sd347ec01a202f8a5">
   <source>1 year</source>
+  <target>1 año</target>
 </trans-unit>
 <trans-unit id="sc62e587718608e85">
   <source>No expiry</source>
+  <target>Sin vencimiento</target>
 </trans-unit>
 <trans-unit id="s6c5623c2f0205753">
   <source>Shared. The grant is on chain.</source>
+  <target>Compartido. El permiso ya está registrado en la blockchain.</target>
 </trans-unit>
 <trans-unit id="s121ef1f89a9e972d">
   <source>The share could not be completed.</source>
+  <target>No se pudo completar el uso compartido.</target>
 </trans-unit>
 <trans-unit id="sfe255b8825ebcad9">
   <source>Until <x id="0" equiv-text="${when.toLocaleDateString()}"/></source>
+  <target>Hasta el <x id="0" equiv-text="${when.toLocaleDateString()}"/></target>
 </trans-unit>
 <trans-unit id="s47e52a1832bbfd38">
   <source>Share vehicle</source>
+  <target>Compartir vehículo</target>
 </trans-unit>
 <trans-unit id="s2e5f0579d98a7bbd">
   <source>Give another wallet access to <x id="0" equiv-text="${this.vehicleTitle}"/>.</source>
+  <target>Dé a otra wallet acceso a <x id="0" equiv-text="${this.vehicleTitle}"/>.</target>
 </trans-unit>
 <trans-unit id="s61aecbc69cddd9fd">
   <source>Give another wallet access to this vehicle.</source>
+  <target>Dé a otra wallet acceso a este vehículo.</target>
 </trans-unit>
 <trans-unit id="s9236d58aba771b04">
   <source>Wallet address</source>
+  <target>Dirección de wallet</target>
 </trans-unit>
 <trans-unit id="se0f764fca6c21fa4">
   <source>That does not look like a wallet address.</source>
+  <target>Eso no parece una dirección de wallet.</target>
 </trans-unit>
 <trans-unit id="sd0b06e7c54d772ab">
   <source>They will be able to see this vehicle’s data and send commands to it.</source>
@@ -1707,21 +1782,27 @@
 </trans-unit>
 <trans-unit id="sbcdda1147516d9d7">
   <source>Access expires</source>
+  <target>El acceso vence</target>
 </trans-unit>
 <trans-unit id="sea5e7a6becbbc1e4">
   <source>Already shared with</source>
+  <target>Ya compartido con</target>
 </trans-unit>
 <trans-unit id="s9bc0ff5515fa792a">
   <source>Nobody yet.</source>
+  <target>Nadie todavía.</target>
 </trans-unit>
 <trans-unit id="s499ada0c6cfc11af">
   <source>Sharing…</source>
+  <target>Compartiendo…</target>
 </trans-unit>
 <trans-unit id="s2df075aface0dab8">
   <source>Share</source>
+  <target>Compartir</target>
 </trans-unit>
 <trans-unit id="sf6510147e1f44ccb">
   <source>Details still syncing — this vehicle was added recently</source>
+  <target>Los detalles aún se están sincronizando: este vehículo se agregó hace poco</target>
 </trans-unit>
 <trans-unit id="s8a09ef93ccb43efd">
   <source>Sharing needs the manage-vehicles permission</source>
@@ -1753,21 +1834,27 @@
 </trans-unit>
 <trans-unit id="s2f62713f5932809d">
   <source>Access revoked.</source>
+  <target>Acceso revocado.</target>
 </trans-unit>
 <trans-unit id="s9eca87f909adc2a1">
   <source>The access could not be revoked.</source>
+  <target>No se pudo revocar el acceso.</target>
 </trans-unit>
 <trans-unit id="s81454e9f6eaf08b6">
   <source>Revoking…</source>
+  <target>Revocando…</target>
 </trans-unit>
 <trans-unit id="sfa9dc1928d99a604">
   <source>Revoke?</source>
+  <target>¿Revocar?</target>
 </trans-unit>
 <trans-unit id="scb489a1a173ac3f0">
   <source>Yes</source>
+  <target>Sí</target>
 </trans-unit>
 <trans-unit id="s51621cc0113782ba">
   <source>Revoke access for <x id="0" equiv-text="${shortWallet(s.grantee)}"/></source>
+  <target>Revocar el acceso de <x id="0" equiv-text="${shortWallet(s.grantee)}"/></target>
 </trans-unit>
 <trans-unit id="s221a304df56e1f01">
   <source>Grant permissions</source>
@@ -1775,21 +1862,27 @@
 </trans-unit>
 <trans-unit id="s4adc5c14fd53aceb">
   <source>Added through another DIMO app. You can view and download it here; only the app that added it can remove it.</source>
+  <target>Agregado desde otra aplicación de DIMO. Puede verlo y descargarlo aquí; solo la aplicación que lo agregó puede eliminarlo.</target>
 </trans-unit>
 <trans-unit id="s0133efb90058acce">
   <source>This vehicle is shared with you. You can view, download and add documents, but not delete them.</source>
+  <target>Este vehículo se compartió con usted. Puede ver, descargar y agregar documentos, pero no eliminarlos.</target>
 </trans-unit>
 <trans-unit id="s1bed893eb831653c">
   <source>File ID</source>
+  <target>ID del archivo</target>
 </trans-unit>
 <trans-unit id="s37994d4488233fda">
   <source>Added by</source>
+  <target>Agregado por</target>
 </trans-unit>
 <trans-unit id="sc20c30585f399bc6">
   <source>Owned by you (<x id="0" equiv-text="${short}"/>) — only vehicles held by the fleet wallet can be shared</source>
+  <target>Es de su propiedad (<x id="0" equiv-text="${short}"/>) — solo se pueden compartir los vehículos que están en la wallet de la flota</target>
 </trans-unit>
 <trans-unit id="s7c50f395df2bf908">
   <source>Owned by <x id="0" equiv-text="${short}"/> — not held by the fleet wallet</source>
+  <target>Propiedad de <x id="0" equiv-text="${short}"/> — no está en la wallet de la flota</target>
 </trans-unit>
 <trans-unit id="sfb2a5eab8cd5b61b">
   <source>Driving behaviour</source>
@@ -1869,45 +1962,59 @@
 </trans-unit>
 <trans-unit id="s77a0727520efc502">
   <source>Charging</source>
+  <target>Carga</target>
 </trans-unit>
 <trans-unit id="s7cb460c778e4e90d">
   <source><x id="0" equiv-text="${formatMoney(s.cost, s.currency)}"/> spent / <x id="1" equiv-text="${formatMoney(s.savings, s.currency)}"/> saved</source>
+  <target><x id="0" equiv-text="${formatMoney(s.cost, s.currency)}"/> gastado / <x id="1" equiv-text="${formatMoney(s.savings, s.currency)}"/> ahorrado</target>
 </trans-unit>
 <trans-unit id="s6cdeb03d11e8fd9b">
   <source>Energy added</source>
+  <target>Energía cargada</target>
 </trans-unit>
 <trans-unit id="s3f521c5166365b35">
   <source>Spent on electricity</source>
+  <target>Gasto en electricidad</target>
 </trans-unit>
 <trans-unit id="saecc57a149cb6f09">
   <source>Saved vs. gasoline</source>
+  <target>Ahorro frente a gasolina</target>
 </trans-unit>
 <trans-unit id="se81fdbeb35dd29dc">
   <source>Gas MPG equivalent</source>
+  <target>MPG equivalente en gasolina</target>
 </trans-unit>
 <trans-unit id="sc2e2d0ffd5c12bad">
   <source>Vehicle efficiency (kWh/mile)</source>
+  <target>Eficiencia del vehículo (kWh/milla)</target>
 </trans-unit>
 <trans-unit id="s90a6d0dbd7c45585">
   <source>Save settings</source>
+  <target>Guardar configuración</target>
 </trans-unit>
 <trans-unit id="s3fd6bd99e3f6a5be">
   <source>Started</source>
+  <target>Comenzó</target>
 </trans-unit>
 <trans-unit id="sdb6622a51b2a94f5">
   <source>Energy</source>
+  <target>Energía</target>
 </trans-unit>
 <trans-unit id="s367d079d1aed1358">
   <source>Cost</source>
+  <target>Costo</target>
 </trans-unit>
 <trans-unit id="s97cedfd3f0d112ac">
   <source>Electricity rate (per kWh)</source>
+  <target>Tarifa eléctrica (por kWh)</target>
 </trans-unit>
 <trans-unit id="sd718caba2093c04e">
   <source>Gas price (per gallon)</source>
+  <target>Precio de la gasolina (por galón)</target>
 </trans-unit>
 <trans-unit id="sf113fa256db9617b">
   <source>Ended</source>
+  <target>Terminó</target>
 </trans-unit>
 <trans-unit id="s760fea0a0b77b2ea">
   <source>Light mode</source>
@@ -1992,6 +2099,58 @@
 <trans-unit id="hcd12aaf0719d60ee">
   <source>To grant from here, add <x id="0" equiv-text="&lt;code&gt;${location.origin}"/>/<x id="1" equiv-text="&lt;/code&gt;"/> to this license’s redirect URIs in the DIMO developer console.</source>
   <target>Para otorgar permisos desde aquí, agrega <x id="0" equiv-text="&lt;code&gt;${location.origin}"/>/<x id="1" equiv-text="&lt;/code&gt;"/> a las URI de redirección de esta licencia en la consola de desarrolladores de DIMO.</target>
+</trans-unit>
+<trans-unit id="s230a04ffaa88b7af">
+  <source>Last reading <x id="0" equiv-text="${new Date(s.endedAt).toLocaleString()}"/></source>
+  <target>Última lectura <x id="0" equiv-text="${new Date(s.endedAt).toLocaleString()}"/></target>
+</trans-unit>
+<trans-unit id="s5d3e747464563886">
+  <source>Charging now</source>
+  <target>Cargando ahora</target>
+</trans-unit>
+<trans-unit id="s69992ad613cabe68">
+  <source>App: <x id="0" equiv-text="${app}"/></source>
+  <target>Aplicación: <x id="0" equiv-text="${app}"/></target>
+</trans-unit>
+<trans-unit id="s4b1f92075c316409">
+  <source>Documents are included, and the expiry stays the same.</source>
+  <target>Incluye los documentos y el vencimiento no cambia.</target>
+</trans-unit>
+<trans-unit id="s5ed9cb3a4ee0c666">
+  <source>This wallet already has access (<x id="0" equiv-text="${this.formatExpiry(current.expiresAt)}"/>). Sharing again replaces it with the standard access for the duration below.</source>
+  <target>Esta wallet ya tiene acceso (<x id="0" equiv-text="${this.formatExpiry(current.expiresAt)}"/>). Compartir de nuevo lo reemplaza por el acceso estándar con la duración de abajo.</target>
+</trans-unit>
+<trans-unit id="s02e53495741cdb59">
+  <source>The share is taking longer than expected. It may still complete — check the shared-with list in a moment.</source>
+  <target>El uso compartido está tardando más de lo esperado. Puede que aún se complete: revise la lista de accesos en un momento.</target>
+</trans-unit>
+<trans-unit id="s89f2ac333c79d010">
+  <source>The revoke is taking longer than expected. It may still complete — check the shared-with list in a moment.</source>
+  <target>La revocación está tardando más de lo esperado. Puede que aún se complete: revise la lista de accesos en un momento.</target>
+</trans-unit>
+<trans-unit id="sa474d1f3506940ba">
+  <source>It also removes permissions this app doesn’t recognise.</source>
+  <target>También quita permisos que esta aplicación no reconoce.</target>
+</trans-unit>
+<trans-unit id="s4937d87572fd7070">
+  <source>This fleet’s own access. It isn’t managed here.</source>
+  <target>El acceso propio de esta flota. No se gestiona aquí.</target>
+</trans-unit>
+<trans-unit id="saff3eeed00f40e63">
+  <source>That is this fleet’s own license. Its access isn’t managed here.</source>
+  <target>Esa es la licencia propia de esta flota. Su acceso no se gestiona aquí.</target>
+</trans-unit>
+<trans-unit id="s68deaebb72ef1556">
+  <source>all <x id="0" equiv-text="${visible.length}"/></source>
+  <target>todos los <x id="0" equiv-text="${visible.length}"/></target>
+</trans-unit>
+<trans-unit id="s96074d160f65b3c6">
+  <source>Showing <x id="0" equiv-text="${page * TCOView.PAGE_SIZE + 1}"/>–<x id="1" equiv-text="${Math.min((page + 1) * TCOView.PAGE_SIZE, visible.length)}"/> of <x id="2" equiv-text="${visible.length}"/></source>
+  <target>Mostrando <x id="0" equiv-text="${page * TCOView.PAGE_SIZE + 1}"/>–<x id="1" equiv-text="${Math.min((page + 1) * TCOView.PAGE_SIZE, visible.length)}"/> de <x id="2" equiv-text="${visible.length}"/></target>
+</trans-unit>
+<trans-unit id="sb03fe38bb2554090">
+  <source>Savings</source>
+  <target>Ahorro</target>
 </trans-unit>
 </body>
 </file>

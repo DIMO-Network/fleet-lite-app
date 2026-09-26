@@ -5,6 +5,7 @@ import { sharedStyles } from '../global-styles.ts';
 import { FleetGroupService } from '../services/fleet-group-service.ts';
 import { FleetGroup } from '../types/group.ts';
 import { Vehicle } from '../types/vehicle.ts';
+import { ModalController } from '../utils/modal-controller.ts';
 
 /**
  * manage-group-vehicles-modal — toggle which vehicles belong to a group.
@@ -51,6 +52,11 @@ export class ManageGroupVehiclesModal extends LitElement {
         }
         this.memberIds = members;
         this.initialMemberIds = new Set(members);
+    }
+
+    constructor() {
+        super();
+        new ModalController(this, { close: () => this.dispatchClose() });
     }
 
     static styles = [
@@ -100,7 +106,7 @@ export class ManageGroupVehiclesModal extends LitElement {
                 flex-shrink: 0; height: 40px; padding: 0 12px; margin-bottom: 12px;
                 border-radius: var(--radius-md);
                 background: var(--surface-container-high);
-                border: 1px solid var(--outline-variant);
+                border: 1px solid var(--control-border);
                 transition: border-color 0.15s ease, box-shadow 0.15s ease;
             }
             .search:focus-within { border-color: var(--focus-ring); box-shadow: 0 0 0 3px var(--accent-soft); }
@@ -234,11 +240,11 @@ export class ManageGroupVehiclesModal extends LitElement {
         );
 
         return html`
-            <div class="card" @click=${(e: Event) => e.stopPropagation()}>
+            <div class="card" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1" @click=${(e: Event) => e.stopPropagation()}>
                 <button class="close" aria-label=${msg('Close')} @click=${this.dispatchClose}>
                     <span class="material-symbols-outlined">close</span>
                 </button>
-                <h2 style="--c:${this.group.color}"><span class="dot"></span>${this.group.name}</h2>
+                <h2 id="modal-title" style="--c:${this.group.color}"><span class="dot"></span>${this.group.name}</h2>
                 <p class="sub">${msg(str`${this.memberIds.size} of ${this.vehicles.length} vehicles in this group.`)}</p>
 
                 <div class="search">

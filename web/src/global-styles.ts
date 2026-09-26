@@ -78,6 +78,12 @@ export const sharedStyles = css`
         outline-offset: 2px;
     }
 
+    /* A modal's dialog takes focus when it opens (ModalController) so a screen
+       reader announces it; the ring belongs on the controls inside it. */
+    [role='dialog']:focus {
+        outline: none;
+    }
+
     ::selection {
         background: var(--accent-soft-strong);
         color: var(--on-surface);
@@ -126,11 +132,11 @@ export const sharedStyles = css`
         appearance: none;
         -webkit-appearance: none;
         background-color: var(--surface-container-high);
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a8d8d' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+        background-image: var(--select-chevron);
         background-repeat: no-repeat;
         background-position: right 12px center;
         padding-right: 34px !important;
-        border: 1px solid var(--outline-variant);
+        border: 1px solid var(--control-border);
         border-radius: var(--radius-md);
         cursor: pointer;
     }
@@ -261,6 +267,15 @@ const documentStyles = `
         --accent-glow: 0 0 0 1px rgba(70, 241, 228, 0.35), 0 6px 24px -6px rgba(70, 241, 228, 0.45);
         /* Keyboard focus outline (>=3:1 against every surface). */
         --focus-ring: #46F1E4;
+        /* Edges of inputs, selects and textareas: >=3:1 against every surface
+           they sit on (WCAG 1.4.11). --outline-variant stays the light hairline
+           for dividers; a control's edge is what makes it a control. */
+        --control-border: #747A7F;
+        --control-border-hover: #A0A3A2;
+        /* A data URI can't follow currentColor, so the chevron is per theme. */
+        --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23A0A3A2' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+        /* Progress fills (trip replay, geofence activity): a brand moment. */
+        --progress-fill: var(--brand-gradient);
         /* Toggled/selected controls (filters, segmented options, map tools):
            inverse ink, so selection never reads as a status color. Resolves
            per theme through the inverse-* roles. */
@@ -369,7 +384,9 @@ const documentStyles = `
         --scrim: rgba(19, 20, 23, 0.32);
         --brand-glow: radial-gradient(60% 50% at 35% 40%, rgba(140, 208, 255, 0.28), transparent 70%), radial-gradient(55% 50% at 65% 60%, rgba(70, 241, 228, 0.22), transparent 70%);
 
-        --accent: #22C7BA;
+        /* Status markers only (online dots, live charging): >=3.3:1 on light
+           surfaces, where the mint #22C7BA was 1.8-2.1:1. */
+        --accent: #0B8F85;
         /* >=4.5:1 on white, surface-container-*, the canvas and accent-soft(-strong) over each. */
         --accent-ink: #07635C;
         --on-accent: #06201E;
@@ -378,12 +395,20 @@ const documentStyles = `
         --accent-glow: 0 0 0 1px rgba(34, 199, 186, 0.35), 0 6px 20px -8px rgba(34, 199, 186, 0.55);
         /* 5.2:1 on white, 4.3:1 on the canvas. */
         --focus-ring: #0B7A72;
+        --control-border: #7C8082;
+        --control-border-hover: #5E6163;
+        --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235E6163' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+        /* The sky-to-mint gradient is 1.1-1.4:1 on a light track, so the fill
+           vanished. The same gradient, deepened: >=3.9:1. */
+        --progress-fill: linear-gradient(105deg, #1E6FBF 0%, #0A7069 100%);
         --btn-primary-bg: #131417;
         --btn-primary-fg: #FFFFFF;
         --btn-primary-hover: #2E3236;
 
-        --positive: #1B8842;
-        --warning: #B75B0A;
+        /* >=4.5:1 as text on every light surface and on their own 10-16%
+           tints (badges); #1B8842 / #B75B0A were 3.5-3.9:1 there. */
+        --positive: #11672F;
+        --warning: #8F4500;
         --negative: #C70000;
         --favorite: #C99A00;
 

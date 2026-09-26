@@ -2,15 +2,27 @@ name: web-lint
 on:
   pull_request:
     branches: [ '**' ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   web-lint:
-    name: lint
+    # The check name branch protection requires (docs/RELEASING.md).
+    name: web
     runs-on: [self-hosted, linux]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          node-version: '20'
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          # Same major as the image build (Dockerfile, NodeSource 22.x).
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: web/package-lock.json
       - name: install deps
@@ -18,6 +30,14 @@ jobs:
         working-directory: web
       - name: lint
         run: npm run lint:check
+        working-directory: web
+      # Typecheck and production build: before this, a type error or a broken
+      # build surfaced only in the post-merge Docker build.
+      - name: typecheck and build
+        run: npm run build
+        working-directory: web
+      - name: unit tests
+        run: npm test
         working-directory: web
       - name: localize drift check
         run: |

@@ -6,6 +6,7 @@ import { DocumentService, fileToBase64 } from '../services/document-service.ts';
 import { ExtractResult } from '../types/document.ts';
 import { Vehicle } from '../types/vehicle.ts';
 import { UPLOAD_CATEGORIES, categoryLabel, COST_ELIGIBLE_CATEGORIES } from '../utils/document-categories.ts';
+import { ModalController } from '../utils/modal-controller.ts';
 
 type Step = 'pick' | 'review' | 'submitting' | 'done' | 'error';
 
@@ -36,6 +37,11 @@ export class UploadDocumentModal extends LitElement {
     @state() private selectedCategory: string = 'dimo.document.unknown';
     @state() private amount: string = '';
     @state() private errorMessage = '';
+
+    constructor() {
+        super();
+        new ModalController(this, { close: () => this.dispatchClose() });
+    }
 
     static styles = [
         sharedStyles,
@@ -87,6 +93,7 @@ export class UploadDocumentModal extends LitElement {
             .close:hover { background: var(--surface-container-high); color: var(--on-surface); }
 
             .drop {
+                position: relative;
                 display: flex;
                 flex-direction: column;
                 align-items: center;
@@ -101,10 +108,17 @@ export class UploadDocumentModal extends LitElement {
                 transition: border-color 0.15s ease, background 0.15s ease;
             }
             .drop:hover, .drop.over, .drop:focus-within {
-                border-color: var(--accent);
-                background: var(--accent-soft);
+                border-color: var(--control-border-hover);
+                background: var(--surface-container-high);
             }
-            .drop input { display: none; }
+            /* Focusable, just not visible: with display:none the only way to
+               choose a file was a pointer. The label keeps the whole zone
+               clickable; :focus-within shows keyboard focus on the zone. */
+            .drop input {
+                position: absolute; width: 1px; height: 1px; opacity: 0;
+                overflow: hidden; pointer-events: none;
+            }
+            .drop:focus-within { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
             .drop .icon {
                 width: 48px;
                 height: 48px;
@@ -113,13 +127,13 @@ export class UploadDocumentModal extends LitElement {
                 align-items: center;
                 justify-content: center;
                 border-radius: var(--radius-full);
-                background: var(--accent-soft);
-                color: var(--accent-ink);
+                background: var(--surface-container-high);
+                color: var(--on-surface);
                 transition: background 0.15s ease;
             }
-            .drop:hover .icon, .drop.over .icon { background: var(--accent-soft-strong); }
+            .drop:hover .icon, .drop.over .icon { background: var(--surface-container-highest); }
             .drop .icon .material-symbols-outlined { font-size: 24px; }
-            .drop strong { font-weight: 500; color: var(--accent-ink); }
+            .drop strong { font-weight: 600; color: var(--on-surface); }
             .drop .hint { font: var(--type-label); color: var(--on-surface-variant); margin-top: 4px; }
 
             .field { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
@@ -129,14 +143,14 @@ export class UploadDocumentModal extends LitElement {
                 padding: 0 12px;
                 background-color: var(--surface-container-high);
                 color: var(--on-surface);
-                border: 1px solid var(--outline-variant);
+                border: 1px solid var(--control-border);
                 border-radius: var(--radius-md);
                 font: var(--type-body-sm);
                 transition: border-color 0.15s ease, box-shadow 0.15s ease;
             }
             .field input[type="text"]::placeholder { color: var(--on-surface-variant); }
             .field select:hover:not(:focus-visible),
-            .field input[type="text"]:hover:not(:focus-visible) { border-color: var(--outline); }
+            .field input[type="text"]:hover:not(:focus-visible) { border-color: var(--control-border-hover); }
             .field select:focus-visible, .field input[type="text"]:focus-visible {
                 outline: none;
                 border-color: var(--focus-ring);
@@ -226,8 +240,8 @@ export class UploadDocumentModal extends LitElement {
                 height: 28px;
                 margin: 0 auto 16px;
                 border-radius: var(--radius-full);
-                border: 2.5px solid var(--accent-soft-strong);
-                border-top-color: var(--accent);
+                border: 2.5px solid var(--outline-variant);
+                border-top-color: var(--primary);
                 animation: upload-spin 0.8s linear infinite;
             }
             @keyframes upload-spin { to { transform: rotate(360deg); } }
@@ -340,7 +354,7 @@ export class UploadDocumentModal extends LitElement {
 
     private renderPick() {
         return html`
-            <h2>${msg('Add a document')}</h2>
+            <h2 id="modal-title">${msg('Add a document')}</h2>
             <p class="sub">${msg("PDF, JPG, or PNG. We'll read the VIN and other details automatically, then securely save the document to DIMO.")}</p>
             <label class="drop">
                 <input type="file" accept="application/pdf,image/jpeg,image/png" @change=${this.onFilePicked} />
@@ -361,7 +375,7 @@ export class UploadDocumentModal extends LitElement {
         const vin = this.extractResult.vin?.trim();
         const canSubmit = this.selectedTokenId !== null;
         return html`
-            <h2>${msg('Confirm')}</h2>
+            <h2 id="modal-title">${msg('Confirm')}</h2>
             <p class="sub">${msg('Pick which vehicle this belongs to and confirm the category.')}</p>
 
             ${this.file ? html`
@@ -431,7 +445,7 @@ export class UploadDocumentModal extends LitElement {
 
     private renderDone() {
         return html`
-            <h2>${msg('Saved')}</h2>
+            <h2 id="modal-title">${msg('Saved')}</h2>
             <p class="sub">${msg('Your document has been saved to DIMO. The list will refresh.')}</p>
             <div class="actions"><button class="primary" @click=${this.dispatchClose}>${msg('Done')}</button></div>
         `;
@@ -458,7 +472,7 @@ export class UploadDocumentModal extends LitElement {
 
     private renderError() {
         return html`
-            <h2>${msg('Something went wrong')}</h2>
+            <h2 id="modal-title">${msg('Something went wrong')}</h2>
             <div class="error-text">${this.errorMessage || msg('Unknown error')}</div>
             <div class="actions">
                 <button class="ghost" @click=${this.dispatchClose}>${msg('Close')}</button>
@@ -475,8 +489,8 @@ export class UploadDocumentModal extends LitElement {
             this.step === 'done'       ? this.renderDone() :
                                          this.renderError();
         return html`
-            <div class="card" @click=${(e: Event) => e.stopPropagation()}>
-                <button class="close" @click=${this.dispatchClose}>
+            <div class="card" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1" @click=${(e: Event) => e.stopPropagation()}>
+                <button class="close" aria-label=${msg('Close')} @click=${this.dispatchClose}>
                     <span class="material-symbols-outlined">close</span>
                 </button>
                 ${body}

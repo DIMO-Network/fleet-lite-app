@@ -31,10 +31,11 @@ export const DIMO_PERMISSIONS_ALL = '11111111';
  * app's own glovebox reads through token-exchange with RAW_DATA and never
  * needed them — requesting them makes the grant say what it gives.
  *
- * Vehicle documents and their original files, tagged `documents`, matching
- * the agreements fleet-tenancy-api writes for its own shares. `source` is
- * left out on purpose: login.dimo.org fills in the grantor (whose files are
- * shared), which an app can't know before the owner signs in.
+ * Vehicle documents and their original files, tagged `documents`: the vehicle
+ * half of what fleet-tenancy-api's own shares grant (those add the driver's,
+ * `dimo.*.driver.*`, which a fleet license reading vehicle data has no use
+ * for). `source` is left out on purpose: login.dimo.org fills in the grantor
+ * (whose files are shared), which an app can't know before the owner signs in.
  */
 export const DIMO_VEHICLE_FILE_AGREEMENTS = [
     { eventType: 'dimo.document.vehicle.*', tags: ['documents'] },
@@ -46,6 +47,11 @@ export function dimoRedirectUri(): string {
     return location.origin + '/login.html';
 }
 
+/** Whether two developer-license client ids name the same license. */
+export function sameClientId(a: string, b: string): boolean {
+    return !!a && !!b && a.toLowerCase() === b.toLowerCase();
+}
+
 /**
  * Choose which of a license's registered redirect URIs a grant should return
  * to, or null when none of them is on this app's origin.
@@ -53,23 +59,29 @@ export function dimoRedirectUri(): string {
  * A grant is made to the *fleet's* dev license, not to this app's login
  * license, and each fleet registered its own redirect list. DIMO login requires
  * an exact match and answers a mismatch with a generic "issue with the app's
- * credentials" page — so assuming `/login.html` sends every fleet that
- * registered only its root (license #472 did) to a dead end.
+ * credentials" page, so assuming one path sends every fleet that registered a
+ * different one to a dead end (license #472 registered only its root).
  *
- * Only the app root (`/` or `/index.html`) qualifies. A grant returns with
- * the *grantor's* token for the fleet's license, and login.html stores any
- * `token` it is handed as this app's session — returning there signs the
- * member's browser in as whoever granted. accept-invite.html likewise keeps
- * its `token` as the pending invite. The root ignores the token (index.html
- * strips it from the URL) and the member stays signed in as themselves. A
- * license with nothing but those pages gets null, so the caller shows the
- * setup hint instead of a link.
+ * The grant comes back carrying the *grantor's* token for the fleet's license.
+ * No page may treat that as a sign-in:
+ *   - `/` and `/index.html` ignore it (index.html strips it from the URL);
+ *   - `/login.html` stores a token only when DIMO issued it to this app's own
+ *     client id (see src/login-redirect.ts; the API checks the same), so the
+ *     fleet's token is dropped and the member stays signed in as themselves.
+ *     That makes it usable, last, as long as the grant's license is not this
+ *     app's own — then the grantor's token *would* be a valid sign-in.
+ *     `loginPageSafe` is false in exactly that case.
+ *   - accept-invite.html keeps any `token` as a pending invite: never.
  *
  * Returned exactly as registered, trailing slash and all, because the
  * comparison upstream is exact. Only the same scheme and host count: a
  * lookalike host or plain http is not ours.
  */
-export function pickGrantRedirectUri(registered: readonly string[], origin: string): string | null {
+export function pickGrantRedirectUri(
+    registered: readonly string[],
+    origin: string,
+    opts: { loginPageSafe: boolean },
+): string | null {
     const ours = registered.filter((uri) => {
         try {
             return new URL(uri).origin === origin;
@@ -77,18 +89,20 @@ export function pickGrantRedirectUri(registered: readonly string[], origin: stri
             return false;
         }
     });
-    const path = (uri: string) => new URL(uri).pathname;
+    const withPath = (p: string) => ours.find((uri) => new URL(uri).pathname === p);
     return (
-        ours.find((uri) => path(uri) === '/') ??
-        ours.find((uri) => path(uri) === '/index.html') ??
+        withPath('/') ??
+        withPath('/index.html') ??
+        (opts.loginPageSafe ? withPath('/login.html') : undefined) ??
         null
     );
 }
 
 /**
  * Where a grant returns when the license's redirect list couldn't be read.
- * The root is the only safe guess (see pickGrantRedirectUri); if it isn't
- * registered DIMO shows its credentials error, which beats a session swap.
+ * The root is the only guess that is safe for every license (see
+ * pickGrantRedirectUri); if it isn't registered DIMO shows its credentials
+ * error, which beats a session swap.
  */
 export function grantFallbackRedirectUri(): string {
     return location.origin + '/';
@@ -107,8 +121,8 @@ export interface ShareVehiclesUrlOptions extends DimoGrantUrlOptions {
     /** Token ids to narrow the vehicle picker to. Omit to offer the whole garage. */
     vehicles?: Array<number | string>;
     /**
-     * Where DIMO returns afterwards; must be registered on `clientId`. Never
-     * the login page — see pickGrantRedirectUri.
+     * Where DIMO returns afterwards; must be registered on `clientId`. Choose
+     * it with pickGrantRedirectUri, which knows which pages are safe.
      */
     redirectUri: string;
 }

@@ -36,6 +36,12 @@ export interface MyAccess {
     permissions?: string[];
     /** The caller's own wallet, so the UI can say "owned by you". */
     wallet?: string;
+    /**
+     * The license this fleet reads its vehicles with, so the share modal can
+     * show that grant as the fleet's own. Optional so an older backend's
+     * response still parses; empty when the API could not resolve it.
+     */
+    fleetLicense?: string;
     /** null = unrestricted (owner or full-access member). */
     allowedGroupIds: string[] | null;
     /**

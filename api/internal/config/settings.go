@@ -127,5 +127,11 @@ func (s *Settings) Validate() error {
 			"credentials would be encrypted with sha256(\"\"), a publicly known key",
 			s.Environment)
 	}
+	// The client id is what the API checks a JWT's audience against. Without
+	// it the check is skipped and a token DIMO issued to any app is accepted,
+	// which dev tolerates (nobody can sign in there) and prod must not.
+	if s.Environment == "prod" && s.DimoAuthClientID == (common.Address{}) {
+		return fmt.Errorf("DIMO_AUTH_CLIENT_ID is unset in prod: JWTs issued to any DIMO app would be accepted")
+	}
 	return nil
 }

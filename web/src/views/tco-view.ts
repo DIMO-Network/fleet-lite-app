@@ -1,5 +1,5 @@
 import { LitElement, html, css, nothing } from 'lit';
-import { msg } from '@lit/localize';
+import { msg, str } from '@lit/localize';
 import { customElement, property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { ApiService } from '../services/api-service.ts';
@@ -103,7 +103,7 @@ export class TCOView extends LitElement {
             .back-link:hover { background: var(--surface-container-high); color: var(--on-surface); }
             .back-link .material-symbols-outlined { font-size: 18px; }
 
-            /* Primary action: DIMO gradient pill. */
+            /* Primary action: solid ink (--btn-primary-*), as .btn-primary. */
             .export-btn {
                 display: inline-flex;
                 align-items: center;
@@ -294,7 +294,7 @@ export class TCOView extends LitElement {
                 height: 40px;
                 background: var(--surface-container-high);
                 color: var(--on-surface);
-                border: 1px solid var(--outline-variant);
+                border: 1px solid var(--control-border);
                 border-radius: var(--radius-md);
                 padding: 0 12px;
                 font: var(--type-body-sm);
@@ -331,7 +331,7 @@ export class TCOView extends LitElement {
                 height: 32px;
                 background: var(--surface-container-high);
                 color: var(--on-surface);
-                border: 1px solid var(--outline-variant);
+                border: 1px solid var(--control-border);
                 border-radius: var(--radius-md);
                 padding: 0 10px;
                 font: var(--type-body-sm);
@@ -740,7 +740,7 @@ export class TCOView extends LitElement {
                     </tbody>
                     <tfoot>
                         <tr>
-                            <td>${msg('Fleet total')} <span class="fleet-total-scope">(${msg('all')} ${visible.length})</span></td>
+                            <td>${msg('Fleet total')} <span class="fleet-total-scope">(${msg(str`all ${visible.length}`)})</span></td>
                             <td class="num">${allLoaded ? formatMoney(fleetOperating) : html`<span class="cell-loading">···</span>`}</td>
                             <td class="num">${allLoaded ? formatMoney(fleetAcquisition) : html`<span class="cell-loading">···</span>`}</td>
                             <td class="num">${allLoaded ? formatMoney(fleetDepreciation) : html`<span class="cell-loading">···</span>`}</td>
@@ -752,8 +752,7 @@ export class TCOView extends LitElement {
             ${totalPages > 1 ? html`
                 <div class="pagination">
                     <span class="pagination-info">
-                        ${msg('Showing')} ${page * TCOView.PAGE_SIZE + 1}–${Math.min((page + 1) * TCOView.PAGE_SIZE, visible.length)}
-                        ${msg('of')} ${visible.length}
+                        ${msg(str`Showing ${page * TCOView.PAGE_SIZE + 1}–${Math.min((page + 1) * TCOView.PAGE_SIZE, visible.length)} of ${visible.length}`)}
                     </span>
                     <div class="pagination-controls">
                         <button class="page-btn" ?disabled=${page === 0} @click=${() => { this.page = page - 1; }}>

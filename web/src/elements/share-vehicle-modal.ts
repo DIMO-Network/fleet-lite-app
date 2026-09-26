@@ -3,9 +3,18 @@ import { msg, str } from '@lit/localize';
 import { customElement, property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../global-styles.ts';
 import { ApiService } from '../services/api-service.ts';
-import { JobTimeoutError, SharingService } from '../services/sharing-service.ts';
+import { JobTimeoutError, JobWaitAbortedError, SharingService } from '../services/sharing-service.ts';
 import { shortWallet } from '../utils/share-blocker.ts';
-import { extraPermissions, missingStandardPermissions, remainingShareDays, SacdPermission } from '../utils/sacd-permissions.ts';
+import { lookupAppGrantees } from '../utils/app-grantees.ts';
+import { sameClientId } from '../utils/dimo-permissions.ts';
+import {
+    extraPermissions,
+    hasUnrecognisedPermissions,
+    missingStandardPermissions,
+    remainingShareDays,
+    SacdPermission,
+} from '../utils/sacd-permissions.ts';
+import { ModalController } from '../utils/modal-controller.ts';
 
 /** One existing on-chain grant, read back from identity-api. */
 interface ExistingShare {
@@ -79,6 +88,9 @@ interface DurationOption {
  *   - blockedReason: why sharing is unavailable; empty when it is available.
  *   - owner: the owner wallet the caller already knows, as a fallback.
  *   - myWallet: the signed-in wallet, to mark the owner as the reader.
+ *   - fleetLicense: the license this fleet reads its vehicles with (GET
+ *     /me/access); its grant is shown as the fleet's and never offered for
+ *     revoke, upgrade or re-share.
  * Events:
  *   - close: dismissed.
  *   - shared: a grant landed on chain; the caller may want to refetch.
@@ -97,6 +109,12 @@ export class ShareVehicleModal extends LitElement {
     /** Owner wallet as the caller knows it — used until the chain answers. */
     @property({ type: String }) owner = '';
     @property({ type: String }) myWallet = '';
+    /**
+     * The fleet's own license. Revoking its grant would cut the fleet off the
+     * vehicle, and re-sharing to it could shorten that access, so this modal
+     * does neither — and the API refuses both.
+     */
+    @property({ type: String }) fleetLicense = '';
 
     @state() private grantee = '';
     @state() private durationDays = 365;
@@ -138,6 +156,20 @@ export class ShareVehicleModal extends LitElement {
     @state() private upgraded = new Set<string>();
     /** Owner as identity-api reports it; empty until it answers, or if it fails. */
     @state() private chainOwner = '';
+    /**
+     * Grantees that are other apps' developer licenses (see lookupAppGrantees),
+     * or null until known. An app's grant is scoped by its developer on
+     * purpose: Upgrade would hand it remote commands, credentials and raw data,
+     * so apps are never offered one — and while it is unknown which grantees
+     * are apps, nobody is.
+     */
+    @state() private appGrantees: Map<string, string> | null = null;
+
+    /**
+     * Stops the status polling (not the jobs) when the modal goes away, so a
+     * closed modal doesn't keep polling and re-reading chain for two minutes.
+     */
+    private abort = new AbortController();
 
     /** Sharing can't proceed, so every control that would attempt it is off. */
     private get blocked(): boolean {
@@ -173,7 +205,13 @@ export class ShareVehicleModal extends LitElement {
 
     connectedCallback() {
         super.connectedCallback();
+        this.abort = new AbortController();
         void this.loadFromChain();
+    }
+
+    disconnectedCallback() {
+        this.abort.abort();
+        super.disconnectedCallback();
     }
 
     /**
@@ -193,7 +231,7 @@ export class ShareVehicleModal extends LitElement {
         const query = `{
             vehicle(tokenId: ${this.tokenId}) {
                 owner
-                sacds(first: 15) {
+                sacds(first: 50) {
                     nodes { grantee permissions expiresAt }
                 }
             }
@@ -204,11 +242,20 @@ export class ShareVehicleModal extends LitElement {
             }>('/identity/proxy', { query });
             this.existing = liveGrants(res.data?.vehicle?.sacds?.nodes ?? []);
             this.chainOwner = res.data?.vehicle?.owner ?? '';
+            void this.loadAppGrantees(this.existing.map((e) => e.grantee));
         } catch {
             this.existing = [];
             // chainOwner stays empty so the caller's value keeps rendering.
         } finally {
             this.loadingExisting = false;
+        }
+    }
+
+    private async loadAppGrantees(grantees: string[]) {
+        try {
+            this.appGrantees = await lookupAppGrantees(grantees);
+        } catch {
+            this.appGrantees = null;
         }
     }
 
@@ -232,12 +279,13 @@ export class ShareVehicleModal extends LitElement {
         try {
             const svc = SharingService.getInstance();
             const jobId = await svc.revoke(this.tokenId, grantee);
-            await svc.waitForRevoke(this.tokenId, jobId);
+            await svc.waitForRevoke(this.tokenId, jobId, this.abort.signal);
 
             this.successMessage = msg('Access revoked.');
             this.dispatchEvent(new CustomEvent('revoked', { bubbles: true, composed: true }));
             await this.loadFromChain();
         } catch (err) {
+            if (err instanceof JobWaitAbortedError) return;
             if (err instanceof JobTimeoutError) {
                 // We stopped waiting; the chain did not stop working. Saying
                 // "revoked" here would be a claim about a job still running,
@@ -277,13 +325,14 @@ export class ShareVehicleModal extends LitElement {
         try {
             const svc = SharingService.getInstance();
             const jobId = await svc.share(this.tokenId, s.grantee, remainingShareDays(s.expiresAt));
-            await svc.waitForShare(this.tokenId, jobId);
+            await svc.waitForShare(this.tokenId, jobId, this.abort.signal);
 
             this.upgraded = new Set(this.upgraded).add(s.grantee.toLowerCase());
             this.successMessage = msg('Access upgraded.');
             this.dispatchEvent(new CustomEvent('shared', { bubbles: true, composed: true }));
             await this.loadFromChain();
         } catch (err) {
+            if (err instanceof JobWaitAbortedError) return;
             if (err instanceof JobTimeoutError) {
                 // Same reasoning as revoke: we stopped waiting, the job did not.
                 // Treat the grantee as upgraded so the row doesn't offer a
@@ -321,7 +370,7 @@ export class ShareVehicleModal extends LitElement {
     private async submit() {
         // The button is disabled while blocked; this is the second lock, so a
         // stale blockedReason update can't leave a live share behind it.
-        if (!this.granteeIsValid || this.submitting || this.upgrading || this.blocked) return;
+        if (!this.granteeIsValid || this.submitting || this.upgrading || this.revoking || this.blocked) return;
 
         this.submitting = true;
         this.errorMessage = '';
@@ -332,7 +381,7 @@ export class ShareVehicleModal extends LitElement {
         try {
             const svc = SharingService.getInstance();
             const jobId = await svc.share(this.tokenId, this.grantee.trim(), this.durationDays);
-            await svc.waitForShare(this.tokenId, jobId);
+            await svc.waitForShare(this.tokenId, jobId, this.abort.signal);
 
             this.successMessage = msg('Shared. The grant is on chain.');
             this.grantee = '';
@@ -344,7 +393,15 @@ export class ShareVehicleModal extends LitElement {
             // identity-api until it catches up.
             await this.loadFromChain();
         } catch (err) {
-            this.errorMessage = err instanceof Error ? err.message : msg('The share could not be completed.');
+            if (err instanceof JobWaitAbortedError) return;
+            if (err instanceof JobTimeoutError) {
+                // Unknown, not failed — the same reasoning as revoke and
+                // upgrade. The list is the honest answer to "did it land?".
+                this.noticeMessage = err.message;
+                await this.loadFromChain();
+            } else {
+                this.errorMessage = err instanceof Error ? err.message : msg('The share could not be completed.');
+            }
         } finally {
             this.submitting = false;
         }
@@ -364,6 +421,15 @@ export class ShareVehicleModal extends LitElement {
         if (when > tenYears) return msg('No expiry');
 
         return msg(str`Until ${when.toLocaleDateString()}`);
+    }
+
+    constructor() {
+        super();
+        new ModalController(this, {
+            close: () => this.dispatchClose(),
+            // The same condition that disables the close buttons.
+            canClose: () => !this.submitting && !this.revoking && !this.upgrading,
+        });
     }
 
     static styles = [
@@ -423,7 +489,10 @@ export class ShareVehicleModal extends LitElement {
                 transition: background 0.15s ease, color 0.15s ease;
             }
             .close .material-symbols-outlined { font-size: 20px; }
-            .close:hover { background: var(--surface-container-high); color: var(--on-surface); }
+            .close:hover:not(:disabled) { background: var(--surface-container-high); color: var(--on-surface); }
+            /* Off while a job runs, like the footer Close: closing mid-job left
+               nobody watching it and reopened the modal with its guards reset. */
+            .close:disabled { opacity: 0.4; cursor: not-allowed; }
 
             .owner-row {
                 display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -440,12 +509,12 @@ export class ShareVehicleModal extends LitElement {
             input[type='text'] {
                 width: 100%; height: 40px; padding: 0 12px;
                 background-color: var(--surface-container-high); color: var(--on-surface);
-                border: 1px solid var(--outline-variant); border-radius: var(--radius-md);
+                border: 1px solid var(--control-border); border-radius: var(--radius-md);
                 font: var(--type-body-sm);
                 transition: border-color 0.15s ease, box-shadow 0.15s ease;
             }
             input[type='text']::placeholder { color: var(--on-surface-variant); }
-            input[type='text']:hover:not(:disabled):not(:focus-visible) { border-color: var(--outline); }
+            input[type='text']:hover:not(:disabled):not(:focus-visible) { border-color: var(--control-border-hover); }
             input[type='text']:focus-visible {
                 outline: none; border-color: var(--focus-ring); box-shadow: 0 0 0 3px var(--accent-soft);
             }
@@ -458,6 +527,7 @@ export class ShareVehicleModal extends LitElement {
             .durations button:disabled { opacity: 0.5; cursor: not-allowed; }
             .hint { font: var(--type-body-sm); color: var(--on-surface-variant); margin-top: 8px; }
             .hint.bad { color: var(--error); }
+            .hint.warn { color: var(--warning); }
 
             .durations { display: flex; gap: 8px; margin: 0 0 4px; }
             .durations button {
@@ -520,7 +590,7 @@ export class ShareVehicleModal extends LitElement {
                 background: color-mix(in srgb, var(--error) 18%, var(--error-container));
             }
             .existing li .ask { color: var(--error); font-weight: 500; flex: none; }
-            .existing li .ask.up { color: var(--accent-ink); }
+            .existing li .ask.up { color: var(--on-surface); }
 
             /* A grant below the standard set says so on its own line, in words:
                a tooltip would be unreachable on touch, and "limited" alone
@@ -532,13 +602,8 @@ export class ShareVehicleModal extends LitElement {
             }
             /* While asking, the line explains what Yes grants — that is a
                statement, not a warning, so it drops the warning colour. */
-            .existing li .missing.confirm { color: var(--on-surface-variant); }
-            .existing li .act button.upgrade {
-                background: var(--accent-soft-strong); color: var(--accent-ink);
-            }
-            .existing li .act button.upgrade:hover:not(:disabled) {
-                background: color-mix(in srgb, var(--accent) 40%, transparent);
-            }
+            .existing li .missing.confirm,
+            .existing li .missing.note { color: var(--on-surface-variant); }
             .existing li .act button.go {
                 background: var(--btn-primary-bg); color: var(--btn-primary-fg); font-weight: 600;
             }
@@ -627,9 +692,16 @@ export class ShareVehicleModal extends LitElement {
         const busy = this.revoking === s.grantee;
         const upArmed = this.confirmingUpgrade === s.grantee;
         const upBusy = this.upgrading === s.grantee;
+        // Another app's developer license: its developer scoped this grant, and
+        // Upgrade would hand it remote commands, credentials and raw data. Only
+        // offered once it is known the grantee is not an app.
+        const app = this.appGrantees?.get(s.grantee.toLowerCase());
+        // The fleet's own access: shown, but not this modal's to change.
+        const fleets = sameClientId(s.grantee, this.fleetLicense);
+        const upgradeable = this.appGrantees !== null && !app && !fleets;
         // null = the mask could not be read; offer nothing rather than guess.
         const missing = missingStandardPermissions(s.permissions);
-        const limited = !!missing && missing.length > 0 && !this.upgraded.has(s.grantee.toLowerCase());
+        const limited = upgradeable && !!missing && missing.length > 0 && !this.upgraded.has(s.grantee.toLowerCase());
         const missingList = limited ? missing.map((p) => this.permissionLabel(p)).join(', ') : '';
         // A re-share writes exactly the standard mask, so anything beyond it
         // on this grant is lost. Say so before they confirm.
@@ -646,7 +718,9 @@ export class ShareVehicleModal extends LitElement {
         else middle = html`<span class="when">${this.formatExpiry(s.expiresAt)}</span>`;
 
         let actions;
-        if (busy) {
+        if (fleets) {
+            actions = nothing;
+        } else if (busy) {
             actions = html`<button class="busy" disabled>${msg('Revoking…')}</button>`;
         } else if (upBusy) {
             actions = html`<button class="busy upgrade" disabled>${msg('Upgrading…')}</button>`;
@@ -695,37 +769,51 @@ export class ShareVehicleModal extends LitElement {
         }
 
         return html`
-            <li class=${limited ? 'limited' : ''}>
+            <li class=${limited || app || fleets ? 'limited' : ''}>
                 <span class="who" title=${s.grantee}>${shortWallet(s.grantee)}</span>
                 ${middle}
                 <span class="act">${actions}</span>
-                ${limited
-                    ? html`<span class="missing ${upArmed ? 'confirm' : ''}">
-                          ${upArmed
-                              ? lostList
-                                  ? msg(str`Adds ${missingList}. Removes ${lostList}.`)
-                                  : msg(str`Adds ${missingList}.`)
-                              : msg(str`Limited access: missing ${missingList}`)}
-                      </span>`
-                    : nothing}
+                ${fleets
+                    ? html`<span class="missing note">${msg('This fleet’s own access. It isn’t managed here.')}</span>`
+                    : app
+                      ? html`<span class="missing note">${msg(str`App: ${app}`)}</span>`
+                      : limited
+                        ? html`<span class="missing ${upArmed ? 'confirm' : ''}">
+                              ${upArmed
+                                  ? html`${lostList
+                                        ? msg(str`Adds ${missingList}. Removes ${lostList}.`)
+                                        : msg(str`Adds ${missingList}.`)}
+                                    ${hasUnrecognisedPermissions(s.permissions)
+                                        ? msg('It also removes permissions this app doesn’t recognise.')
+                                        : nothing}
+                                    ${msg('Documents are included, and the expiry stays the same.')}`
+                                  : msg(str`Limited access: missing ${missingList}`)}
+                          </span>`
+                        : nothing}
             </li>
         `;
     }
 
     render() {
         const showInvalid = this.grantee.trim().length > 0 && !this.granteeIsValid;
+        // SACD keeps one record per grantee, so sharing to a wallet that has
+        // one replaces it — duration and all, which can shorten a grant.
+        const current = this.granteeIsValid
+            ? this.existing.find((e) => e.grantee.toLowerCase() === this.grantee.trim().toLowerCase())
+            : undefined;
+        const toFleet = this.granteeIsValid && sameClientId(this.grantee.trim(), this.fleetLicense);
         // A revoke in flight closes the share form too. Both are the same
         // signer on the same account, and two jobs in flight against one
         // vehicle is a race the customer would have to untangle from the list.
         const inputsOff = this.submitting || this.blocked || !!this.revoking || !!this.upgrading;
 
         return html`
-            <div class="card" role="dialog" aria-modal="true" aria-label=${msg('Share vehicle')}>
-                <button class="close" @click=${this.dispatchClose} aria-label=${msg('Close')}>
+            <div class="card" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1">
+                <button class="close" ?disabled=${this.submitting || !!this.revoking || !!this.upgrading} @click=${this.dispatchClose} aria-label=${msg('Close')}>
                     <span class="material-symbols-outlined">close</span>
                 </button>
                 <div class="head">
-                    <h2>${msg('Share vehicle')}</h2>
+                    <h2 id="modal-title">${msg('Share vehicle')}</h2>
                     <!-- The grant is irreversible once it is on chain, so the id
                          of the vehicle it will be written against is stated
                          before the form rather than left to the title, which a
@@ -747,6 +835,7 @@ export class ShareVehicleModal extends LitElement {
                     <label for="grantee">${msg('Wallet address')}</label>
                     <input
                         id="grantee"
+                        autofocus
                         type="text"
                         class=${showInvalid ? 'invalid' : ''}
                         placeholder="0x…"
@@ -754,10 +843,14 @@ export class ShareVehicleModal extends LitElement {
                         ?disabled=${inputsOff}
                         @input=${(e: Event) => (this.grantee = (e.target as HTMLInputElement).value)}
                     />
-                    <p class="hint ${showInvalid ? 'bad' : ''}">
+                    <p class="hint ${showInvalid || toFleet ? 'bad' : current ? 'warn' : ''}">
                         ${showInvalid
                             ? msg('That does not look like a wallet address.')
-                            : msg('They will be able to see this vehicle’s data and send commands to it.')}
+                            : toFleet
+                              ? msg('That is this fleet’s own license. Its access isn’t managed here.')
+                              : current
+                              ? msg(str`This wallet already has access (${this.formatExpiry(current.expiresAt)}). Sharing again replaces it with the standard access for the duration below.`)
+                              : msg('They will be able to see this vehicle’s data and send commands to it.')}
                     </p>
 
                     <label style="margin-top:20px">${msg('Access expires')}</label>
@@ -809,7 +902,7 @@ export class ShareVehicleModal extends LitElement {
                         </button>
                         <button
                             class="confirm"
-                            ?disabled=${!this.granteeIsValid || inputsOff}
+                            ?disabled=${!this.granteeIsValid || toFleet || inputsOff}
                             @click=${this.submit}
                         >
                             ${this.submitting ? msg('Sharing…') : msg('Share')}

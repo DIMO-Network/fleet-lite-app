@@ -1036,8 +1036,8 @@ export class FleetOverviewView extends LitElement {
                 z-index: 1;
             }
             .zoom-btn:hover {
-                background: var(--accent-soft);
-                color: var(--accent-ink);
+                background: var(--surface-container-high);
+                color: var(--on-surface);
             }
             .zoom-btn .material-symbols-outlined { font-size: 16px; }
             .vehicle-card:hover { background: var(--surface-container-high); }
@@ -1081,7 +1081,7 @@ export class FleetOverviewView extends LitElement {
                 transition: background 0.15s, color 0.15s;
                 z-index: 1;
             }
-            .unhide-btn:hover { background: var(--accent-soft); color: var(--accent-ink); }
+            .unhide-btn:hover { background: var(--surface-container-high); color: var(--on-surface); }
             .unhide-btn .material-symbols-outlined { font-size: 16px; }
 
             .dense-hide-btn {

@@ -291,7 +291,7 @@ func (d *DocumentsController) ListDocuments(c *fiber.Ctx) error {
 				"documents":           []interface{}{},
 				"tokenDid":            tokenDID,
 				"permissionsRequired": true,
-				"devLicense":          tenant.ClientID,
+				"devLicense":          d.authProvider.EffectiveClientID(tenant),
 			})
 		}
 		d.logger.Err(err).Str("did", tokenDID).Msg("list failed")

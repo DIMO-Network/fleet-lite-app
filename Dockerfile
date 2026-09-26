@@ -17,11 +17,15 @@ ENV GOFLAGS=-mod=vendor
 RUN apt-get clean && apt-get update
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
 RUN apt-get install -y nodejs
+# No `go mod tidy` here: it may rewrite go.mod/go.sum mid-build, so the image
+# would not be built from the dependency set CI linted and tested. go.mod and
+# go.sum are tidied in the repo (see api/Makefile `deps`).
 RUN go mod download
-RUN go mod tidy
 RUN go mod vendor
 RUN make install COMMIT=${COMMIT_HASH}
-RUN npm install && npm run build
+# npm ci installs exactly package-lock.json (and fails if it is out of date)
+# instead of re-resolving ranges at build time.
+RUN npm ci && npm run build
 
 FROM busybox AS package
 

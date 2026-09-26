@@ -4,48 +4,88 @@ on:
     tags:
       - v*
 
+# The prod image-tag bump commits to main and the release is created here.
+permissions:
+  contents: write
+
+concurrency:
+  group: buildpushprod
+  cancel-in-progress: false
+
 jobs:
-  build_prod:
-    # The type of runner that the job will run on
+  deploy_prod:
     name: buildpushprod
     runs-on: [self-hosted, linux]
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # Full history, to find the code commit behind the tag (below).
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       - name: Login to DockerHub
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Get short SHA
+      # A tag normally sits on a PR's merge commit, which buildpushdev built.
+      # A tag on one of the bots' image-bump commits (main's tip right after a
+      # deploy) is the same code, so this uses the newest first-parent commit
+      # that changed anything besides the image tags.
+      - name: Find the commit whose image this tag deploys
         id: slug
-        run: echo "BUILD_TAG=$(echo ${GITHUB_SHA} | cut -c1-7)" >> $GITHUB_OUTPUT
+        run: |
+          sha=$(git log --first-parent -1 --format=%H HEAD -- . \
+            ':(exclude)charts/fleet-lite-app/values.yaml' \
+            ':(exclude)charts/fleet-lite-app/values-prod.yaml')
+          echo "BUILD_TAG=${sha:0:7}" >> "$GITHUB_OUTPUT"
+          echo "${GITHUB_REF_NAME} deploys the image of ${sha:0:7}"
 
-      - uses: actions/setup-go@v6
-        with:
-          go-version: '1.26'
-          cache: false
+      # Prod runs the image dev already built for this commit — never a second
+      # build of it. Tags are usually pushed seconds after the merge, so this
+      # waits for buildpushdev (a few minutes). No image means the commit never
+      # went through dev: fail loudly rather than ship something dev never ran.
+      - name: Wait for the dev image of this commit
+        env:
+          IMAGE: dimozone/fleet-lite-app:${{ steps.slug.outputs.BUILD_TAG }}
+        run: |
+          for i in $(seq 1 60); do
+            if docker buildx imagetools inspect "$IMAGE" >/dev/null 2>&1; then
+              echo "found $IMAGE"
+              exit 0
+            fi
+            echo "waiting for $IMAGE from buildpushdev ($i/60)"
+            sleep 30
+          done
+          echo "::error::No $IMAGE after 30 minutes: buildpushdev never built this commit (not on main, its run failed, or a newer merge replaced its queued run). Tag a commit dev has deployed; see docs/RELEASING.md."
+          exit 1
 
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          build-args: |
-            COMMIT_HASH=${{ steps.slug.outputs.BUILD_TAG }}
-          tags: dimozone/fleet-lite-app:${{ steps.slug.outputs.BUILD_TAG }}, dimozone/fleet-lite-app:latest
-# note we are going straight to prod here. There is no dev env possible due to LIWD
-      - name: Update Image Version in the related HelmChart values.yaml
-        uses: fjogeleit/yaml-update-action@v0.15.0
+      - name: Update Image Version in the related HelmChart values-prod.yaml
+        uses: fjogeleit/yaml-update-action@451fb54614e46f952fc18ffd99e8c93b7b13f85e # v0.15.0
         with:
           valueFile: 'charts/fleet-lite-app/values-prod.yaml'
           propertyPath: 'image.tag'
           value: ${{ steps.slug.outputs.BUILD_TAG }}
           branch: main
-          message: 'Update Image Version to ${{ steps.slug.outputs.BUILD_TAG }}'
+          message: 'Update prod image version to ${{ steps.slug.outputs.BUILD_TAG }} (${{ github.ref_name }})'
+
+      # Every prod deploy gets a GitHub Release with generated notes, so
+      # "what is in prod" has an answer that isn't a git archaeology session.
+      - name: Create the GitHub Release
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        with:
+          script: |
+            const tag = context.ref.replace('refs/tags/', '');
+            const { owner, repo } = context.repo;
+            try {
+              await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+              core.info(`Release ${tag} already exists`);
+            } catch (e) {
+              if (e.status !== 404) throw e;
+              await github.rest.repos.createRelease({ owner, repo, tag_name: tag, name: tag, generate_release_notes: true });
+              core.info(`Created release ${tag}`);
+            }

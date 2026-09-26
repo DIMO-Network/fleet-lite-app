@@ -28,11 +28,12 @@ type SharingController struct {
 	sharing    *service.SharingService
 	vehicleSvc *service.VehicleService
 	tenancy    *gateway.TenancyAPI
+	licenses   LicenseResolver
 }
 
 func NewSharingController(logger *zerolog.Logger, sharing *service.SharingService,
-	vehicleSvc *service.VehicleService, tenancy *gateway.TenancyAPI) *SharingController {
-	return &SharingController{logger: logger, sharing: sharing, vehicleSvc: vehicleSvc, tenancy: tenancy}
+	vehicleSvc *service.VehicleService, tenancy *gateway.TenancyAPI, licenses LicenseResolver) *SharingController {
+	return &SharingController{logger: logger, sharing: sharing, vehicleSvc: vehicleSvc, tenancy: tenancy, licenses: licenses}
 }
 
 // shareRequest is the body of POST /vehicles/:tokenID/share.
@@ -69,23 +70,21 @@ func (s *SharingController) ShareVehicle(c *fiber.Ctx) error {
 	if body.DurationDays < 0 {
 		return fiber.NewError(fiber.StatusBadRequest, "durationDays must not be negative")
 	}
+	// Sharing again replaces a grant, duration and all, so a share to the
+	// fleet's own license could shorten the fleet's access to 30 days. Like
+	// revoking it, that is not something to do from here.
+	if s.isFleetLicense(tenant, common.HexToAddress(body.Grantee)) {
+		return fiber.NewError(fiber.StatusConflict,
+			"this is the fleet's own license; its access is not managed here")
+	}
 
 	wallet, err := s.requireManageVehicles(c, tenant)
 	if err != nil {
 		return err
 	}
 
-	// The vehicle must be one of this tenant's, read through the same
-	// group-scoped path as every other vehicle route. Passing the caller's
-	// token id straight upstream would let a member outside the vehicle's
-	// fleet group start a share the tenancy service would accept — its checks
-	// are tenant-level and know nothing about our group scope.
-	allowed, _ := GetAllowedGroups(c)
-	if _, verr := s.vehicleSvc.GetVehicle(c.Context(), tenant, int64(tokenID), allowed); verr != nil {
-		if serr := ScopeUnavailable(verr); serr != nil {
-			return serr
-		}
-		return fiber.NewError(fiber.StatusNotFound, "vehicle not found")
+	if err := s.vehicleInScope(c, tenant, tokenID); err != nil {
+		return err
 	}
 
 	jobID, err := s.tenancy.ShareVehicle(c.Context(), tenant, int64(tokenID),
@@ -109,7 +108,8 @@ func (s *SharingController) ShareVehicle(c *fiber.Ctx) error {
 //
 // Every gate ShareVehicle applies applies here, in the same order and for the
 // same reasons: revoking somebody's access is the same authority over the same
-// account as granting it.
+// account as granting it. One more comes first: the fleet's own license is
+// refused (isFleetLicense).
 func (s *SharingController) RevokeShare(c *fiber.Ctx) error {
 	tenant, err := GetTenant(c)
 	if err != nil {
@@ -131,22 +131,23 @@ func (s *SharingController) RevokeShare(c *fiber.Ctx) error {
 	if granteeAddr == (common.Address{}) {
 		return fiber.NewError(fiber.StatusBadRequest, "grantee must not be the zero address")
 	}
+	// The fleet's own license is how this app reads the vehicle at all, and
+	// for a tenant on the operator's license it is every such tenant's access.
+	// Revoking it from here would cut them off, so it is refused here and not
+	// just hidden in the modal. Checked before the capability because it needs
+	// no upstream call and reveals nothing: the license is public on chain.
+	if s.isFleetLicense(tenant, granteeAddr) {
+		return fiber.NewError(fiber.StatusConflict,
+			"this is the fleet's own license; its access is not managed here")
+	}
 
 	wallet, err := s.requireManageVehicles(c, tenant)
 	if err != nil {
 		return err
 	}
 
-	// Same group-scoped re-read as ShareVehicle. Passing the caller's token id
-	// straight upstream would let a member outside the vehicle's fleet group
-	// revoke a grant the tenancy service would accept — its checks are
-	// tenant-level and know nothing about our group scope.
-	allowed, _ := GetAllowedGroups(c)
-	if _, verr := s.vehicleSvc.GetVehicle(c.Context(), tenant, int64(tokenID), allowed); verr != nil {
-		if serr := ScopeUnavailable(verr); serr != nil {
-			return serr
-		}
-		return fiber.NewError(fiber.StatusNotFound, "vehicle not found")
+	if err := s.vehicleInScope(c, tenant, tokenID); err != nil {
+		return err
 	}
 
 	jobID, err := s.tenancy.RevokeShare(c.Context(), tenant, int64(tokenID), granteeAddr.Hex(), wallet)
@@ -174,11 +175,48 @@ func (s *SharingController) ShareStatus(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "jobId is required and must be a number")
 	}
 
+	// The same gates as the share and the revoke it reports on. Job ids are
+	// sequential, so without them any member could read the grantee and
+	// outcome of jobs on vehicles outside their groups. Both checks are cheap
+	// on a poll: Authz is cached and the vehicle read is one query.
+	if _, err := s.requireManageVehicles(c, tenant); err != nil {
+		return err
+	}
+	if err := s.vehicleInScope(c, tenant, tokenID); err != nil {
+		return err
+	}
+
 	status, err := s.tenancy.ShareStatus(c.Context(), tenant, int64(tokenID), jobID)
 	if err != nil {
 		return s.upstreamError(err, tenant.ID, int64(tokenID), "read share status")
 	}
 	return c.JSON(status)
+}
+
+// vehicleInScope re-reads the vehicle through the same group-scoped path as
+// every other vehicle route. Passing the caller's token id straight upstream
+// would let a member outside the vehicle's fleet group act on it: the tenancy
+// service's checks are tenant-level and know nothing about our group scope.
+func (s *SharingController) vehicleInScope(c *fiber.Ctx, tenant models.Tenant, tokenID uint64) error {
+	allowed, _ := GetAllowedGroups(c)
+	if _, err := s.vehicleSvc.GetVehicle(c.Context(), tenant, int64(tokenID), allowed); err != nil {
+		if serr := ScopeUnavailable(err); serr != nil {
+			return serr
+		}
+		return fiber.NewError(fiber.StatusNotFound, "vehicle not found")
+	}
+	return nil
+}
+
+// isFleetLicense reports whether grantee is the license this tenant reads its
+// vehicles with — a grant this app neither makes nor withdraws. An
+// unresolvable license matches nothing.
+func (s *SharingController) isFleetLicense(tenant models.Tenant, grantee common.Address) bool {
+	if s.licenses == nil {
+		return false
+	}
+	own := s.licenses.EffectiveClientID(tenant)
+	return common.IsHexAddress(own) && common.HexToAddress(own) == grantee
 }
 
 // requireManageVehicles resolves the caller and confirms the capability.

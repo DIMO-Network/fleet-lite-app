@@ -174,6 +174,22 @@ export class ChargingView extends LitElement {
                 overflow-x: auto;
                 margin: 16px var(--gutter) 0;
             }
+            /* A session still charging has no end yet: a live status, so the
+               accent dot DESIGN.md reserves for "online". */
+            .charging-now {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                font-weight: 500;
+            }
+            .charging-now::before {
+                content: '';
+                width: 7px;
+                height: 7px;
+                border-radius: 50%;
+                background: var(--accent);
+                box-shadow: 0 0 6px var(--accent-soft-strong);
+            }
             table {
                 width: 100%;
                 border-collapse: collapse;
@@ -202,7 +218,7 @@ export class ChargingView extends LitElement {
             td:nth-child(2), td:nth-child(3) { color: var(--on-surface-variant); white-space: nowrap; }
             th.num, td.num { text-align: right; white-space: nowrap; }
 
-            /* Primary action: DIMO gradient pill. */
+            /* Primary action: solid ink (--btn-primary-*), as .btn-primary. */
             .export-btn {
                 display: inline-flex;
                 align-items: center;
@@ -239,7 +255,7 @@ export class ChargingView extends LitElement {
                 height: 40px;
                 background: var(--surface-container-high);
                 color: var(--on-surface);
-                border: 1px solid var(--outline-variant);
+                border: 1px solid var(--control-border);
                 border-radius: var(--radius-md);
                 padding: 0 12px;
                 font: var(--type-body-sm);
@@ -485,7 +501,7 @@ export class ChargingView extends LitElement {
                                     <th>${msg('Ended')}</th>
                                     <th class="num">${msg('Energy')}</th>
                                     <th class="num">${msg('Cost')}</th>
-                                    <th class="num">${msg('Saved')}</th>
+                                    <th class="num">${msg('Savings')}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -494,7 +510,9 @@ export class ChargingView extends LitElement {
                                         <tr>
                                             <td>${s.vehicleLabel}</td>
                                             <td>${new Date(s.startedAt).toLocaleString()}</td>
-                                            <td>${new Date(s.endedAt).toLocaleString()}</td>
+                                            <td>${s.inProgress
+                                                ? html`<span class="charging-now" title=${msg(str`Last reading ${new Date(s.endedAt).toLocaleString()}`)}>${msg('Charging now')}</span>`
+                                                : new Date(s.endedAt).toLocaleString()}</td>
                                             <td class="num">${formatEnergyCell(s)}</td>
                                             <td class="num">${formatMoney(s.cost, s.currency)}</td>
                                             <td class="num">${formatMoney(s.savings, s.currency)}</td>

@@ -363,7 +363,8 @@ export class VehicleTripsPanel extends LitElement {
                 font: 500 13px/18px var(--font-body);
                 color: var(--on-surface);
             }
-            /* "Back to live": returning to the live position is the actionable state. */
+            /* "Back to live" is an action, so it is a neutral pill: teal is for
+               live status, not for things to click. */
             .back-live {
                 display: inline-flex;
                 align-items: center;
@@ -371,13 +372,13 @@ export class VehicleTripsPanel extends LitElement {
                 height: 36px;
                 padding: 0 14px 0 10px;
                 border-radius: var(--radius-full);
-                background: var(--accent-soft);
-                color: var(--accent-ink);
+                background: var(--surface-container-high);
+                color: var(--on-surface);
                 font: 500 13px/18px var(--font-body);
                 transition: background 0.15s ease;
             }
             .back-live .material-symbols-outlined { font-size: 16px; }
-            .back-live:hover { background: var(--accent-soft-strong); }
+            .back-live:hover { background: var(--surface-container-highest); }
 
             .body {
                 display: grid;
@@ -434,7 +435,7 @@ export class VehicleTripsPanel extends LitElement {
             }
             .map .leaflet-control-attribution a { color: var(--on-surface-variant); }
 
-            /* Trip rows: rounded list items; selected = accent tint + inset bar. */
+            /* Trip rows: rounded list items; selected = neutral fill + ink bar. */
             .trip-entry {
                 border-radius: var(--radius-md);
                 overflow: hidden;
@@ -530,7 +531,7 @@ export class VehicleTripsPanel extends LitElement {
                 color: var(--on-surface-variant);
                 transition: background 0.15s ease, color 0.15s ease;
             }
-            .replay-btn:hover { background: var(--accent-soft); color: var(--accent-ink); }
+            .replay-btn:hover { background: var(--surface-container-high); color: var(--on-surface); }
             .replay-btn .material-symbols-outlined { font-size: 18px; }
             .trip-row .when .times {
                 display: flex;

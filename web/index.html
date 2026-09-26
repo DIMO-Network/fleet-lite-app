@@ -30,7 +30,9 @@
           try {
             var parts = t.split('.');
             if (parts.length === 3) {
-              var payload = JSON.parse(atob(parts[1]));
+              // base64url, which atob rejects as-is (see utils/token.ts).
+              var b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+              var payload = JSON.parse(atob(b64 + '==='.slice(0, (4 - b64.length % 4) % 4)));
               var exp = typeof payload.exp === 'number' ? payload.exp : 0;
               expired = exp < Math.floor(Date.now() / 1000);
             }

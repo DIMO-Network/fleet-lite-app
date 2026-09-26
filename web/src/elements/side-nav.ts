@@ -101,6 +101,11 @@ export class SideNav extends LitElement {
             :host(:hover) .collapse-toggle,
             .collapse-toggle:focus-visible,
             :host([collapsed]) .collapse-toggle { opacity: 1; }
+            /* No hover on touch screens (tablets get the sidebar too), so the
+               toggle would never appear there: always show it. */
+            @media (hover: none) {
+                .collapse-toggle { opacity: 1; }
+            }
             .collapse-toggle:hover {
                 background: var(--surface-container-highest);
                 color: var(--on-surface);

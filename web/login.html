@@ -46,6 +46,7 @@
             --on-surface-variant: #A0A3A2;
             --outline: #5C6063;
             --outline-variant: #2A2E32;
+            --control-border: #747A7F;
             --error: #FF6060;
 
             --radius-md: 10px;
@@ -158,6 +159,12 @@
             color: var(--on-surface-variant);
         }
         .note svg { width: 14px; height: 14px; flex-shrink: 0; color: var(--accent-ink); }
+        .login-error {
+            margin: -12px auto 20px;
+            max-width: 320px;
+            font: 400 14px/20px var(--font-body);
+            color: var(--error);
+        }
 
         /* Shown by the script below when the OAuth redirect carried no email.
            While it is up, it replaces the sign-in button. */
@@ -184,7 +191,7 @@
             height: 40px;
             padding: 0 12px;
             background: var(--surface-container-high);
-            border: 1px solid var(--outline-variant);
+            border: 1px solid var(--control-border);
             border-radius: var(--radius-md);
             color: var(--on-surface);
             font: 400 14px/20px var(--font-body);
@@ -249,6 +256,7 @@
             <div class="card">
                 <h1 class="login-title">Your fleet, live</h1>
                 <p class="login-sub">Sign in with your DIMO account to see every vehicle, trip and document in one place.</p>
+                <p id="login-error" class="login-error" role="alert" hidden></p>
                 <div class="login-action">
                     <login-element></login-element>
                 </div>
@@ -288,6 +296,8 @@
 
 <script type="module">
     import { isTokenExpired } from './src/utils/token.ts';
+    import { classifyLoginRedirect } from './src/login-redirect.ts';
+    import { SettingsService } from './src/services/settings-service.ts';
 
     // After a successful login, an invitee with a stashed invite token returns
     // to the accept page (which finishes binding their wallet); everyone else
@@ -296,47 +306,74 @@
         return localStorage.getItem('pendingInviteToken') ? '/accept-invite.html' : '/';
     }
 
-    const queryString = window.location.search;
+    function hasLiveSession() {
+        return !isTokenExpired(localStorage.getItem('token'));
+    }
 
-    if (queryString === '') {
-        const token = localStorage.getItem('token');
-        if (isTokenExpired(token) === false) {
-            window.location.href = '/';
+    // A token is only a sign-in when DIMO issued it to *this* app (see
+    // src/login-redirect.ts), which needs our client id. It is read before
+    // anything is stored, and a token is never stored unchecked.
+    async function appClientId() {
+        if (!new URLSearchParams(location.search).has('token')) return null;
+        try {
+            return (await SettingsService.getInstance().fetchPublicSettings()).clientId || null;
+        } catch {
+            return null;
         }
-    } else {
-        const params = new URLSearchParams(queryString);
-        let noEmail = false;
-        params.forEach((value, key) => {
-            if (key === 'logout' && value === 'true') {
-                localStorage.removeItem('token');
-                localStorage.removeItem('email');
-                window.location.href = '/login.html';
-            }
-            if (key === 'email' || key === 'token') {
-                localStorage.setItem(key, value);
-                if (key === 'email' && !value) noEmail = true;
-            }
-        });
+    }
 
-        document.addEventListener('DOMContentLoaded', () => {
-            const missing = document.getElementById('missing-email');
-            if (noEmail && missing) {
-                missing.style.display = 'block';
-            } else {
-                window.location.href = postLoginDest();
-            }
-            const input = document.getElementById('email');
-            const btn = document.getElementById('submitEmail');
-            if (btn) {
-                btn.addEventListener('click', () => {
-                    const v = input.value;
-                    if (!v) { alert('Please enter a valid email address.'); return; }
-                    localStorage.setItem('email', v);
-                    window.location.href = postLoginDest();
-                });
-            }
+    function showError(text) {
+        const el = document.getElementById('login-error');
+        el.textContent = text;
+        el.hidden = false;
+    }
+
+    // Shown when the OAuth redirect carried an empty email; replaces the button.
+    function showMissingEmail() {
+        document.getElementById('missing-email').style.display = 'block';
+        const input = document.getElementById('email');
+        document.getElementById('submitEmail').addEventListener('click', () => {
+            const v = input.value;
+            if (!v) { alert('Please enter a valid email address.'); return; }
+            localStorage.setItem('email', v);
+            window.location.href = postLoginDest();
         });
     }
+
+    (async () => {
+        const outcome = classifyLoginRedirect(location.search, await appClientId());
+        // Whatever came in the query (a token, an email) does not stay in the
+        // address bar or the history.
+        if (location.search) history.replaceState(null, '', '/login.html');
+
+        switch (outcome.kind) {
+            case 'logout':
+                localStorage.removeItem('token');
+                localStorage.removeItem('email');
+                break;
+            case 'none':
+                if (hasLiveSession()) window.location.href = '/';
+                break;
+            case 'not-a-sign-in':
+                // A "Grant permissions" round trip (the grantor's token for the
+                // fleet's license) or another app's token. Not ours to keep:
+                // whoever is signed in here stays signed in.
+                if (hasLiveSession()) window.location.replace('/');
+                break;
+            case 'unverified':
+                showError("We couldn't verify that sign-in. Please sign in again.");
+                break;
+            case 'sign-in':
+                localStorage.setItem('token', outcome.token);
+                localStorage.setItem('email', outcome.email);
+                if (outcome.emailMissing) {
+                    showMissingEmail();
+                } else {
+                    window.location.href = postLoginDest();
+                }
+                break;
+        }
+    })();
 </script>
 </body>
 </html>
