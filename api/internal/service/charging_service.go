@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	dbmodels "github.com/DIMO-Network/fleet-lite-app/internal/db/models"
 	"github.com/DIMO-Network/fleet-lite-app/internal/models"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
@@ -23,18 +22,23 @@ const chargingFleetSummaryConcurrency = 10
 // ChargingSessionView is one session, priced against current tenant
 // settings, shaped for the API and CSV export.
 type ChargingSessionView struct {
-	VehicleTokenID int64      `json:"tokenId"`
-	VehicleLabel   string     `json:"vehicleLabel"`
-	VIN            string     `json:"vin,omitempty"`
-	StartedAt      time.Time  `json:"startedAt"`
-	EndedAt        time.Time  `json:"endedAt"`
-	AddedEnergyKwh *float64   `json:"addedEnergyKwh,omitempty"`
-	AvgPowerKw     *float64   `json:"avgPowerKw,omitempty"`
-	SocStartPct    *float64   `json:"socStartPct,omitempty"`
-	SocEndPct      *float64   `json:"socEndPct,omitempty"`
-	Lat            *float64   `json:"lat,omitempty"`
-	Lng            *float64   `json:"lng,omitempty"`
-	Currency       string     `json:"currency"`
+	VehicleTokenID int64     `json:"tokenId"`
+	VehicleLabel   string    `json:"vehicleLabel"`
+	VIN            string    `json:"vin,omitempty"`
+	StartedAt      time.Time `json:"startedAt"`
+	// EndedAt is the session's last reading. For a session still in progress
+	// that is "so far", not an end — see InProgress.
+	EndedAt time.Time `json:"endedAt"`
+	// InProgress: the session's last reading is recent enough that it may
+	// still grow, so it isn't final (or stored) yet.
+	InProgress     bool     `json:"inProgress,omitempty"`
+	AddedEnergyKwh *float64 `json:"addedEnergyKwh,omitempty"`
+	AvgPowerKw     *float64 `json:"avgPowerKw,omitempty"`
+	SocStartPct    *float64 `json:"socStartPct,omitempty"`
+	SocEndPct      *float64 `json:"socEndPct,omitempty"`
+	Lat            *float64 `json:"lat,omitempty"`
+	Lng            *float64 `json:"lng,omitempty"`
+	Currency       string   `json:"currency"`
 	ChargingSessionCost
 }
 
@@ -68,9 +72,11 @@ func NewChargingService(logger *zerolog.Logger, detectionSvc *ChargingDetectionS
 	return &ChargingService{logger: logger, detectionSvc: detectionSvc, settingsSvc: settingsSvc, vehicleSvc: vehicleSvc}
 }
 
-func toView(row dbmodels.ChargingSession, label, vin string, settings ChargingSettings) ChargingSessionView {
+func toView(r ChargingSessionRow, label, vin string, settings ChargingSettings) ChargingSessionView {
+	row := r.ChargingSession
 	energy := row.AddedEnergyKWH.Ptr()
 	v := ChargingSessionView{
+		InProgress:          r.InProgress,
 		VehicleTokenID:      row.TokenID,
 		VehicleLabel:        label,
 		VIN:                 vin,
@@ -186,7 +192,8 @@ func (s *ChargingService) FleetSummary(ctx context.Context, tenant models.Tenant
 func BuildChargingCSV(sessions []ChargingSessionView) string {
 	var b strings.Builder
 	w := csv.NewWriter(&b)
-	_ = w.Write([]string{"vehicle", "vin", "startedAt", "endedAt", "addedEnergyKwh", "avgPowerKw", "cost", "gasCostAvoided", "savings", "currency"})
+	// inProgress is appended last so existing column positions don't move.
+	_ = w.Write([]string{"vehicle", "vin", "startedAt", "endedAt", "addedEnergyKwh", "avgPowerKw", "cost", "gasCostAvoided", "savings", "currency", "inProgress"})
 	for _, s := range sessions {
 		_ = w.Write([]string{
 			s.VehicleLabel,
@@ -199,6 +206,7 @@ func BuildChargingCSV(sessions []ChargingSessionView) string {
 			floatOrBlank(s.GasCostAvoided),
 			floatOrBlank(s.Savings),
 			s.Currency,
+			boolOrBlank(s.InProgress),
 		})
 	}
 	w.Flush()
@@ -210,4 +218,13 @@ func floatOrBlank(f *float64) string {
 		return ""
 	}
 	return strconv.FormatFloat(*f, 'f', 2, 64)
+}
+
+// boolOrBlank renders true as "true" and false as an empty cell, matching how
+// unset numbers render.
+func boolOrBlank(b bool) string {
+	if b {
+		return "true"
+	}
+	return ""
 }

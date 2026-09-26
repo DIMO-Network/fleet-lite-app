@@ -11,7 +11,13 @@ export interface ChargingSessionView {
     vehicleLabel: string;
     vin?: string;
     startedAt: string;
+    /** Last reading. While `inProgress`, that is "so far", not an end. */
     endedAt: string;
+    /**
+     * The session's last reading is recent enough that it may still grow
+     * (the api holds it back from storage until then). Absent when final.
+     */
+    inProgress?: boolean;
     addedEnergyKwh?: number;
     avgPowerKw?: number;
     socStartPct?: number;

@@ -1908,6 +1908,7 @@
 </trans-unit>
 <trans-unit id="sf113fa256db9617b">
   <source>Ended</source>
+  <target>Terminó</target>
 </trans-unit>
 <trans-unit id="s760fea0a0b77b2ea">
   <source>Light mode</source>
@@ -1992,6 +1993,14 @@
 <trans-unit id="hcd12aaf0719d60ee">
   <source>To grant from here, add <x id="0" equiv-text="&lt;code&gt;${location.origin}"/>/<x id="1" equiv-text="&lt;/code&gt;"/> to this license’s redirect URIs in the DIMO developer console.</source>
   <target>Para otorgar permisos desde aquí, agrega <x id="0" equiv-text="&lt;code&gt;${location.origin}"/>/<x id="1" equiv-text="&lt;/code&gt;"/> a las URI de redirección de esta licencia en la consola de desarrolladores de DIMO.</target>
+</trans-unit>
+<trans-unit id="s230a04ffaa88b7af">
+  <source>Last reading <x id="0" equiv-text="${new Date(s.endedAt).toLocaleString()}"/></source>
+  <target>Última lectura <x id="0" equiv-text="${new Date(s.endedAt).toLocaleString()}"/></target>
+</trans-unit>
+<trans-unit id="s5d3e747464563886">
+  <source>Charging now</source>
+  <target>Cargando ahora</target>
 </trans-unit>
 </body>
 </file>

@@ -174,6 +174,22 @@ export class ChargingView extends LitElement {
                 overflow-x: auto;
                 margin: 16px var(--gutter) 0;
             }
+            /* A session still charging has no end yet: a live status, so the
+               accent dot DESIGN.md reserves for "online". */
+            .charging-now {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                font-weight: 500;
+            }
+            .charging-now::before {
+                content: '';
+                width: 7px;
+                height: 7px;
+                border-radius: 50%;
+                background: var(--accent);
+                box-shadow: 0 0 6px var(--accent-soft-strong);
+            }
             table {
                 width: 100%;
                 border-collapse: collapse;
@@ -494,7 +510,9 @@ export class ChargingView extends LitElement {
                                         <tr>
                                             <td>${s.vehicleLabel}</td>
                                             <td>${new Date(s.startedAt).toLocaleString()}</td>
-                                            <td>${new Date(s.endedAt).toLocaleString()}</td>
+                                            <td>${s.inProgress
+                                                ? html`<span class="charging-now" title=${msg(str`Last reading ${new Date(s.endedAt).toLocaleString()}`)}>${msg('Charging now')}</span>`
+                                                : new Date(s.endedAt).toLocaleString()}</td>
                                             <td class="num">${formatEnergyCell(s)}</td>
                                             <td class="num">${formatMoney(s.cost, s.currency)}</td>
                                             <td class="num">${formatMoney(s.savings, s.currency)}</td>

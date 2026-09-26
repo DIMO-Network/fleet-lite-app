@@ -542,19 +542,86 @@ func (t *telemetryAPIService) Segments(tenant models.Tenant, tokenID uint64, fro
 	return resp.Data.Segments, nil
 }
 
+// rechargeSegmentsPageSize is telemetry-api's maximum `limit` for segments.
+const rechargeSegmentsPageSize = 200
+
+// rechargeSegmentsMaxPages bounds one window's paging. 200 segments a page is
+// already far past any real charging pattern; this only stops a cursor that
+// fails to advance from looping.
+const rechargeSegmentsMaxPages = 10
+
+// rechargeSegmentsMaxWindow keeps each query inside telemetry-api's 32-day
+// segments range limit; longer windows are fetched in consecutive chunks.
+const rechargeSegmentsMaxWindow = 31 * 24 * time.Hour
+
 // RechargeSegments queries telemetry-api's `recharge` segmentation directly —
 // the same detector the Trips panel offers under "Recharge" — requesting the
 // charging-specific aggregations ChargingDetectionService needs instead of
 // the distance/speed pair Segments requests for driving trips. No
 // eventRequests: driver-behaviour events don't occur while charging.
+//
+// Returns every segment in [from, to], oldest first. telemetry-api returns at
+// most one page of the OLDEST segments and caps a query at 32 days, so a busy
+// or noisy vehicle's newest sessions were silently missing from a single
+// `limit: 60` query: the window is split into chunks and each chunk is paged.
+//
+// The cursor is the last segment's END, not its start as telemetry-api's docs
+// suggest: `after` moves the detection window itself, and resuming at a
+// segment's start re-detects that segment's tail as a new, shorter one.
 func (t *telemetryAPIService) RechargeSegments(tenant models.Tenant, tokenID uint64, from, to string) ([]Segment, error) {
+	windowFrom, err := time.Parse(time.RFC3339, from)
+	if err != nil {
+		return nil, fmt.Errorf("recharge segments from: %w", err)
+	}
+	windowTo, err := time.Parse(time.RFC3339, to)
+	if err != nil {
+		return nil, fmt.Errorf("recharge segments to: %w", err)
+	}
+	var all []Segment
+	for chunkFrom := windowFrom; chunkFrom.Before(windowTo); chunkFrom = chunkFrom.Add(rechargeSegmentsMaxWindow) {
+		chunkTo := chunkFrom.Add(rechargeSegmentsMaxWindow)
+		if chunkTo.After(windowTo) {
+			chunkTo = windowTo
+		}
+		after := ""
+		for page := 0; ; page++ {
+			if page == rechargeSegmentsMaxPages {
+				return nil, fmt.Errorf("recharge segments: more than %d pages in %s..%s",
+					rechargeSegmentsMaxPages, rfc3339(chunkFrom), rfc3339(chunkTo))
+			}
+			segs, err := t.rechargeSegmentsPage(tenant, tokenID, rfc3339(chunkFrom), rfc3339(chunkTo), after)
+			if err != nil {
+				return nil, err
+			}
+			all = append(all, segs...)
+			if len(segs) < rechargeSegmentsPageSize {
+				break
+			}
+			last := segs[len(segs)-1].End.Timestamp
+			if last == "" || last == after {
+				break // an open last segment ends the window; a stuck cursor would loop
+			}
+			after = last
+		}
+	}
+	return all, nil
+}
+
+// rechargeSegmentsPage fetches one page of recharge segments, starting after
+// `after` (RFC3339) when it is set.
+func (t *telemetryAPIService) rechargeSegmentsPage(tenant models.Tenant, tokenID uint64, from, to, after string) ([]Segment, error) {
+	cursor := ""
+	if after != "" {
+		cursor = fmt.Sprintf("after: %q", after)
+	}
 	q := fmt.Sprintf(`query {
 		segments(
 			tokenId: %d
 			from: %q
 			to: %q
 			mechanism: recharge
-			limit: 60
+			limit: %d
+			%s
 			signalRequests: [
 				{ name: "powertrainTractionBatteryChargingAddedEnergy", agg: FIRST }
 				{ name: "powertrainTractionBatteryChargingAddedEnergy", agg: LAST }
@@ -568,7 +635,7 @@ func (t *telemetryAPIService) RechargeSegments(tenant models.Tenant, tokenID uin
 			isOngoing
 			signals { name agg value }
 		}
-	}`, tokenID, from, to)
+	}`, tokenID, from, to, rechargeSegmentsPageSize, cursor)
 
 	raw, err := t.query(tenant, tokenID, q)
 	if err != nil {
