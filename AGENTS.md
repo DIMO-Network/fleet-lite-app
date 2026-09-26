@@ -151,7 +151,9 @@ Don't add these unless asked — `docs/PLAN.md` lists them and the rationale:
 
 Tests: Go tests in `api/` (`go test ./...`, testify), web unit tests in `web/`
 (`npm test`, vitest; `src/**/*.test.ts`). Pure logic that decides security or
-money questions gets a test.
+money questions gets a test. DB-backed Go tests get a migrated throwaway
+Postgres from `migratedStore` (testcontainers-go,
+`api/internal/service/postgres_test.go`) and skip when there is no Docker.
 
 Already landed (no longer "not yet" — the frontend is wired to the real api,
 not mock data): `/vehicles`, telemetry charts, the glovebox documents flow

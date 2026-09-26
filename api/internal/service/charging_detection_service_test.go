@@ -2,9 +2,7 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -13,42 +11,10 @@ import (
 	"github.com/DIMO-Network/fleet-lite-app/internal/models"
 	"github.com/DIMO-Network/shared/pkg/db"
 	"github.com/google/uuid"
-	_ "github.com/lib/pq"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// chargingStore connects to the local Postgres the other DIMO services' DB
-// tests use (dimo/dimo on localhost, database fleet_lite_app, migrated), and
-// skips when there is none — CI without a database still passes.
-func chargingStore(t *testing.T) *db.Store {
-	t.Helper()
-	settings := db.Settings{
-		User: "dimo", Password: "dimo", Host: "localhost", Port: "5432",
-		Name: "fleet_lite_app", SSLMode: "disable", MaxOpenConnections: 10, MaxIdleConnections: 2,
-	}
-	if v := os.Getenv("FLEET_LITE_TEST_DB_HOST"); v != "" {
-		settings.Host = v
-	}
-	probe, err := sql.Open("postgres", settings.BuildConnectionString(true))
-	if err == nil {
-		err = probe.Ping()
-	}
-	if err == nil {
-		var n int
-		err = probe.QueryRow(`SELECT count(*) FROM charging_sessions WHERE false`).Scan(&n)
-	}
-	if probe != nil {
-		_ = probe.Close()
-	}
-	if err != nil {
-		t.Skipf("local postgres with fleet-lite migrations not reachable, skipping: %v", err)
-	}
-	store := db.NewDbConnectionFromSettings(context.Background(), &settings, true)
-	store.WaitForDB(zerolog.Nop())
-	return &store
-}
 
 // chargeModel is a vehicle's charging as telemetry-api's recharge detector
 // reports it: each true session appears clipped to what has been read so far
@@ -103,7 +69,7 @@ type chargingFixture struct {
 
 func newChargingFixture(t *testing.T, sessions ...timeInterval) *chargingFixture {
 	t.Helper()
-	store := chargingStore(t)
+	store := migratedStore(t)
 	logger := zerolog.Nop()
 	model := &chargeModel{sessions: sessions}
 	svc := NewChargingDetectionService(&logger, store, model)
