@@ -279,6 +279,9 @@ type Vehicle struct {
 	LastLat  *float64   `json:"lastLat,omitempty"`
 	LastLon  *float64   `json:"lastLon,omitempty"`
 	LastSeen *time.Time `json:"lastSeen,omitempty"`
+	// LastHeading is the heading of that same fix, in degrees clockwise from
+	// true north (0-360). nil when the vehicle doesn't report heading.
+	LastHeading *float64 `json:"lastHeading,omitempty"`
 	// LocationPulledAt is when we last fetched this vehicle's location from
 	// telemetry-api (a real fan-out query, not a cache serve) — distinct from
 	// LastSeen (the GPS fix time). The frontend uses it to skip re-pulling a

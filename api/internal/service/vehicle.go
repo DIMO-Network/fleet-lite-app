@@ -802,6 +802,10 @@ func applyLastLocation(v *models.Vehicle, r *dbmodels.Vehicle) {
 		ts := r.LastSeen.Time
 		v.LastSeen = &ts
 	}
+	if r.LastHeading.Valid {
+		h := r.LastHeading.Float64
+		v.LastHeading = &h
+	}
 	if r.LocationPulledAt.Valid {
 		ts := r.LocationPulledAt.Time
 		v.LocationPulledAt = &ts
@@ -809,11 +813,12 @@ func applyLastLocation(v *models.Vehicle, r *dbmodels.Vehicle) {
 }
 
 // UpsertLastLocations writes through the latest GPS fix for each vehicle into
-// its row (the last_lat/last_lon/last_seen display cache). Best-effort: a fix
-// with no/unparseable timestamp is skipped so we never stamp last_seen with a
-// zero time, and a per-row failure is logged but never fails the batch. Only
-// the three location columns (plus updated_at) are touched; a vehicle missing
-// from the table simply updates zero rows.
+// its row (the last_lat/last_lon/last_seen/last_heading display cache).
+// Best-effort: a fix with no/unparseable timestamp is skipped so we never stamp
+// last_seen with a zero time, and a per-row failure is logged but never fails
+// the batch. Only the location columns (plus updated_at) are touched; a vehicle
+// missing from the table simply updates zero rows. A fix without a heading
+// clears last_heading rather than leaving an older fix's heading behind.
 func (s *VehicleService) UpsertLastLocations(ctx context.Context, tenantID string, locs map[uint64]LocationCoords) {
 	for id, c := range locs {
 		ts, err := time.Parse(time.RFC3339, c.Timestamp)
@@ -821,14 +826,15 @@ func (s *VehicleService) UpsertLastLocations(ctx context.Context, tenantID strin
 			continue
 		}
 		row := &dbmodels.Vehicle{
-			TenantID: tenantID,
-			TokenID:  int64(id),
-			LastLat:  null.Float64From(c.Lat),
-			LastLon:  null.Float64From(c.Lon),
-			LastSeen: null.TimeFrom(ts),
+			TenantID:    tenantID,
+			TokenID:     int64(id),
+			LastLat:     null.Float64From(c.Lat),
+			LastLon:     null.Float64From(c.Lon),
+			LastSeen:    null.TimeFrom(ts),
+			LastHeading: null.Float64FromPtr(c.Heading),
 		}
 		if _, err := row.Update(ctx, s.pdb.DBS().Writer,
-			boil.Whitelist("last_lat", "last_lon", "last_seen", "updated_at")); err != nil {
+			boil.Whitelist("last_lat", "last_lon", "last_seen", "last_heading", "updated_at")); err != nil {
 			s.logger.Warn().Uint64("tokenId", id).Err(err).Msg("write-through last location")
 		}
 	}

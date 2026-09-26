@@ -42,6 +42,9 @@ export interface Vehicle {
      * from the DB before live locations stream in. */
     lastLat?: number;
     lastLon?: number;
+    /** Heading of that fix, degrees clockwise from true north. Absent when the
+     * vehicle doesn't report heading. */
+    lastHeading?: number;
     /** ISO timestamp of that latest GPS fix — shown in the list as "last seen". */
     lastSeen?: string;
     /** ISO timestamp of when we last fetched this vehicle's location from

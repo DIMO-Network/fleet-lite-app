@@ -15,8 +15,8 @@ import { FleetGroup } from '../types/group.ts';
 import { Vehicle, VehiclesResponse } from '../types/vehicle.ts';
 import { formatArea } from '../utils/geo.ts';
 import {
-    createFleetMap, applyTileTheme, createVehicleClusterGroup, createVehicleMarker,
-    seedLocationsFromDb, fetchFleetLocations, LatLon,
+    createFleetMap, applyTileTheme, createVehicleClusterGroup, createVehicleMarker, setVehicleHeading,
+    seedLocationsFromDb, fetchFleetLocations, HeadingMarker, LatLon, VEHICLE_TOOLTIP_CSS,
     VEHICLE_MARKER_STYLE, VEHICLE_MARKER_STYLE_HOVER, MAP_COLORS,
 } from '../utils/fleet-map.ts';
 import '../elements/create-geofence-modal.ts';
@@ -59,7 +59,7 @@ export class GeofencesManagementView extends LitElement {
     private tileLayer: L.TileLayer | null = null;
     private geofenceLayers = new Map<string, L.Polygon>();
     private vehicleLayer: L.MarkerClusterGroup | null = null;
-    private vehicleMarkers = new Map<string, L.CircleMarker>();
+    private vehicleMarkers = new Map<string, HeadingMarker>();
     // Bumped per vehicle-location load; abandons stale in-flight fan-out when the
     // overlay is toggled off or reloaded.
     private vehLoadGeneration = 0;
@@ -156,12 +156,14 @@ export class GeofencesManagementView extends LitElement {
         if (!this.vehicleLayer) return;
         const titleMap = new Map(this.vehicles.map((v) => [String(v.tokenId), this.vehicleTitle(v)]));
         for (const [tokenId, coords] of Object.entries(locations)) {
+            const title = titleMap.get(tokenId) ?? `Vehicle ${tokenId}`;
             const existing = this.vehicleMarkers.get(tokenId);
             if (existing) {
                 existing.setLatLng([coords.lat, coords.lon]);
+                setVehicleHeading(existing, title, coords.heading);
                 continue;
             }
-            const marker = createVehicleMarker(coords.lat, coords.lon, titleMap.get(tokenId) ?? `Vehicle ${tokenId}`);
+            const marker = createVehicleMarker(coords, title);
             marker.on('mouseover', () => marker.setStyle(VEHICLE_MARKER_STYLE_HOVER));
             marker.on('mouseout', () => marker.setStyle(VEHICLE_MARKER_STYLE));
             this.vehicleLayer.addLayer(marker);
@@ -353,6 +355,7 @@ export class GeofencesManagementView extends LitElement {
         sharedStyles,
         unsafeCSS(leafletCss),
         unsafeCSS(markerClusterCss),
+        unsafeCSS(VEHICLE_TOOLTIP_CSS),
         css`
             :host {
                 display: flex; flex-direction: column; position: relative;

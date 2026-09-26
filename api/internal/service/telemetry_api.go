@@ -55,11 +55,14 @@ func locCacheKey(tenantID string, tokenID uint64) string {
 // license must have permissions on the vehicle.
 // LocationCoords is the decoded value of a currentLocationCoordinates signal.
 // Timestamp is the fix time (RFC3339), set by FleetLocations so the caller can
-// persist it as the vehicle's "last seen"; empty where not requested.
+// persist it as the vehicle's "last seen"; empty where not requested. Heading
+// (degrees clockwise from true north) is also only set by FleetLocations, and
+// only when the vehicle reports currentLocationHeading.
 type LocationCoords struct {
-	Lat       float64 `json:"lat"`
-	Lon       float64 `json:"lon"`
-	Timestamp string  `json:"timestamp,omitempty"`
+	Lat       float64  `json:"lat"`
+	Lon       float64  `json:"lon"`
+	Timestamp string   `json:"timestamp,omitempty"`
+	Heading   *float64 `json:"heading,omitempty"`
 }
 
 // TripWaypoint is one GPS fix sampled at a fixed interval across a trip's
@@ -966,7 +969,7 @@ func (t *telemetryAPIService) FleetLocations(ctx context.Context, tenant models.
 				return nil
 			}
 
-			q := fmt.Sprintf(`query { signalsLatest(tokenId: %d) { currentLocationCoordinates { value { latitude longitude } timestamp } } }`, id)
+			q := fmt.Sprintf(`query { signalsLatest(tokenId: %d) { currentLocationCoordinates { value { latitude longitude } timestamp } currentLocationHeading { value } } }`, id)
 			raw, err := t.doQuery(gctx, jwt, q)
 			if err != nil {
 				// JWT worked but query failed (e.g. telemetry API hiccup) — skip silently.
@@ -984,6 +987,12 @@ func (t *telemetryAPIService) FleetLocations(ctx context.Context, tenant models.
 							} `json:"value"`
 							Timestamp string `json:"timestamp"`
 						} `json:"currentLocationCoordinates"`
+						// Same VEHICLE_ALL_TIME_LOCATION privilege as the
+						// coordinates, so asking for it can't fail a vehicle
+						// whose coordinates would otherwise resolve.
+						CurrentLocationHeading *struct {
+							Value float64 `json:"value"`
+						} `json:"currentLocationHeading"`
 					} `json:"signalsLatest"`
 				} `json:"data"`
 			}
@@ -998,6 +1007,10 @@ func (t *telemetryAPIService) FleetLocations(ctx context.Context, tenant models.
 				return nil
 			}
 			c := LocationCoords{Lat: coords.Value.Latitude, Lon: coords.Value.Longitude, Timestamp: coords.Timestamp}
+			if h := resp.Data.SignalsLatest.CurrentLocationHeading; h != nil {
+				heading := h.Value
+				c.Heading = &heading
+			}
 			t.locCache.Set(locCacheKey(tenant.ID, id), locCacheEntry{coords: &c}, fleetLocationsCacheTTL)
 			mu.Lock()
 			locs[id] = c
