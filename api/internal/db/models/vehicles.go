@@ -45,6 +45,7 @@ type Vehicle struct {
 	LastLon          null.Float64 `boil:"last_lon" json:"last_lon,omitempty" toml:"last_lon" yaml:"last_lon,omitempty"`
 	LastSeen         null.Time    `boil:"last_seen" json:"last_seen,omitempty" toml:"last_seen" yaml:"last_seen,omitempty"`
 	LocationPulledAt null.Time    `boil:"location_pulled_at" json:"location_pulled_at,omitempty" toml:"location_pulled_at" yaml:"location_pulled_at,omitempty"`
+	LastHeading      null.Float64 `boil:"last_heading" json:"last_heading,omitempty" toml:"last_heading" yaml:"last_heading,omitempty"`
 
 	R *vehicleR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L vehicleL  `boil:"-" json:"-" toml:"-" yaml:"-"`
@@ -72,6 +73,7 @@ var VehicleColumns = struct {
 	LastLon          string
 	LastSeen         string
 	LocationPulledAt string
+	LastHeading      string
 }{
 	TenantID:         "tenant_id",
 	TokenID:          "token_id",
@@ -94,6 +96,7 @@ var VehicleColumns = struct {
 	LastLon:          "last_lon",
 	LastSeen:         "last_seen",
 	LocationPulledAt: "location_pulled_at",
+	LastHeading:      "last_heading",
 }
 
 var VehicleTableColumns = struct {
@@ -118,6 +121,7 @@ var VehicleTableColumns = struct {
 	LastLon          string
 	LastSeen         string
 	LocationPulledAt string
+	LastHeading      string
 }{
 	TenantID:         "vehicles.tenant_id",
 	TokenID:          "vehicles.token_id",
@@ -140,6 +144,7 @@ var VehicleTableColumns = struct {
 	LastLon:          "vehicles.last_lon",
 	LastSeen:         "vehicles.last_seen",
 	LocationPulledAt: "vehicles.location_pulled_at",
+	LastHeading:      "vehicles.last_heading",
 }
 
 // Generated where
@@ -190,6 +195,7 @@ var VehicleWhere = struct {
 	LastLon          whereHelpernull_Float64
 	LastSeen         whereHelpernull_Time
 	LocationPulledAt whereHelpernull_Time
+	LastHeading      whereHelpernull_Float64
 }{
 	TenantID:         whereHelperstring{field: "\"vehicles\".\"tenant_id\""},
 	TokenID:          whereHelperint64{field: "\"vehicles\".\"token_id\""},
@@ -212,6 +218,7 @@ var VehicleWhere = struct {
 	LastLon:          whereHelpernull_Float64{field: "\"vehicles\".\"last_lon\""},
 	LastSeen:         whereHelpernull_Time{field: "\"vehicles\".\"last_seen\""},
 	LocationPulledAt: whereHelpernull_Time{field: "\"vehicles\".\"location_pulled_at\""},
+	LastHeading:      whereHelpernull_Float64{field: "\"vehicles\".\"last_heading\""},
 }
 
 // VehicleRels is where relationship names are stored.
@@ -251,9 +258,9 @@ func (r *vehicleR) GetTenant() *Tenant {
 type vehicleL struct{}
 
 var (
-	vehicleAllColumns            = []string{"tenant_id", "token_id", "owner_address", "make", "model", "year", "definition_id", "device_type", "imei", "serial", "minted_at", "raw", "synced_at", "created_at", "updated_at", "license_plate", "vin", "last_lat", "last_lon", "last_seen", "location_pulled_at"}
+	vehicleAllColumns            = []string{"tenant_id", "token_id", "owner_address", "make", "model", "year", "definition_id", "device_type", "imei", "serial", "minted_at", "raw", "synced_at", "created_at", "updated_at", "license_plate", "vin", "last_lat", "last_lon", "last_seen", "location_pulled_at", "last_heading"}
 	vehicleColumnsWithoutDefault = []string{"tenant_id", "token_id"}
-	vehicleColumnsWithDefault    = []string{"owner_address", "make", "model", "year", "definition_id", "device_type", "imei", "serial", "minted_at", "raw", "synced_at", "created_at", "updated_at", "license_plate", "vin", "last_lat", "last_lon", "last_seen", "location_pulled_at"}
+	vehicleColumnsWithDefault    = []string{"owner_address", "make", "model", "year", "definition_id", "device_type", "imei", "serial", "minted_at", "raw", "synced_at", "created_at", "updated_at", "license_plate", "vin", "last_lat", "last_lon", "last_seen", "location_pulled_at", "last_heading"}
 	vehiclePrimaryKeyColumns     = []string{"tenant_id", "token_id"}
 	vehicleGeneratedColumns      = []string{}
 )

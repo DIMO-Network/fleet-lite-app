@@ -1,9 +1,10 @@
 import { get as idbGet, set as idbSet, del as idbDel } from 'idb-keyval';
 import { VehicleCard } from '../types/vehicle.ts';
+import type { LatLon } from '../utils/fleet-map.ts';
 
 export interface FleetOverviewData {
     vehicles: VehicleCard[];
-    locations: Record<string, { lat: number; lon: number }>;
+    locations: Record<string, LatLon>;
 }
 
 interface PersistedFleetData extends FleetOverviewData {

@@ -14,8 +14,8 @@ import { TelemetryService } from '../services/telemetry-service.ts';
 import { FleetCache } from '../services/fleet-cache.ts';
 import { Vehicle, VehicleCard, VehiclesResponse, VehicleGroupRef } from '../types/vehicle.ts';
 import {
-    createFleetMap, applyTileTheme, createVehicleClusterGroup,
-    seedLocationsFromDb, fetchFleetLocations,
+    createFleetMap, applyTileTheme, createVehicleClusterGroup, createVehicleMarker, setVehicleHeading,
+    seedLocationsFromDb, fetchFleetLocations, HeadingMarker, LatLon, VEHICLE_TOOLTIP_CSS,
     VEHICLE_MARKER_STYLE, VEHICLE_MARKER_STYLE_HOVER, VEHICLE_MARKER_STYLE_SELECTED, VEHICLE_MARKER_STYLE_HIDDEN,
     tripMapStyles,
 } from '../utils/fleet-map.ts';
@@ -40,8 +40,8 @@ export class FleetOverviewView extends LitElement {
     private leafletMap: L.Map | null = null;
     private tileLayer: L.TileLayer | null = null;
     private clusterGroup: L.MarkerClusterGroup | null = null;
-    private markers = new Map<string, L.CircleMarker>();
-    private lastLocations: Record<string, { lat: number; lon: number }> = {};
+    private markers = new Map<string, HeadingMarker>();
+    private lastLocations: Record<string, LatLon> = {};
     private resizeObserver: ResizeObserver | null = null;
     /** Tokens whose brand logo failed to load — fall back to the generic car icon. */
     @state() private brokenLogos = new Set<string>();
@@ -175,10 +175,16 @@ export class FleetOverviewView extends LitElement {
             if (this.quickViewVehicle?.tokenId !== tokenId) return;
             const loc = res.locations?.[tokenId];
             if (!loc) return;
-            this.lastLocations = { ...this.lastLocations, [tokenId]: { lat: loc.lat, lon: loc.lon } };
+            const fix: LatLon = { lat: loc.lat, lon: loc.lon, heading: loc.heading };
+            this.lastLocations = { ...this.lastLocations, [tokenId]: fix };
             const marker = this.markers.get(tokenId);
-            if (marker) marker.setLatLng([loc.lat, loc.lon]);
-            else this.addMarkers({ [tokenId]: { lat: loc.lat, lon: loc.lon } });
+            if (marker) {
+                marker.setLatLng([loc.lat, loc.lon]);
+                const title = this.vehicles.find((c) => c.tokenId === tokenId)?.title ?? `Vehicle ${tokenId}`;
+                setVehicleHeading(marker, title, loc.heading);
+            } else {
+                this.addMarkers({ [tokenId]: fix });
+            }
             // Refresh the card's "last seen" so the list reflects the live fix.
             if (loc.timestamp) {
                 this.vehicles = this.vehicles.map((c) =>
@@ -294,7 +300,7 @@ export class FleetOverviewView extends LitElement {
      * current group/search/hidden filter. Additive on purpose: the progressive loader
      * calls this per batch so markers stream in without clearing the map.
      */
-    private addMarkers(locations: Record<string, { lat: number; lon: number }>) {
+    private addMarkers(locations: Record<string, LatLon>) {
         if (!this.leafletMap) return;
         const titleMap = new Map(this.vehicles.map((v) => [v.tokenId, v.title]));
         const allowed = (this.selectedGroupId || this.searchQuery.trim()) ? this.visibleTokenIds() : null;
@@ -305,10 +311,11 @@ export class FleetOverviewView extends LitElement {
             if (allowed && !allowed.has(tokenId)) continue;
             const selected = this.quickViewVehicle?.tokenId === tokenId;
             const baseStyle = isHidden ? FleetOverviewView.MARKER_STYLE_HIDDEN : FleetOverviewView.MARKER_STYLE;
-            const marker = L.circleMarker(
-                [coords.lat, coords.lon],
+            const marker = createVehicleMarker(
+                coords,
+                titleMap.get(tokenId) ?? `Vehicle ${tokenId}`,
                 selected ? FleetOverviewView.MARKER_STYLE_SELECTED : baseStyle,
-            ).bindTooltip(titleMap.get(tokenId) ?? `Vehicle ${tokenId}`, { permanent: false, direction: 'top', offset: [0, -10] });
+            );
             marker.on('click', () => {
                 const v = this.vehicles.find((c) => c.tokenId === tokenId);
                 if (v) this.openQuickView(v);
@@ -573,6 +580,7 @@ export class FleetOverviewView extends LitElement {
         sharedStyles,
         unsafeCSS(leafletCss),
         unsafeCSS(markerClusterCss),
+        unsafeCSS(VEHICLE_TOOLTIP_CSS),
         css`
             :host {
                 display: flex;

@@ -11,7 +11,9 @@ import { SettingsService } from '../services/settings-service.ts';
  * these so the GPS points look and load identically.
  */
 
-export type LatLon = { lat: number; lon: number };
+/** A vehicle's last GPS fix. heading is degrees clockwise from true north,
+ *  present only for vehicles that report currentLocationHeading. */
+export type LatLon = { lat: number; lon: number; heading?: number };
 
 // ---- Base map + tiles ----------------------------------------------------
 
@@ -125,16 +127,135 @@ export const VEHICLE_MARKER_STYLE_HOVER: L.CircleMarkerOptions = { radius: 8, fi
 export const VEHICLE_MARKER_STYLE_SELECTED: L.CircleMarkerOptions = { radius: 9, fillColor: MAP_COLORS.sky, color: MAP_COLORS.ink, weight: 3, opacity: 1, fillOpacity: 1 };
 export const VEHICLE_MARKER_STYLE_HIDDEN: L.CircleMarkerOptions = { radius: 4, fillColor: MAP_COLORS.muted, color: MAP_COLORS.ink, weight: 1, opacity: 0.35, fillOpacity: 0.35 };
 
-/** A green GPS dot with a hover tooltip, matching the vehicle map's style. */
+// Internals of L.CircleMarker / L.SVG that HeadingMarker draws with. Leaflet's
+// typings don't expose them.
+type CircleMarkerInternals = {
+    _point: L.Point;
+    _radius: number;
+    _renderer: L.Renderer & { _setPath(layer: L.Path, d: string): void };
+    _pxBounds: L.Bounds;
+    _clickTolerance(): number;
+    _empty(): boolean;
+};
+
+/** How far the heading point reaches from the dot's centre. Scales with the
+ *  hover/selected radius so the shape holds; the constant keeps the point
+ *  legible on the smallest (default 5px) dot. */
+const headingTipReach = (r: number) => r * 1.6 + 2;
+
+/**
+ * A vehicle GPS dot that, when the vehicle reports a heading, draws as a
+ * teardrop pointing in that direction: the same fill and ring, one silhouette,
+ * so a fleet mixing vehicles with and without heading still reads as one set of
+ * dots. Everything else is CircleMarker — setStyle/radius (hover, selected,
+ * hidden), tooltips, clustering. SVG renderer only; under Canvas it stays a dot.
+ */
+export class HeadingMarker extends L.CircleMarker {
+    private heading: number | null = null;
+
+    setHeading(deg: number | null | undefined): this {
+        this.heading = typeof deg === 'number' && Number.isFinite(deg) ? ((deg % 360) + 360) % 360 : null;
+        if ((this as unknown as { _map?: L.Map })._map) this.redraw();
+        return this;
+    }
+
+    getHeading(): number | null {
+        return this.heading;
+    }
+
+    private get drawsHeading(): boolean {
+        const self = this as unknown as CircleMarkerInternals;
+        return this.heading !== null && self._renderer instanceof L.SVG;
+    }
+
+    _updateBounds(): void {
+        const self = this as unknown as CircleMarkerInternals;
+        if (!this.drawsHeading) {
+            // @ts-expect-error — Leaflet internal, untyped
+            return super._updateBounds();
+        }
+        // Grow the culling box to cover the point, whichever way it faces.
+        const reach = headingTipReach(self._radius) + self._clickTolerance();
+        const p = L.point(reach, reach);
+        self._pxBounds = L.bounds(self._point.subtract(p), self._point.add(p));
+    }
+
+    _updatePath(): void {
+        const self = this as unknown as CircleMarkerInternals;
+        if (!this.drawsHeading) {
+            // @ts-expect-error — Leaflet internal, untyped
+            return super._updatePath();
+        }
+        if (self._empty()) {
+            self._renderer._setPath(this, 'M0 0');
+            return;
+        }
+        const { x, y } = self._point;
+        const r = Math.max(Math.round(self._radius), 1);
+        const d = headingTipReach(r);
+        // Screen space: y grows downward, so north (0°) is -y.
+        const rad = (this.heading! * Math.PI) / 180;
+        const ux = Math.sin(rad);
+        const uy = -Math.cos(rad);
+        // The point meets the circle along the two tangents from the tip.
+        const a = Math.acos(r / d);
+        const at = (ang: number) => [
+            x + r * (ux * Math.cos(ang) - uy * Math.sin(ang)),
+            y + r * (ux * Math.sin(ang) + uy * Math.cos(ang)),
+        ];
+        const [p1x, p1y] = at(a);
+        const [p2x, p2y] = at(-a);
+        const f = (n: number) => n.toFixed(2);
+        self._renderer._setPath(this,
+            `M${f(p1x)},${f(p1y)}L${f(x + ux * d)},${f(y + uy * d)}L${f(p2x)},${f(p2y)}` +
+            `A${r},${r} 0 1,0 ${f(p1x)},${f(p1y)}Z`);
+    }
+}
+
+const COMPASS_POINTS = ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'];
+
+/** "northeast" for 45°, etc. — eight points is as precise as a glance needs. */
+export function compassPoint(deg: number): string {
+    return COMPASS_POINTS[Math.round((((deg % 360) + 360) % 360) / 45) % 8];
+}
+
+function escapeHtml(s: string): string {
+    return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+}
+
+/** Tooltip body for a vehicle dot: its title, plus which way it faces when
+ *  known. "Facing" rather than "heading" — a parked vehicle keeps the heading
+ *  of its last fix, and "heading" would read as moving. */
+export function vehicleTooltipHtml(title: string, heading?: number | null): string {
+    const facing = typeof heading === 'number' && Number.isFinite(heading)
+        ? `<span class="vehicle-tip-heading">Facing ${compassPoint(heading)}</span>`
+        : '';
+    return `${escapeHtml(title)}${facing}`;
+}
+
+/** Update a vehicle dot's heading and its tooltip together. */
+export function setVehicleHeading(marker: HeadingMarker, title: string, heading?: number | null): void {
+    marker.setHeading(heading);
+    marker.setTooltipContent(vehicleTooltipHtml(title, heading));
+}
+
+/** A green GPS dot (teardrop when heading is known) with a hover tooltip,
+ *  matching the vehicle map's style. */
 export function createVehicleMarker(
-    lat: number,
-    lon: number,
+    coords: LatLon,
     title: string,
     style: L.CircleMarkerOptions = VEHICLE_MARKER_STYLE,
-): L.CircleMarker {
-    return L.circleMarker([lat, lon], style)
-        .bindTooltip(title, { permanent: false, direction: 'top', offset: [0, -10] });
+): HeadingMarker {
+    return new HeadingMarker([coords.lat, coords.lon], style)
+        .setHeading(coords.heading)
+        // Clears the point at hover size even when it faces straight up.
+        .bindTooltip(vehicleTooltipHtml(title, coords.heading), { permanent: false, direction: 'top', offset: [0, -14] });
 }
+
+/** Tooltip lines for vehicle dots. Each map's shadow root needs it. */
+export const VEHICLE_TOOLTIP_CSS = `
+    .leaflet-tooltip .vehicle-tip-heading { display: block; font-weight: 400; opacity: 0.72; }
+`;
 
 function clusterIcon(count: number): L.DivIcon {
     const size = count < 10 ? 30 : count < 50 ? 38 : 46;
@@ -190,7 +311,7 @@ export function seedLocationsFromDb(vehicles: Vehicle[]): Record<string, LatLon>
     const seed: Record<string, LatLon> = {};
     for (const v of vehicles) {
         if (typeof v.lastLat === 'number' && typeof v.lastLon === 'number') {
-            seed[String(v.tokenId)] = { lat: v.lastLat, lon: v.lastLon };
+            seed[String(v.tokenId)] = { lat: v.lastLat, lon: v.lastLon, heading: v.lastHeading };
         }
     }
     return seed;
@@ -254,7 +375,7 @@ export async function fetchFleetLocations(opts: FetchFleetLocationsOpts): Promis
                 if (res.noPermissions?.length) onNoPermissions?.(res.noPermissions);
                 const locs: Record<string, LatLon> = {};
                 for (const [id, loc] of Object.entries(res.locations ?? {})) {
-                    locs[id] = { lat: loc.lat, lon: loc.lon };
+                    locs[id] = { lat: loc.lat, lon: loc.lon, heading: loc.heading };
                     fetched[id] = locs[id];
                 }
                 if (Object.keys(locs).length) onBatch(locs);
