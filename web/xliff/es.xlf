@@ -1682,9 +1682,11 @@
 </trans-unit>
 <trans-unit id="s121ef1f89a9e972d">
   <source>The share could not be completed.</source>
+  <target>No se pudo completar el uso compartido.</target>
 </trans-unit>
 <trans-unit id="sfe255b8825ebcad9">
   <source>Until <x id="0" equiv-text="${when.toLocaleDateString()}"/></source>
+  <target>Hasta el <x id="0" equiv-text="${when.toLocaleDateString()}"/></target>
 </trans-unit>
 <trans-unit id="s47e52a1832bbfd38">
   <source>Share vehicle</source>
@@ -1756,15 +1758,19 @@
 </trans-unit>
 <trans-unit id="s9eca87f909adc2a1">
   <source>The access could not be revoked.</source>
+  <target>No se pudo revocar el acceso.</target>
 </trans-unit>
 <trans-unit id="s81454e9f6eaf08b6">
   <source>Revoking…</source>
+  <target>Revocando…</target>
 </trans-unit>
 <trans-unit id="sfa9dc1928d99a604">
   <source>Revoke?</source>
+  <target>¿Revocar?</target>
 </trans-unit>
 <trans-unit id="scb489a1a173ac3f0">
   <source>Yes</source>
+  <target>Sí</target>
 </trans-unit>
 <trans-unit id="s51621cc0113782ba">
   <source>Revoke access for <x id="0" equiv-text="${shortWallet(s.grantee)}"/></source>
@@ -2001,6 +2007,30 @@
 <trans-unit id="s5d3e747464563886">
   <source>Charging now</source>
   <target>Cargando ahora</target>
+</trans-unit>
+<trans-unit id="s69992ad613cabe68">
+  <source>App: <x id="0" equiv-text="${app}"/></source>
+  <target>Aplicación: <x id="0" equiv-text="${app}"/></target>
+</trans-unit>
+<trans-unit id="s4b1f92075c316409">
+  <source>Documents are included, and the expiry stays the same.</source>
+  <target>Incluye los documentos y el vencimiento no cambia.</target>
+</trans-unit>
+<trans-unit id="s5ed9cb3a4ee0c666">
+  <source>This wallet already has access (<x id="0" equiv-text="${this.formatExpiry(current.expiresAt)}"/>). Sharing again replaces it with the standard access for the duration below.</source>
+  <target>Esta wallet ya tiene acceso (<x id="0" equiv-text="${this.formatExpiry(current.expiresAt)}"/>). Compartir de nuevo lo reemplaza por el acceso estándar con la duración de abajo.</target>
+</trans-unit>
+<trans-unit id="s02e53495741cdb59">
+  <source>The share is taking longer than expected. It may still complete — check the shared-with list in a moment.</source>
+  <target>El uso compartido está tardando más de lo esperado. Puede que aún se complete: revise la lista de accesos en un momento.</target>
+</trans-unit>
+<trans-unit id="s89f2ac333c79d010">
+  <source>The revoke is taking longer than expected. It may still complete — check the shared-with list in a moment.</source>
+  <target>La revocación está tardando más de lo esperado. Puede que aún se complete: revise la lista de accesos en un momento.</target>
+</trans-unit>
+<trans-unit id="sa474d1f3506940ba">
+  <source>It also removes permissions this app doesn’t recognise.</source>
+  <target>También quita permisos que esta aplicación no reconoce.</target>
 </trans-unit>
 </body>
 </file>

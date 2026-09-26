@@ -100,3 +100,12 @@ export function remainingShareDays(expiresAt: string | null | undefined, now: nu
 
     return Math.max(1, Math.ceil((when - now) / 86_400_000));
 }
+
+/**
+ * Whether the grant carries bits beyond the permissions this app knows (8, in
+ * bits 2-17). A re-share writes exactly the standard mask, so those would be
+ * removed too — unnamed, but not unmentioned.
+ */
+export function hasUnrecognisedPermissions(hex: string | null | undefined): boolean {
+    return parsePermissionMask(hex) >> 18n !== 0n;
+}
