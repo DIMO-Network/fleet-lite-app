@@ -128,7 +128,7 @@ export class SideNav extends LitElement {
                 width: auto;
                 display: block;
             }
-            /* The gradient wordmark is drawn for dark backgrounds; on the light
+            /* The wordmark is white, drawn for dark backgrounds; on the light
                canvas render it as solid ink. */
             .brand .wordmark.on-light { filter: brightness(0) opacity(0.88); }
             .brand .product {
@@ -252,7 +252,7 @@ export class SideNav extends LitElement {
             </button>
             <!-- Product name is a brand, so it is not localized. -->
             <a class="brand" href="#/${this.tenantId}/" aria-label="DIMO Fleet">
-                <img class="wordmark ${this.theme === 'light' ? 'on-light' : ''}" src="/assets/dimo-wordmark.png" alt="" />
+                <img class="wordmark ${this.theme === 'light' ? 'on-light' : ''}" src="/assets/dimo-wordmark.svg" alt="" />
                 <span class="product">Fleet</span>
                 <img class="mark" src="/assets/dimo-mark.png" alt="" />
             </a>
