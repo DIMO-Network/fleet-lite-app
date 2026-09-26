@@ -17,9 +17,7 @@ import {
     formatVoltage,
 } from '../utils/units.ts';
 import { tripDurationMs } from '../utils/trips.ts';
-import { SettingsService } from '../services/settings-service.ts';
-import { buildShareVehiclesUrl, grantFallbackRedirectUri, pickGrantRedirectUri } from '../utils/dimo-permissions.ts';
-import { LicenseService } from '../services/license-service.ts';
+import { GrantLinkController } from '../utils/grant-link.ts';
 import '../elements/vehicle-trips-panel.ts';
 import '../elements/vehicle-behavior-panel.ts';
 
@@ -42,11 +40,9 @@ export class VehicleDetailsView extends LitElement {
     @state() private distanceBuckets: TimeSeriesBucket[] = [];
     @state() private telemetryPermissionsRequired = false;
     @state() private telemetryDevLicense = '';
-    /** Registered redirect for grants to the license; see resolveGrantRedirect. */
-    @state() private grantRedirect: string | null | undefined = undefined;
-    // Login host for the grant link in the permissions banner. Empty until
-    // /public/settings resolves; the banner falls back to plain text.
-    @state() private loginUrl = '';
+    // "Grant permissions" in the permissions banner: the fleet license's
+    // sharing link, or the setup hint (see GrantLinkController).
+    private readonly grant = new GrantLinkController(this);
     @state() private favoriteBusy = false;
     // Detected trips over the last 7 days, for the Utilization (driving time)
     // card. The trips panel fetches its own (selectable) window separately.
@@ -110,7 +106,7 @@ export class VehicleDetailsView extends LitElement {
             this.latestSignals = latestRes.value.signals || {};
             this.telemetryPermissionsRequired = !!latestRes.value.permissionsRequired;
             this.telemetryDevLicense = latestRes.value.devLicense || '';
-            this.resolveGrantRedirect(this.telemetryDevLicense);
+            this.grant.setLicense(this.telemetryDevLicense);
         } else {
             console.warn('latest telemetry failed', latestRes.reason);
         }
@@ -154,48 +150,7 @@ export class VehicleDetailsView extends LitElement {
     connectedCallback() {
         super.connectedCallback();
         this.loadAll();
-        void SettingsService.getInstance()
-            .fetchPublicSettings()
-            .then((s) => { this.loginUrl = s.loginUrl; })
-            .catch(() => { /* banner degrades to text-only */ });
         this.unsubscribePrefs = PrefsService.getInstance().subscribe(() => this.requestUpdate());
-    }
-
-    /**
-     * Link that sends the vehicle owner to DIMO's sharing screen for this
-     * vehicle, asking for every privilege. Empty while /public/settings is
-     * still in flight or the API didn't name a license.
-     */
-    private grantUrl(): string {
-        // Unknown (lookup pending) or unusable: no link, never a guessed redirect.
-        if (!this.grantRedirect) return '';
-        if (!this.loginUrl || !this.telemetryDevLicense) return '';
-        return buildShareVehiclesUrl({
-            loginUrl: this.loginUrl,
-            clientId: this.telemetryDevLicense,
-            redirectUri: this.grantRedirect,
-            vehicles: [this.tokenId],
-        });
-    }
-
-    /**
-     * Look up where a grant to `license` may return (see pickGrantRedirectUri).
-     * undefined = lookup pending: no link yet. A failed lookup falls back to
-     * the app root, never the login page. null = the license has no usable
-     * URI on our origin, so a link would only reach DIMO's credentials error;
-     * the banner explains the fix instead.
-     */
-    private resolveGrantRedirect(license: string) {
-        this.grantRedirect = undefined;
-        if (!license) return;
-        LicenseService.getInstance()
-            .redirectUris(license)
-            .then((uris) => {
-                if (this.telemetryDevLicense === license) this.grantRedirect = pickGrantRedirectUri(uris, location.origin);
-            })
-            .catch(() => {
-                if (this.telemetryDevLicense === license) this.grantRedirect = grantFallbackRedirectUri();
-            });
     }
 
     disconnectedCallback() {
@@ -1091,12 +1046,7 @@ export class VehicleDetailsView extends LitElement {
                                 `)}
                                 </p>
                             </div>
-                            ${this.grantUrl() ? html`
-                                <a class="grant" href=${this.grantUrl()} target="_blank" rel="noopener">
-                                    ${msg('Grant permissions')}
-                                    <span class="material-symbols-outlined" style="font-size:14px;">open_in_new</span>
-                                </a>
-                            ` : this.grantRedirect === null ? html`<p class="grant-setup">${msg(html`To grant from here, add <code>${location.origin}/</code> to this license’s redirect URIs in the DIMO developer console.`)}</p>` : nothing}
+                            ${this.grant.render([this.tokenId], 14)}
                         </div>
                     ` : nothing}
 

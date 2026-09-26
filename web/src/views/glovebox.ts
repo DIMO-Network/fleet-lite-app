@@ -9,9 +9,7 @@ import { DocumentEntry } from '../types/document.ts';
 import { categoryLabel, EXPECTED_CE_TYPES } from '../utils/document-categories.ts';
 import { documentSummary } from '../utils/document-summary.ts';
 import { FleetCache } from '../services/fleet-cache.ts';
-import { SettingsService } from '../services/settings-service.ts';
-import { buildShareVehiclesUrl, grantFallbackRedirectUri, pickGrantRedirectUri } from '../utils/dimo-permissions.ts';
-import { LicenseService } from '../services/license-service.ts';
+import { GrantLinkController } from '../utils/grant-link.ts';
 import { TCOCache } from '../services/tco-cache.ts';
 import '../elements/upload-document-modal.ts';
 import '../elements/document-detail-modal.ts';
@@ -54,11 +52,9 @@ export class GloveboxView extends LitElement {
     @state() private docCounts = new Map<number, number>();
     @state() private permissionsRequired = false;
     @state() private devLicense = '';
-    /** Registered redirect for grants to the license; see resolveGrantRedirect. */
-    @state() private grantRedirect: string | null | undefined = undefined;
-    // Login host for the grant link in the permissions banner. Empty until
-    // /public/settings resolves; the banner falls back to plain text.
-    @state() private loginUrl = '';
+    // "Grant permissions" in the permissions banner: the fleet license's
+    // sharing link, or the setup hint (see GrantLinkController).
+    private readonly grant = new GrantLinkController(this);
 
     @state() private showUploadModal = false;
     @state() private detailOpen: DocumentEntry | null = null;
@@ -69,10 +65,6 @@ export class GloveboxView extends LitElement {
     async connectedCallback() {
         super.connectedCallback();
         this.connected = true;
-        void SettingsService.getInstance()
-            .fetchPublicSettings()
-            .then((s) => { this.loginUrl = s.loginUrl; })
-            .catch(() => { /* banner degrades to text-only */ });
         try {
             const res = await ApiService.getInstance().get<VehiclesResponse>('/vehicles');
             this.vehicles = res.vehicles || [];
@@ -130,51 +122,13 @@ export class GloveboxView extends LitElement {
             this.documents = res.documents || [];
             this.permissionsRequired = !!res.permissionsRequired;
             this.devLicense = res.devLicense || '';
-            this.resolveGrantRedirect(this.devLicense);
+            this.grant.setLicense(this.devLicense);
             this.docCounts = new Map(this.docCounts).set(tokenId, this.documents.length);
         } catch (e) {
             console.error('Failed to load documents', e);
         } finally {
             this.loadingDocs = false;
         }
-    }
-
-    /**
-     * Link that sends the vehicle owner to DIMO's sharing screen for the
-     * selected vehicle, asking for every privilege — the glovebox needs
-     * RAW_DATA (7), which no permission template grants. Empty while
-     * /public/settings is still in flight or the API didn't name a license.
-     */
-    private grantUrl(): string {
-        // Unknown (lookup pending) or unusable: no link, never a guessed redirect.
-        if (!this.grantRedirect) return '';
-        if (!this.loginUrl || !this.devLicense || !this.selected) return '';
-        return buildShareVehiclesUrl({
-            loginUrl: this.loginUrl,
-            clientId: this.devLicense,
-            redirectUri: this.grantRedirect,
-            vehicles: [this.selected.tokenId],
-        });
-    }
-
-    /**
-     * Look up where a grant to `license` may return (see pickGrantRedirectUri).
-     * undefined = lookup pending: no link yet. A failed lookup falls back to
-     * the app root, never the login page. null = the license has no usable
-     * URI on our origin, so a link would only reach DIMO's credentials error;
-     * the banner explains the fix instead.
-     */
-    private resolveGrantRedirect(license: string) {
-        this.grantRedirect = undefined;
-        if (!license) return;
-        LicenseService.getInstance()
-            .redirectUris(license)
-            .then((uris) => {
-                if (this.devLicense === license) this.grantRedirect = pickGrantRedirectUri(uris, location.origin);
-            })
-            .catch(() => {
-                if (this.devLicense === license) this.grantRedirect = grantFallbackRedirectUri();
-            });
     }
 
     private async selectVehicle(v: Vehicle) {
@@ -628,12 +582,7 @@ export class GloveboxView extends LitElement {
                                         Documents you upload here are still saved — you just can't list or download them yet.`)}
                                     </p>
                                 </div>
-                                ${this.grantUrl() ? html`
-                                    <a class="grant" href=${this.grantUrl()} target="_blank" rel="noopener">
-                                        ${msg('Grant permissions')}
-                                        <span class="material-symbols-outlined" style="font-size:16px;">open_in_new</span>
-                                    </a>
-                                ` : this.grantRedirect === null ? html`<p class="grant-setup">${msg(html`To grant from here, add <code>${location.origin}/</code> to this license’s redirect URIs in the DIMO developer console.`)}</p>` : nothing}
+                                ${this.grant.render([this.selected.tokenId], 16)}
                             </div>
                         ` : nothing}
                         <div class="filter-row">

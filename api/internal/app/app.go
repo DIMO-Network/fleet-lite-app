@@ -13,6 +13,7 @@ import (
 	"github.com/DIMO-Network/fleet-lite-app/internal/service"
 	"github.com/DIMO-Network/shared/pkg/db"
 	"github.com/DIMO-Network/shared/pkg/middleware/metrics"
+	"github.com/ethereum/go-ethereum/common"
 	jwtware "github.com/gofiber/contrib/jwt"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -175,11 +176,22 @@ func App(
 	app.Get("/identity/owner/:owner", identityCtrl.GetOwnerBy0x)
 	app.Post("/identity/proxy", identityCtrl.ProxyGraphQLQuery)
 
-	// JWT auth middleware against DIMO JWKS
+	// JWT auth middleware against DIMO JWKS, then the audience: DIMO signs
+	// every app's tokens with the same keys, so a valid signature alone says
+	// nothing about whether the token was issued to this app. See
+	// RequireTokenAudience. Without a client id (dev, where Login with DIMO is
+	// not configured and nobody can sign in) there is nothing to compare
+	// against; Validate refuses to start prod that way.
 	jwtAuth := jwtware.New(jwtware.Config{
 		JWKSetURLs: []string{settings.JwtKeySetURL.String()},
 	})
-	authApp := app.Group("", jwtAuth)
+	authHandlers := []fiber.Handler{jwtAuth}
+	if settings.DimoAuthClientID != (common.Address{}) {
+		authHandlers = append(authHandlers, RequireTokenAudience(settings.DimoAuthClientID))
+	} else {
+		logger.Warn().Msg("DIMO_AUTH_CLIENT_ID is unset: JWTs issued to any DIMO app are accepted")
+	}
+	authApp := app.Group("", authHandlers...)
 
 	// Tenant management (JWT only — these precede / manage tenant selection;
 	// each handler authorizes against the :id path param itself).

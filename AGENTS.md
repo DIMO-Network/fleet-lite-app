@@ -61,7 +61,13 @@ Public:
 - `GET  /identity/vehicle/:tokenID`, `GET /identity/definition/:id`,
   `GET /identity/owner/:owner`, `POST /identity/proxy` — DIMO identity-api proxies
 
-Authenticated (DIMO JWT in `Authorization: Bearer ...`):
+Authenticated (DIMO JWT in `Authorization: Bearer ...`, issued to **this app**):
+- DIMO signs every app's Login-with-DIMO tokens with the same keys and puts the
+  requesting license in `aud`. The API rejects any token whose `aud` isn't
+  `DIMO_AUTH_CLIENT_ID` (`internal/app/audience.go`), and `login.html` stores a
+  `?token=` only under the same rule (`web/src/login-redirect.ts`). A "Grant
+  permissions" round trip returns the *grantor's* token for the *fleet's*
+  license — never treat it as a session. Don't loosen either check.
 - `GET /vehicles` — vehicles owned by the JWT's `ethereum_address`
 - `GET /vehicles/:tokenID` — single vehicle by tokenID
 - `GET /telemetry/:tokenID/latest`, `GET /telemetry/:tokenID/timeseries` — DIMO telemetry-api
@@ -134,7 +140,10 @@ Don't add these unless asked — `docs/PLAN.md` lists them and the rationale:
 - Tenant model, alerts, ledger, maintenance, reports, rental sessions,
   guests, kore, google-calendar (all stripped from the API — see PLAN.md §"Deliberately dropped from rental-fleets-app/api")
 - River job queue + Langfuse observability
-- Tests
+
+Tests: Go tests in `api/` (`go test ./...`, testify), web unit tests in `web/`
+(`npm test`, vitest; `src/**/*.test.ts`). Pure logic that decides security or
+money questions gets a test.
 
 Already landed (no longer "not yet" — the frontend is wired to the real api,
 not mock data): `/vehicles`, telemetry charts, the glovebox documents flow
