@@ -117,6 +117,14 @@ mkcert generates `web/.mkcert/cert.pem` and `key.pem` on first run.
 
 - `3009` — Vite dev server (rental-fleets-app uses 3008; don't collide).
 
+## CI and releases
+
+See [`docs/RELEASING.md`](docs/RELEASING.md). PR checks are `go-lint`,
+`go-test` and `web`. Merging to `main` builds the only image and deploys it to
+dev; a `v*` tag deploys that same image to prod — the prod workflow never
+builds. Actions in `.github/workflows/` are pinned to commit SHAs with the
+version in a comment; Dependabot updates them.
+
 ## Future api/ standards
 
 When the Go backend lands, follow the same standards as
