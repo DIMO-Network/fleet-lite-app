@@ -95,7 +95,7 @@ export class ManageGeofenceVehiclesModal extends LitElement {
                 flex-shrink: 0; height: 40px; padding: 0 12px; margin-bottom: 12px;
                 border-radius: var(--radius-md);
                 background: var(--surface-container-high);
-                border: 1px solid var(--outline-variant);
+                border: 1px solid var(--control-border);
                 transition: border-color 0.15s ease, box-shadow 0.15s ease;
             }
             .search:focus-within { border-color: var(--focus-ring); box-shadow: 0 0 0 3px var(--accent-soft); }

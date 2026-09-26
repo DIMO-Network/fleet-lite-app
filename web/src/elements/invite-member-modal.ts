@@ -106,14 +106,14 @@ export class InviteMemberModal extends LitElement {
                 padding: 0 12px;
                 background-color: var(--surface-container-high);
                 color: var(--on-surface);
-                border: 1px solid var(--outline-variant);
+                border: 1px solid var(--control-border);
                 border-radius: var(--radius-md);
                 font: var(--type-body-sm);
                 transition: border-color 0.15s ease, box-shadow 0.15s ease;
             }
             .field input[type="email"]::placeholder { color: var(--on-surface-variant); }
             .field input[type="email"]:hover:not(:focus-visible),
-            .field select:hover:not(:focus-visible) { border-color: var(--outline); }
+            .field select:hover:not(:focus-visible) { border-color: var(--control-border-hover); }
             .field input[type="email"]:focus-visible, .field select:focus-visible {
                 outline: none;
                 border-color: var(--focus-ring);

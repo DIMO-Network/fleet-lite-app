@@ -218,7 +218,7 @@ export class ChargingView extends LitElement {
             td:nth-child(2), td:nth-child(3) { color: var(--on-surface-variant); white-space: nowrap; }
             th.num, td.num { text-align: right; white-space: nowrap; }
 
-            /* Primary action: DIMO gradient pill. */
+            /* Primary action: solid ink (--btn-primary-*), as .btn-primary. */
             .export-btn {
                 display: inline-flex;
                 align-items: center;
@@ -255,7 +255,7 @@ export class ChargingView extends LitElement {
                 height: 40px;
                 background: var(--surface-container-high);
                 color: var(--on-surface);
-                border: 1px solid var(--outline-variant);
+                border: 1px solid var(--control-border);
                 border-radius: var(--radius-md);
                 padding: 0 12px;
                 font: var(--type-body-sm);

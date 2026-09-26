@@ -715,12 +715,19 @@ export class VehicleDetailsView extends LitElement {
             .placeholder-body p { font: var(--type-body-sm); color: var(--on-surface-variant); margin-bottom: 4px; }
             .placeholder-body p.small { font: var(--type-label); }
 
-            .pill-normal {
+            .pill-normal,
+            .pill-check {
                 padding: 2px 8px;
                 border-radius: var(--radius-sm);
                 background: color-mix(in srgb, var(--positive) 14%, transparent);
                 color: var(--positive);
                 font: var(--type-label);
+            }
+            /* An out-of-range coolant reading said "Check" in the all-clear
+               green. */
+            .pill-check {
+                background: color-mix(in srgb, var(--warning) 14%, transparent);
+                color: var(--warning);
             }
 
             .distance-row {
@@ -858,7 +865,7 @@ export class VehicleDetailsView extends LitElement {
                 <div style="display:flex; justify-content:space-between; align-items:flex-end;">
                     <div class="stat-value-lg"><span class="num">${fmt.value}</span><span class="unit">${fmt.unit}</span></div>
                     ${typeof c === 'number'
-                        ? html`<span class="pill-normal">${normal ? msg('Normal') : msg('Check')}</span>`
+                        ? html`<span class=${normal ? 'pill-normal' : 'pill-check'}>${normal ? msg('Normal') : msg('Check')}</span>`
                         : nothing}
                 </div>
             </div>

@@ -489,12 +489,12 @@ export class ShareVehicleModal extends LitElement {
             input[type='text'] {
                 width: 100%; height: 40px; padding: 0 12px;
                 background-color: var(--surface-container-high); color: var(--on-surface);
-                border: 1px solid var(--outline-variant); border-radius: var(--radius-md);
+                border: 1px solid var(--control-border); border-radius: var(--radius-md);
                 font: var(--type-body-sm);
                 transition: border-color 0.15s ease, box-shadow 0.15s ease;
             }
             input[type='text']::placeholder { color: var(--on-surface-variant); }
-            input[type='text']:hover:not(:disabled):not(:focus-visible) { border-color: var(--outline); }
+            input[type='text']:hover:not(:disabled):not(:focus-visible) { border-color: var(--control-border-hover); }
             input[type='text']:focus-visible {
                 outline: none; border-color: var(--focus-ring); box-shadow: 0 0 0 3px var(--accent-soft);
             }

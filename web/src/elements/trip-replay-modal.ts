@@ -240,7 +240,7 @@ export class TripReplayModal extends LitElement {
             }
             .progress-fill {
                 height: 100%;
-                background: var(--brand-gradient);
+                background: var(--progress-fill);
                 border-radius: var(--radius-full);
             }
             .event-tick {

@@ -87,6 +87,7 @@ export class UploadDocumentModal extends LitElement {
             .close:hover { background: var(--surface-container-high); color: var(--on-surface); }
 
             .drop {
+                position: relative;
                 display: flex;
                 flex-direction: column;
                 align-items: center;
@@ -101,10 +102,17 @@ export class UploadDocumentModal extends LitElement {
                 transition: border-color 0.15s ease, background 0.15s ease;
             }
             .drop:hover, .drop.over, .drop:focus-within {
-                border-color: var(--accent);
-                background: var(--accent-soft);
+                border-color: var(--control-border-hover);
+                background: var(--surface-container-high);
             }
-            .drop input { display: none; }
+            /* Focusable, just not visible: with display:none the only way to
+               choose a file was a pointer. The label keeps the whole zone
+               clickable; :focus-within shows keyboard focus on the zone. */
+            .drop input {
+                position: absolute; width: 1px; height: 1px; opacity: 0;
+                overflow: hidden; pointer-events: none;
+            }
+            .drop:focus-within { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
             .drop .icon {
                 width: 48px;
                 height: 48px;
@@ -113,13 +121,13 @@ export class UploadDocumentModal extends LitElement {
                 align-items: center;
                 justify-content: center;
                 border-radius: var(--radius-full);
-                background: var(--accent-soft);
-                color: var(--accent-ink);
+                background: var(--surface-container-high);
+                color: var(--on-surface);
                 transition: background 0.15s ease;
             }
-            .drop:hover .icon, .drop.over .icon { background: var(--accent-soft-strong); }
+            .drop:hover .icon, .drop.over .icon { background: var(--surface-container-highest); }
             .drop .icon .material-symbols-outlined { font-size: 24px; }
-            .drop strong { font-weight: 500; color: var(--accent-ink); }
+            .drop strong { font-weight: 600; color: var(--on-surface); }
             .drop .hint { font: var(--type-label); color: var(--on-surface-variant); margin-top: 4px; }
 
             .field { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
@@ -129,14 +137,14 @@ export class UploadDocumentModal extends LitElement {
                 padding: 0 12px;
                 background-color: var(--surface-container-high);
                 color: var(--on-surface);
-                border: 1px solid var(--outline-variant);
+                border: 1px solid var(--control-border);
                 border-radius: var(--radius-md);
                 font: var(--type-body-sm);
                 transition: border-color 0.15s ease, box-shadow 0.15s ease;
             }
             .field input[type="text"]::placeholder { color: var(--on-surface-variant); }
             .field select:hover:not(:focus-visible),
-            .field input[type="text"]:hover:not(:focus-visible) { border-color: var(--outline); }
+            .field input[type="text"]:hover:not(:focus-visible) { border-color: var(--control-border-hover); }
             .field select:focus-visible, .field input[type="text"]:focus-visible {
                 outline: none;
                 border-color: var(--focus-ring);
@@ -226,8 +234,8 @@ export class UploadDocumentModal extends LitElement {
                 height: 28px;
                 margin: 0 auto 16px;
                 border-radius: var(--radius-full);
-                border: 2.5px solid var(--accent-soft-strong);
-                border-top-color: var(--accent);
+                border: 2.5px solid var(--outline-variant);
+                border-top-color: var(--primary);
                 animation: upload-spin 0.8s linear infinite;
             }
             @keyframes upload-spin { to { transform: rotate(360deg); } }

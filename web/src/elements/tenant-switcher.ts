@@ -79,7 +79,7 @@ export class TenantSwitcher extends LitElement {
             }
             .item:hover { background: var(--surface-container-high); }
             .item.current { font-weight: 500; color: var(--primary); }
-            .item .check { color: var(--accent-ink); font-size: 18px; flex: none; }
+            .item .check { color: var(--primary); font-size: 18px; flex: none; }
             .sep { height: 1px; background: var(--outline-variant); margin: 6px 4px; }
             .item.add { justify-content: flex-start; color: var(--on-surface-variant); }
             .item.add:hover { color: var(--on-surface); }

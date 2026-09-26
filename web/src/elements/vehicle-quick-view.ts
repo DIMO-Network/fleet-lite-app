@@ -395,7 +395,8 @@ export class VehicleQuickView extends LitElement {
             .close-btn .material-symbols-outlined { font-size: 20px; }
             .close-btn:hover { background: var(--surface-container-high); color: var(--primary); }
 
-            /* Real-time toggle: neutral pill; on = accent tint (it's live). */
+            /* Real-time toggle: neutral pill; on = raised pill + pulsing accent dot
+               (the dot is the live status). */
             .rt-btn {
                 display: inline-flex;
                 align-items: center;
@@ -533,10 +534,12 @@ export class VehicleQuickView extends LitElement {
                 transition: background 0.15s ease;
             }
             .trip-row:hover { background: var(--surface-container-high); }
+            /* Selected = neutral fill + ink bar, as in the trips panel: teal is
+               for live status, not selection. */
             .trip-row.selected,
             .trip-row.selected:hover {
-                background: var(--accent-soft);
-                box-shadow: inset 3px 0 0 var(--accent);
+                background: var(--surface-container-high);
+                box-shadow: inset 3px 0 0 var(--primary);
             }
             .trip-row .when { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
             .trip-row .when .times {

@@ -103,7 +103,7 @@ export class TCOView extends LitElement {
             .back-link:hover { background: var(--surface-container-high); color: var(--on-surface); }
             .back-link .material-symbols-outlined { font-size: 18px; }
 
-            /* Primary action: DIMO gradient pill. */
+            /* Primary action: solid ink (--btn-primary-*), as .btn-primary. */
             .export-btn {
                 display: inline-flex;
                 align-items: center;
@@ -294,7 +294,7 @@ export class TCOView extends LitElement {
                 height: 40px;
                 background: var(--surface-container-high);
                 color: var(--on-surface);
-                border: 1px solid var(--outline-variant);
+                border: 1px solid var(--control-border);
                 border-radius: var(--radius-md);
                 padding: 0 12px;
                 font: var(--type-body-sm);
@@ -331,7 +331,7 @@ export class TCOView extends LitElement {
                 height: 32px;
                 background: var(--surface-container-high);
                 color: var(--on-surface);
-                border: 1px solid var(--outline-variant);
+                border: 1px solid var(--control-border);
                 border-radius: var(--radius-md);
                 padding: 0 10px;
                 font: var(--type-body-sm);

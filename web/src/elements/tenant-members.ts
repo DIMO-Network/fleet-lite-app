@@ -113,24 +113,21 @@ export class TenantMembers extends LitElement {
                 display: flex;
                 gap: 10px;
             }
-            .add-form input,
-            .invite-form input[type='email'] {
+            .add-form input {
                 flex: 1;
                 min-width: 0;
                 height: 40px;
                 box-sizing: border-box;
                 background: var(--surface-container-high);
-                border: 1px solid var(--outline-variant);
+                border: 1px solid var(--control-border);
                 border-radius: var(--radius-md);
                 padding: 0 14px;
                 color: var(--on-surface);
                 font: var(--type-body-sm);
             }
-            .add-form input::placeholder,
-            .invite-form input::placeholder { color: var(--on-surface-variant); }
+            .add-form input::placeholder { color: var(--on-surface-variant); }
             /* Secondary action: tonal pill with a hairline. */
-            .add-form button,
-            .invite-form button {
+            .add-form button {
                 min-height: 40px;
                 padding: 0 18px;
                 border-radius: var(--radius-full);
@@ -141,10 +138,8 @@ export class TenantMembers extends LitElement {
                 white-space: nowrap;
                 transition: background 0.15s ease, border-color 0.15s ease;
             }
-            .add-form button:hover,
-            .invite-form button:hover { background: var(--surface-container-highest); border-color: var(--outline); }
-            .add-form button[disabled],
-            .invite-form button[disabled] { opacity: 0.6; cursor: default; }
+            .add-form button:hover { background: var(--surface-container-highest); border-color: var(--outline); }
+            .add-form button[disabled] { opacity: 0.6; cursor: default; }
 
             .state { padding: 16px; font: var(--type-body-sm); color: var(--on-surface-variant); }
             .error { color: var(--error); font: var(--type-body-sm); margin-top: var(--stack-sm); }
@@ -154,13 +149,6 @@ export class TenantMembers extends LitElement {
                 font: 500 13px/18px var(--font-body);
                 color: var(--on-surface-variant);
                 margin: 28px 4px 10px;
-            }
-            /* Invite-by-email form: email input grows, role select + button hug right. */
-            .invite-form { display: flex; gap: 10px; flex-wrap: wrap; }
-            .invite-form select {
-                height: 40px;
-                padding: 0 12px;
-                font: var(--type-body-sm);
             }
 
             /* Pending-invite rows reuse the .member layout but key off the email. */
@@ -180,7 +168,7 @@ export class TenantMembers extends LitElement {
             .text-btn.danger:hover { background: var(--error-container); color: var(--error); }
             .text-btn[disabled] { opacity: 0.5; cursor: default; }
 
-            /* Primary action: DIMO gradient pill. */
+            /* Primary action: solid ink (--btn-primary-*), as .btn-primary. */
             .invite-btn {
                 display: inline-flex;
                 align-items: center;

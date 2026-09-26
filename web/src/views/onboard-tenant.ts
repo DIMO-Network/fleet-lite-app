@@ -257,7 +257,7 @@ export class OnboardTenantView extends LitElement {
                 height: 40px;
                 padding: 0 12px;
                 background: var(--surface-container-high);
-                border: 1px solid var(--outline-variant);
+                border: 1px solid var(--control-border);
                 border-radius: var(--radius-md);
                 color: var(--on-surface);
                 font: var(--type-body-sm);

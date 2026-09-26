@@ -182,7 +182,7 @@ export class GeofenceActivityModal extends LitElement {
 
             .progress { display: flex; align-items: center; gap: 12px; font: var(--type-body-sm); color: var(--on-surface-variant); }
             .bar { flex: 1; height: 4px; border-radius: var(--radius-full); background: var(--surface-container-high); overflow: hidden; }
-            .bar > i { display: block; height: 100%; border-radius: inherit; background: var(--brand-gradient); transition: width 0.25s ease; }
+            .bar > i { display: block; height: 100%; border-radius: inherit; background: var(--progress-fill); transition: width 0.25s ease; }
             .capped { font: var(--type-body-sm); color: var(--warning); margin: 8px 0 0; display: flex; gap: 6px; align-items: flex-start; }
             .capped .material-symbols-outlined { font-size: 16px; margin-top: 2px; }
 
@@ -232,7 +232,7 @@ export class GeofenceActivityModal extends LitElement {
             .pass-row td:first-child { color: var(--on-surface); }
             .pass-row td { color: var(--on-surface-variant); }
             .speed.over { color: var(--error); font-weight: 600; }
-            .dash { color: var(--outline); }
+            .dash { color: var(--on-surface-variant); }
 
             .empty-state { color: var(--on-surface-variant); font: var(--type-body-sm); padding: 32px 24px; text-align: center; }
             .error-text {
