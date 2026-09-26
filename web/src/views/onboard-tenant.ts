@@ -149,7 +149,7 @@ export class OnboardTenantView extends LitElement {
                 gap: 10px;
             }
             .brand .wordmark { height: 18px; width: auto; display: block; }
-            /* The gradient wordmark is drawn for dark backgrounds. */
+            /* The wordmark is white, drawn for dark backgrounds. */
             .brand .wordmark.on-light { filter: brightness(0) opacity(0.88); }
             .brand .product {
                 font: 500 18px/1 var(--font-headline);
@@ -366,7 +366,7 @@ export class OnboardTenantView extends LitElement {
                 <header class="topbar">
                     <div class="brand" role="img" aria-label="DIMO Fleet">
                         <img class="wordmark ${themeService.current === 'light' ? 'on-light' : ''}"
-                            src="/assets/dimo-wordmark.png" alt="" />
+                            src="/assets/dimo-wordmark.svg" alt="" />
                         <span class="product">Fleet</span>
                     </div>
                     <button class="logout-btn" type="button" @click=${() => logout()}>
