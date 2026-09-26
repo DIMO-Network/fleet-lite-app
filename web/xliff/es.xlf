@@ -2032,6 +2032,14 @@
   <source>It also removes permissions this app doesn’t recognise.</source>
   <target>También quita permisos que esta aplicación no reconoce.</target>
 </trans-unit>
+<trans-unit id="s4937d87572fd7070">
+  <source>This fleet’s own access. It isn’t managed here.</source>
+  <target>El acceso propio de esta flota. No se gestiona aquí.</target>
+</trans-unit>
+<trans-unit id="saff3eeed00f40e63">
+  <source>That is this fleet’s own license. Its access isn’t managed here.</source>
+  <target>Esa es la licencia propia de esta flota. Su acceso no se gestiona aquí.</target>
+</trans-unit>
 </body>
 </file>
 </xliff>

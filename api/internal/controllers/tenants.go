@@ -490,11 +490,19 @@ func (t *TenantsController) GetMyAccess(c *fiber.Ctx) error {
 		wallet = addr.Hex()
 	}
 
+	// The license this fleet reads its vehicles with, so the share modal can
+	// show that grant as the fleet's own instead of offering to revoke it.
+	// "" when it cannot be resolved; the revoke route refuses it regardless.
+	fleetLicense := ""
+	if tenant, terr := GetTenant(c); terr == nil && t.authProvider != nil {
+		fleetLicense = t.authProvider.EffectiveClientID(tenant)
+	}
+
 	allowed, limited := GetAllowedGroups(c)
 	if !limited {
-		return c.JSON(fiber.Map{"role": role, "permissions": perms, "allowedGroupIds": nil, "membershipsEnforced": enforced, "wallet": wallet})
+		return c.JSON(fiber.Map{"role": role, "permissions": perms, "allowedGroupIds": nil, "membershipsEnforced": enforced, "wallet": wallet, "fleetLicense": fleetLicense})
 	}
-	return c.JSON(fiber.Map{"role": role, "permissions": perms, "allowedGroupIds": allowed, "membershipsEnforced": enforced, "wallet": wallet})
+	return c.JSON(fiber.Map{"role": role, "permissions": perms, "allowedGroupIds": allowed, "membershipsEnforced": enforced, "wallet": wallet, "fleetLicense": fleetLicense})
 }
 
 // RemoveMember — DELETE /tenants/:id/members/:wallet. Owner-only.

@@ -95,7 +95,7 @@ func App(
 		sharingSvc = service.NewSharingService(logger, tenancyAPI)
 	}
 	vehiclesCtrl := controllers.NewVehiclesController(settings, logger, vehicleSvc, groupSvc, sharingSvc)
-	sharingCtrl := controllers.NewSharingController(logger, sharingSvc, vehicleSvc, tenancyAPI)
+	sharingCtrl := controllers.NewSharingController(logger, sharingSvc, vehicleSvc, tenancyAPI, authProvider)
 	fleetGroupsCtrl := controllers.NewFleetGroupsController(logger, groupSvc)
 	geofenceSvc := service.NewGeofenceService(logger, pdb)
 	// Every group-scoped read — the vehicle scope filter, a group-scoped
@@ -162,7 +162,7 @@ func App(
 	}
 	membershipsCtrl := controllers.NewMembershipsController(logger, membershipSvc)
 	geofenceDetectionSvc := service.NewGeofenceDetectionService(logger, pdb, telemetryAPI, geofenceSvc)
-	geofencesCtrl := controllers.NewGeofencesController(logger, geofenceSvc, attestSvc, geofenceDetectionSvc, vehicleSvc)
+	geofencesCtrl := controllers.NewGeofencesController(logger, geofenceSvc, attestSvc, geofenceDetectionSvc, vehicleSvc, authProvider)
 	settingsCtrl := controllers.NewSettingsController(settings, logger)
 	tenantsCtrl := controllers.NewTenantsController(logger, settings, tenantSvc, vehicleSvc, identity, authProvider, membershipSvc, tenancyAPI)
 	invitationsCtrl := controllers.NewInvitationsController(logger, tenantSvc, invitationSvc, tenancyAPI)
@@ -279,7 +279,7 @@ func App(
 	tenantApp.Get("/fleet/geofences/:id/passes", geofencesCtrl.GetGeofencePasses)
 
 	// Telemetry (vehicle-details charts)
-	telemetryCtrl := controllers.NewTelemetryController(logger, settings, vehicleSvc, telemetryAPI)
+	telemetryCtrl := controllers.NewTelemetryController(logger, settings, vehicleSvc, telemetryAPI, authProvider)
 	tenantApp.Get("/telemetry/locations", telemetryCtrl.GetFleetLocations)
 	tenantApp.Get("/telemetry/:tokenID/latest", telemetryCtrl.GetLatest)
 	tenantApp.Get("/telemetry/:tokenID/timeseries", telemetryCtrl.GetTimeSeries)

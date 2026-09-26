@@ -30,10 +30,11 @@ type GeofencesController struct {
 	attest     service.AttestService
 	detection  *service.GeofenceDetectionService
 	vehicleSvc *service.VehicleService
+	licenses   LicenseResolver
 }
 
-func NewGeofencesController(logger *zerolog.Logger, geofences *service.GeofenceService, attest service.AttestService, detection *service.GeofenceDetectionService, vehicleSvc *service.VehicleService) *GeofencesController {
-	return &GeofencesController{logger: logger, geofences: geofences, attest: attest, detection: detection, vehicleSvc: vehicleSvc}
+func NewGeofencesController(logger *zerolog.Logger, geofences *service.GeofenceService, attest service.AttestService, detection *service.GeofenceDetectionService, vehicleSvc *service.VehicleService, licenses LicenseResolver) *GeofencesController {
+	return &GeofencesController{logger: logger, geofences: geofences, attest: attest, detection: detection, vehicleSvc: vehicleSvc, licenses: licenses}
 }
 
 type createGeofenceRequest struct {
@@ -468,7 +469,7 @@ func (gc *GeofencesController) GetTripGeofences(c *fiber.Ctx) error {
 			return c.JSON(fiber.Map{
 				"geofences":           []service.GeofenceCrossing{},
 				"permissionsRequired": true,
-				"devLicense":          tenant.ClientID,
+				"devLicense":          gc.licenses.EffectiveClientID(tenant),
 			})
 		}
 		return gc.mapServiceError(err, "trip geofences")

@@ -29,11 +29,22 @@ var curatedLatestSignals = []string{
 	"speed", // current speed (km/h)
 }
 
+// LicenseResolver names the developer license a tenant's DIMO calls are made
+// with (gateway.DimoAuthProvider.EffectiveClientID). A permissionsRequired
+// response reports it as devLicense — the license the vehicle's owner must
+// grant to. tenant.ClientID is not that: it is empty for a tenant whose
+// tokens the operator mints, which left those banners with a blank license
+// and no "Grant permissions" link.
+type LicenseResolver interface {
+	EffectiveClientID(tenant models.Tenant) string
+}
+
 type TelemetryController struct {
 	logger         *zerolog.Logger
 	settings       *config.Settings
 	vehicleSvc     *service.VehicleService
 	telemetry      service.TelemetryAPIService
+	licenses       LicenseResolver
 	locationsCache *cache.Cache // tenantID -> []vehicleLocationJSON (map markers)
 }
 
@@ -42,12 +53,14 @@ func NewTelemetryController(
 	settings *config.Settings,
 	vehicleSvc *service.VehicleService,
 	telemetry service.TelemetryAPIService,
+	licenses LicenseResolver,
 ) *TelemetryController {
 	return &TelemetryController{
 		logger:         logger,
 		settings:       settings,
 		vehicleSvc:     vehicleSvc,
 		telemetry:      telemetry,
+		licenses:       licenses,
 		locationsCache: cache.New(2*time.Minute, 5*time.Minute),
 	}
 }
@@ -108,7 +121,7 @@ func (t *TelemetryController) GetLatest(c *fiber.Ctx) error {
 			return c.JSON(fiber.Map{
 				"signals":             map[string]interface{}{},
 				"permissionsRequired": true,
-				"devLicense":          tenant.ClientID,
+				"devLicense":          t.licenses.EffectiveClientID(tenant),
 			})
 		}
 		t.logger.Err(err).Uint64("tokenID", tokenID).Msg("telemetry latest failed")
@@ -224,7 +237,7 @@ func (t *TelemetryController) GetTimeSeries(c *fiber.Ctx) error {
 			return c.JSON(fiber.Map{
 				"buckets":             []interface{}{},
 				"permissionsRequired": true,
-				"devLicense":          tenant.ClientID,
+				"devLicense":          t.licenses.EffectiveClientID(tenant),
 			})
 		}
 		t.logger.Err(err).Str("signal", signal).Uint64("tokenID", tokenID).Msg("telemetry timeseries failed")
@@ -291,7 +304,7 @@ func (t *TelemetryController) GetSegments(c *fiber.Ctx) error {
 			return c.JSON(fiber.Map{
 				"segments":            []interface{}{},
 				"permissionsRequired": true,
-				"devLicense":          tenant.ClientID,
+				"devLicense":          t.licenses.EffectiveClientID(tenant),
 			})
 		}
 		t.logger.Err(err).Uint64("tokenID", tokenID).Msg("telemetry segments failed")
@@ -376,7 +389,7 @@ func (t *TelemetryController) GetBehavior(c *fiber.Ctx) error {
 				"allTime":             []interface{}{},
 				"days":                []interface{}{},
 				"permissionsRequired": true,
-				"devLicense":          tenant.ClientID,
+				"devLicense":          t.licenses.EffectiveClientID(tenant),
 			})
 		}
 		t.logger.Err(err).Uint64("tokenID", tokenID).Msg("telemetry behavior failed")
@@ -424,7 +437,7 @@ func (t *TelemetryController) GetTripRoute(c *fiber.Ctx) error {
 			return c.JSON(fiber.Map{
 				"points":              []interface{}{},
 				"permissionsRequired": true,
-				"devLicense":          tenant.ClientID,
+				"devLicense":          t.licenses.EffectiveClientID(tenant),
 			})
 		}
 		t.logger.Err(err).Uint64("tokenID", tokenID).Msg("telemetry route failed")
@@ -469,7 +482,7 @@ func (t *TelemetryController) GetTripReplay(c *fiber.Ctx) error {
 				"waypoints":           []service.TripWaypoint{},
 				"events":              []service.TripEvent{},
 				"permissionsRequired": true,
-				"devLicense":          tenant.ClientID,
+				"devLicense":          t.licenses.EffectiveClientID(tenant),
 			})
 		}
 		t.logger.Err(err).Uint64("tokenID", tokenID).Msg("telemetry trip replay failed")

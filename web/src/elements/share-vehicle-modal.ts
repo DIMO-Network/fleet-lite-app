@@ -6,6 +6,7 @@ import { ApiService } from '../services/api-service.ts';
 import { JobTimeoutError, JobWaitAbortedError, SharingService } from '../services/sharing-service.ts';
 import { shortWallet } from '../utils/share-blocker.ts';
 import { lookupAppGrantees } from '../utils/app-grantees.ts';
+import { sameClientId } from '../utils/dimo-permissions.ts';
 import {
     extraPermissions,
     hasUnrecognisedPermissions,
@@ -86,6 +87,9 @@ interface DurationOption {
  *   - blockedReason: why sharing is unavailable; empty when it is available.
  *   - owner: the owner wallet the caller already knows, as a fallback.
  *   - myWallet: the signed-in wallet, to mark the owner as the reader.
+ *   - fleetLicense: the license this fleet reads its vehicles with (GET
+ *     /me/access); its grant is shown as the fleet's and never offered for
+ *     revoke, upgrade or re-share.
  * Events:
  *   - close: dismissed.
  *   - shared: a grant landed on chain; the caller may want to refetch.
@@ -104,6 +108,12 @@ export class ShareVehicleModal extends LitElement {
     /** Owner wallet as the caller knows it — used until the chain answers. */
     @property({ type: String }) owner = '';
     @property({ type: String }) myWallet = '';
+    /**
+     * The fleet's own license. Revoking its grant would cut the fleet off the
+     * vehicle, and re-sharing to it could shorten that access, so this modal
+     * does neither — and the API refuses both.
+     */
+    @property({ type: String }) fleetLicense = '';
 
     @state() private grantee = '';
     @state() private durationDays = 365;
@@ -676,7 +686,9 @@ export class ShareVehicleModal extends LitElement {
         // Upgrade would hand it remote commands, credentials and raw data. Only
         // offered once it is known the grantee is not an app.
         const app = this.appGrantees?.get(s.grantee.toLowerCase());
-        const upgradeable = this.appGrantees !== null && !app;
+        // The fleet's own access: shown, but not this modal's to change.
+        const fleets = sameClientId(s.grantee, this.fleetLicense);
+        const upgradeable = this.appGrantees !== null && !app && !fleets;
         // null = the mask could not be read; offer nothing rather than guess.
         const missing = missingStandardPermissions(s.permissions);
         const limited = upgradeable && !!missing && missing.length > 0 && !this.upgraded.has(s.grantee.toLowerCase());
@@ -696,7 +708,9 @@ export class ShareVehicleModal extends LitElement {
         else middle = html`<span class="when">${this.formatExpiry(s.expiresAt)}</span>`;
 
         let actions;
-        if (busy) {
+        if (fleets) {
+            actions = nothing;
+        } else if (busy) {
             actions = html`<button class="busy" disabled>${msg('Revoking…')}</button>`;
         } else if (upBusy) {
             actions = html`<button class="busy upgrade" disabled>${msg('Upgrading…')}</button>`;
@@ -745,25 +759,27 @@ export class ShareVehicleModal extends LitElement {
         }
 
         return html`
-            <li class=${limited || app ? 'limited' : ''}>
+            <li class=${limited || app || fleets ? 'limited' : ''}>
                 <span class="who" title=${s.grantee}>${shortWallet(s.grantee)}</span>
                 ${middle}
                 <span class="act">${actions}</span>
-                ${app
-                    ? html`<span class="missing note">${msg(str`App: ${app}`)}</span>`
-                    : limited
-                      ? html`<span class="missing ${upArmed ? 'confirm' : ''}">
-                            ${upArmed
-                                ? html`${lostList
-                                      ? msg(str`Adds ${missingList}. Removes ${lostList}.`)
-                                      : msg(str`Adds ${missingList}.`)}
-                                  ${hasUnrecognisedPermissions(s.permissions)
-                                      ? msg('It also removes permissions this app doesn’t recognise.')
-                                      : nothing}
-                                  ${msg('Documents are included, and the expiry stays the same.')}`
-                                : msg(str`Limited access: missing ${missingList}`)}
-                        </span>`
-                      : nothing}
+                ${fleets
+                    ? html`<span class="missing note">${msg('This fleet’s own access. It isn’t managed here.')}</span>`
+                    : app
+                      ? html`<span class="missing note">${msg(str`App: ${app}`)}</span>`
+                      : limited
+                        ? html`<span class="missing ${upArmed ? 'confirm' : ''}">
+                              ${upArmed
+                                  ? html`${lostList
+                                        ? msg(str`Adds ${missingList}. Removes ${lostList}.`)
+                                        : msg(str`Adds ${missingList}.`)}
+                                    ${hasUnrecognisedPermissions(s.permissions)
+                                        ? msg('It also removes permissions this app doesn’t recognise.')
+                                        : nothing}
+                                    ${msg('Documents are included, and the expiry stays the same.')}`
+                                  : msg(str`Limited access: missing ${missingList}`)}
+                          </span>`
+                        : nothing}
             </li>
         `;
     }
@@ -775,6 +791,7 @@ export class ShareVehicleModal extends LitElement {
         const current = this.granteeIsValid
             ? this.existing.find((e) => e.grantee.toLowerCase() === this.grantee.trim().toLowerCase())
             : undefined;
+        const toFleet = this.granteeIsValid && sameClientId(this.grantee.trim(), this.fleetLicense);
         // A revoke in flight closes the share form too. Both are the same
         // signer on the same account, and two jobs in flight against one
         // vehicle is a race the customer would have to untangle from the list.
@@ -815,10 +832,12 @@ export class ShareVehicleModal extends LitElement {
                         ?disabled=${inputsOff}
                         @input=${(e: Event) => (this.grantee = (e.target as HTMLInputElement).value)}
                     />
-                    <p class="hint ${showInvalid ? 'bad' : current ? 'warn' : ''}">
+                    <p class="hint ${showInvalid || toFleet ? 'bad' : current ? 'warn' : ''}">
                         ${showInvalid
                             ? msg('That does not look like a wallet address.')
-                            : current
+                            : toFleet
+                              ? msg('That is this fleet’s own license. Its access isn’t managed here.')
+                              : current
                               ? msg(str`This wallet already has access (${this.formatExpiry(current.expiresAt)}). Sharing again replaces it with the standard access for the duration below.`)
                               : msg('They will be able to see this vehicle’s data and send commands to it.')}
                     </p>
@@ -872,7 +891,7 @@ export class ShareVehicleModal extends LitElement {
                         </button>
                         <button
                             class="confirm"
-                            ?disabled=${!this.granteeIsValid || inputsOff}
+                            ?disabled=${!this.granteeIsValid || toFleet || inputsOff}
                             @click=${this.submit}
                         >
                             ${this.submitting ? msg('Sharing…') : msg('Share')}

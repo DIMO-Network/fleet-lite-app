@@ -37,6 +37,7 @@ export class FleetListView extends LitElement {
     @state() private canShareVehicles = false;
     /** The signed-in wallet, so a blocked share can say "owned by you". */
     @state() private myWallet = '';
+    @state() private fleetLicense = '';
     @state() private shareTarget: VehicleCard | null = null;
     private unsubscribeHidden: (() => void) | null = null;
 
@@ -256,6 +257,7 @@ export class FleetListView extends LitElement {
             const access = await TenantService.getInstance().fetchMyAccess();
             this.canShareVehicles = (access.permissions ?? []).includes('manage_vehicles');
             this.myWallet = access.wallet ?? '';
+            this.fleetLicense = access.fleetLicense ?? '';
         } catch {
             this.canShareVehicles = false;
         }
@@ -920,6 +922,7 @@ export class FleetListView extends LitElement {
                           .blockedReason=${shareBlockReason(this.shareTarget, this.canShareVehicles, this.myWallet) ?? ''}
                           .owner=${this.shareTarget.owner ?? ''}
                           .myWallet=${this.myWallet}
+                          .fleetLicense=${this.fleetLicense}
                           @close=${() => { this.shareTarget = null; }}
                       ></share-vehicle-modal>
                   `
