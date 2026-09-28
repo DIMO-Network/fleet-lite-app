@@ -20,17 +20,28 @@ into* that file (see below), not which git ref ArgoCD syncs from.
 
 ## Confirmed from each repo's GitHub workflows
 
-All three apps share the same two-workflow shape:
+All three apps share the same trigger shape (dev on push to `main`,
+prod on push tag `v*`) and the same values-file split, but **prod does
+not build the same way in all three** — this is the one difference
+`build-app.yml` (spec, CI/CD section) most needs to model as a config
+knob, not assume away:
 
-| App | Dev trigger | Dev writes | Prod trigger | Prod writes |
-|---|---|---|---|---|
-| fleet-lite-app | push to `main` | `charts/fleet-lite-app/values.yaml` | push tag `v*` | `charts/fleet-lite-app/values-prod.yaml` |
-| parentos | push to `main` | `charts/parentos/values.yaml` | push tag `v*` | `charts/parentos/values-prod.yaml` |
-| kaufmann-oracle | push to `main` | `charts/kaufmann-oracle/values.yaml` | push tag `v*`, cut via a GitHub Release | `charts/kaufmann-oracle/values-prod.yaml` |
+| App | Dev trigger | Dev writes | Prod trigger | Prod builds? | Prod image tag source | Prod writes |
+|---|---|---|---|---|---|---|
+| fleet-lite-app | push to `main` | `charts/fleet-lite-app/values.yaml` | push tag `v*` | **No.** Polls for the image `buildpushdev` already built for the tagged commit (up to 30 min), fails loudly if it never appears. Never runs a second build. | The dev-build SHA of the commit behind the tag (found via `git log --first-parent`, skipping bot bump commits) | `charts/fleet-lite-app/values-prod.yaml` |
+| parentos | push to `main` | `charts/parentos/values.yaml` | push tag `v*` | **Yes**, a fresh `docker/build-push-action` run. | Commit SHA slug (`steps.slug.outputs.BUILD_TAG`) | `charts/parentos/values-prod.yaml` |
+| kaufmann-oracle | push to `main` | `charts/kaufmann-oracle/values.yaml` | push tag `v*` | **Yes**, a fresh `docker/build-push-action` run. | The **git tag itself**, stripped of `v` (`dawidd6/action-get-tag`) — not the commit SHA | `charts/kaufmann-oracle/values-prod.yaml` |
 
-kaufmann-oracle's prod tag is created by cutting a GitHub Release
-(confirmed by the user), not by pushing a tag directly with git — the
-practical trigger (`push: tags: v*`) is the same either way.
+**Release vs. tag causality is opposite in fleet-lite-app vs. the other
+two.** In fleet-lite-app, *pushing the tag* is what creates the GitHub
+Release — `buildpushprod.yml`'s last step calls
+`github.rest.repos.createRelease` for the pushed tag if one doesn't
+already exist. In kaufmann-oracle, it runs the other way: *cutting a
+GitHub Release* is the trigger, since a Release creates a `v*` tag that
+`buildpushtagged.yml` listens for (confirmed by the user). parentos'
+tag-creation mechanism (direct `git push --tags` vs. a Release) has not
+been independently confirmed. A phase-1 reader relying only on this doc
+should not assume the same tag/Release relationship holds across apps.
 
 ## Still open — not blocking code work, blocks phase 1 cutover only
 
@@ -40,11 +51,14 @@ practical trigger (`push: tags: v*`) is the same either way.
   `values.yaml` instead of `values-prod.yaml`), but this has not been
   confirmed and should not be treated as fact until someone checks the
   ArgoCD UI for a `-dev` (or equivalently named) Application per app.
-- **Bump-commit self-trigger loop.** Every dev/prod workflow above ends
-  by committing an `image.tag` change back to `main` via
-  `fjogeleit/yaml-update-action`. Whether that commit re-triggers
-  `buildpushdev.yml` (which also fires on push to `main`) has not been
-  checked in any of the three repos. This must be verified before the
+- **Bump-commit self-trigger loop.** Every dev/prod workflow above
+  writes an `image.tag` change back to `main` via
+  `fjogeleit/yaml-update-action` (fleet-lite-app's prod workflow does
+  this and then also creates a GitHub Release — see the table note
+  above; the bump commit itself is the same shape everywhere). Whether
+  that commit re-triggers `buildpushdev.yml` (which also fires on push
+  to `main`) has not been checked in any of the three repos. This must
+  be verified before the
   reusable `build-app.yml` workflow (spec, CI/CD section) is written,
   since a self-triggering loop in the shared workflow would hit three
   apps at once instead of one.
