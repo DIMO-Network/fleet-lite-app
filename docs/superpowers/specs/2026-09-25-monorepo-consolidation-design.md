@@ -32,7 +32,7 @@ Success criteria:
 
 Overlap measured by path, after normalizing module paths:
 - Go, fleet-lite vs parentos: 8 files identical, 36 diverged at the time of this spec's first draft. Drift had already started; `core/config` and `core/server` (Phase 2) have since reclaimed the identical portion of it.
-- Web, fleet-lite vs parentos: 400 of 444 files identical as of this spec's first draft — stale as of fleet-lite-app's visual refresh (see Web core below); needs re-measuring before Phase 3.
+- Web, fleet-lite vs parentos: 400 of 444 files identical as of this spec's first draft — stale as of fleet-lite-app's visual refresh (see Web core below); needs re-measuring before Phase 3. **Re-measured 2026-10-07 in `dimo-monorepo`:** 399 of 443 common `web/src` paths are still byte-identical post-refresh, same 44 diverged. The visual refresh didn't change *which* files diverge, only *why* — the diverged set is exactly the shared-element list called out below (`side-nav`, `app-root`, every modal, `tenant-members`, `tenant-switcher`, login, plus `global-styles.ts`, the service/type/util layer, and a handful of views). fleet-lite also has 42 web files parentos doesn't (glovebox, TCO, charging — features parentos lacks); parentos has 12 fleet-lite doesn't. The 399-file identical pool is the Phase 3 `packages/web-core` candidate set; the 44 diverged files are triaged individually per the Web core section below.
 
 kaufmann-oracle was compared here in earlier drafts (1 of 44 Go files identical, same layer names but mostly different code, Go-only device-ingestion shape with no web frontend) — see Non-goals for why it's excluded. That comparison is kept out of this table now since it's no longer a candidate app, not because the numbers changed.
 
@@ -80,7 +80,7 @@ Practical effect on phase 3 (web core extraction):
 - `packages/web-core`'s tokens, fonts and shared elements are extracted from fleet-lite-app's post-refresh code, not parentos'.
 - parentos adopts the new tokens as part of moving onto `web-core`, rather than web-core supporting two visual languages.
 - `docs/DESIGN.md` moves to the repo root (or `packages/web-core/docs/`) as the one design doc for all apps, superseding the need for each app to restate it.
-- Re-diff fleet-lite vs parentos web files at the start of phase 3 — the divergence count above is now stale.
+- Re-diff fleet-lite vs parentos web files at the start of phase 3 — the divergence count above is now stale. **Done** — see Findings above; 399/443 common paths identical, candidate pool for `packages/web-core` identified. Extraction itself (moving the 399 files into the workspace package, rewiring both apps' imports, triaging the 44 diverged files) is not yet started — it is a large mechanical change that needs its own reviewable PR sequence plus a dev-server smoke test per app, not a single pass.
 
 ### Base Helm chart
 
@@ -105,7 +105,7 @@ Incremental, one reviewable step at a time. Every step leaves all apps green and
 0. **Done.** Prep, in the existing repos: kaufmann to Go 1.26 (harmless, kept even though kaufmann is no longer part of this migration), deployment inventory doc.
 1. **Done.** Create the monorepo and import fleet-lite and parentos with full history under `apps/`. No code changes.
 2. **In progress.** Extract Go core from fleet-lite and parentos, one package per PR. `config` and `server` done; `db`, `gateway`, `errors`/`permissions` remain, extracted only if genuinely shared (see Go core above).
-3. **Not started.** Extract web core from the identical files first, then triage the diverged ones (re-diff first — the count is stale post-refresh).
+3. **In progress.** Extract web core from the identical files first, then triage the diverged ones. Re-diff done (see Findings): 399/443 common paths identical. Extraction itself not started.
 4. **Not started, revised scope.** Base Helm chart, built by hand using kaufmann-oracle's chart as a reference rather than an import (see Base Helm chart above).
 5. **Not started.** Scaffold and docs: `scripts/new-app`, a short "new app" doc, a root `AGENTS.md`, and the `build-app.yml` reusable workflow (which also needs the Docker-build-context question resolved first — see CI/CD above). Archive the old repos read-only once both apps are fully on the monorepo.
 
