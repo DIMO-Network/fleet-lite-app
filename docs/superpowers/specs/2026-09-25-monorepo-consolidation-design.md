@@ -62,9 +62,9 @@ go.mod            single module at the repo root
 Candidate `core/` packages, each reconciled from the diverged copies before extraction:
 - `config`: settings loading and common fields (ports, DB, JWT key set URL, DIMO endpoints). **Done** — `core/config`.
 - `server`: Fiber bootstrap, error handling, health/version endpoints, and DIMO JWT audience enforcement (folded `auth` in here rather than as its own package — the two apps' JWT wiring was small enough to live alongside the bootstrap it's attached to). **Done** — `core/server`.
-- `db`: connection setup and goose migration runner. Migrations and sqlboiler models stay per app. Not started.
-- `gateway`: identity-api, telemetry-api, device-definitions-api clients. Not started.
-- `errors`, `permissions`. Not started — may turn out to already be covered by `core/server`'s `ErrorHandler`/`ErrorRes`; check before adding a separate package.
+- `db`: goose migration runner. **Done** — `core/db.MigrateCmd` (PR #14). Connection setup itself (`db.NewDbConnectionFromSettings`, `db.Store`) was already in the external `github.com/DIMO-Network/shared/pkg/db` package, not duplicated in either app — nothing to extract there. Migrations and sqlboiler models stay per app, as planned.
+- `gateway`: identity-api, telemetry-api, device-definitions-api clients. **Checked, deliberately skipped for now** (see PR #14's description). `identity_api.go`/`fetch_api.go` are structurally close to identical (import-path-only diff) but coupled to each app's `models.Vehicle`/`models.Tenant`, which genuinely diverge mid-tenancy-migration — fleet-lite's `Vehicle` carries `CanShare`/`ShareBlocker`/`Groups`/`MetadataPending` (operator-tenancy fields), parentos' carries `Driver *FamilyMember`. Extracting now means designing a generics-based abstraction over that shape, which is real design work, not a mechanical move — revisit once tenancy work lands and the shape stabilizes. `document_types.go` has zero model coupling and is the easiest follow-up candidate; needs one parameter for fleet-lite's "fuel" doc-type extra.
+- `errors`, `permissions`. **Checked, skipped.** Both apps' `internal/core/errors.go`/`permissions.go` are identical 4-8 line stubs ("empty for now" on permissions) — already effectively covered by `core/server`'s `ErrorHandler`/`ErrorRes`, and `permissions.go` is about to churn once `role` becomes a capability check (see Tenancy section of `AGENTS.md`). Not worth a package yet.
 
 Extracted only after diffing, and only if the copies are the same concept: `tenants`, `reports/distance_travelled`, `attestation/vinvc`. fleet-lite's tenancy is being superseded (see its `docs/operator-tenancy/`), so `tenants` is not extracted until that lands.
 
@@ -104,7 +104,7 @@ Incremental, one reviewable step at a time. Every step leaves all apps green and
 
 0. **Done.** Prep, in the existing repos: kaufmann to Go 1.26 (harmless, kept even though kaufmann is no longer part of this migration), deployment inventory doc.
 1. **Done.** Create the monorepo and import fleet-lite and parentos with full history under `apps/`. No code changes.
-2. **In progress.** Extract Go core from fleet-lite and parentos, one package per PR. `config` and `server` done; `db`, `gateway`, `errors`/`permissions` remain, extracted only if genuinely shared (see Go core above).
+2. **Done.** Extract Go core from fleet-lite and parentos, one package per PR. `config`, `server`, `db` extracted; `gateway` and `errors`/`permissions` deliberately left in-app for now (see Go core above for why — not a gap, a reviewed decision).
 3. **In progress.** Extract web core from the identical files first, then triage the diverged ones. Re-diff done (see Findings): 399/443 common paths identical. Extraction itself not started.
 4. **Not started, revised scope.** Base Helm chart, built by hand using kaufmann-oracle's chart as a reference rather than an import (see Base Helm chart above).
 5. **Not started.** Scaffold and docs: `scripts/new-app`, a short "new app" doc, a root `AGENTS.md`, and the `build-app.yml` reusable workflow (which also needs the Docker-build-context question resolved first — see CI/CD above). Archive the old repos read-only once both apps are fully on the monorepo.
