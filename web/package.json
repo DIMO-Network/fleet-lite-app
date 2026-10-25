@@ -40,6 +40,6 @@
     "vite-plugin-eslint": "^1.8.1",
     "vite-plugin-mkcert": "^1.17.10",
     "vite-plugin-static-copy": "^3.4.0",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.5"
   }
 }
